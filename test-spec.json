@@ -1,0 +1,4 @@
+# syntax=bkpkg:mariner2
+{
+    "Name": "test-pkg"
+}

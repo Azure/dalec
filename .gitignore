@@ -396,3 +396,8 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+
+# Internal/buildtime files which will get embedded into the final binary
+version.txt
+revision.txt
