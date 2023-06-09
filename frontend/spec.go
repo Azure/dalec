@@ -17,7 +17,7 @@ type Spec struct {
 	Website string
 
 	// Dependencies are the different dependencies that need to be specified in the package.
-	Dependendencies PackageDependencies
+	Dependencies PackageDependencies
 
 	// Conflicts is the list of packages that conflict with the generated package.
 	// This will prevent the package from being installed if any of these packages are already installed or vice versa.
