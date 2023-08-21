@@ -29,7 +29,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 			dt = append([]byte("//"), dt[1:]...)
 		}
 
-		spec, err := frontend.LoadSpec(dt)
+		spec, err := frontend.LoadSpec(dt, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error loading spec: %w", err)
 		}

@@ -1,0 +1,62 @@
+# syntax=cpuguy83/rpmbundle
+anchors:
+  build: &rpmBuild
+    libseccomp-devel:
+    libtool-ltdl-devel:
+    which:
+  runtime: &rpmRuntime
+    libseccomp:
+      - ">= 2.3"
+    "/bin/sh":
+
+args:
+  RUNC_COMMIT:
+  REVISION: 1
+  VERSION:
+name: moby-runc
+description: A CLI tool for spawning and running containers according to the OCI specification.
+website: https://www.runc.io
+version: ${VERSION}
+revision: ${REVISION}
+
+dependencies:
+  build:
+    <<: *rpmBuild
+    gcc:
+    golang:
+      - ">= 1.19"
+    go-md2man:
+    libtool:
+    make:
+    pkgconfig:
+    tar:
+  runtime:
+    <<: *rpmRuntime
+packager: Microsoft <support@microsoft.com>
+license: Apache-2.0
+conflicts:
+  runc:
+  runc-io:
+  containerd.io:
+provides:
+  - runc
+sources:
+  src:
+    ref: https://github.com/opencontainers/runc.git#${RUNC_COMMIT}
+  golang:
+    ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.20
+    path: /usr/local/go
+    satisfies:
+      - golang
+buildSteps:
+  - workdir: /build/src
+    mounts:
+      src: /build/src
+      golang: /usr/local/go
+    steps:
+      - command: make man runc
+    outputs:
+      man/man8/*:
+        type: manpage
+      runc:
+        type: binary
