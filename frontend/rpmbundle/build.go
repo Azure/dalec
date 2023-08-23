@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
@@ -94,6 +95,13 @@ func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.State
 			if err != nil {
 				return llb.Scratch(), fmt.Errorf("error getting executable path: %w", err)
 			}
+
+			// Resolve any symlinks in the executable path so we don't bust the cache on every build.
+			exe, err = filepath.EvalSymlinks(exe)
+			if err != nil {
+				return llb.Scratch(), fmt.Errorf("error resolving symlink for executable path: %w", err)
+			}
+
 			localPath := "/tmp/" + k + "/st"
 			dstPath := localPath + "Out/" + k + ".tar.gz"
 			localSrcWork := localSt.Run(
