@@ -11,6 +11,7 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -34,6 +35,8 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	if err != nil {
 		return nil, fmt.Errorf("could not get current frontend: %w", err)
 	}
+	caps := client.BuildOpts().LLBCaps
+	noMerge := !caps.Contains(pb.CapMergeOp)
 
 	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
 		dt := bytes.TrimSpace(src.Data)
@@ -42,7 +45,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 			return nil, nil, fmt.Errorf("error loading spec: %w", err)
 		}
 
-		st, err := specToLLB(spec, localSt)
+		st, err := specToLLB(spec, localSt, noMerge)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error converting spec to llb: %w", err)
 		}
@@ -71,7 +74,7 @@ func shArgs(args string) llb.RunOption {
 	return llb.Args([]string{"/bin/sh", "-c", args})
 }
 
-func specToLLB(spec *frontend.Spec, localSt *llb.State) (llb.State, error) {
+func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.State, error) {
 	out := llb.Scratch().File(llb.Mkdir("SOURCES", 0755))
 
 	diffs := make([]llb.State, 0, len(spec.Sources))
@@ -98,16 +101,25 @@ func specToLLB(spec *frontend.Spec, localSt *llb.State) (llb.State, error) {
 				llb.AddMount(localPath, st, llb.Readonly),
 				llb.WithCustomNamef("Create comrpessed tar of source %q", k),
 			).State
+			if noMerge {
+				out = out.File(llb.Copy(localSrcWork, dstPath, "/SOURCES/"), llb.WithCustomNamef("Copy tar for source %q to SOURCES", k))
+				continue
+			}
 			st = llb.Scratch().File(llb.Copy(localSrcWork, dstPath, "/SOURCES/"), llb.WithCustomNamef("Copy tar for source %q to SOURCES", k))
+			diffs = append(diffs, llb.Diff(out, st, llb.WithCustomNamef("Diff source %q from empty SOURCES", k)))
 		} else {
+			if noMerge {
+				out = out.File(llb.Copy(st, "/", "/SOURCES/"), llb.WithCustomNamef("Copy file source for %q to SOURCES", k))
+				continue
+			}
 			st = llb.Scratch().File(llb.Copy(st, "/", "/SOURCES/"), llb.WithCustomNamef("Copy file source for %q to SOURCES", k))
+			diffs = append(diffs, llb.Diff(out, st, llb.WithCustomNamef("Diff source %q from empty SOURCES", k)))
 		}
-
-		diffs = append(diffs, llb.Diff(out, st, llb.WithCustomNamef("Diff source %q from empty SOURCES", k)))
 	}
 
-	// TODO: fallback for when `Merge` is not supported
-	out = llb.Merge(append([]llb.State{out}, diffs...), llb.WithCustomName("Merge sources into SOURCES dir"))
+	if len(diffs) > 0 {
+		out = llb.Merge(append([]llb.State{out}, diffs...), llb.WithCustomName("Merge sources into SOURCES dir"))
+	}
 
 	buf := bytes.NewBuffer(nil)
 	if err := specTmpl.Execute(buf, &specWrapper{
