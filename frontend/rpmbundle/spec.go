@@ -8,7 +8,7 @@ import (
 	"github.com/azure/dalec/frontend"
 )
 
-var specTmpl = template.Must(template.New("spec").Parse(`
+var specTmpl = template.Must(template.New("spec").Parse(strings.TrimSpace(`
 Summary: {{.Description}}
 Name: {{.Name}}
 Version: {{.Version}}
@@ -34,7 +34,7 @@ Replaces: {{$r}}
 %prep
 {{ .PrepareSources }}
 
-`))
+`)))
 
 type specWrapper struct {
 	*frontend.Spec
