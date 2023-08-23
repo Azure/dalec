@@ -18,7 +18,7 @@ func Source2LLB(src Source) (llb.State, error) {
 	var st llb.State
 	switch scheme {
 	case sourcetypes.DockerImageScheme:
-		st = llb.Image(ref)
+		st = llb.Image(ref, llb.WithCustomName("Fetch docker image source: "+ref))
 	case sourcetypes.GitScheme:
 		// TODO: Pass git secrets
 		ref, err := gitutil.ParseGitRef(ref)
@@ -29,6 +29,7 @@ func Source2LLB(src Source) (llb.State, error) {
 		if src.KeepGitDir {
 			opts = append(opts, llb.KeepGitDir())
 		}
+		opts = append(opts, llb.WithCustomName("Fetch git source: "+ref.Remote+"@"+ref.Commit))
 		st = llb.Git(ref.Remote, ref.Commit, opts...)
 	case sourcetypes.HTTPScheme, sourcetypes.HTTPSScheme:
 		ref, err := gitutil.ParseGitRef(src.Ref)
@@ -38,16 +39,26 @@ func Source2LLB(src Source) (llb.State, error) {
 			if src.KeepGitDir {
 				opts = append(opts, llb.KeepGitDir())
 			}
+			opts = append(opts, llb.WithCustomName("Fetch git source: "+ref.Remote+"@"+ref.Commit))
 			st = llb.Git(ref.Remote, ref.Commit, opts...)
 		} else {
-			st = llb.HTTP(src.Ref)
+			st = llb.HTTP(src.Ref, llb.WithCustomName("Fetch http source: "+src.Ref))
 		}
 	case sourcetypes.LocalScheme:
-		st = llb.Local(ref)
+		st = llb.Local(ref, llb.WithCustomName("Fetch local source: "+ref))
 	}
 
 	if src.Path != "" || len(src.Includes) > 0 || len(src.Excludes) > 0 {
-		st = llb.Scratch().File(llb.Copy(st, src.Path, "/", withIncludes(src.Includes), withExcludes(src.Excludes)))
+		st = llb.Scratch().File(
+			llb.Copy(
+				st,
+				src.Path,
+				"/",
+				withIncludes(src.Includes),
+				withExcludes(src.Excludes),
+			),
+			llb.WithCustomNamef("Get source subpath and filter includes/excludes: %s @ %s", src.Ref, src.Path),
+		)
 	}
 	return st, nil
 }

@@ -96,17 +96,18 @@ func specToLLB(spec *frontend.Spec, localSt *llb.State) (llb.State, error) {
 			localSrcWork := localSt.Run(
 				llb.Args([]string{exe, "tar", localPath, dstPath}),
 				llb.AddMount(localPath, st, llb.Readonly),
+				llb.WithCustomNamef("Create comrpessed tar of source %q", k),
 			).State
-			st = llb.Scratch().File(llb.Copy(localSrcWork, dstPath, "/SOURCES/"))
+			st = llb.Scratch().File(llb.Copy(localSrcWork, dstPath, "/SOURCES/"), llb.WithCustomNamef("Copy tar for source %q to SOURCES", k))
 		} else {
-			st = llb.Scratch().File(llb.Copy(st, "/", "/SOURCES/"))
+			st = llb.Scratch().File(llb.Copy(st, "/", "/SOURCES/"), llb.WithCustomNamef("Copy file source for %q to SOURCES", k))
 		}
 
-		diffs = append(diffs, llb.Diff(out, st))
+		diffs = append(diffs, llb.Diff(out, st, llb.WithCustomNamef("Diff source %q from empty SOURCES", k)))
 	}
 
 	// TODO: fallback for when `Merge` is not supported
-	out = llb.Merge(append([]llb.State{out}, diffs...))
+	out = llb.Merge(append([]llb.State{out}, diffs...), llb.WithCustomName("Merge sources into SOURCES dir"))
 
 	buf := bytes.NewBuffer(nil)
 	if err := specTmpl.Execute(buf, &specWrapper{
@@ -115,7 +116,7 @@ func specToLLB(spec *frontend.Spec, localSt *llb.State) (llb.State, error) {
 		return llb.Scratch(), fmt.Errorf("could not generate rpm spec file: %w", err)
 	}
 
-	out = out.File(llb.Mkfile(spec.Name+".spec", 0640, buf.Bytes()))
+	out = out.File(llb.Mkfile(spec.Name+".spec", 0640, buf.Bytes()), llb.WithCustomName("Generate rpm spec file"))
 
 	return out, nil
 }
