@@ -42,9 +42,16 @@ type Spec struct {
 	// Sources can be embedded in the main spec as here or overriden in a build request.
 	Sources map[string]Source
 
-	// BuildSteps is the list of build steps to run to build the artifact(s).
-	// Each entry may be run in parallel and will not share state with each other.
-	BuildSteps []StepGroup
+	// Patches is the list of patches to apply to the sources.
+	// The map key is the name of the source to apply the patches to.
+	// The value is the list of patches to apply to the source.
+	// The patch must be present in the `Sources` map.
+	// Each patch is applied in order and the result is used as the source for the build.
+	Patches map[string][]string
+
+	// Targets is the list of targets to build.
+	// The map key is the name of the target and the value is the target configuration.
+	Targets map[string]Target
 
 	// SourcePolicy is used to approve/deny/rewrite sources used by a build.
 	SourcePolicy *spb.Policy
@@ -94,8 +101,8 @@ type PackageDependencies struct {
 	Recommends map[string][]string
 }
 
-// StepGroup configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
-type StepGroup struct {
+// Target configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
+type Target struct {
 	// Steps is the list of commands to run to build the artifact(s).
 	// Each step is run sequentially and will be cached accordingly.
 	Steps []BuildStep
@@ -103,9 +110,9 @@ type StepGroup struct {
 	CacheDirs map[string]CacheDirConfig
 	// Outputs is the list of artifacts to be extracted after running the steps.
 	Outputs map[string]ArtifactConfig
-	// Mounts is the list of sources to mount into the build.
+	// Sources is the list of sources to mount into the build.
 	// The map key is the name of the source to mount and the value is the path to mount it to.
-	Mounts map[string]string
+	Sources map[string]string
 	// Workdir specifies the working directory that each new command will run in within this step group
 	WorkDir string
 	// Env is the list of environment variables to set for all commands in this step group.
@@ -175,6 +182,15 @@ type Filters struct {
 	Excludes []string
 }
 
+func knownArg(key string) bool {
+	switch key {
+	case "BUILDKIT_SYNTAX":
+		return true
+	default:
+		return false
+	}
+}
+
 // LoadSpec loads a spec from the given data.
 // env is a map of environment variables to use for shell-style expansion in the spec.
 func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
@@ -191,7 +207,9 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 	}
 	for k, v := range env {
 		if _, ok := args[k]; !ok {
-			return nil, fmt.Errorf("unknown arg %q", k)
+			if !knownArg(k) {
+				return nil, fmt.Errorf("unknown arg %q", k)
+			}
 		}
 		args[k] = v
 	}

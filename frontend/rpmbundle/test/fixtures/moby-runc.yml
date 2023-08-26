@@ -48,9 +48,10 @@ sources:
     path: /usr/local/go
     satisfies:
       - golang
-buildSteps:
-  - workdir: /build/src
-    mounts:
+targets:
+  runc:
+    workdir: /build/src
+    sources:
       src: /build/src
       golang: /usr/local/go
     steps:

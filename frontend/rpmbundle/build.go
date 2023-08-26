@@ -11,13 +11,53 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
+	"github.com/moby/buildkit/frontend/gateway/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/frontend/subrequests/outline"
+	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/exp/maps"
 )
 
 type reexecFrontend interface {
 	CurrentFrontend() (*llb.State, error)
+}
+
+func loadSpec(ctx context.Context, client *dockerui.Client) (*frontend.Spec, error) {
+	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
+	if err != nil {
+		return nil, fmt.Errorf("could not read spec file: %w", err)
+	}
+
+	spec, err := frontend.LoadSpec(bytes.TrimSpace(src.Data), client.BuildArgs)
+	if err != nil {
+		return nil, fmt.Errorf("error loading spec: %w", err)
+	}
+	return spec, nil
+}
+
+func handleSubrequest(ctx context.Context, bc *dockerui.Client) (*client.Result, bool, error) {
+	return bc.HandleSubrequest(ctx, dockerui.RequestHandler{
+		Outline: func(ctx context.Context) (*outline.Outline, error) {
+			return nil, fmt.Errorf("not implemented")
+		},
+		ListTargets: func(ctx context.Context) (*targets.List, error) {
+			spec, err := loadSpec(ctx, bc)
+			if err != nil {
+				return nil, err
+			}
+			var tl targets.List
+
+			for _, name := range maps.Keys(spec.Targets) {
+				tl.Targets = append(tl.Targets, targets.Target{
+					Name:    name,
+					Default: true,
+				})
+			}
+			return &tl, nil
+		},
+	})
 }
 
 func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -26,9 +66,9 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	src, err := bc.ReadEntrypoint(ctx, "Dockerfile")
-	if err != nil {
-		return nil, fmt.Errorf("could not read spec file: %w", err)
+	res, handled, err := handleSubrequest(ctx, bc)
+	if err != nil || handled {
+		return res, err
 	}
 
 	cf := client.(reexecFrontend)
@@ -40,16 +80,39 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
 	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
-		dt := bytes.TrimSpace(src.Data)
-		spec, err := frontend.LoadSpec(dt, bc.BuildArgs)
+		spec, err := loadSpec(ctx, bc)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error loading spec: %w", err)
+			return nil, nil, err
 		}
 
-		st, err := specToLLB(spec, localSt, noMerge)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error converting spec to llb: %w", err)
+		if bc.Target != "" {
+			_, ok := spec.Targets[bc.Target]
+			if !ok {
+				return nil, nil, fmt.Errorf("target %q not found", bc.Target)
+			}
 		}
+
+		var st llb.State
+		if bc.Target != "" {
+			st, err = specToLLB(spec, localSt, noMerge, bc.Target)
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			// Build all targets
+			base := llb.Scratch()
+			diffs := make([]llb.State, 0, len(spec.Targets))
+			diffs = append(diffs, base)
+			for t := range spec.Targets {
+				_st, err := specToLLB(spec, localSt, noMerge, t)
+				if err != nil {
+					return nil, nil, err
+				}
+				diffs = append(diffs, llb.Diff(base, _st, llb.WithCustomNamef("Diff target %q", t)))
+			}
+			st = llb.Merge(diffs)
+		}
+
 		def, err := st.Marshal(ctx)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
@@ -71,15 +134,17 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	return rb.Finalize()
 }
 
-func shArgs(args string) llb.RunOption {
-	return llb.Args([]string{"/bin/sh", "-c", args})
-}
-
-func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.State, error) {
+func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool, target string) (llb.State, error) {
 	out := llb.Scratch().File(llb.Mkdir("SOURCES", 0755))
 
-	diffs := make([]llb.State, 0, len(spec.Sources))
-	for k, src := range spec.Sources {
+	t := spec.Targets[target]
+	diffs := make([]llb.State, 0, len(t.Sources))
+	for k := range t.Sources {
+		src, ok := spec.Sources[k]
+		if !ok {
+			return llb.Scratch(), fmt.Errorf("source %q not found", k)
+		}
+
 		st, err := frontend.Source2LLB(src)
 		if err != nil {
 			return llb.Scratch(), fmt.Errorf("error converting source %s: %w", k, err)
@@ -130,13 +195,12 @@ func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.State
 	}
 
 	buf := bytes.NewBuffer(nil)
-	if err := specTmpl.Execute(buf, &specWrapper{
-		Spec: spec,
-	}); err != nil {
+	if err := specTmpl.Execute(buf, newSpecWrapper(spec, target)); err != nil {
 		return llb.Scratch(), fmt.Errorf("could not generate rpm spec file: %w", err)
 	}
 
-	out = out.File(llb.Mkfile(spec.Name+".spec", 0640, buf.Bytes()), llb.WithCustomName("Generate rpm spec file"))
+	out = out.File(llb.Mkdir("SPECS", 0755))
+	out = out.File(llb.Mkfile("SPECS/"+spec.Name+".spec", 0640, buf.Bytes()), llb.WithCustomName("Generate rpm spec file - SPECS/"+spec.Name+".spec"))
 
 	return out, nil
 }
