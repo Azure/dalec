@@ -6,7 +6,7 @@ RUN \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -o /frontend ./cmd/frontend-mariner2
 
-FROM golang:1.20 AS build-test
+FROM golang:1.21 AS build-test
 WORKDIR /build
 COPY . .
 RUN \
