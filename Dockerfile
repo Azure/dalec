@@ -16,4 +16,5 @@ RUN \
 
 FROM scratch
 COPY --from=build-test /frontend /frontend
+LABEL moby.buildkit.frontend.caps=moby.buildkit.frontend.subrequests
 ENTRYPOINT ["/frontend"]

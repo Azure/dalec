@@ -13,7 +13,6 @@ import (
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/frontend/gateway/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/frontend/subrequests/outline"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -39,9 +38,6 @@ func loadSpec(ctx context.Context, client *dockerui.Client) (*frontend.Spec, err
 
 func handleSubrequest(ctx context.Context, bc *dockerui.Client) (*client.Result, bool, error) {
 	return bc.HandleSubrequest(ctx, dockerui.RequestHandler{
-		Outline: func(ctx context.Context) (*outline.Outline, error) {
-			return nil, fmt.Errorf("not implemented")
-		},
 		ListTargets: func(ctx context.Context) (*targets.List, error) {
 			spec, err := loadSpec(ctx, bc)
 			if err != nil {
