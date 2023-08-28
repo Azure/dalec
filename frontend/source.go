@@ -9,6 +9,14 @@ import (
 	"github.com/moby/buildkit/util/gitutil"
 )
 
+func WithInternalName(name string) llb.ConstraintsOpt {
+	return llb.WithCustomNamef("[internal] %s", name)
+}
+
+func WithInternalNamef(format string, a ...interface{}) llb.ConstraintsOpt {
+	return llb.WithCustomNamef("[internal] "+format, a...)
+}
+
 func Source2LLB(src Source) (llb.State, error) {
 	scheme, ref, err := SplitSourceRef(src.Ref)
 	if err != nil {
@@ -57,7 +65,7 @@ func Source2LLB(src Source) (llb.State, error) {
 				withIncludes(src.Includes),
 				withExcludes(src.Excludes),
 			),
-			llb.WithCustomNamef("Get source subpath and filter includes/excludes: %s @ %s", src.Ref, src.Path),
+			WithInternalNamef("[internal] Get source subpath and filter includes/excludes: %s @ %s", src.Ref, src.Path),
 		)
 	}
 	return st, nil

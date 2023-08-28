@@ -108,7 +108,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 				if err != nil {
 					return nil, nil, err
 				}
-				diffs = append(diffs, llb.Diff(base, _st, llb.WithCustomNamef("Diff target %q", t)))
+				diffs = append(diffs, llb.Diff(base, _st, frontend.WithInternalNamef("Diff target %q", t)))
 			}
 			st = llb.Merge(diffs)
 		}
@@ -172,21 +172,21 @@ func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool, target str
 			localSrcWork := localSt.Run(
 				llb.Args([]string{exe, "tar", localPath, dstPath}),
 				llb.AddMount(localPath, st, llb.Readonly),
-				llb.WithCustomNamef("Create comrpessed tar of source %q", k),
+				frontend.WithInternalNamef("Create comrpessed tar of source %q", k),
 			).State
 			if noMerge {
-				out = out.File(llb.Copy(localSrcWork, dstPath, "/SOURCES/"), llb.WithCustomNamef("Copy tar for source %q to SOURCES", k))
+				out = out.File(llb.Copy(localSrcWork, dstPath, "/SOURCES/"), llb.WithCustomNamef("Copy archive of source %q to SOURCES", k))
 				continue
 			}
-			st = llb.Scratch().File(llb.Copy(localSrcWork, dstPath, "/SOURCES/"), llb.WithCustomNamef("Copy tar for source %q to SOURCES", k))
-			diffs = append(diffs, llb.Diff(out, st, llb.WithCustomNamef("Diff source %q from empty SOURCES", k)))
+			st = llb.Scratch().File(llb.Copy(localSrcWork, dstPath, "/SOURCES/"), llb.WithCustomNamef("Copy archive of source %q to SOURCES", k))
+			diffs = append(diffs, llb.Diff(out, st, frontend.WithInternalNamef("Diff source %q from empty SOURCES", k)))
 		} else {
 			if noMerge {
 				out = out.File(llb.Copy(st, "/", "/SOURCES/"), llb.WithCustomNamef("Copy file source for %q to SOURCES", k))
 				continue
 			}
-			st = llb.Scratch().File(llb.Copy(st, "/", "/SOURCES/"), llb.WithCustomNamef("Copy file source for %q to SOURCES", k))
-			diffs = append(diffs, llb.Diff(out, st, llb.WithCustomNamef("Diff source %q from empty SOURCES", k)))
+			st = llb.Scratch().File(llb.Copy(st, "/", "/SOURCES/"), frontend.WithInternalNamef("Copy file source for %q to SOURCES", k))
+			diffs = append(diffs, llb.Diff(out, st, frontend.WithInternalNamef("Diff source %q from empty SOURCES", k)))
 		}
 	}
 
