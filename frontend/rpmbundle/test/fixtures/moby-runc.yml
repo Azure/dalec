@@ -1,19 +1,11 @@
 # syntax=cpuguy83/rpmbundle
-anchors:
-  build: &rpmBuild
-    libseccomp-devel:
-    libtool-ltdl-devel:
-    which:
-  runtime: &rpmRuntime
-    libseccomp:
-      - ">= 2.3"
-    "/bin/sh":
 
 args:
   RUNC_COMMIT:
   GO_MD2MAN_COMMIT: d97078115282836e16d0dca10b4b42ce60fc70e6
   REVISION: 1
   VERSION:
+
 name: moby-runc
 description: A CLI tool for spawning and running containers according to the OCI specification.
 website: https://www.runc.io
@@ -23,7 +15,9 @@ vendor: Moby
 
 dependencies:
   build:
-    <<: *rpmBuild
+    libseccomp-devel:
+    libtool-ltdl-devel:
+    which:
     gcc:
     golang:
       - ">= 1.19"
@@ -33,7 +27,9 @@ dependencies:
     pkgconfig:
     tar:
   runtime:
-    <<: *rpmRuntime
+    libseccomp:
+      - ">= 2.3"
+    "/bin/sh":
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 conflicts:
