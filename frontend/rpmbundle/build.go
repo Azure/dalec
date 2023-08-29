@@ -16,8 +16,15 @@ import (
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
-	"golang.org/x/exp/maps"
 )
+
+const (
+	targetBuildroot = "buildroot"
+)
+
+var builtinTargets = map[string]struct{}{
+	targetBuildroot: {},
+}
 
 type reexecFrontend interface {
 	CurrentFrontend() (*llb.State, error)
@@ -39,21 +46,33 @@ func loadSpec(ctx context.Context, client *dockerui.Client) (*frontend.Spec, err
 func handleSubrequest(ctx context.Context, bc *dockerui.Client) (*client.Result, bool, error) {
 	return bc.HandleSubrequest(ctx, dockerui.RequestHandler{
 		ListTargets: func(ctx context.Context) (*targets.List, error) {
-			spec, err := loadSpec(ctx, bc)
+			_, err := loadSpec(ctx, bc)
 			if err != nil {
 				return nil, err
 			}
-			var tl targets.List
 
-			for _, name := range maps.Keys(spec.Targets) {
-				tl.Targets = append(tl.Targets, targets.Target{
-					Name:    name,
-					Default: true,
-				})
-			}
-			return &tl, nil
+			return &targets.List{
+				Targets: []targets.Target{
+					{
+						Name:        targetBuildroot,
+						Default:     true,
+						Description: "Outputs an rpm buildroot suitable for passing to rpmbuild",
+					},
+				},
+			}, nil
 		},
 	})
+}
+
+func validateTarget(t string) error {
+	if t == "" {
+		return nil
+	}
+	_, ok := builtinTargets[t]
+	if !ok {
+		return fmt.Errorf("unknown target %q", t)
+	}
+	return nil
 }
 
 func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -81,32 +100,13 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 			return nil, nil, err
 		}
 
-		if bc.Target != "" {
-			_, ok := spec.Targets[bc.Target]
-			if !ok {
-				return nil, nil, fmt.Errorf("target %q not found", bc.Target)
-			}
+		if err := validateTarget(bc.Target); err != nil {
+			return nil, nil, err
 		}
 
-		var st llb.State
-		if bc.Target != "" {
-			st, err = specToLLB(spec, localSt, noMerge, bc.Target)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else {
-			// Build all targets
-			base := llb.Scratch()
-			diffs := make([]llb.State, 0, len(spec.Targets))
-			diffs = append(diffs, base)
-			for t := range spec.Targets {
-				_st, err := specToLLB(spec, localSt, noMerge, t)
-				if err != nil {
-					return nil, nil, err
-				}
-				diffs = append(diffs, llb.Diff(base, _st, frontend.WithInternalNamef("Diff target %q", t)))
-			}
-			st = llb.Merge(diffs)
+		st, err := specToLLB(spec, localSt, noMerge, bc.Target)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		def, err := st.Marshal(ctx)
@@ -133,14 +133,8 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool, target string) (llb.State, error) {
 	out := llb.Scratch().File(llb.Mkdir("SOURCES", 0755), frontend.WithInternalName("Create SOURCES dir"))
 
-	t := spec.Targets[target]
-	diffs := make([]llb.State, 0, len(t.Sources))
-	for _, k := range t.Sources {
-		src, ok := spec.Sources[k]
-		if !ok {
-			return llb.Scratch(), fmt.Errorf("source %q not found", k)
-		}
-
+	diffs := make([]llb.State, 0, len(spec.Sources))
+	for k, src := range spec.Sources {
 		st, err := frontend.Source2LLB(src)
 		if err != nil {
 			return llb.Scratch(), fmt.Errorf("error converting source %s: %w", k, err)

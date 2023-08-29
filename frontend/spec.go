@@ -48,9 +48,8 @@ type Spec struct {
 	// Each patch is applied in order and the result is used as the source for the build.
 	Patches map[string][]string
 
-	// Targets is the list of targets to build.
-	// The map key is the name of the target and the value is the target configuration.
-	Targets map[string]Target
+	// Build is the configuration for building the artifacts in the package.
+	Build Target
 
 	// Args is the list of arguments that can be used for shell-style expansion in (certain fields of) the spec.
 	// Any arg supplied in the build request which does not appear in this list will cause an error.
@@ -112,11 +111,6 @@ type Target struct {
 	Steps []BuildStep
 	// List of CacheDirs which will be used across all Steps
 	CacheDirs map[string]CacheDirConfig
-	// Outputs is the list of artifacts to be extracted after running the steps.
-	// Outputs map[string]ArtifactConfig
-	// Sources is the list of sources to mount into the build.
-	// The map key is the name of the source to mount and the value is the path to mount it to.
-	Sources []string
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string
 }

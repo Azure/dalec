@@ -131,9 +131,7 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 
 	sourceIdx := w.indexSourcesOnce()
 
-	t := w.Spec.Targets[w.target]
-	for _, name := range t.Sources {
-		src := w.Spec.Sources[name]
+	for name, src := range w.Spec.Sources {
 		ref := name
 		isDir, err := frontend.SourceIsDir(src)
 		if err != nil {
@@ -157,8 +155,7 @@ func (w *specWrapper) Release() string {
 
 func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	b := &strings.Builder{}
-	t := w.Spec.Targets[w.target]
-	if len(t.Sources) == 0 {
+	if len(w.Spec.Sources) == 0 {
 		return b, nil
 	}
 
@@ -172,8 +169,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		}
 	}
 
-	for _, name := range t.Sources {
-		src := w.Spec.Sources[name]
+	for name, src := range w.Spec.Sources {
 		err := func(name string, src frontend.Source) error {
 			if patches[name] {
 				// This source is a patch so we don't need to set anything up
@@ -186,7 +182,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			}
 
 			if !isDir {
-				fmt.Fprintf(b, "cp -a %{_sourcedir}/%s .\n", name)
+				fmt.Fprintf(b, "cp -a %%{_sourcedir}/%s .\n", name)
 				return nil
 			}
 
@@ -209,8 +205,8 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 func (w *specWrapper) BuildSteps() fmt.Stringer {
 	b := &strings.Builder{}
 
-	steps := w.Spec.Targets[w.target]
-	if len(steps.Steps) == 0 {
+	t := w.Spec.Build
+	if len(t.Steps) == 0 {
 		return b
 	}
 
@@ -220,11 +216,11 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	fmt.Fprintln(b, `export DALEC_OUTPUT_DIR="%{_builddir}/_output"`)
 	fmt.Fprintln(b, `mkdir -p "${DALEC_OUTPUT_DIR}/"{bin,man}`) // TODO: Add more artifact types
 
-	for k, v := range steps.Env {
+	for k, v := range t.Env {
 		fmt.Fprintf(b, "export %s=%s\n", k, v)
 	}
 
-	for _, step := range steps.Steps {
+	for _, step := range t.Steps {
 		for k, v := range step.Env {
 			fmt.Fprintf(b, "%s=%s ", k, v)
 		}
