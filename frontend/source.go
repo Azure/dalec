@@ -65,7 +65,7 @@ func Source2LLB(src Source) (llb.State, error) {
 				withIncludes(src.Includes),
 				withExcludes(src.Excludes),
 			),
-			WithInternalNamef("[internal] Get source subpath and filter includes/excludes: %s @ %s", src.Ref, src.Path),
+			WithInternalNamef("Get source subpath and filter includes/excludes: %s @ %s", src.Ref, src.Path),
 		)
 	}
 	return st, nil
