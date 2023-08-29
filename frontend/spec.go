@@ -5,7 +5,6 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
-	spb "github.com/moby/buildkit/sourcepolicy/pb"
 )
 
 // Spec is the specification for a package build.
@@ -52,9 +51,6 @@ type Spec struct {
 	// Targets is the list of targets to build.
 	// The map key is the name of the target and the value is the target configuration.
 	Targets map[string]Target
-
-	// SourcePolicy is used to approve/deny/rewrite sources used by a build.
-	SourcePolicy *spb.Policy
 
 	// Args is the list of arguments that can be used for shell-style expansion in (certain fields of) the spec.
 	// Any arg supplied in the build request which does not appear in this list will cause an error.
