@@ -109,12 +109,10 @@ type Target struct {
 	// List of CacheDirs which will be used across all Steps
 	CacheDirs map[string]CacheDirConfig
 	// Outputs is the list of artifacts to be extracted after running the steps.
-	Outputs map[string]ArtifactConfig
+	// Outputs map[string]ArtifactConfig
 	// Sources is the list of sources to mount into the build.
 	// The map key is the name of the source to mount and the value is the path to mount it to.
-	Sources map[string]string
-	// Workdir specifies the working directory that each new command will run in within this step group
-	WorkDir string
+	Sources []string
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string
 }
@@ -148,29 +146,6 @@ type CacheDirConfig struct {
 	// What this key is depends on the frontend implementation
 	// Frontends SHOULD use the buildkit platform arch
 	IncludeArchKey bool
-}
-
-type ArtifactType string
-
-var (
-	// ArtifactTypeExecutable is used to install a binary
-	ArtifactTypeExecutable ArtifactType = "exe"
-	// ArtifactTypeManpage is used to install a manpage document
-	ArtifactTypeManpage ArtifactType = "manpage"
-	// ArtifactTypeSystemdUnit is used to install a systemd unit file
-	ArtifactTypeSystemdUnit ArtifactType = "systemd-unit"
-	// ArtifactTypePreInst is used to run a script after installing the package
-	ArtifactTypePostInst ArtifactType = "postinst"
-	// ArtifactTypeContrib is used to install a contrib file
-	ArtifactTypeContrib ArtifactType = "contrib"
-	// TODO: others TBD, eg config files, licenses, notices, libexec, etc
-)
-
-// ArtifactConfig is used to configure how to extract an artifact and whatit is
-type ArtifactConfig struct {
-	// ArtifactType defines the type of artifact this is and will determine how to handle it in the package
-	Type ArtifactType
-	Filters
 }
 
 // Filters is used to filter the files to include/exclude from a directory.

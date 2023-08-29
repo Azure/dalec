@@ -19,6 +19,7 @@ URL: {{.Website}}
 Vendor: {{.Vendor}}
 Packager: {{.Packager}}
 
+
 {{ .Sources }}
 {{ .Conflicts }}
 
@@ -32,11 +33,20 @@ Replaces: {{$r}}
 
 {{ .Requires }}
 
+%description
+{{.Description}}
+
 {{ .PrepareSources }}
 
-%build
 {{ .BuildSteps }}
 
+{{ .Install }}
+
+{{ .Files }}
+
+%changelog
+* Mon Aug 28 2023 Brian Goff <brgoff@microsoft.com>
+- Dummy changelog entry
 `)))
 
 type specWrapper struct {
@@ -122,7 +132,7 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 	sourceIdx := w.indexSourcesOnce()
 
 	t := w.Spec.Targets[w.target]
-	for name := range t.Sources {
+	for _, name := range t.Sources {
 		src := w.Spec.Sources[name]
 		ref := name
 		isDir, err := frontend.SourceIsDir(src)
@@ -162,12 +172,9 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		}
 	}
 
-	sourceIndex := w.indexSourcesOnce()
-
-	for name := range t.Sources {
+	for _, name := range t.Sources {
 		src := w.Spec.Sources[name]
 		err := func(name string, src frontend.Source) error {
-			idx := sourceIndex[name]
 			if patches[name] {
 				// This source is a patch so we don't need to set anything up
 				return nil
@@ -179,18 +186,16 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			}
 
 			if !isDir {
-				fmt.Fprintf(b, "cp -a /SOURCES/%s .\n", name)
+				fmt.Fprintf(b, "cp -a %{_sourcedir}/%s .\n", name)
 				return nil
 			}
 
-			fmt.Fprintf(b, "%%setup -T -b %d -q -c -n %s\n", idx, name)
+			fmt.Fprintf(b, "mkdir -p %%{_builddir}/%s\n", name)
+			fmt.Fprintf(b, "tar -C %%{_builddir}/%s -xzf %%{_sourcedir}/%s.tar.gz\n", name, name)
 
 			for _, p := range w.Patches[name] {
-				idx, ok := w.indexSourcesOnce()[p]
-				if !ok {
-					return fmt.Errorf("patch %q not found", p)
-				}
-				fmt.Fprintf(b, "%%patch%d\n", idx)
+				fmt.Fprintf(b, "cd %s\n", name)
+				fmt.Fprintf(b, "patch -p0 -s < %%{_sourcedir}/%s\n", p)
 			}
 			return nil
 		}(name, src)
@@ -201,17 +206,19 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	return b, nil
 }
 
-func (w *specWrapper) BuildSteps() (fmt.Stringer, error) {
+func (w *specWrapper) BuildSteps() fmt.Stringer {
 	b := &strings.Builder{}
 
 	steps := w.Spec.Targets[w.target]
-
-	b.WriteString("_rootdir=$(pwd)")
-	if steps.WorkDir != "" {
-		fmt.Fprintf(b, "mkdir -p %s\n", "${_rootdir}/"+steps.WorkDir)
-		fmt.Fprintf(b, "cd %s\n", "${_rootdir}/"+steps.WorkDir)
-		fmt.Fprint(b, "\n")
+	if len(steps.Steps) == 0 {
+		return b
 	}
+
+	fmt.Fprintln(b, `%build`)
+
+	fmt.Fprintln(b, "set -e")
+	fmt.Fprintln(b, `export DALEC_OUTPUT_DIR="%{_builddir}/_output"`)
+	fmt.Fprintln(b, `mkdir -p "${DALEC_OUTPUT_DIR}/"{bin,man}`) // TODO: Add more artifact types
 
 	for k, v := range steps.Env {
 		fmt.Fprintf(b, "export %s=%s\n", k, v)
@@ -224,5 +231,30 @@ func (w *specWrapper) BuildSteps() (fmt.Stringer, error) {
 		fmt.Fprintln(b, step.Command)
 	}
 
-	return b, nil
+	return b
+}
+
+func (w *specWrapper) Install() fmt.Stringer {
+	b := &strings.Builder{}
+
+	fmt.Fprintln(b, "%install")
+	fmt.Fprintln(b, `export DALEC_OUTPUT_DIR="%{_builddir}/_output"`)
+
+	fmt.Fprintln(b, "mkdir -p %{buildroot}/{%{_bindir},%{_mandir}}")
+
+	fmt.Fprintln(b, `cp -a "${DALEC_OUTPUT_DIR}"/bin/* %{buildroot}/%{_bindir}/`)
+	fmt.Fprintln(b, `cp -a -r "${DALEC_OUTPUT_DIR}"/man/* %{buildroot}/%{_mandir}/`)
+
+	return b
+}
+
+func (w *specWrapper) Files() fmt.Stringer {
+	b := &strings.Builder{}
+
+	fmt.Fprintln(b, "%files")
+
+	fmt.Fprintln(b, "%{_mandir}/*/*")
+	fmt.Fprintln(b, "%{_bindir}/*")
+
+	return b
 }

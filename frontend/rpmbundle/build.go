@@ -131,11 +131,11 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 }
 
 func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool, target string) (llb.State, error) {
-	out := llb.Scratch().File(llb.Mkdir("SOURCES", 0755))
+	out := llb.Scratch().File(llb.Mkdir("SOURCES", 0755), frontend.WithInternalName("Create SOURCES dir"))
 
 	t := spec.Targets[target]
 	diffs := make([]llb.State, 0, len(t.Sources))
-	for k := range t.Sources {
+	for _, k := range t.Sources {
 		src, ok := spec.Sources[k]
 		if !ok {
 			return llb.Scratch(), fmt.Errorf("source %q not found", k)
@@ -195,7 +195,7 @@ func specToLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool, target str
 		return llb.Scratch(), fmt.Errorf("could not generate rpm spec file: %w", err)
 	}
 
-	out = out.File(llb.Mkdir("SPECS", 0755))
+	out = out.File(llb.Mkdir("SPECS", 0755), frontend.WithInternalName("Create SPECS dir"))
 	out = out.File(llb.Mkfile("SPECS/"+spec.Name+".spec", 0640, buf.Bytes()), llb.WithCustomName("Generate rpm spec file - SPECS/"+spec.Name+".spec"))
 
 	return out, nil
