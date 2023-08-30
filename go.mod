@@ -10,7 +10,6 @@ require (
 	github.com/opencontainers/image-spec v1.1.0-rc4
 	github.com/sirupsen/logrus v1.9.3
 	go.etcd.io/bbolt v1.3.7
-	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
 	google.golang.org/grpc v1.57.0
 	gotest.tools/v3 v3.5.0
 )
