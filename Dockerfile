@@ -20,7 +20,7 @@ RUN yum-config-manager --enable powertools || yum-config-manager --enable resili
 RUN dnf install -y gcc libseccomp-devel libtool libtool-ltdl-devel make which
 COPY _output2/ /root/rpmbuild/
 RUN rpmbuild -bb /root/rpmbuild/SPECS/moby-runc.spec
-RUN ls -lh /root/rpmbuild/RPMS; exit 1
+RUN ls -lh /root/rpmbuild/RPMS/*; exit 1
 
 FROM scratch
 COPY --from=build-test /frontend /frontend
