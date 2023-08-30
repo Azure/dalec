@@ -55,10 +55,9 @@ type specWrapper struct {
 	indexSourcesOnce func() map[string]int
 }
 
-func newSpecWrapper(spec *frontend.Spec, target string) *specWrapper {
+func newSpecWrapper(spec *frontend.Spec) *specWrapper {
 	w := &specWrapper{
-		Spec:   spec,
-		target: target,
+		Spec: spec,
 	}
 	w.indexSourcesOnce = sync.OnceValue(w.indexSources)
 	return w
