@@ -84,11 +84,6 @@ type Source struct {
 
 	// KeepGitDir is used to keep the .git directory after fetching the source for git references.
 	KeepGitDir bool `yaml:"keep_git_dir"`
-
-	// Unpack is used to unpack the source after fetching it.
-	// This is useful when the source is an archive (e.g. tar, zip, etc).
-	// If the source is not an archive this will be ignored.
-	Unpack bool
 }
 
 // PackageDependencies is a list of dependencies for a package.

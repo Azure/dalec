@@ -56,7 +56,7 @@ func Source2LLB(src Source) (llb.State, error) {
 		st = llb.Local(ref, llb.WithCustomName("Fetch local source: "+ref))
 	}
 
-	if src.Path != "" || len(src.Includes) > 0 || len(src.Excludes) > 0 || src.Unpack {
+	if src.Path != "" || len(src.Includes) > 0 || len(src.Excludes) > 0 {
 		st = llb.Scratch().File(
 			llb.Copy(
 				st,
@@ -64,7 +64,6 @@ func Source2LLB(src Source) (llb.State, error) {
 				"/",
 				withIncludes(src.Includes),
 				withExcludes(src.Excludes),
-				withUnpack(src.Unpack),
 			),
 			WithInternalNamef("Get source subpath and filter includes/excludes: %s @ %s", src.Ref, src.Path),
 		)
@@ -76,12 +75,6 @@ type copyOptionFunc func(*llb.CopyInfo)
 
 func (f copyOptionFunc) SetCopyOption(i *llb.CopyInfo) {
 	f(i)
-}
-
-func withUnpack(b bool) llb.CopyOption {
-	return copyOptionFunc(func(opt *llb.CopyInfo) {
-		opt.AttemptUnpack = b
-	})
 }
 
 func withIncludes(patterns []string) llb.CopyOption {
