@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/azure/dalec/frontend"
+	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
@@ -20,11 +21,8 @@ import (
 
 const (
 	targetBuildroot = "buildroot"
+	targetResolve   = "resolve"
 )
-
-var builtinTargets = map[string]struct{}{
-	targetBuildroot: {},
-}
 
 type reexecFrontend interface {
 	CurrentFrontend() (*llb.State, error)
@@ -58,21 +56,64 @@ func handleSubrequest(ctx context.Context, bc *dockerui.Client) (*client.Result,
 						Default:     true,
 						Description: "Outputs an rpm buildroot suitable for passing to rpmbuild",
 					},
+					{
+						Name:        targetResolve,
+						Description: "Outputs the resolved yaml spec with build args expanded",
+					},
 				},
 			}, nil
 		},
 	})
 }
 
-func validateTarget(t string) error {
-	if t == "" {
-		return nil
+func handleResolve(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
+	dt, err := yaml.Marshal(spec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error marshalling spec: %w", err)
 	}
-	_, ok := builtinTargets[t]
-	if !ok {
-		return fmt.Errorf("unknown target %q", t)
+	st := llb.Scratch().File(llb.Mkfile("spec.yaml", 0640, dt), llb.WithCustomName("Generate resolved spec file - spec.yaml"))
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 	}
-	return nil
+	res, err := client.Solve(ctx, gwclient.SolveRequest{
+		Definition: def.ToPB(),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	ref, err := res.SingleRef()
+	return ref, nil, err
+}
+
+func handleBuildRoot(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
+	cf := client.(reexecFrontend)
+	localSt, err := cf.CurrentFrontend()
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not get current frontend: %w", err)
+	}
+	caps := client.BuildOpts().LLBCaps
+	noMerge := !caps.Contains(pb.CapMergeOp)
+
+	st, err := specToLLB(spec, localSt, noMerge, targetBuildroot)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+	}
+
+	res, err := client.Solve(ctx, gwclient.SolveRequest{
+		Definition: def.ToPB(),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ref, err := res.SingleRef()
+	return ref, nil, err
 }
 
 func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -86,43 +127,20 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return res, err
 	}
 
-	cf := client.(reexecFrontend)
-	localSt, err := cf.CurrentFrontend()
-	if err != nil {
-		return nil, fmt.Errorf("could not get current frontend: %w", err)
-	}
-	caps := client.BuildOpts().LLBCaps
-	noMerge := !caps.Contains(pb.CapMergeOp)
-
 	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
 		spec, err := loadSpec(ctx, bc)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		if err := validateTarget(bc.Target); err != nil {
-			return nil, nil, err
+		switch bc.Target {
+		case targetBuildroot, "":
+			return handleBuildRoot(ctx, client, spec)
+		case targetResolve:
+			return handleResolve(ctx, client, spec)
+		default:
+			return nil, nil, fmt.Errorf("unknown target %q", bc.Target)
 		}
-
-		st, err := specToLLB(spec, localSt, noMerge, bc.Target)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		def, err := st.Marshal(ctx)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
-		}
-
-		res, err := client.Solve(ctx, gwclient.SolveRequest{
-			Definition: def.ToPB(),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ref, err := res.SingleRef()
-		return ref, nil, err
 	})
 	if err != nil {
 		return nil, err

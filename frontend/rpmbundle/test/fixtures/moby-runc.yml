@@ -2,7 +2,7 @@
 
 args:
   RUNC_COMMIT:
-  GO_MD2MAN_COMMIT: d97078115282836e16d0dca10b4b42ce60fc70e6
+  MD2MAN_COMMIT: d97078115282836e16d0dca10b4b42ce60fc70e6
   REVISION: 1
   VERSION:
 
@@ -42,7 +42,7 @@ sources:
   src:
     ref: https://github.com/opencontainers/runc.git#${RUNC_COMMIT}
   go-md2man:
-    ref: https://github.com/cpuguy83/go-md2man.git#${GO_MD2MAN_COMMIT}
+    ref: https://github.com/cpuguy83/go-md2man.git#${MD2MAN_COMMIT}
     satisfies:
       - go-md2man
   golang:
