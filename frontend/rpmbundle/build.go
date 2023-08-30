@@ -18,6 +18,7 @@ import (
 const (
 	targetBuildroot = "buildroot"
 	targetResolve   = "resolve"
+	targetSpec      = "spec"
 )
 
 type reexecFrontend interface {
@@ -50,11 +51,15 @@ func handleSubrequest(ctx context.Context, bc *dockerui.Client) (*client.Result,
 					{
 						Name:        targetBuildroot,
 						Default:     true,
-						Description: "Outputs an rpm buildroot suitable for passing to rpmbuild",
+						Description: "Outputs an rpm buildroot suitable for passing to rpmbuild.",
 					},
 					{
 						Name:        targetResolve,
-						Description: "Outputs the resolved yaml spec with build args expanded",
+						Description: "Outputs the resolved yaml spec with build args expanded. This is primarly intended for debugging purposes.",
+					},
+					{
+						Name:        targetSpec,
+						Description: "Like " + targetBuildroot + " but outputs just SPECS/. This is useful for putting the generated spec into a VCS repository.",
 					},
 				},
 			}, nil
@@ -84,6 +89,8 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 			return handleBuildRoot(ctx, client, spec)
 		case targetResolve:
 			return handleResolve(ctx, client, spec)
+		case targetSpec:
+			return handleSpec(ctx, client, spec)
 		default:
 			return nil, nil, fmt.Errorf("unknown target %q", bc.Target)
 		}

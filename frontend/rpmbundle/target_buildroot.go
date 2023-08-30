@@ -1,7 +1,6 @@
 package rpmbundle
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -98,13 +97,5 @@ func specToBuildrootLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (
 		out = llb.Merge(append([]llb.State{out}, diffs...), llb.WithCustomName("Merge sources into SOURCES dir"))
 	}
 
-	buf := bytes.NewBuffer(nil)
-	if err := specTmpl.Execute(buf, newSpecWrapper(spec)); err != nil {
-		return llb.Scratch(), fmt.Errorf("could not generate rpm spec file: %w", err)
-	}
-
-	out = out.File(llb.Mkdir("SPECS", 0755), frontend.WithInternalName("Create SPECS dir"))
-	out = out.File(llb.Mkfile("SPECS/"+spec.Name+".spec", 0640, buf.Bytes()), llb.WithCustomName("Generate rpm spec file - SPECS/"+spec.Name+".spec"))
-
-	return out, nil
+	return specToRpmSpecLLB(spec, out)
 }
