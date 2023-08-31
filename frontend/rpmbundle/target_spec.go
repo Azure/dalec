@@ -38,8 +38,10 @@ func specToRpmSpecLLB(spec *frontend.Spec, in llb.State) (llb.State, error) {
 		return llb.Scratch(), fmt.Errorf("could not generate rpm spec file: %w", err)
 	}
 
+	dir := "SPECS/" + spec.Name
+
 	return in.
-			File(llb.Mkdir("SPECS", 0755, llb.WithParents(true))).
-			File(llb.Mkfile("SPECS/"+spec.Name+".spec", 0640, buf.Bytes())),
+			File(llb.Mkdir(dir, 0755, llb.WithParents(true))).
+			File(llb.Mkfile(dir+"/"+spec.Name+".spec", 0640, buf.Bytes())),
 		nil
 }

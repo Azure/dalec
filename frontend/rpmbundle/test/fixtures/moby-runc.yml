@@ -2,7 +2,6 @@
 
 args:
   RUNC_COMMIT:
-  MD2MAN_COMMIT: d97078115282836e16d0dca10b4b42ce60fc70e6
   REVISION: 1
   VERSION:
 
@@ -19,6 +18,7 @@ dependencies:
     libtool-ltdl-devel:
     which:
     gcc:
+    git:
     golang:
       - ">= 1.19"
     go-md2man:
@@ -30,6 +30,7 @@ dependencies:
     libseccomp:
       - ">= 2.3"
     "/bin/sh":
+
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 conflicts:
@@ -41,10 +42,6 @@ provides:
 sources:
   src:
     ref: https://github.com/opencontainers/runc.git#${RUNC_COMMIT}
-  go-md2man:
-    ref: https://github.com/cpuguy83/go-md2man.git#${MD2MAN_COMMIT}
-    satisfies:
-      - go-md2man
   golang:
     ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.20
     path: /usr/local/go
@@ -58,11 +55,8 @@ build:
     GOFLAGS: -trimpath
   steps:
     - command: |
-        ls -lh
         export PATH="$(pwd)/golang/go/bin:${PATH}"
         export GOROOT="$(pwd)/golang/go"
-        make -C go-md2man
-        export PATH="$(pwd)/go-md2man/bin:${PATH}"
         cd src
         make man runc BUILDTAGS=seccomp
 

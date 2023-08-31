@@ -62,8 +62,8 @@ func Source2LLB(src Source) (llb.State, error) {
 				st,
 				src.Path,
 				"/",
-				withIncludes(src.Includes),
-				withExcludes(src.Excludes),
+				WithIncludes(src.Includes),
+				WithExcludes(src.Excludes),
 			),
 			WithInternalNamef("Get source subpath and filter includes/excludes: %s @ %s", src.Ref, src.Path),
 		)
@@ -77,15 +77,21 @@ func (f copyOptionFunc) SetCopyOption(i *llb.CopyInfo) {
 	f(i)
 }
 
-func withIncludes(patterns []string) llb.CopyOption {
+func WithIncludes(patterns []string) llb.CopyOption {
 	return copyOptionFunc(func(i *llb.CopyInfo) {
 		i.IncludePatterns = patterns
 	})
 }
 
-func withExcludes(patterns []string) llb.CopyOption {
+func WithExcludes(patterns []string) llb.CopyOption {
 	return copyOptionFunc(func(i *llb.CopyInfo) {
 		i.ExcludePatterns = patterns
+	})
+}
+
+func WithDirContentsOnly() llb.CopyOption {
+	return copyOptionFunc(func(i *llb.CopyInfo) {
+		i.CopyDirContentsOnly = true
 	})
 }
 
