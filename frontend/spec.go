@@ -60,6 +60,18 @@ type Spec struct {
 	License  string
 	Vendor   string
 	Packager string
+
+	Image *ImageConfig `yaml:"image"`
+}
+
+type ImageConfig struct {
+	Entrypoint []string            `yaml:"entrypoint"`
+	Cmd        []string            `yaml:"cmd"`
+	Env        []string            `yaml:"env"`
+	Labels     map[string]string   `yaml:"labels"`
+	Volumes    map[string]struct{} `yaml:"volumes"`
+	WorkingDir string              `yaml:"working_dir"`
+	StopSignal string              `yaml:"stop_signal"`
 }
 
 // Source defines a source to be used in the build.

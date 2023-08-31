@@ -23,6 +23,7 @@ const (
 	targetSpec      = "spec"
 	targetRPM       = "rpm"
 	targetSources   = "sources"
+	targetContainer = "container"
 )
 
 type reexecFrontend interface {
@@ -73,6 +74,10 @@ func handleSubrequest(ctx context.Context, bc *dockerui.Client) (*client.Result,
 						Description: "Builds the rpm and outputs to RPMS/<rpmarch>.",
 						Default:     true,
 					},
+					{
+						Name:        targetContainer,
+						Description: "Builds a container with the RPM installed.",
+					},
 				},
 			}, nil
 		},
@@ -95,11 +100,6 @@ func lookupCmd() string {
 
 func frontendCmd(args ...string) llb.RunOption {
 	return llb.Args(append([]string{lookupCmd()}, args...))
-}
-
-func frontendMount(localSt *llb.State) llb.RunOption {
-	p := lookupCmd()
-	return llb.AddMount(p, *localSt, llb.Readonly, llb.SourcePath(p))
 }
 
 func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -130,6 +130,8 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 			return handleRPM(ctx, client, spec)
 		case targetSources:
 			return handleSources(ctx, client, spec)
+		case targetContainer:
+			return handleContainer(ctx, client, spec)
 		default:
 			return nil, nil, fmt.Errorf("unknown target %q", bc.Target)
 		}

@@ -62,3 +62,6 @@ build:
 
         cp runc "${DALEC_OUTPUT_DIR}/bin/"
         cp -r man/man8 ${DALEC_OUTPUT_DIR}/man/man8
+
+image:
+  entrypoint: ["runc"]

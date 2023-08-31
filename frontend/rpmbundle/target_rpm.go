@@ -77,7 +77,8 @@ func handleRPM(ctx context.Context, client gwclient.Client, spec *frontend.Spec)
 		return nil, nil, err
 	}
 	ref, err := res.SingleRef()
-	return ref, nil, err
+	// Do not return a nil image, it may cause a panic
+	return ref, &image.Image{}, err
 }
 
 func shArgs(cmd string) llb.RunOption {

@@ -37,7 +37,8 @@ func handleSources(ctx context.Context, client gwclient.Client, spec *frontend.S
 		return nil, nil, err
 	}
 	ref, err := res.SingleRef()
-	return ref, nil, err
+	// Do not return a nil image, it may cause a panic
+	return ref, &image.Image{}, err
 }
 
 func specToSourcesLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool, in llb.State, target string) (llb.State, error) {
