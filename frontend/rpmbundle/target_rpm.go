@@ -115,7 +115,7 @@ func specToRpmLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.St
 	)
 
 	const toolkitDir = "/usr/local/toolkit"
-	toolkitMount := llb.AddMount(toolkitDir, marinerToolkit())
+	toolkitMount := marinerToolkit(toolkitDir, localSt)
 
 	st := marinerBase.Run(
 		shArgs("make -j$(nproc) -C "+toolkitDir+" toolchain chroot-tools"),
@@ -153,26 +153,8 @@ func specToRpmLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.St
 	), nil
 }
 
-func marinerToolkit() llb.State {
-	remote := llb.Git("https://github.com/microsoft/CBL-Mariner.git", "f3fee7cccffb21f1d7abf5ff940ba7db599fd4a2", llb.KeepGitDir())
-
-	st := marinerBase.Dir("/build").
-		Run(
-			shArgs("cd toolkit; make package-toolkit REBUILD_TOOLS=y && mkdir -p /tmp/toolkit && tar -C /tmp/toolkit --strip-components=1 -zxf /build/out/toolkit-*.tar.gz"),
-			llb.Security(pb.SecurityMode_INSECURE), // building the toolkit does mounts and other things that require root
-			llb.AddMount("/build", remote),
-			cachedToolkitRPMMount,
-			cachedToolkitRPMEnv,
-			goModCache,
-			goBuildCache,
-		).
-		State
-
-	return llb.Scratch().File(
-		llb.Copy(st, "/tmp/toolkit", "/",
-			frontend.WithDirContentsOnly(),
-		),
-	)
+func marinerToolkit(dest string, local *llb.State) llb.RunOption {
+	return llb.AddMount(dest, *local, llb.SourcePath("/toolkit"))
 }
 
 func setMarinerChrootCache(es *llb.ExecInfo) {
