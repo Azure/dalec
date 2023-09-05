@@ -32,17 +32,27 @@ RUN \
 ARG TOOLKIT_COMMIT=f3fee7cccffb21f1d7abf5ff940ba7db599fd4a2
 ADD --keep-git-dir https://github.com/microsoft/CBL-Mariner.git#${TOOLKIT_COMMIT} /build
 WORKDIR /build
+ENV CACHED_RPMS_DIR=/root/.cache/mariner2-toolkit-rpm-cache
 RUN \
     --security=insecure \
-    --mount=type=cache,target=/root/.cache/mariner2-toolkit-rpm-cache,id=mariner2-toolkit-rpm-cache,sharing=locked \
     --mount=type=cache,target=/go/pkg/mod,id=go-pkg-mod \
     --mount=type=cache,target=/root/.cache/go-build,id=go-build-cache \
-    cd toolkit && make package-toolkit REBUILD_TOOLS=y && mkdir -p /tmp/toolkit && tar -C /tmp/toolkit --strip-components=1 -zxf /build/out/toolkit-*.tar.gz
+    cd toolkit && make package-toolkit REBUILD_TOOLS=y 
+RUN mkdir -p /tmp/toolkit && tar -C /tmp/toolkit --strip-components=1 -zxf /build/out/toolkit-*.tar.gz
+RUN \
+    --mount=type=cache,target=/go/pkg/mod,id=go-pkg-mod \
+    --mount=type=cache,target=/root/.cache/go-build,id=go-build-cache \
+    --mount=type=cache,target=/root/.cache/mariner2-toolkit-rpm-cache,id=mariner2-toolkit-rpm-cache,sharing=locked \
+    set -e; \
+    cd /tmp/toolkit; \
+    make -j$(nproc) toolchain chroot-tools REBUILD_TOOLS=y
 
 
+
+FROM scratch AS toolkit
+COPY --from=toolchain-build /tmp/toolkit /
 
 FROM scratch
 COPY --from=frontend-build /frontend /frontend
-COPY --from=toolchain-build /tmp/toolkit /toolkit
 LABEL moby.buildkit.frontend.caps=moby.buildkit.frontend.subrequests
 ENTRYPOINT ["/frontend"]
