@@ -39,15 +39,6 @@ RUN \
     --mount=type=cache,target=/root/.cache/go-build,id=go-build-cache \
     cd toolkit && make package-toolkit REBUILD_TOOLS=y 
 RUN mkdir -p /tmp/toolkit && tar -C /tmp/toolkit --strip-components=1 -zxf /build/out/toolkit-*.tar.gz
-RUN \
-    --mount=type=cache,target=/go/pkg/mod,id=go-pkg-mod \
-    --mount=type=cache,target=/root/.cache/go-build,id=go-build-cache \
-    --mount=type=cache,target=/root/.cache/mariner2-toolkit-rpm-cache,id=mariner2-toolkit-rpm-cache,sharing=locked \
-    set -e; \
-    cd /tmp/toolkit; \
-    make -j$(nproc) toolchain chroot-tools REBUILD_TOOLS=y
-
-
 
 FROM scratch AS toolkit
 COPY --from=toolchain-build /tmp/toolkit /

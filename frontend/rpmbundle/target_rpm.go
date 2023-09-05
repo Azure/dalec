@@ -14,6 +14,9 @@ import (
 
 const (
 	marinerRef = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+
+	cachedToolkitRPMDir = "/root/.cache/mariner2-toolkit-rpm-cache"
+	marinerToolkitPath  = "/usr/local/toolkit"
 )
 
 var baseMarinerPackages = []string{
@@ -42,13 +45,11 @@ var marinerBase = llb.Image(marinerRef).
 	).
 	State
 
-const cachedToolkitRPMDir = "/root/.cache/mariner2-toolkit-rpm-cache"
+var toolkitImg = llb.Image("cpuguy83/mariner-toolkit:f3fee7cccffb21f1d7abf5ff940ba7db599fd4a2")
 
 var (
-	goModCache            = llb.AddMount("/go/pkg/mod", llb.Scratch(), llb.AsPersistentCacheDir("go-pkg-mod", llb.CacheMountShared))
-	goBuildCache          = llb.AddMount("/root/.cache/go-build", llb.Scratch(), llb.AsPersistentCacheDir("go-build-cache", llb.CacheMountShared))
-	cachedToolkitRPMMount = llb.AddMount(cachedToolkitRPMDir, llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked))
-	cachedToolkitRPMEnv   = llb.AddEnv("CACHED_RPMS_DIR", cachedToolkitRPMDir)
+	goModCache   = llb.AddMount("/go/pkg/mod", llb.Scratch(), llb.AsPersistentCacheDir("go-pkg-mod", llb.CacheMountShared))
+	goBuildCache = llb.AddMount("/root/.cache/go-build", llb.Scratch(), llb.AsPersistentCacheDir("go-build-cache", llb.CacheMountShared))
 )
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
@@ -114,24 +115,15 @@ func specToRpmLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.St
 		llb.Diff(sigBase, sigSt)},
 	)
 
-	const toolkitDir = "/usr/local/toolkit"
-	toolkitMount := marinerToolkit(toolkitDir, localSt)
-
-	st := marinerBase.Run(
-		shArgs("make -j$(nproc) -C "+toolkitDir+" toolchain chroot-tools"),
-		withRunMarinerChrootCache(),
-		llb.AddEnv("REBUILD_TOOLS", "y"),
-		llb.AddEnv("OUT_DIR", "/build/out"),
-		llb.AddEnv("PROJECT_DIR", "/build/project"),
-		toolkitMount,
-		cachedToolkitRPMMount,
-		cachedToolkitRPMEnv,
-		goBuildCache,
-		goModCache,
-	).
+	st := marinerBase.
+		Dir(marinerToolkitPath).
 		Run(
-			shArgs("make -j$(nproc) -C /usr/local/toolkit build-packages || (cat /usr/local/build/logs/pkggen/rpmbuilding/*; exit 1)"),
-			withRunMarinerChrootCache(),
+			shArgs("make -j$(nproc) toolchain chroot-tools REBUILD_TOOLS=y"),
+			withMarinerToolkit(),
+		).
+		Run(
+			shArgs("make -j$(nproc) build-packages || (cat /usr/local/build/logs/pkggen/rpmbuilding/*; exit 1)"),
+			withMarinerToolkit(),
 			withRunMarinerPkgBuildCache(),
 			llb.AddMount("/build/rpmbuild/SPECS", br, llb.SourcePath("/SPECS")),
 			llb.AddEnv("SPECS_DIR", "/build/rpmbuild/SPECS"),
@@ -141,9 +133,6 @@ func specToRpmLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.St
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
 			llb.AddEnv("REFRESH_WORKER_CHROOT", "n"),
 			llb.Security(pb.SecurityMode_INSECURE),
-			toolkitMount,
-			cachedToolkitRPMMount,
-			cachedToolkitRPMEnv,
 			goBuildCache,
 			goModCache,
 		).State
@@ -153,31 +142,23 @@ func specToRpmLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.St
 	), nil
 }
 
-func marinerToolkit(dest string, local *llb.State) llb.RunOption {
-	return llb.AddMount(dest, *local, llb.SourcePath("/toolkit"))
-}
+func withMarinerToolkit() llb.RunOption {
+	return runOptionFunc(func(es *llb.ExecInfo) {
+		llb.AddMount(marinerToolkitPath, toolkitImg, llb.AsPersistentCacheDir("mariner2-toolkit-cache", llb.CacheMountPrivate)).SetRunOption(es)
 
-func setMarinerChrootCache(es *llb.ExecInfo) {
-	es.State = es.State.With(
-		llb.AddEnv("CHROOT_DIR", "/tmp/chroot"),
-	)
+		llb.AddEnv("CHROOT_DIR", "/tmp/chroot").SetRunOption(es)
+		llb.AddMount("/tmp/chroot", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-chroot-cache", llb.CacheMountLocked)).SetRunOption(es)
 
-	llb.AddMount("/tmp/chroot", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-chroot-cache", llb.CacheMountLocked)).SetRunOption(es)
-}
-
-func setMarinerPkgBuildCache(es *llb.ExecInfo) {
-	es.State = es.State.With(
-		llb.AddEnv("PKGBUILD_DIR", "/tmp/pkg_build_dir"),
-	)
-	llb.AddMount("/tmp/pkg_build_dir", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-pkgbuild-cache", llb.CacheMountLocked)).SetRunOption(es)
-}
-
-func withRunMarinerChrootCache() llb.RunOption {
-	return runOptionFunc(setMarinerChrootCache)
+		llb.AddEnv("CACHED_RPMS_DIR", cachedToolkitRPMDir).SetRunOption(es)
+		llb.AddMount(cachedToolkitRPMDir, llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked)).SetRunOption(es)
+	})
 }
 
 func withRunMarinerPkgBuildCache() llb.RunOption {
-	return runOptionFunc(setMarinerPkgBuildCache)
+	return runOptionFunc(func(es *llb.ExecInfo) {
+		llb.AddEnv("PKGBUILD_DIR", "/tmp/pkg_build_dir").SetRunOption(es)
+		llb.AddMount("/tmp/pkg_build_dir", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-pkgbuild-cache", llb.CacheMountLocked)).SetRunOption(es)
+	})
 }
 
 type runOptionFunc func(es *llb.ExecInfo)
