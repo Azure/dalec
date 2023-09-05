@@ -401,3 +401,4 @@ FodyWeavers.xsd
 # Internal/buildtime files which will get embedded into the final binary
 version.txt
 revision.txt
+_output
