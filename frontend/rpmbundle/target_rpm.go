@@ -92,7 +92,7 @@ func specToRpmLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.St
 		return llb.Scratch(), err
 	}
 
-	sources, err := specToSourcesLLB(spec, localSt, noMerge, llb.Scratch(), "SPECS/"+spec.Name)
+	sources, err := specToSourcesLLB(spec, noMerge, llb.Scratch(), "SPECS/"+spec.Name)
 	if err != nil {
 		return llb.Scratch(), err
 	}

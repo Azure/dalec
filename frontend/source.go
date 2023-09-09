@@ -9,14 +9,6 @@ import (
 	"github.com/moby/buildkit/util/gitutil"
 )
 
-func WithInternalName(name string) llb.ConstraintsOpt {
-	return llb.WithCustomNamef("[internal] %s", name)
-}
-
-func WithInternalNamef(format string, a ...interface{}) llb.ConstraintsOpt {
-	return llb.WithCustomNamef("[internal] "+format, a...)
-}
-
 func Source2LLB(src Source) (llb.State, error) {
 	scheme, ref, err := SplitSourceRef(src.Ref)
 	if err != nil {
@@ -26,7 +18,7 @@ func Source2LLB(src Source) (llb.State, error) {
 	var st llb.State
 	switch scheme {
 	case sourcetypes.DockerImageScheme:
-		st = llb.Image(ref, llb.WithCustomName("Fetch docker image source: "+ref))
+		st = llb.Image(ref)
 	case sourcetypes.GitScheme:
 		// TODO: Pass git secrets
 		ref, err := gitutil.ParseGitRef(ref)
@@ -37,7 +29,6 @@ func Source2LLB(src Source) (llb.State, error) {
 		if src.KeepGitDir {
 			opts = append(opts, llb.KeepGitDir())
 		}
-		opts = append(opts, llb.WithCustomName("Fetch git source: "+ref.Remote+"@"+ref.Commit))
 		st = llb.Git(ref.Remote, ref.Commit, opts...)
 	case sourcetypes.HTTPScheme, sourcetypes.HTTPSScheme:
 		ref, err := gitutil.ParseGitRef(src.Ref)
@@ -47,13 +38,12 @@ func Source2LLB(src Source) (llb.State, error) {
 			if src.KeepGitDir {
 				opts = append(opts, llb.KeepGitDir())
 			}
-			opts = append(opts, llb.WithCustomName("Fetch git source: "+ref.Remote+"@"+ref.Commit))
 			st = llb.Git(ref.Remote, ref.Commit, opts...)
 		} else {
-			st = llb.HTTP(src.Ref, llb.WithCustomName("Fetch http source: "+src.Ref))
+			st = llb.HTTP(src.Ref)
 		}
 	case sourcetypes.LocalScheme:
-		st = llb.Local(ref, llb.WithCustomName("Fetch local source: "+ref))
+		st = llb.Local(ref)
 	}
 
 	if src.Path != "" || len(src.Includes) > 0 || len(src.Excludes) > 0 {
@@ -65,7 +55,6 @@ func Source2LLB(src Source) (llb.State, error) {
 				WithIncludes(src.Includes),
 				WithExcludes(src.Excludes),
 			),
-			WithInternalNamef("Get source subpath and filter includes/excludes: %s @ %s", src.Ref, src.Path),
 		)
 	}
 	return st, nil

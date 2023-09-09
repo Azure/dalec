@@ -12,15 +12,10 @@ import (
 )
 
 func handleBuildRoot(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
-	cf := client.(reexecFrontend)
-	localSt, err := cf.CurrentFrontend()
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not get current frontend: %w", err)
-	}
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToBuildrootLLB(spec, localSt, noMerge)
+	st, err := specToBuildrootLLB(spec, noMerge)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -41,8 +36,8 @@ func handleBuildRoot(ctx context.Context, client gwclient.Client, spec *frontend
 	return ref, nil, err
 }
 
-func specToBuildrootLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.State, error) {
-	out, err := specToSourcesLLB(spec, localSt, noMerge, llb.Scratch(), "SOURCES")
+func specToBuildrootLLB(spec *frontend.Spec, noMerge bool) (llb.State, error) {
+	out, err := specToSourcesLLB(spec, noMerge, llb.Scratch(), "SOURCES")
 	if err != nil {
 		return llb.Scratch(), err
 	}
