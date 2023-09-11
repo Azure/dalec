@@ -147,7 +147,7 @@ func withMarinerToolkit() llb.RunOption {
 		llb.AddMount(marinerToolkitPath, toolkitImg, llb.AsPersistentCacheDir("mariner2-toolkit-cache", llb.CacheMountPrivate)).SetRunOption(es)
 
 		llb.AddEnv("CHROOT_DIR", "/tmp/chroot").SetRunOption(es)
-		llb.AddMount("/tmp/chroot", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-chroot-cache", llb.CacheMountLocked)).SetRunOption(es)
+		llb.AddMount("/tmp/chroot", llb.Scratch(), llb.Tmpfs()).SetRunOption(es)
 
 		llb.AddEnv("CACHED_RPMS_DIR", cachedToolkitRPMDir).SetRunOption(es)
 		llb.AddMount(cachedToolkitRPMDir, llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked)).SetRunOption(es)
@@ -157,7 +157,7 @@ func withMarinerToolkit() llb.RunOption {
 func withRunMarinerPkgBuildCache() llb.RunOption {
 	return runOptionFunc(func(es *llb.ExecInfo) {
 		llb.AddEnv("PKGBUILD_DIR", "/tmp/pkg_build_dir").SetRunOption(es)
-		llb.AddMount("/tmp/pkg_build_dir", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-pkgbuild-cache", llb.CacheMountLocked)).SetRunOption(es)
+		llb.AddMount("/tmp/pkg_build_dir", llb.Scratch(), llb.Tmpfs()).SetRunOption(es)
 	})
 }
 
