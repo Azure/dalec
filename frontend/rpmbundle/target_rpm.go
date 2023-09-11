@@ -53,15 +53,10 @@ var (
 )
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
-	cf := client.(reexecFrontend)
-	localSt, err := cf.CurrentFrontend()
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not get current frontend: %w", err)
-	}
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToRpmLLB(spec, localSt, noMerge)
+	st, err := specToRpmLLB(spec, noMerge, getDigestFromClientFn(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -86,34 +81,11 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
-func specToRpmLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.State, error) {
-	specs, err := specToRpmSpecLLB(spec, llb.Scratch())
+func specToRpmLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc) (llb.State, error) {
+	br, err := specToMariner2BuildrootLLB(spec, noMerge, getDigest)
 	if err != nil {
 		return llb.Scratch(), err
 	}
-
-	sources, err := specToSourcesLLB(spec, noMerge, llb.Scratch(), "SPECS/"+spec.Name)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	// The mariner toolkit wants a signatures file in the spec dir (next to the spec file) that contains the sha256sum of all sources.
-	sigBase := localSt.
-		// Add these so we can get a clean diff against this state and just get the signatures file
-		File(llb.Mkdir("/tmp/SPECS", 0755, llb.WithParents(true))).
-		File(llb.Mkdir("/SPECS/"+spec.Name, 0755, llb.WithParents(true)))
-
-	sigSt := sigBase.Run(
-		frontendCmd("signatures", "/tmp/SPECS/"+spec.Name, "/SPECS/"+spec.Name+"/"+spec.Name+".signatures.json"),
-		llb.AddMount("/tmp/SPECS", sources, llb.Readonly, llb.SourcePath("SPECS")), // this *should* only include the sources files we care about, so our cmd can just itterate that directory.
-	).State
-
-	br := llb.Merge([]llb.State{
-		llb.Scratch(),
-		llb.Diff(llb.Scratch(), specs),
-		llb.Diff(llb.Scratch(), sources),
-		llb.Diff(sigBase, sigSt)},
-	)
 
 	st := marinerBase.
 		Dir(marinerToolkitPath).

@@ -10,6 +10,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/pb"
 )
 
@@ -18,27 +19,65 @@ import (
 // Currently this image needs /bin/sh and tar in $PATH
 var TarImageRef = "busybox:latest"
 
-func tar(src llb.State, dest string) llb.State {
+func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	// This runs a dummy command to ensure dirs like /proc and /sys are created in the produced state
 	// This way we can use llb.Diff to get just the tarball.
-	base := llb.Image(TarImageRef).Run(shArgs(":")).State.File(llb.Mkdir(filepath.Dir(dest), 0755, llb.WithParents(true)))
 
-	st := base.Run(
+	tarImg := llb.Image(TarImageRef).Run(shArgs(":"), frontend.WithConstraints(opts...)).State
+
+	// Put the output tar in a consistent location regardless of `dest`
+	// This way if `dest` changes we don't have to rebuild the tarball, which can be expensive.
+	base := filepath.Base(dest)
+	st := tarImg.Run(
 		llb.AddMount("/src", src, llb.Readonly),
-		shArgs("tar -C /src -cvzf "+dest+" ."),
+		shArgs("tar -C /src -cvzf "+base+" ."),
+		frontend.WithConstraints(opts...),
 	).State
 
-	return llb.Diff(base, st)
+	if base == dest {
+		return llb.Diff(tarImg, st)
+	}
+
+	return llb.Scratch().File(llb.Copy(st, base, dest, frontend.WithCreateDestPath()))
+}
+
+// mergeOrCopy merges(or copies if noMerge=true) the given states into the given destination path in the given input state.
+func mergeOrCopy(input llb.State, states []llb.State, dest string, noMerge bool) llb.State {
+	output := input
+
+	if noMerge {
+		for _, src := range states {
+			if noMerge {
+				output = output.File(llb.Copy(src, "/", "/SOURCES/", frontend.WithCreateDestPath()))
+			}
+		}
+		return output
+	}
+
+	diffs := make([]llb.State, 0, len(states))
+	for _, src := range states {
+		st := src
+		if dest != "" && dest != "/" {
+			st = llb.Scratch().
+				File(llb.Copy(src, "/", dest, frontend.WithCreateDestPath()))
+		}
+		diffs = append(diffs, llb.Diff(input, st))
+	}
+	return llb.Merge(diffs)
 }
 
 func handleSources(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
 	caps := client.BuildOpts().LLBCaps
-	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToSourcesLLB(spec, noMerge, llb.Scratch(), "SOURCES")
+	// Put sources into the root of the state for consistent caching
+	sources, err := specToSourcesLLB(spec)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	noMerge := !caps.Contains(pb.CapMergeOp)
+	// Now we can merge sources into the desired path
+	st := mergeOrCopy(llb.Scratch(), sources, "/SOURCES", noMerge)
 
 	def, err := st.Marshal(ctx)
 	if err != nil {
@@ -65,47 +104,38 @@ func sortMapKeys[T any](m map[string]T) []string {
 	return keys
 }
 
-func specToSourcesLLB(spec *frontend.Spec, noMerge bool, in llb.State, target string) (llb.State, error) {
-	out := in.File(llb.Mkdir(target, 0755, llb.WithParents(true)))
+func specToSourcesLLB(spec *frontend.Spec) ([]llb.State, error) {
+	out := make([]llb.State, 0, len(spec.Sources))
 
-	diffs := make([]llb.State, 0, len(spec.Sources))
+	pgID := identity.NewID()
+	pgName := "Add spec sources"
+	pg := llb.ProgressGroup(pgID, pgName, false)
 
-	// Sort the keys so we get a consistent order
-	// This is important for caching, especially when noMerge==true
-	keys := sortMapKeys(spec.Sources)
+	// Sort the map keys so that the order is consistent This shouldn't be
+	// needed when MergeOp is supported, but when it is not this will improve
+	// cache hits for callers of this function.
+	sorted := sortMapKeys(spec.Sources)
 
-	for _, k := range keys {
+	for _, k := range sorted {
 		src := spec.Sources[k]
-		st, err := frontend.Source2LLB(src)
+		st, err := frontend.Source2LLB(src, pg)
 		if err != nil {
-			return llb.Scratch(), fmt.Errorf("error converting source %s: %w", k, err)
+			return nil, fmt.Errorf("error converting source %s: %w", k, err)
 		}
 
 		isDir, err := frontend.SourceIsDir(src)
 		if err != nil {
-			return llb.Scratch(), err
+			return nil, err
 		}
 
 		if isDir {
-			dstPath := filepath.Join(target, k+".tar.gz")
-			tarSt := tar(st, dstPath)
-			if noMerge {
-				out = out.File(llb.Copy(tarSt, dstPath, dstPath))
-				continue
-			}
-			diffs = append(diffs, llb.Diff(out, tarSt))
+			// use /tmp/st as the output tar name so that caching doesn't break based on file path.
+			tarSt := tar(st, "/tmp/st", pg)
+			out = append(out, llb.Scratch().File(llb.Copy(tarSt, "/tmp/st", k+".tar.gz"), pg))
 		} else {
-			if noMerge {
-				out = out.File(llb.Copy(st, "/", target+"/"))
-				continue
-			}
-			st = in.File(llb.Copy(st, "/", target+"/"))
-			diffs = append(diffs, llb.Diff(out, st))
+			out = append(out, st)
 		}
 	}
 
-	if len(diffs) > 0 {
-		out = llb.Merge(append([]llb.State{out}, diffs...))
-	}
 	return out, nil
 }

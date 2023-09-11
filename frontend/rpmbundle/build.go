@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/azure/dalec/frontend"
-	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/frontend/gateway/client"
@@ -18,17 +15,14 @@ import (
 )
 
 const (
-	targetBuildroot = "buildroot"
-	targetResolve   = "resolve"
-	targetSpec      = "spec"
-	targetRPM       = "rpm"
-	targetSources   = "sources"
-	targetContainer = "container"
+	targetBuildroot         = "buildroot"
+	targetResolve           = "resolve"
+	targetSpec              = "spec"
+	targetRPM               = "rpm"
+	targetSources           = "sources"
+	targetMariner2Buildroot = "buildroot/mariner2"
+	targetContainer         = "container"
 )
-
-type reexecFrontend interface {
-	CurrentFrontend() (*llb.State, error)
-}
 
 func loadSpec(ctx context.Context, client *dockerui.Client) (*frontend.Spec, error) {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
@@ -58,6 +52,10 @@ func handleSubrequest(ctx context.Context, bc *dockerui.Client) (*client.Result,
 						Description: "Outputs an rpm buildroot suitable for passing to rpmbuild.",
 					},
 					{
+						Name:        targetMariner2Buildroot,
+						Description: "Outputs an rpm buildroot suitable for passing to the mariner2 build toolkit.",
+					},
+					{
 						Name:        targetResolve,
 						Description: "Outputs the resolved yaml spec with build args expanded. This is primarly intended for debugging purposes.",
 					},
@@ -82,24 +80,6 @@ func handleSubrequest(ctx context.Context, bc *dockerui.Client) (*client.Result,
 			}, nil
 		},
 	})
-}
-
-func lookupCmd() string {
-	exe, err := os.Executable()
-	if err != nil {
-		panic(fmt.Errorf("error getting executable path: %w", err))
-	}
-
-	// Resolve any symlinks in the executable path so we don't bust the cache on every build.
-	exe, err = filepath.EvalSymlinks(exe)
-	if err != nil {
-		panic(fmt.Errorf("error resolving symlink for executable path: %w", err))
-	}
-	return exe
-}
-
-func frontendCmd(args ...string) llb.RunOption {
-	return llb.Args(append([]string{lookupCmd()}, args...))
 }
 
 func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -132,6 +112,8 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 			return handleSources(ctx, client, spec)
 		case targetContainer:
 			return handleContainer(ctx, client, spec)
+		case targetMariner2Buildroot:
+			return handleMariner2Buildroot(ctx, client, spec)
 		default:
 			return nil, nil, fmt.Errorf("unknown target %q", bc.Target)
 		}

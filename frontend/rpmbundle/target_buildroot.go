@@ -37,9 +37,10 @@ func handleBuildRoot(ctx context.Context, client gwclient.Client, spec *frontend
 }
 
 func specToBuildrootLLB(spec *frontend.Spec, noMerge bool) (llb.State, error) {
-	out, err := specToSourcesLLB(spec, noMerge, llb.Scratch(), "SOURCES")
+	sources, err := specToSourcesLLB(spec)
 	if err != nil {
 		return llb.Scratch(), err
 	}
-	return specToRpmSpecLLB(spec, out)
+
+	return specToRpmSpecLLB(spec, mergeOrCopy(llb.Scratch(), sources, "SOURCES", noMerge), "")
 }

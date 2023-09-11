@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
@@ -12,7 +13,7 @@ import (
 )
 
 func handleSpec(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
-	st, err := specToRpmSpecLLB(spec, llb.Scratch())
+	st, err := specToRpmSpecLLB(spec, llb.Scratch(), "")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -33,16 +34,18 @@ func handleSpec(ctx context.Context, client gwclient.Client, spec *frontend.Spec
 	return ref, &image.Image{}, err
 }
 
-func specToRpmSpecLLB(spec *frontend.Spec, in llb.State) (llb.State, error) {
+func specToRpmSpecLLB(spec *frontend.Spec, in llb.State, dir string) (llb.State, error) {
 	buf := bytes.NewBuffer(nil)
 	if err := specTmpl.Execute(buf, newSpecWrapper(spec)); err != nil {
 		return llb.Scratch(), fmt.Errorf("could not generate rpm spec file: %w", err)
 	}
 
-	dir := "SPECS/" + spec.Name
+	if dir == "" {
+		dir = "SPECS/" + spec.Name
+	}
 
 	return in.
 			File(llb.Mkdir(dir, 0755, llb.WithParents(true))).
-			File(llb.Mkfile(dir+"/"+spec.Name+".spec", 0640, buf.Bytes())),
+			File(llb.Mkfile(filepath.Join(dir, spec.Name)+".spec", 0640, buf.Bytes())),
 		nil
 }

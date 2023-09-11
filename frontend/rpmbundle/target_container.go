@@ -13,15 +13,10 @@ import (
 )
 
 func handleContainer(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
-	cf := client.(reexecFrontend)
-	localSt, err := cf.CurrentFrontend()
-	if err != nil {
-		return nil, nil, fmt.Errorf("could not get current frontend: %w", err)
-	}
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToContainerLLB(spec, localSt, noMerge)
+	st, err := specToContainerLLB(spec, noMerge, getDigestFromClientFn(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -54,8 +49,8 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *frontend
 	return ref, &img, err
 }
 
-func specToContainerLLB(spec *frontend.Spec, localSt *llb.State, noMerge bool) (llb.State, error) {
-	st, err := specToRpmLLB(spec, localSt, noMerge)
+func specToContainerLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc) (llb.State, error) {
+	st, err := specToRpmLLB(spec, noMerge, getDigest)
 	if err != nil {
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
 	}
