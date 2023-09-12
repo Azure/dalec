@@ -3,8 +3,8 @@ package rpmbundle
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
-	"sync"
 	"text/template"
 
 	"github.com/azure/dalec/frontend"
@@ -23,15 +23,8 @@ Packager: {{.Packager}}
 
 {{ .Sources }}
 {{ .Conflicts }}
-
-{{- range $p := .Provides }}
-Provides: {{$p}}
-{{- end }}
-
-{{- range $r := .Replaces }}
-Replaces: {{$r}}
-{{- end }}
-
+{{ .Provides }}
+{{ .Replaces }}
 {{ .Requires }}
 
 %description
@@ -52,16 +45,33 @@ Replaces: {{$r}}
 
 type specWrapper struct {
 	*frontend.Spec
-	target           string
-	indexSourcesOnce func() map[string]int
 }
 
 func newSpecWrapper(spec *frontend.Spec) *specWrapper {
 	w := &specWrapper{
 		Spec: spec,
 	}
-	w.indexSourcesOnce = sync.OnceValue(w.indexSources)
 	return w
+}
+
+func (w *specWrapper) Provides() fmt.Stringer {
+	b := &strings.Builder{}
+
+	sort.Strings(w.Spec.Provides)
+	for _, name := range w.Spec.Provides {
+		fmt.Fprintln(b, "Provides:", name)
+	}
+	return b
+}
+
+func (w *specWrapper) Replaces() fmt.Stringer {
+	b := &strings.Builder{}
+
+	keys := sortMapKeys(w.Spec.Replaces)
+	for _, name := range keys {
+		writeDep(b, "Replaces", name, w.Spec.Replaces[name])
+	}
+	return b
 }
 
 func (w *specWrapper) Requires() fmt.Stringer {
@@ -74,10 +84,12 @@ func (w *specWrapper) Requires() fmt.Stringer {
 		}
 	}
 
-	for name, constraints := range w.Spec.Dependencies.Build {
+	buildKeys := sortMapKeys(w.Spec.Dependencies.Build)
+	for _, name := range buildKeys {
 		if satisfies[name] {
 			continue
 		}
+		constraints := w.Spec.Dependencies.Build[name]
 		writeDep(b, "BuildRequires", name, constraints)
 	}
 
@@ -85,7 +97,9 @@ func (w *specWrapper) Requires() fmt.Stringer {
 		b.WriteString("\n")
 	}
 
-	for name, constraints := range w.Spec.Dependencies.Runtime {
+	runtimeKeys := sortMapKeys(w.Spec.Dependencies.Runtime)
+	for _, name := range runtimeKeys {
+		constraints := w.Spec.Dependencies.Build[name]
 		// satisifes is only for build deps, not runtime deps
 		// TODO: consider if it makes sense to support sources satisfying runtime deps
 		writeDep(b, "Requires", name, constraints)
@@ -99,6 +113,8 @@ func writeDep(b *strings.Builder, kind, name string, constraints []string) {
 		fmt.Fprintf(b, "%s: %s\n", kind, name)
 		return
 	}
+
+	sort.Strings(constraints)
 	for _, c := range constraints {
 		fmt.Fprintf(b, "%s: %s %s\n", kind, name, c)
 	}
@@ -107,31 +123,22 @@ func writeDep(b *strings.Builder, kind, name string, constraints []string) {
 func (w *specWrapper) Conflicts() string {
 	b := &strings.Builder{}
 
-	for name, constraints := range w.Spec.Conflicts {
+	keys := sortMapKeys(w.Spec.Conflicts)
+	for _, name := range keys {
+		constraints := w.Spec.Conflicts[name]
 		writeDep(b, "Conflicts", name, constraints)
 	}
 	return b.String()
 }
 
-func (w *specWrapper) indexSources() map[string]int {
-	// Each source has an index that the rpm spec file uses to refer to it
-	// We'll need these indexes when extracting the sources and applying patches
-	var idx int
-
-	out := make(map[string]int, len(w.Spec.Sources))
-	for name := range w.Spec.Sources {
-		out[name] = idx
-		idx++
-	}
-	return out
-}
-
 func (w *specWrapper) Sources() (fmt.Stringer, error) {
 	b := &strings.Builder{}
 
-	sourceIdx := w.indexSourcesOnce()
+	// Sort keys for consistent output
+	keys := sortMapKeys(w.Spec.Sources)
 
-	for name, src := range w.Spec.Sources {
+	for idx, name := range keys {
+		src := w.Spec.Sources[name]
 		ref := name
 		isDir, err := frontend.SourceIsDir(src)
 		if err != nil {
@@ -141,7 +148,7 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 			ref += ".tar.gz"
 		}
 
-		fmt.Fprintf(b, "Source%d: %s\n", sourceIdx[name], ref)
+		fmt.Fprintf(b, "Source%d: %s\n", idx, ref)
 	}
 	return b, nil
 }
@@ -169,7 +176,11 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		}
 	}
 
-	for name, src := range w.Spec.Sources {
+	// Sort keys for consistent output
+	keys := sortMapKeys(w.Spec.Sources)
+
+	for _, name := range keys {
+		src := w.Spec.Sources[name]
 		err := func(name string, src frontend.Source) error {
 			if patches[name] {
 				// This source is a patch so we don't need to set anything up
@@ -214,13 +225,16 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 
 	fmt.Fprintln(b, "set -e")
 
-	for k, v := range t.Env {
+	envKeys := sortMapKeys(t.Env)
+	for _, k := range envKeys {
+		v := t.Env[k]
 		fmt.Fprintf(b, "export %s=%s\n", k, v)
 	}
 
 	for _, step := range t.Steps {
-		for k, v := range step.Env {
-			fmt.Fprintf(b, "%s=%s ", k, v)
+		envKeys := sortMapKeys(step.Env)
+		for _, k := range envKeys {
+			fmt.Fprintf(b, "%s=%s ", k, step.Env[k])
 		}
 		fmt.Fprintln(b, step.Command)
 	}
@@ -255,11 +269,15 @@ func (w *specWrapper) Install() fmt.Stringer {
 		fmt.Fprintln(b, "cp -r", p, targetPath)
 	}
 
-	for p, cfg := range w.Spec.Artifacts.Binaries {
+	binKeys := sortMapKeys(w.Spec.Artifacts.Binaries)
+	for _, p := range binKeys {
+		cfg := w.Spec.Artifacts.Binaries[p]
 		copyArtifact(`%{buildroot}/%{_bindir}`, p, cfg)
 	}
 
-	for p, cfg := range w.Spec.Artifacts.Manpages {
+	manKeys := sortMapKeys(w.Spec.Artifacts.Manpages)
+	for _, p := range manKeys {
+		cfg := w.Spec.Artifacts.Manpages[p]
 		copyArtifact(`%{buildroot}/%{_mandir}`, p, cfg)
 	}
 
@@ -275,7 +293,9 @@ func (w *specWrapper) Files() fmt.Stringer {
 
 	fmt.Fprintln(b, "%files")
 
-	for p, cfg := range w.Spec.Artifacts.Binaries {
+	binKeys := sortMapKeys(w.Spec.Artifacts.Binaries)
+	for _, p := range binKeys {
+		cfg := w.Spec.Artifacts.Binaries[p]
 		full := filepath.Join(`%{_bindir}/`, cfg.SubPath, filepath.Base(p))
 		fmt.Fprintln(b, full)
 	}
