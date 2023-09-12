@@ -2,6 +2,7 @@ package rpmbundle
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"text/template"
@@ -212,8 +213,6 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	fmt.Fprintln(b, `%build`)
 
 	fmt.Fprintln(b, "set -e")
-	fmt.Fprintln(b, `export DALEC_OUTPUT_DIR="%{_builddir}/_output"`)
-	fmt.Fprintln(b, `mkdir -p "${DALEC_OUTPUT_DIR}/"{bin,man}`) // TODO: Add more artifact types
 
 	for k, v := range t.Env {
 		fmt.Fprintf(b, "export %s=%s\n", k, v)
@@ -232,13 +231,37 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 func (w *specWrapper) Install() fmt.Stringer {
 	b := &strings.Builder{}
 
+	if w.Spec.Artifacts.IsEmpty() {
+		return b
+	}
+
 	fmt.Fprintln(b, "%install")
-	fmt.Fprintln(b, `export DALEC_OUTPUT_DIR="%{_builddir}/_output"`)
 
-	fmt.Fprintln(b, "mkdir -p %{buildroot}/{%{_bindir},%{_mandir}}")
+	copyArtifact := func(root, p string, cfg frontend.ArtifactConfig) {
+		targetDir := filepath.Join(root, cfg.SubPath)
+		fmt.Fprintln(b, "mkdir -p", targetDir)
 
-	fmt.Fprintln(b, `for i in "${DALEC_OUTPUT_DIR}"/bin/*; do if [ -f "$i" ] || [ -d "$i" ]; then cp -a "$i" %{buildroot}/%{_bindir}/; fi; done`)
-	fmt.Fprintln(b, `for i in "${DALEC_OUTPUT_DIR}"/man/*; do if [ -f "$i" ] || [ -d "$i" ]; then cp -a -r "$i" %{buildroot}/%{_mandir}/; fi; done`)
+		var targetPath string
+		if cfg.Name != "" {
+			targetPath = filepath.Join(targetDir, cfg.Name)
+		} else {
+			baseName := filepath.Base(p)
+			if !strings.Contains(baseName, "*") {
+				targetPath = filepath.Join(targetDir, baseName)
+			} else {
+				targetPath = targetDir + "/"
+			}
+		}
+		fmt.Fprintln(b, "cp -r", p, targetPath)
+	}
+
+	for p, cfg := range w.Spec.Artifacts.Binaries {
+		copyArtifact(`%{buildroot}/%{_bindir}`, p, cfg)
+	}
+
+	for p, cfg := range w.Spec.Artifacts.Manpages {
+		copyArtifact(`%{buildroot}/%{_mandir}`, p, cfg)
+	}
 
 	return b
 }
@@ -246,10 +269,19 @@ func (w *specWrapper) Install() fmt.Stringer {
 func (w *specWrapper) Files() fmt.Stringer {
 	b := &strings.Builder{}
 
+	if w.Spec.Artifacts.IsEmpty() {
+		return b
+	}
+
 	fmt.Fprintln(b, "%files")
 
-	fmt.Fprintln(b, "%{_mandir}/*/*")
-	fmt.Fprintln(b, "%{_bindir}/*")
+	for p, cfg := range w.Spec.Artifacts.Binaries {
+		full := filepath.Join(`%{_bindir}/`, cfg.SubPath, filepath.Base(p))
+		fmt.Fprintln(b, full)
+	}
 
+	if len(w.Spec.Artifacts.Manpages) > 0 {
+		fmt.Fprintln(b, `%{_mandir}/*/*`)
+	}
 	return b
 }

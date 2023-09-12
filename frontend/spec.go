@@ -62,6 +62,39 @@ type Spec struct {
 	Packager string
 
 	Image *ImageConfig `yaml:"image"`
+
+	// Artifacts is the list of artifacts to include in the package.
+	Artifacts Artifacts
+}
+
+type Artifacts struct {
+	// NOTE: Using a struct as a map value for future expansion
+	Binaries map[string]ArtifactConfig `yaml:"binaries"`
+	Manpages map[string]ArtifactConfig `yaml:"manpages"`
+	// TODO: other types of artifacts (systtemd units, libexec, configs, etc)
+	// NOTE: When other artifact types are added, you must also update [ArtifactsConfig.IsEmpty]
+}
+
+type ArtifactConfig struct {
+	// Subpath is the subpath to use in the package for the artifact type.
+	//
+	// As an example, binaries are typically placed in /usr/bin when installed.
+	// If you want to nest them in a subdirectory, you can specify it here.
+	SubPath string `yaml:"subpath"`
+	// Name is file or dir name to use for the artifact in the package.
+	// If empty, the file or dir name from the produced artifact will be used.
+	Name string `yaml:"name"`
+}
+
+// IsEmpty is used to determine if there are any artifacts to include in the package.
+func (a *Artifacts) IsEmpty() bool {
+	if len(a.Binaries) > 0 {
+		return false
+	}
+	if len(a.Manpages) > 0 {
+		return false
+	}
+	return true
 }
 
 type ImageConfig struct {
