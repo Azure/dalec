@@ -45,7 +45,7 @@ var marinerBase = llb.Image(marinerRef).
 	).
 	State
 
-var toolkitImg = llb.Image("cpuguy83/mariner-toolkit:f3fee7cccffb21f1d7abf5ff940ba7db599fd4a2")
+var toolkitImg = llb.Image("ghcr.io/azure/dalec/mariner2/toolkit:latest@sha256:bad684e29b21a92ca61e46257c7b0e7e96895f6b23d9825f4f526f313b4a203f")
 
 var (
 	goModCache   = llb.AddMount("/go/pkg/mod", llb.Scratch(), llb.AsPersistentCacheDir("go-pkg-mod", llb.CacheMountShared))
