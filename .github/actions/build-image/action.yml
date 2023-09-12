@@ -1,0 +1,50 @@
+name: Build and push image
+description: Build the specified dockerfile target and push it to GHCR
+
+inputs:
+  insecure:
+    description: Allow insecure build
+    required: false
+    default: false
+  target:
+    description: The dockerfile target to build
+    required: true
+    default: ""
+  tag:
+    description: The tag to apply to the image
+    required: true
+    default: ""
+  token:
+    description: The token to use for authentication
+    required: true
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: docker/login-action@v2
+      name: Login to GHCR
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.token }}
+    - name: Allow insecure build
+      shell: bash
+      if: ${{ inputs.insecure == 'true' }}
+      run: |
+        docker buildx create --driver docker-container --name local --buildkitd-flags '--allow-insecure-entitlement security.insecure'
+        echo BUILDX_BUILDER=local >> "${GITHUB_ENV}"
+        echo DOCKER_BUILD_INSECURE="--allow security.insecure" >> "${GITHUB_ENV}"
+    - name: Expose GitHub Runtime
+      uses: crazy-max/ghaction-github-runtime@v3
+    - name: Build all the things
+      shell: bash
+      run: |
+        docker buildx build \
+          ${DOCKER_BUILD_INSECURE} \
+          --target=${{inputs.target}} \
+          -t ghcr.io/${{ github.repository }}/${{inputs.target}}:${{ inputs.tag }} \
+          --push \
+          --cache-to=type=gha,mode=max,scope=${GITHUB_REF_NAME}-toolkit \
+          --cache-from=type=gha,scope=${GITHUB_REF_NAME}-toolkit \
+          .

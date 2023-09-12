@@ -1,0 +1,27 @@
+name: Publish toolkit image to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish'
+        required: true
+        default: 'latest'
+      
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout
+      - uses: ./.github/actions/build-image
+        with:
+          tag: ${{ github.event.inputs.tag }}
+          target: toolkit
+          token: ${{ secrets.GITHUB_TOKEN }}
+          insecure: true
+ 
