@@ -237,8 +237,8 @@ func (w *specWrapper) Install() fmt.Stringer {
 
 	fmt.Fprintln(b, "mkdir -p %{buildroot}/{%{_bindir},%{_mandir}}")
 
-	fmt.Fprintln(b, `cp -a "${DALEC_OUTPUT_DIR}"/bin/* %{buildroot}/%{_bindir}/`)
-	fmt.Fprintln(b, `cp -a -r "${DALEC_OUTPUT_DIR}"/man/* %{buildroot}/%{_mandir}/`)
+	fmt.Fprintln(b, `for i in "${DALEC_OUTPUT_DIR}"/bin/*; do if [ -f "$i" ] || [ -d "$i" ]; then cp -a "$i" %{buildroot}/%{_bindir}/; fi; done`)
+	fmt.Fprintln(b, `for i in "${DALEC_OUTPUT_DIR}"/man/*; do if [ -f "$i" ] || [ -d "$i" ]; then cp -a -r "$i" %{buildroot}/%{_mandir}/; fi; done`)
 
 	return b
 }
