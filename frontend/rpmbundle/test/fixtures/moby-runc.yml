@@ -1,4 +1,4 @@
-# syntax=cpuguy83/rpmbundle
+# syntax=ghcr.io/azure/dalec/frontend:latest
 
 args:
   RUNC_COMMIT:
