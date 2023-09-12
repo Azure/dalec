@@ -19,6 +19,7 @@ jobs:
         name: Checkout
       - uses: ./.github/actions/build-image
         with:
+          repo: mariner2/toolkit
           tag: ${{ github.event.inputs.tag }}
           target: toolkit
           token: ${{ secrets.GITHUB_TOKEN }}

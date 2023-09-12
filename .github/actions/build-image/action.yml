@@ -18,6 +18,10 @@ inputs:
     description: The token to use for authentication
     required: true
     default: ""
+  repo:
+    description: The repo name to use for the image
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -45,13 +49,19 @@ runs:
       uses: crazy-max/ghaction-github-runtime@v3
     - name: Build all the things
       shell: bash
+      env:
+        REPO: ${{ inputs.repo }}
       run: |
-        REPO="${GITHUB_REPOSITORY,,}" # Make repo lowercase
+        if [ -z "${REPO}" ]; then
+          REPO="${{ inputs.target }}"
+        fi
+
+        FULL_REPO="${GITHUB_REPOSITORY,,}/${REPO}"
 
         docker buildx build \
           ${DOCKER_BUILD_INSECURE} \
           --target=${{inputs.target}} \
-          -t ghcr.io/${REPO}/${{inputs.target}}:${{ inputs.tag }} \
+          -t "ghcr.io/${FULL_REPO}:${{ inputs.tag }}" \
           --push \
           --cache-to=type=gha,mode=max,scope=${GITHUB_REF_NAME}-${{ inputs.target }} \
           --cache-from=type=gha,scope=${GITHUB_REF_NAME}-${{ inputs.target }} \
