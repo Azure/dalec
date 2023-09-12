@@ -46,10 +46,12 @@ runs:
     - name: Build all the things
       shell: bash
       run: |
+        REPO="${GITHUB_REPOSITORY,,}" # Make repo lowercase
+
         docker buildx build \
           ${DOCKER_BUILD_INSECURE} \
           --target=${{inputs.target}} \
-          -t ghcr.io/${{ github.repository }}/${{inputs.target}}:${{ inputs.tag }} \
+          -t ghcr.io/${REPO}/${{inputs.target}}:${{ inputs.tag }} \
           --push \
           --cache-to=type=gha,mode=max,scope=${GITHUB_REF_NAME}-${{ inputs.target }} \
           --cache-from=type=gha,scope=${GITHUB_REF_NAME}-${{ inputs.target }} \
