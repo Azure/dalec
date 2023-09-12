@@ -1,4 +1,4 @@
-name: Publish toolkit image to GHCR
+name: Publish frontend image to GHCR
 
 on:
   workflow_dispatch:
@@ -20,7 +20,6 @@ jobs:
       - uses: ./.github/actions/build-image
         with:
           tag: ${{ github.event.inputs.tag }}
-          target: toolkit
+          target: frontend
           token: ${{ secrets.GITHUB_TOKEN }}
-          privileged: true
  

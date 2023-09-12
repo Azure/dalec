@@ -2,8 +2,8 @@ name: Build and push image
 description: Build the specified dockerfile target and push it to GHCR
 
 inputs:
-  insecure:
-    description: Allow insecure build
+  privileged:
+    description: Allow the buildkit security.insecure entitlement
     required: false
     default: false
   target:
@@ -28,13 +28,19 @@ runs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ inputs.token }}
-    - name: Allow insecure build
+    - name: Setup privileged builder
       shell: bash
-      if: ${{ inputs.insecure == 'true' }}
+      if: ${{ inputs.privileged == 'true' }}
       run: |
         docker buildx create --driver docker-container --name local --buildkitd-flags '--allow-insecure-entitlement security.insecure'
         echo BUILDX_BUILDER=local >> "${GITHUB_ENV}"
         echo DOCKER_BUILD_INSECURE="--allow security.insecure" >> "${GITHUB_ENV}"
+    - name: Setup builder
+      if: ${{ inputs.privileged == 'false' }}
+      shell: bash
+      run: |
+        docker buildx create --driver docker-container --name local
+        echo BUILDX_BUILDER=local >> "${GITHUB_ENV}"
     - name: Expose GitHub Runtime
       uses: crazy-max/ghaction-github-runtime@v3
     - name: Build all the things
@@ -45,6 +51,6 @@ runs:
           --target=${{inputs.target}} \
           -t ghcr.io/${{ github.repository }}/${{inputs.target}}:${{ inputs.tag }} \
           --push \
-          --cache-to=type=gha,mode=max,scope=${GITHUB_REF_NAME}-toolkit \
-          --cache-from=type=gha,scope=${GITHUB_REF_NAME}-toolkit \
+          --cache-to=type=gha,mode=max,scope=${GITHUB_REF_NAME}-${{ inputs.target }} \
+          --cache-from=type=gha,scope=${GITHUB_REF_NAME}-${{ inputs.target }} \
           .

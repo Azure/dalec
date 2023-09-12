@@ -52,7 +52,7 @@ RUN \
 FROM scratch AS toolkit
 COPY --from=toolchain-build /tmp/toolkit /
 
-FROM scratch
+FROM scratch AS frontend
 COPY --from=frontend-build /frontend /frontend
 LABEL moby.buildkit.frontend.caps=moby.buildkit.frontend.subrequests
 ENTRYPOINT ["/frontend"]
