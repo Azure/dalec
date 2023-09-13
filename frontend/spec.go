@@ -228,7 +228,7 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 	}
 
 	for name, src := range spec.Sources {
-		updated, err := lex.ProcessWordWithMap(src.Ref, env)
+		updated, err := lex.ProcessWordWithMap(src.Ref, args)
 		if err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
