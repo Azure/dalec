@@ -38,7 +38,7 @@ sources:
                 - Dockerfile
                 - .dockerignore
                 - _output
-                - frontend/rpmbundle/test  
+                - frontend/rpmbundle/test
       cache_dirs:
         /go/pkg/mod:
           key: go-pkg-mod
@@ -63,7 +63,6 @@ build:
 artifacts:
   binaries:
     src/frontend-rpm-bundle:
-
 
 image:
   entrypoint: ["frontend-rpm-bundle"]

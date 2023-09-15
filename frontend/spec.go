@@ -116,8 +116,11 @@ type Source struct {
 	// Path is the path to the source after fetching it based on the identifier.
 	Path string `yaml:"path"`
 
-	// Filters is used to filter the files to include/exclude from beneath "Path".
-	Filters
+	// Includes is a list of paths underneath `Path` to include, everything else is execluded
+	// If empty, everything is included (minus the excludes)
+	Includes []string `yaml:"includes"`
+	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
+	Excludes []string `yaml:"excludes"`
 
 	// Satisfies is the list of build dependencies that this source satisfies.
 	// This needs to match the name of the dependency in the
@@ -212,15 +215,6 @@ type CacheDirConfig struct {
 	// What this key is depends on the frontend implementation
 	// Frontends SHOULD use the buildkit platform arch
 	IncludeArchKey bool `yaml:"include_arch_key"`
-}
-
-// Filters is used to filter the files to include/exclude from a directory.
-type Filters struct {
-	// Includes is a list of paths underneath `Path` to include, everything else is execluded
-	// If empty, everything is included (minus the excludes)
-	Includes []string `yaml:"includes"`
-	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
-	Excludes []string `yaml:"excludes"`
 }
 
 func knownArg(key string) bool {
