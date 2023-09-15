@@ -70,7 +70,8 @@ func handleSources(ctx context.Context, client gwclient.Client, spec *frontend.S
 	caps := client.BuildOpts().LLBCaps
 
 	// Put sources into the root of the state for consistent caching
-	sources, err := specToSourcesLLB(spec)
+	llb.WithMetaResolver(client)
+	sources, err := specToSourcesLLB(spec, client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -104,26 +105,24 @@ func sortMapKeys[T any](m map[string]T) []string {
 	return keys
 }
 
-func specToSourcesLLB(spec *frontend.Spec) ([]llb.State, error) {
-	out := make([]llb.State, 0, len(spec.Sources))
-
+func specToSourcesLLB(spec *frontend.Spec, resolver llb.ImageMetaResolver) ([]llb.State, error) {
 	pgID := identity.NewID()
-	pgName := "Add spec sources"
-	pg := llb.ProgressGroup(pgID, pgName, false)
 
 	// Sort the map keys so that the order is consistent This shouldn't be
 	// needed when MergeOp is supported, but when it is not this will improve
 	// cache hits for callers of this function.
 	sorted := sortMapKeys(spec.Sources)
 
+	out := make([]llb.State, 0, len(spec.Sources))
 	for _, k := range sorted {
 		src := spec.Sources[k]
-		st, err := frontend.Source2LLB(src, pg)
+		isDir, err := frontend.SourceIsDir(src)
 		if err != nil {
-			return nil, fmt.Errorf("error converting source %s: %w", k, err)
+			return nil, err
 		}
 
-		isDir, err := frontend.SourceIsDir(src)
+		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+src.Ref, false)
+		st, err := frontend.Source2LLBGetter(spec, src, resolver)(pg)
 		if err != nil {
 			return nil, err
 		}

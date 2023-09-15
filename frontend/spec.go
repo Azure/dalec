@@ -112,9 +112,9 @@ type ImageConfig struct {
 type Source struct {
 	// Ref is a unique identifier for the source.
 	// example: "docker-image://busybox:latest", "https://github.com/moby/moby.git#master", "local://some/local/path
-	Ref string
+	Ref string `yaml:"ref"`
 	// Path is the path to the source after fetching it based on the identifier.
-	Path string
+	Path string `yaml:"path"`
 
 	// Filters is used to filter the files to include/exclude from beneath "Path".
 	Filters
@@ -125,10 +125,15 @@ type Source struct {
 	// that are satisfied by this source.  This will cause the output packaging
 	// spec to elide the dependency from the package metadata but should include
 	// the dependency in the build source.
-	Satisfies []string
+	Satisfies []string `yaml:"satisfies"`
 
 	// KeepGitDir is used to keep the .git directory after fetching the source for git references.
 	KeepGitDir bool `yaml:"keep_git_dir"`
+
+	// Cmd is used to generate the source from a command.
+	// This is used when `Ref` is "cmd://"
+	// If ref is "cmd://", this is required.
+	Cmd *CmdSpec `yaml:"cmd,omitempty"`
 }
 
 // PackageDependencies is a list of dependencies for a package.
@@ -148,9 +153,9 @@ type PackageDependencies struct {
 type Target struct {
 	// Steps is the list of commands to run to build the artifact(s).
 	// Each step is run sequentially and will be cached accordingly.
-	Steps []BuildStep
+	Steps []BuildStep `yaml:"steps"`
 	// List of CacheDirs which will be used across all Steps
-	CacheDirs map[string]CacheDirConfig
+	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs"`
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string
 }
@@ -159,12 +164,35 @@ type Target struct {
 type BuildStep struct {
 	// Command is the command to run to build the artifact(s).
 	// This will always be wrapped as /bin/sh -c "<command>", or whatever the equivalent is for the target distro.
-	Command string
+	Command string `yaml:"command"`
 	// CacheDirs is the list of CacheDirs which will be used for this build step.
 	// Note that this list will be merged with the list of CacheDirs from the StepGroup.
-	CacheDirs map[string]CacheDirConfig
+	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs"`
 	// Env is the list of environment variables to set for the command.
+	Env map[string]string `yaml:"env"`
+}
+
+type SourceMount struct {
+	// Path is the destination directory to mount to
+	Path string `yaml:"path"`
+	// Copy is used to copy the source into the destination directory rather than mount it
+	Copy bool `yaml:"copy"`
+	// Spec specifies the source to mount
+	Spec Source `yaml:"spec"`
+}
+
+type CmdSpec struct {
+	// Dir is the working directory to run the command in.
+	Dir string `yaml:"dir"`
+	// Sources is the list of sources to mount into the build steps.
+	Sources []SourceMount `yaml:"sources"`
+
+	// List of CacheDirs which will be used across all Steps
+	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs"`
+	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string
+
+	Steps []*BuildStep `yaml:"steps"`
 }
 
 // CacheDirConfig configures a persistent cache to be used across builds.
@@ -172,27 +200,27 @@ type CacheDirConfig struct {
 	// Mode is the locking mode to set on the cache directory
 	// values: shared, private, locked
 	// default: shared
-	Mode string
+	Mode string `yaml:"mode"`
 	// Key is the cache key to use to cache the directory
 	// default: Value of `Path`
-	Key string
+	Key string `yaml:"key"`
 	// IncludeDistroKey is used to include the distro key as part of the cache key
 	// What this key is depends on the frontend implementation
 	// Example for Debian Buster may be "buster"
-	IncludeDistroKey bool
+	IncludeDistroKey bool `yaml:"include_distro_key"`
 	// IncludeArchKey is used to include the architecture key as part of the cache key
 	// What this key is depends on the frontend implementation
 	// Frontends SHOULD use the buildkit platform arch
-	IncludeArchKey bool
+	IncludeArchKey bool `yaml:"include_arch_key"`
 }
 
 // Filters is used to filter the files to include/exclude from a directory.
 type Filters struct {
 	// Includes is a list of paths underneath `Path` to include, everything else is execluded
 	// If empty, everything is included (minus the excludes)
-	Includes []string
+	Includes []string `yaml:"includes"`
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
-	Excludes []string
+	Excludes []string `yaml:"excludes"`
 }
 
 func knownArg(key string) bool {

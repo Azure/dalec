@@ -1,0 +1,69 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-rpm-frontend
+description: A test fixture which builds this project as an RPM, mainly to validate generating sources from a command.
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+dependencies:
+  build:
+    golang:
+      - ">= 1.19"
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+sources:
+  golang:
+    ref: docker-image://golang:1.21
+    path: /usr/local/go
+    satisfies:
+      - golang
+
+  src:
+    ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.21
+    path: /build/src
+    cmd:
+      dir: /build/src
+      sources:
+        -
+          copy: true
+          path: /build/src
+          spec:
+            ref: context://
+            filters:
+              excludes:
+                - .github
+                - Dockerfile
+                - .dockerignore
+                - _output
+                - frontend/rpmbundle/test  
+      cache_dirs:
+        /go/pkg/mod:
+          key: go-pkg-mod
+      steps:
+        - command: go mod vendor
+
+build:
+  env:
+    GOPROXY: direct
+    CGO_ENABLED: 0
+    GOGC: off
+    GOFLAGS: -trimpath
+    GOPATH: /go
+  steps:
+    - command: |
+        export GOROOT="$(pwd)/golang"
+        export PATH="${GOROOT}/bin:$PATH"
+
+        cd src
+        go build -mod=vendor ./cmd/frontend-rpm-bundle
+
+artifacts:
+  binaries:
+    src/frontend-rpm-bundle:
+
+
+image:
+  entrypoint: ["/frontend-rpm-bundle"]

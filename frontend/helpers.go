@@ -63,3 +63,7 @@ func WithConstraints(ls ...llb.ConstraintsOpt) llb.ConstraintsOpt {
 		}
 	})
 }
+
+func withConstraints(opts []llb.ConstraintsOpt) llb.ConstraintsOpt {
+	return WithConstraints(opts...)
+}

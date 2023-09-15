@@ -55,8 +55,8 @@ build:
     GOFLAGS: -trimpath
   steps:
     - command: |
-        export PATH="$(pwd)/golang/go/bin:${PATH}"
-        export GOROOT="$(pwd)/golang/go"
+        export PATH="$(pwd)/golang/bin:${PATH}"
+        export GOROOT="$(pwd)/golang"
         cd src
         make man runc BUILDTAGS=seccomp
 artifacts:
