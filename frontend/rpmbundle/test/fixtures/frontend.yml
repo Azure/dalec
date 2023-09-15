@@ -66,4 +66,4 @@ artifacts:
 
 
 image:
-  entrypoint: ["/frontend-rpm-bundle"]
+  entrypoint: ["frontend-rpm-bundle"]
