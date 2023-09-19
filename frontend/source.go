@@ -2,9 +2,11 @@ package frontend
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerui"
 	sourcetypes "github.com/moby/buildkit/source/types"
 	"github.com/moby/buildkit/util/gitutil"
 )
@@ -12,11 +14,14 @@ import (
 const (
 	// Custom source type to generate output from a command.
 	sourceTypeContext = "context"
+	sourceTypeBuild   = "build"
 )
 
-type LLBGetter func(opts ...llb.ConstraintsOpt) (llb.State, error)
+type LLBGetter func(forwarder ForwarderFunc, opts ...llb.ConstraintsOpt) (llb.State, error)
 
-func generateSourceFromImage(s *Spec, st llb.State, cmd *CmdSpec, resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) (llb.State, error) {
+type ForwarderFunc func(llb.State, *BuildSpec) (llb.State, error)
+
+func generateSourceFromImage(s *Spec, st llb.State, cmd *CmdSpec, resolver llb.ImageMetaResolver, forward ForwarderFunc, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if cmd == nil {
 		return st, nil
 	}
@@ -47,7 +52,7 @@ func generateSourceFromImage(s *Spec, st llb.State, cmd *CmdSpec, resolver llb.I
 	}
 
 	for _, src := range cmd.Sources {
-		srcSt, err := source2LLBGetter(s, src.Spec, resolver, true)(opts...)
+		srcSt, err := source2LLBGetter(s, src.Spec, resolver, true)(forward, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -85,7 +90,7 @@ func Source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver) LLBGetter {
 }
 
 func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bool) LLBGetter {
-	return func(opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
+	return func(forward ForwarderFunc, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
 		scheme, ref, err := SplitSourceRef(src.Ref)
 		if err != nil {
 			return llb.Scratch(), err
@@ -128,7 +133,7 @@ func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bo
 
 		switch scheme {
 		case sourcetypes.DockerImageScheme:
-			return generateSourceFromImage(s, llb.Image(ref, llb.WithMetaResolver(mr)), src.Cmd, mr, opts...)
+			return generateSourceFromImage(s, llb.Image(ref, llb.WithMetaResolver(mr)), src.Cmd, mr, forward, opts...)
 		case sourcetypes.GitScheme:
 			// TODO: Pass git secrets
 			ref, err := gitutil.ParseGitRef(ref)
@@ -164,7 +169,31 @@ func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bo
 				lOpts = append(lOpts, llb.ExcludePatterns(src.Excludes))
 			}
 			includeExcludeHandled = true
-			return llb.Local("context", lOpts...), nil
+			if src.Path == "" && ref != "" {
+				src.Path = ref
+			}
+			return llb.Local(filepath.Join(dockerui.DefaultLocalNameContext), lOpts...), nil
+		case sourceTypeBuild:
+			var st llb.State
+			if ref == "" {
+				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
+			} else {
+				src2 := Source{
+					Ref:        ref,
+					Path:       src.Path,
+					Includes:   src.Includes,
+					Excludes:   src.Excludes,
+					KeepGitDir: src.KeepGitDir,
+					Cmd:        src.Cmd,
+					Satisfies:  src.Satisfies,
+				}
+				st, err = source2LLBGetter(s, src2, mr, forMount)(forward, opts...)
+				if err != nil {
+					return llb.Scratch(), err
+				}
+			}
+
+			return forward(st, src.Build)
 		default:
 			return llb.Scratch(), fmt.Errorf("unsupported source type: %s", scheme)
 		}
@@ -206,6 +235,7 @@ func SourceIsDir(src Source) (bool, error) {
 	switch scheme {
 	case sourcetypes.DockerImageScheme,
 		sourcetypes.GitScheme,
+		sourceTypeBuild,
 		sourceTypeContext:
 		return true, nil
 	case sourcetypes.HTTPScheme, sourcetypes.HTTPSScheme:

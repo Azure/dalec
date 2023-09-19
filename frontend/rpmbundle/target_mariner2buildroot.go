@@ -52,7 +52,7 @@ func handleMariner2Buildroot(ctx context.Context, client gwclient.Client, spec *
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToMariner2BuildrootLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client)
+	st, err := specToMariner2BuildrootLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -73,13 +73,13 @@ func handleMariner2Buildroot(ctx context.Context, client gwclient.Client, spec *
 	return ref, &image.Image{}, err
 }
 
-func specToMariner2BuildrootLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver) (llb.State, error) {
+func specToMariner2BuildrootLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward frontend.ForwarderFunc) (llb.State, error) {
 	specs, err := specToRpmSpecLLB(spec, llb.Scratch(), "/")
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	sources, err := specToSourcesLLB(spec, mr)
+	sources, err := specToSourcesLLB(spec, mr, forward)
 	if err != nil {
 		return llb.Scratch(), err
 	}

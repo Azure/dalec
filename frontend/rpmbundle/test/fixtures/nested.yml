@@ -1,0 +1,25 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-test-nested-build
+description: A test fixture which tests nested builds
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+noarch: true
+sources:
+  src:
+    ref: build://context://frontend/rpmbundle/test/fixtures/nested
+    build:
+      inline: |
+        # syntax=docker/dockerfile:1.5
+        FROM scratch
+        COPY /hello /hello
+
+build:
+  steps:
+    - command: |
+        [ "$(cat src/hello)" = "hello world!" ]

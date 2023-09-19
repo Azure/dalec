@@ -70,8 +70,7 @@ func handleSources(ctx context.Context, client gwclient.Client, spec *frontend.S
 	caps := client.BuildOpts().LLBCaps
 
 	// Put sources into the root of the state for consistent caching
-	llb.WithMetaResolver(client)
-	sources, err := specToSourcesLLB(spec, client)
+	sources, err := specToSourcesLLB(spec, client, frontend.ForwarderFromClient(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -105,7 +104,7 @@ func sortMapKeys[T any](m map[string]T) []string {
 	return keys
 }
 
-func specToSourcesLLB(spec *frontend.Spec, resolver llb.ImageMetaResolver) ([]llb.State, error) {
+func specToSourcesLLB(spec *frontend.Spec, resolver llb.ImageMetaResolver, forward frontend.ForwarderFunc) ([]llb.State, error) {
 	pgID := identity.NewID()
 
 	// Sort the map keys so that the order is consistent This shouldn't be
@@ -122,7 +121,7 @@ func specToSourcesLLB(spec *frontend.Spec, resolver llb.ImageMetaResolver) ([]ll
 		}
 
 		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+src.Ref, false)
-		st, err := frontend.Source2LLBGetter(spec, src, resolver)(pg)
+		st, err := frontend.Source2LLBGetter(spec, src, resolver)(forward, pg)
 		if err != nil {
 			return nil, err
 		}

@@ -15,7 +15,7 @@ func handleBuildRoot(ctx context.Context, client gwclient.Client, spec *frontend
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToBuildrootLLB(spec, noMerge, client)
+	st, err := specToBuildrootLLB(spec, noMerge, client, frontend.ForwarderFromClient(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -36,8 +36,8 @@ func handleBuildRoot(ctx context.Context, client gwclient.Client, spec *frontend
 	return ref, nil, err
 }
 
-func specToBuildrootLLB(spec *frontend.Spec, noMerge bool, mr llb.ImageMetaResolver) (llb.State, error) {
-	sources, err := specToSourcesLLB(spec, mr)
+func specToBuildrootLLB(spec *frontend.Spec, noMerge bool, mr llb.ImageMetaResolver, forward frontend.ForwarderFunc) (llb.State, error) {
+	sources, err := specToSourcesLLB(spec, mr, forward)
 	if err != nil {
 		return llb.Scratch(), err
 	}

@@ -142,6 +142,31 @@ type Source struct {
 	// This is used when `Ref` is "cmd://"
 	// If ref is "cmd://", this is required.
 	Cmd *CmdSpec `yaml:"cmd,omitempty"`
+
+	// Build is used to generate source from a build.
+	// This is used when [Ref]` is "build://"
+	// The context for the build is assumed too be specified in after `build://` in the ref, e.g. `build://https://github.com/moby/buildkit.git#master`
+	// When nothing is specified after `build://`, the context is assumed to be the current build context.
+	Build *BuildSpec `yaml:"build,omitempty"`
+}
+
+// BuildSpec is used to generate source from a build.
+// This is used when [Source.Ref] is "build://" to forward a build (aka a nested build) through to buildkit.
+type BuildSpec struct {
+	// Target specifies the build target to use.
+	// If unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default).
+	Target string `yaml:"target"`
+	// Args are the build args to pass to the build.
+	Args map[string]string `yaml:"args"`
+	// File is the path to the build file in the b uild context
+	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
+	// This is exclusive with [Inline]
+	File string `yaml:"file"`
+
+	// Inline is an inline build spec to use.
+	// This can be used to specify a dockerfile instead of using one in the build context
+	// This is exclusive with [File]
+	Inline string `yaml:"inline"`
 }
 
 // PackageDependencies is a list of dependencies for a package.

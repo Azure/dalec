@@ -56,7 +56,7 @@ func handleRPM(ctx context.Context, client gwclient.Client, spec *frontend.Spec)
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToRpmLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client)
+	st, err := specToRpmLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -81,8 +81,8 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
-func specToRpmLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver) (llb.State, error) {
-	br, err := specToMariner2BuildrootLLB(spec, noMerge, getDigest, mr)
+func specToRpmLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward frontend.ForwarderFunc) (llb.State, error) {
+	br, err := specToMariner2BuildrootLLB(spec, noMerge, getDigest, mr, forward)
 	if err != nil {
 		return llb.Scratch(), err
 	}
