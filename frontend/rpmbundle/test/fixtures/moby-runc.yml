@@ -67,4 +67,5 @@ artifacts:
       subpath: man8
 
 image:
+  base: mcr.microsoft.com/cbl-mariner/distroless/base:2.0
   entrypoint: ["runc"]

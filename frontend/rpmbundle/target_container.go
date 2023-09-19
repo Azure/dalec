@@ -55,12 +55,20 @@ func specToContainerLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFu
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
 	}
 
-	return llb.Image(marinerRef).
+	installBase := llb.Image(marinerRef)
+	installed := installBase.
 		Run(
 			shArgs("tdnf install -y /tmp/rpms/$(uname -m)/*.rpm"),
 			llb.AddMount("/tmp/rpms", st, llb.SourcePath("/RPMS")),
 			marinerTdnfCache,
-		).State, nil
+		).State
+
+	if spec.Image == nil || spec.Image.Base == "" {
+		return installed, nil
+	}
+
+	diff := llb.Diff(installBase, installed)
+	return llb.Merge([]llb.State{llb.Image(spec.Image.Base), diff}), nil
 }
 
 func copyImageConfig(dst *image.Image, src *frontend.ImageConfig) {

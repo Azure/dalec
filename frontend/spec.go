@@ -110,6 +110,9 @@ type ImageConfig struct {
 	Volumes    map[string]struct{} `yaml:"volumes"`
 	WorkingDir string              `yaml:"working_dir"`
 	StopSignal string              `yaml:"stop_signal"`
+	// Base is the base image to use for the output image.
+	// This only affects the output image, not the build image.
+	Base string `yaml:"base"`
 }
 
 // Source defines a source to be used in the build.
