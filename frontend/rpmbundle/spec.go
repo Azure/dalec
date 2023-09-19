@@ -19,6 +19,9 @@ License: {{.License}}
 URL: {{.Website}}
 Vendor: {{.Vendor}}
 Packager: {{.Packager}}
+{{- if .NoArch}}
+BuildArch: noarch
+{{- end}}
 
 
 {{ .Sources }}
@@ -245,11 +248,10 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 func (w *specWrapper) Install() fmt.Stringer {
 	b := &strings.Builder{}
 
+	fmt.Fprintln(b, "%install")
 	if w.Spec.Artifacts.IsEmpty() {
 		return b
 	}
-
-	fmt.Fprintln(b, "%install")
 
 	copyArtifact := func(root, p string, cfg frontend.ArtifactConfig) {
 		targetDir := filepath.Join(root, cfg.SubPath)
@@ -287,11 +289,10 @@ func (w *specWrapper) Install() fmt.Stringer {
 func (w *specWrapper) Files() fmt.Stringer {
 	b := &strings.Builder{}
 
+	fmt.Fprintln(b, "%files")
 	if w.Spec.Artifacts.IsEmpty() {
 		return b
 	}
-
-	fmt.Fprintln(b, "%files")
 
 	binKeys := sortMapKeys(w.Spec.Artifacts.Binaries)
 	for _, p := range binKeys {

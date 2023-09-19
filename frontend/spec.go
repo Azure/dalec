@@ -19,6 +19,11 @@ type Spec struct {
 	Version  string
 	Revision string
 
+	// Marks the package as architecture independent.
+	// It is up to the package author to ensure that the package is actually architecture independent.
+	// This is metadata only.
+	NoArch bool `yaml:"noarch"`
+
 	// Dependencies are the different dependencies that need to be specified in the package.
 	Dependencies PackageDependencies
 
@@ -111,7 +116,7 @@ type ImageConfig struct {
 // A source can be a local directory, a git repositoryt, http(s) URL, etc.
 type Source struct {
 	// Ref is a unique identifier for the source.
-	// example: "docker-image://busybox:latest", "https://github.com/moby/moby.git#master", "local://some/local/path
+	// example: "docker-image://busybox:latest", "https://github.com/moby/buildkit.git#master", "local://some/local/path
 	Ref string `yaml:"ref"`
 	// Path is the path to the source after fetching it based on the identifier.
 	Path string `yaml:"path"`
