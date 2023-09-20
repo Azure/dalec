@@ -38,7 +38,7 @@ sources:
                 - Dockerfile
                 - .dockerignore
                 - _output
-                - frontend/rpmbundle/test
+                - frontend/mariner2/test
       cache_dirs:
         /go/pkg/mod:
           key: go-pkg-mod

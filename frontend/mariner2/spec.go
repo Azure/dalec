@@ -1,4 +1,4 @@
-package rpmbundle
+package mariner2
 
 import (
 	"fmt"

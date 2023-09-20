@@ -12,7 +12,7 @@ license: Apache 2.0
 noarch: true
 sources:
   src:
-    ref: build://context://frontend/rpmbundle/test/fixtures/nested
+    ref: build://context://frontend/mariner2/test/fixtures/nested
     build:
       inline: |
         # syntax=docker/dockerfile:1.5
