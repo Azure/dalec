@@ -54,7 +54,7 @@ type Spec struct {
 	Patches map[string][]string
 
 	// Build is the configuration for building the artifacts in the package.
-	Build Target
+	Build ArtifactBuild
 
 	// Args is the list of arguments that can be used for shell-style expansion in (certain fields of) the spec.
 	// Any arg supplied in the build request which does not appear in this list will cause an error.
@@ -185,10 +185,10 @@ type PackageDependencies struct {
 	Recommends map[string][]string
 }
 
-// Target configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
-type Target struct {
+// ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
+type ArtifactBuild struct {
 	// Steps is the list of commands to run to build the artifact(s).
-	// Each step is run sequentially and will be cached accordingly.
+	// Each step is run sequentially and will be cached accordingly depending on the frontend implementation.
 	Steps []BuildStep `yaml:"steps"`
 	// List of CacheDirs which will be used across all Steps
 	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs"`
