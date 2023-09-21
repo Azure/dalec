@@ -82,6 +82,14 @@ func (w *specWrapper) Replaces() fmt.Stringer {
 func (w *specWrapper) Requires() fmt.Stringer {
 	b := &strings.Builder{}
 
+	deps := w.Spec.Targets[w.Target].Dependencies
+	if deps == nil {
+		deps = w.Spec.Dependencies
+	}
+	if deps == nil {
+		return b
+	}
+
 	satisfies := make(map[string]bool)
 	for _, src := range w.Spec.Sources {
 		for _, s := range src.Satisfies {
@@ -89,8 +97,7 @@ func (w *specWrapper) Requires() fmt.Stringer {
 		}
 	}
 
-	buildKeys := dalec.SortMapKeys(w.Spec.Targets[w.Target].Dependencies.Build)
-	deps := w.Spec.Targets[w.Target].Dependencies
+	buildKeys := dalec.SortMapKeys(deps.Build)
 	for _, name := range buildKeys {
 		if satisfies[name] {
 			continue

@@ -12,31 +12,31 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 )
 
-func HandleBuildRoot(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	caps := client.BuildOpts().LLBCaps
-	noMerge := !caps.Contains(pb.CapMergeOp)
+func BuildrootHandler(target string) frontend.BuildFunc {
+	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+		caps := client.BuildOpts().LLBCaps
+		noMerge := !caps.Contains(pb.CapMergeOp)
 
-	t, _ := frontend.GetBuildArg(client, distroTargetKey)
+		st, err := specToBuildrootLLB(spec, noMerge, client, frontend.ForwarderFromClient(ctx, client), target)
+		if err != nil {
+			return nil, nil, err
+		}
 
-	st, err := specToBuildrootLLB(spec, noMerge, client, frontend.ForwarderFromClient(ctx, client), t)
-	if err != nil {
-		return nil, nil, err
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+		}
+
+		res, err := client.Solve(ctx, gwclient.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ref, err := res.SingleRef()
+		return ref, nil, err
 	}
-
-	def, err := st.Marshal(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
-	}
-
-	res, err := client.Solve(ctx, gwclient.SolveRequest{
-		Definition: def.ToPB(),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ref, err := res.SingleRef()
-	return ref, nil, err
 }
 
 func specToBuildrootLLB(spec *dalec.Spec, noMerge bool, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc, target string) (llb.State, error) {

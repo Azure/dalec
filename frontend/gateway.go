@@ -2,15 +2,26 @@ package frontend
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/azure/dalec"
+	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
+)
+
+const (
+	requestIDKey               = "requestid"
+	dalecSubrequstForwardBuild = "dalec.forward.build"
 )
 
 // ForwarderFromClient creates a [dalec.ForwarderFunc] from a gateway client.
@@ -114,4 +125,58 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
+	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (_ gwclient.Reference, _ *image.Image, retErr error) {
+		defer func() {
+			if retErr != nil {
+				retErr = errors.Wrapf(retErr, "error forwarding build to frontend %q for target %s", specT.Frontend.Image, bkt.Name)
+			}
+		}()
+
+		dt, err := yaml.Marshal(spec)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "error marshalling spec to yaml")
+		}
+		def, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0600, dt)).Marshal(ctx)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "error marshaling dockerfile to LLB")
+		}
+
+		req := gwclient.SolveRequest{
+			Frontend: "gateway.v0",
+			FrontendInputs: map[string]*pb.Definition{
+				"dockerfile": def.ToPB(),
+			},
+			FrontendOpt: map[string]string{
+				"source":     specT.Frontend.Image,
+				"cmdline":    specT.Frontend.CmdLine,
+				"target":     bkt.Name,
+				requestIDKey: dalecSubrequstForwardBuild,
+			},
+		}
+
+		for k, v := range client.BuildOpts().Opts {
+			if strings.HasPrefix(k, "build-arg:") {
+				req.FrontendOpt[k] = v
+			}
+		}
+		res, err := client.Solve(ctx, req)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ref, err := res.SingleRef()
+		if err != nil {
+			return nil, nil, err
+		}
+		configDt := res.Metadata[exptypes.ExporterImageConfigKey]
+		var cfg image.Image
+		if err := json.Unmarshal(configDt, &cfg); err != nil {
+			return nil, nil, err
+		}
+
+		return ref, &cfg, nil
+	}
 }

@@ -5,10 +5,11 @@ FROM mcr.microsoft.com/oss/go/microsoft/golang:1.21 AS go
 FROM go AS frontend-build
 WORKDIR /build
 COPY . .
+ENV CGO_ENABLED=0 GOFLAGS=-trimpath
 RUN \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -o /frontend ./cmd/frontend
+    go build -o /frontend ./cmd/frontend
 
 
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0 AS toolchain-build

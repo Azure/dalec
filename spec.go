@@ -67,7 +67,14 @@ type Spec struct {
 	Artifacts Artifacts
 
 	// The list of distro targets to build the package for.
-	Targets map[string]Target
+	Targets map[string]Target `yaml:"targets,omitempty"`
+
+	// Dependencies are the different dependencies that need to be specified in the package.
+	// Dependencies are overwritten if specified in the target map for the requested distro.
+	Dependencies *PackageDependencies `yaml:"dependencies,omitempty"`
+	// Image is the image configuration when the target output is a container image.
+	// This is overwritten if specified in the target map for the requested distro.
+	Image *ImageConfig `yaml:"image,omitempty"`
 }
 
 type Artifacts struct {
@@ -306,12 +313,12 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 
 // Frontend encapsulates the configuration for a frontend to forward a build target to.
 type Frontend struct {
-	// Syntax specifies the frontend image to forward the build to.
+	// Image specifies the frontend image to forward the build to.
 	// This can be left unspecified *if* the original frontend has builtin support for the distro.
 	//
 	// If the original frontend does not have builtin support for the distro, this must be specified or the build will fail.
 	// If this is specified then it MUST be used.
-	Syntax string `yaml:"syntax,omitempty"`
+	Image string `yaml:"image,omitempty"`
 	// CmdLine is the command line to use to forward the build to the frontend.
 	// By default the frontend image's entrypoint/cmd is used.
 	CmdLine string `yaml:"cmdline,omitempty"`
@@ -321,12 +328,13 @@ type Frontend struct {
 // This is used in [Spec] to specify the build target for a distro.
 type Target struct {
 	// Dependencies are the different dependencies that need to be specified in the package.
-	Dependencies PackageDependencies `yaml:"dependencies,omitempty"`
+	Dependencies *PackageDependencies `yaml:"dependencies,omitempty"`
 
 	// Image is the image configuration when the target output is a container image.
 	Image *ImageConfig `yaml:"image,omitempty"`
 
 	// Frontend is the frontend configuration to use for the target.
 	// This is used to forward the build to a different, dalec-compatabile frontend.
-	Frontend Frontend `yaml:"frontend,omitempty"`
+	// This can be useful when testing out new distros or using a different version of the frontend for a given distro.
+	Frontend *Frontend `yaml:"frontend,omitempty"`
 }

@@ -2,6 +2,7 @@ package mariner2
 
 import (
 	"github.com/azure/dalec/frontend"
+	"github.com/azure/dalec/frontend/rpm"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
@@ -12,7 +13,7 @@ const (
 func RegisterTargets() {
 	frontend.RegisterTarget(targetKey, targets.Target{
 		Name:        "toolkitroot",
-		Description: "Outputs an rpm buildroot suitable for passing to the mariner2 build toolkit.",
+		Description: "Outputs configs suitable for passing to the mariner2 build toolkit.",
 	}, handleToolkitRoot)
 
 	frontend.RegisterTarget(targetKey, targets.Target{
@@ -25,4 +26,6 @@ func RegisterTargets() {
 		Description: "Builds a container with the RPM installed.",
 		Default:     true,
 	}, handleContainer)
+
+	rpm.RegisterTargets(targetKey)
 }

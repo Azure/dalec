@@ -1,21 +1,23 @@
 package rpm
 
 import (
+	"path"
+
 	"github.com/azure/dalec/frontend"
 	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
-func RegisterTargets() {
-	frontend.RegisterTarget("rpm", bktargets.Target{
+func RegisterTargets(group string) {
+	frontend.RegisterTarget(path.Join(group, "rpm"), bktargets.Target{
 		Name:        "buildroot",
 		Description: "Outputs an rpm buildroot suitable for passing to rpmbuild.",
-	}, HandleBuildRoot)
-	frontend.RegisterTarget("rpm", bktargets.Target{
+	}, BuildrootHandler(group))
+	frontend.RegisterTarget(path.Join(group, "rpm"), bktargets.Target{
 		Name:        "sources",
 		Description: "Outputs all the sources specified in the spec file.",
 	}, HandleSources)
-	frontend.RegisterTarget("rpm", bktargets.Target{
+	frontend.RegisterTarget(path.Join(group, "rpm"), bktargets.Target{
 		Name:        "spec",
 		Description: "Outputs the generated RPM spec file",
-	}, HandleSpec)
+	}, SpecHandler(group))
 }
