@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/azure/dalec"
 	"github.com/azure/dalec/frontend"
+	"github.com/azure/dalec/frontend/rpm"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -48,11 +50,11 @@ func getDigestFromClientFn(ctx context.Context, client gwclient.Client) getDiges
 	}
 }
 
-func handleMariner2Buildroot(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
+func handleToolkitRoot(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToMariner2BuildrootLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client))
+	st, err := spec2ToolkitRootLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -73,13 +75,13 @@ func handleMariner2Buildroot(ctx context.Context, client gwclient.Client, spec *
 	return ref, &image.Image{}, err
 }
 
-func specToMariner2BuildrootLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward frontend.ForwarderFunc) (llb.State, error) {
-	specs, err := specToRpmSpecLLB(spec, llb.Scratch(), "/")
+func spec2ToolkitRootLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc) (llb.State, error) {
+	specs, err := rpm.Dalec2SpecLLB(spec, llb.Scratch(), targetKey, "/")
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	sources, err := specToSourcesLLB(spec, mr, forward)
+	sources, err := rpm.Dalec2SourcesLLB(spec, mr, forward)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -111,4 +113,29 @@ func specToMariner2BuildrootLLB(spec *frontend.Spec, noMerge bool, getDigest get
 	))
 
 	return mergeOrCopy(llb.Scratch(), inputs, filepath.Join("/SPECS", spec.Name), noMerge), nil
+}
+
+// mergeOrCopy merges(or copies if noMerge=true) the given states into the given destination path in the given input state.
+func mergeOrCopy(input llb.State, states []llb.State, dest string, noMerge bool) llb.State {
+	output := input
+
+	if noMerge {
+		for _, src := range states {
+			if noMerge {
+				output = output.File(llb.Copy(src, "/", "/SOURCES/", dalec.WithCreateDestPath()))
+			}
+		}
+		return output
+	}
+
+	diffs := make([]llb.State, 0, len(states))
+	for _, src := range states {
+		st := src
+		if dest != "" && dest != "/" {
+			st = llb.Scratch().
+				File(llb.Copy(src, "/", dest, dalec.WithCreateDestPath()))
+		}
+		diffs = append(diffs, llb.Diff(input, st))
+	}
+	return llb.Merge(diffs)
 }

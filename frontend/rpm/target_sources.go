@@ -1,11 +1,11 @@
-package mariner2
+package rpm
 
 import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"sort"
 
+	"github.com/azure/dalec"
 	"github.com/azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
@@ -19,11 +19,15 @@ import (
 // Currently this image needs /bin/sh and tar in $PATH
 var TarImageRef = "busybox:latest"
 
+func shArgs(cmd string) llb.RunOption {
+	return llb.Args([]string{"sh", "-c", cmd})
+}
+
 func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	// This runs a dummy command to ensure dirs like /proc and /sys are created in the produced state
 	// This way we can use llb.Diff to get just the tarball.
 
-	tarImg := llb.Image(TarImageRef).Run(shArgs(":"), frontend.WithConstraints(opts...)).State
+	tarImg := llb.Image(TarImageRef).Run(shArgs(":"), dalec.WithConstraints(opts...)).State
 
 	// Put the output tar in a consistent location regardless of `dest`
 	// This way if `dest` changes we don't have to rebuild the tarball, which can be expensive.
@@ -31,14 +35,14 @@ func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	st := tarImg.Run(
 		llb.AddMount("/src", src, llb.Readonly),
 		shArgs("tar -C /src -cvzf "+base+" ."),
-		frontend.WithConstraints(opts...),
+		dalec.WithConstraints(opts...),
 	).State
 
 	if base == dest {
 		return llb.Diff(tarImg, st)
 	}
 
-	return llb.Scratch().File(llb.Copy(st, base, dest, frontend.WithCreateDestPath()))
+	return llb.Scratch().File(llb.Copy(st, base, dest, dalec.WithCreateDestPath()))
 }
 
 // mergeOrCopy merges(or copies if noMerge=true) the given states into the given destination path in the given input state.
@@ -48,7 +52,7 @@ func mergeOrCopy(input llb.State, states []llb.State, dest string, noMerge bool)
 	if noMerge {
 		for _, src := range states {
 			if noMerge {
-				output = output.File(llb.Copy(src, "/", "/SOURCES/", frontend.WithCreateDestPath()))
+				output = output.File(llb.Copy(src, "/", "/SOURCES/", dalec.WithCreateDestPath()))
 			}
 		}
 		return output
@@ -59,18 +63,17 @@ func mergeOrCopy(input llb.State, states []llb.State, dest string, noMerge bool)
 		st := src
 		if dest != "" && dest != "/" {
 			st = llb.Scratch().
-				File(llb.Copy(src, "/", dest, frontend.WithCreateDestPath()))
+				File(llb.Copy(src, "/", dest, dalec.WithCreateDestPath()))
 		}
 		diffs = append(diffs, llb.Diff(input, st))
 	}
 	return llb.Merge(diffs)
 }
 
-func handleSources(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
+func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	caps := client.BuildOpts().LLBCaps
 
-	// Put sources into the root of the state for consistent caching
-	sources, err := specToSourcesLLB(spec, client, frontend.ForwarderFromClient(ctx, client))
+	sources, err := Dalec2SourcesLLB(spec, client, frontend.ForwarderFromClient(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -95,33 +98,24 @@ func handleSources(ctx context.Context, client gwclient.Client, spec *frontend.S
 	return ref, &image.Image{}, err
 }
 
-func sortMapKeys[T any](m map[string]T) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func specToSourcesLLB(spec *frontend.Spec, resolver llb.ImageMetaResolver, forward frontend.ForwarderFunc) ([]llb.State, error) {
+func Dalec2SourcesLLB(spec *dalec.Spec, resolver llb.ImageMetaResolver, forward dalec.ForwarderFunc) ([]llb.State, error) {
 	pgID := identity.NewID()
 
 	// Sort the map keys so that the order is consistent This shouldn't be
 	// needed when MergeOp is supported, but when it is not this will improve
 	// cache hits for callers of this function.
-	sorted := sortMapKeys(spec.Sources)
+	sorted := dalec.SortMapKeys(spec.Sources)
 
 	out := make([]llb.State, 0, len(spec.Sources))
 	for _, k := range sorted {
 		src := spec.Sources[k]
-		isDir, err := frontend.SourceIsDir(src)
+		isDir, err := dalec.SourceIsDir(src)
 		if err != nil {
 			return nil, err
 		}
 
 		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+src.Ref, false)
-		st, err := frontend.Source2LLBGetter(spec, src, resolver)(forward, pg)
+		st, err := dalec.Source2LLBGetter(spec, src, resolver)(forward, pg)
 		if err != nil {
 			return nil, err
 		}

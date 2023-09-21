@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/azure/dalec"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
 	"github.com/moby/buildkit/frontend/dockerui"
@@ -12,78 +13,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-type copyOptionFunc func(*llb.CopyInfo)
-
-func (f copyOptionFunc) SetCopyOption(i *llb.CopyInfo) {
-	f(i)
-}
-
-func WithIncludes(patterns []string) llb.CopyOption {
-	return copyOptionFunc(func(i *llb.CopyInfo) {
-		i.IncludePatterns = patterns
-	})
-}
-
-func WithExcludes(patterns []string) llb.CopyOption {
-	return copyOptionFunc(func(i *llb.CopyInfo) {
-		i.ExcludePatterns = patterns
-	})
-}
-
-func WithDirContentsOnly() llb.CopyOption {
-	return copyOptionFunc(func(i *llb.CopyInfo) {
-		i.CopyDirContentsOnly = true
-	})
-}
-
-type constraintsOptFunc func(*llb.Constraints)
-
-func (f constraintsOptFunc) SetConstraintsOption(c *llb.Constraints) {
-	f(c)
-}
-
-func (f constraintsOptFunc) SetRunOption(ei *llb.ExecInfo) {
-	f(&ei.Constraints)
-}
-
-func (f constraintsOptFunc) SetLocalOption(li *llb.LocalInfo) {
-	f(&li.Constraints)
-}
-
-func (f constraintsOptFunc) SetOCILayoutOption(oi *llb.OCILayoutInfo) {
-	f(&oi.Constraints)
-}
-
-func (f constraintsOptFunc) SetHTTPOption(hi *llb.HTTPInfo) {
-	f(&hi.Constraints)
-}
-
-func (f constraintsOptFunc) SetImageOption(ii *llb.ImageInfo) {
-	f(&ii.Constraints)
-}
-
-func (f constraintsOptFunc) SetGitOption(gi *llb.GitInfo) {
-	f(&gi.Constraints)
-}
-
-func WithConstraints(ls ...llb.ConstraintsOpt) llb.ConstraintsOpt {
-	return constraintsOptFunc(func(c *llb.Constraints) {
-		for _, opt := range ls {
-			opt.SetConstraintsOption(c)
-		}
-	})
-}
-
-func withConstraints(opts []llb.ConstraintsOpt) llb.ConstraintsOpt {
-	return WithConstraints(opts...)
-}
-
-// ForwarderFromClient creates a [ForwarderFunc] from a gateway client.
-// This is used for forwarding builds to other frontends in [Source2LLBGetter]
-func ForwarderFromClient(ctx context.Context, client gwclient.Client) ForwarderFunc {
-	return func(st llb.State, spec *BuildSpec) (llb.State, error) {
+// ForwarderFromClient creates a [dalec.ForwarderFunc] from a gateway client.
+// This is used for forwarding builds to other frontends in [dalec.Source2LLBGetter]
+func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.ForwarderFunc {
+	return func(st llb.State, spec *dalec.BuildSpec) (llb.State, error) {
 		if spec == nil {
-			spec = &BuildSpec{}
+			spec = &dalec.BuildSpec{}
 		}
 
 		if spec.File != "" && spec.Inline != "" {
@@ -169,4 +104,14 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) ForwarderF
 		}
 		return ref.ToState()
 	}
+}
+
+func GetBuildArg(client gwclient.Client, k string) (string, bool) {
+	opts := client.BuildOpts().Opts
+	if opts != nil {
+		if v, ok := opts["build-arg:"+k]; ok {
+			return v, true
+		}
+	}
+	return "", false
 }

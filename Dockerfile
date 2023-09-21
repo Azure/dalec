@@ -8,7 +8,7 @@ COPY . .
 RUN \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -o /frontend ./cmd/frontend-rpm-bundle
+    CGO_ENABLED=0 go build -o /frontend ./cmd/frontend
 
 
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0 AS toolchain-build

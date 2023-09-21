@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/azure/dalec"
 	"github.com/azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
@@ -12,11 +13,11 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 )
 
-func handleContainer(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
+func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToContainerLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client))
+	st, err := specToContainerLLB(spec, targetKey, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -43,13 +44,13 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *frontend
 		return nil, nil, fmt.Errorf("error unmarshalling image config: %w", err)
 	}
 
-	copyImageConfig(&img, spec.Image)
+	copyImageConfig(&img, spec.Targets[targetKey].Image)
 
 	ref, err := res.SingleRef()
 	return ref, &img, err
 }
 
-func specToContainerLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward frontend.ForwarderFunc) (llb.State, error) {
+func specToContainerLLB(spec *dalec.Spec, target string, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc) (llb.State, error) {
 	st, err := specToRpmLLB(spec, noMerge, getDigest, mr, forward)
 	if err != nil {
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
@@ -63,15 +64,16 @@ func specToContainerLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFu
 			marinerTdnfCache,
 		).State
 
-	if spec.Image == nil || spec.Image.Base == "" {
+	img := spec.Targets[target].Image
+	if img == nil || img.Base == "" {
 		return installed, nil
 	}
 
 	diff := llb.Diff(installBase, installed)
-	return llb.Merge([]llb.State{llb.Image(spec.Image.Base), diff}), nil
+	return llb.Merge([]llb.State{llb.Image(img.Base), diff}), nil
 }
 
-func copyImageConfig(dst *image.Image, src *frontend.ImageConfig) {
+func copyImageConfig(dst *image.Image, src *dalec.ImageConfig) {
 	if src == nil {
 		return
 	}

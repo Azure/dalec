@@ -1,4 +1,4 @@
-package frontend
+package dalec
 
 import (
 	"fmt"
@@ -23,9 +23,6 @@ type Spec struct {
 	// It is up to the package author to ensure that the package is actually architecture independent.
 	// This is metadata only.
 	NoArch bool `yaml:"noarch"`
-
-	// Dependencies are the different dependencies that need to be specified in the package.
-	Dependencies PackageDependencies
 
 	// Conflicts is the list of packages that conflict with the generated package.
 	// This will prevent the package from being installed if any of these packages are already installed or vice versa.
@@ -66,10 +63,11 @@ type Spec struct {
 	Vendor   string
 	Packager string
 
-	Image *ImageConfig `yaml:"image"`
-
 	// Artifacts is the list of artifacts to include in the package.
 	Artifacts Artifacts
+
+	// The list of distro targets to build the package for.
+	Targets map[string]Target
 }
 
 type Artifacts struct {
@@ -304,4 +302,31 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 	spec.Revision = updated
 
 	return &spec, nil
+}
+
+// Frontend encapsulates the configuration for a frontend to forward a build target to.
+type Frontend struct {
+	// Syntax specifies the frontend image to forward the build to.
+	// This can be left unspecified *if* the original frontend has builtin support for the distro.
+	//
+	// If the original frontend does not have builtin support for the distro, this must be specified or the build will fail.
+	// If this is specified then it MUST be used.
+	Syntax string `yaml:"syntax,omitempty"`
+	// CmdLine is the command line to use to forward the build to the frontend.
+	// By default the frontend image's entrypoint/cmd is used.
+	CmdLine string `yaml:"cmdline,omitempty"`
+}
+
+// Target defines a distro-specific build target.
+// This is used in [Spec] to specify the build target for a distro.
+type Target struct {
+	// Dependencies are the different dependencies that need to be specified in the package.
+	Dependencies PackageDependencies `yaml:"dependencies,omitempty"`
+
+	// Image is the image configuration when the target output is a container image.
+	Image *ImageConfig `yaml:"image,omitempty"`
+
+	// Frontend is the frontend configuration to use for the target.
+	// This is used to forward the build to a different, dalec-compatabile frontend.
+	Frontend Frontend `yaml:"frontend,omitempty"`
 }

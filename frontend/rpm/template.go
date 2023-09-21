@@ -1,13 +1,14 @@
-package mariner2
+package rpm
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 	"sort"
 	"strings"
 	"text/template"
 
-	"github.com/azure/dalec/frontend"
+	"github.com/azure/dalec"
 )
 
 var specTmpl = template.Must(template.New("spec").Parse(strings.TrimSpace(`
@@ -47,10 +48,11 @@ BuildArch: noarch
 `)))
 
 type specWrapper struct {
-	*frontend.Spec
+	*dalec.Spec
+	Target string
 }
 
-func newSpecWrapper(spec *frontend.Spec) *specWrapper {
+func newSpecWrapper(spec *dalec.Spec) *specWrapper {
 	w := &specWrapper{
 		Spec: spec,
 	}
@@ -70,7 +72,7 @@ func (w *specWrapper) Provides() fmt.Stringer {
 func (w *specWrapper) Replaces() fmt.Stringer {
 	b := &strings.Builder{}
 
-	keys := sortMapKeys(w.Spec.Replaces)
+	keys := dalec.SortMapKeys(w.Spec.Replaces)
 	for _, name := range keys {
 		writeDep(b, "Replaces", name, w.Spec.Replaces[name])
 	}
@@ -87,22 +89,23 @@ func (w *specWrapper) Requires() fmt.Stringer {
 		}
 	}
 
-	buildKeys := sortMapKeys(w.Spec.Dependencies.Build)
+	buildKeys := dalec.SortMapKeys(w.Spec.Targets[w.Target].Dependencies.Build)
+	deps := w.Spec.Targets[w.Target].Dependencies
 	for _, name := range buildKeys {
 		if satisfies[name] {
 			continue
 		}
-		constraints := w.Spec.Dependencies.Build[name]
+		constraints := deps.Build[name]
 		writeDep(b, "BuildRequires", name, constraints)
 	}
 
-	if len(w.Spec.Dependencies.Build) > 0 && len(w.Spec.Dependencies.Runtime) > 0 {
+	if len(deps.Build) > 0 && len(deps.Runtime) > 0 {
 		b.WriteString("\n")
 	}
 
-	runtimeKeys := sortMapKeys(w.Spec.Dependencies.Runtime)
+	runtimeKeys := dalec.SortMapKeys(deps.Runtime)
 	for _, name := range runtimeKeys {
-		constraints := w.Spec.Dependencies.Build[name]
+		constraints := deps.Build[name]
 		// satisifes is only for build deps, not runtime deps
 		// TODO: consider if it makes sense to support sources satisfying runtime deps
 		writeDep(b, "Requires", name, constraints)
@@ -126,7 +129,7 @@ func writeDep(b *strings.Builder, kind, name string, constraints []string) {
 func (w *specWrapper) Conflicts() string {
 	b := &strings.Builder{}
 
-	keys := sortMapKeys(w.Spec.Conflicts)
+	keys := dalec.SortMapKeys(w.Spec.Conflicts)
 	for _, name := range keys {
 		constraints := w.Spec.Conflicts[name]
 		writeDep(b, "Conflicts", name, constraints)
@@ -138,12 +141,12 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 	b := &strings.Builder{}
 
 	// Sort keys for consistent output
-	keys := sortMapKeys(w.Spec.Sources)
+	keys := dalec.SortMapKeys(w.Spec.Sources)
 
 	for idx, name := range keys {
 		src := w.Spec.Sources[name]
 		ref := name
-		isDir, err := frontend.SourceIsDir(src)
+		isDir, err := dalec.SourceIsDir(src)
 		if err != nil {
 			return nil, fmt.Errorf("error checking if source %s is a directory: %w", name, err)
 		}
@@ -173,24 +176,24 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 
 	patches := make(map[string]bool)
 
-	for _, v := range w.Patches {
+	for _, v := range w.Spec.Patches {
 		for _, p := range v {
 			patches[p] = true
 		}
 	}
 
 	// Sort keys for consistent output
-	keys := sortMapKeys(w.Spec.Sources)
+	keys := dalec.SortMapKeys(w.Spec.Sources)
 
 	for _, name := range keys {
 		src := w.Spec.Sources[name]
-		err := func(name string, src frontend.Source) error {
+		err := func(name string, src dalec.Source) error {
 			if patches[name] {
 				// This source is a patch so we don't need to set anything up
 				return nil
 			}
 
-			isDir, err := frontend.SourceIsDir(src)
+			isDir, err := dalec.SourceIsDir(src)
 			if err != nil {
 				return err
 			}
@@ -203,7 +206,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			fmt.Fprintf(b, "mkdir -p %%{_builddir}/%s\n", name)
 			fmt.Fprintf(b, "tar -C %%{_builddir}/%s -xzf %%{_sourcedir}/%s.tar.gz\n", name, name)
 
-			for _, p := range w.Patches[name] {
+			for _, p := range w.Spec.Patches[name] {
 				fmt.Fprintf(b, "cd %s\n", name)
 				fmt.Fprintf(b, "patch -p0 -s < %%{_sourcedir}/%s\n", p)
 			}
@@ -228,14 +231,14 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 
 	fmt.Fprintln(b, "set -e")
 
-	envKeys := sortMapKeys(t.Env)
+	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
 		v := t.Env[k]
 		fmt.Fprintf(b, "export %s=%s\n", k, v)
 	}
 
 	for _, step := range t.Steps {
-		envKeys := sortMapKeys(step.Env)
+		envKeys := dalec.SortMapKeys(step.Env)
 		for _, k := range envKeys {
 			fmt.Fprintf(b, "%s=%s ", k, step.Env[k])
 		}
@@ -253,7 +256,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		return b
 	}
 
-	copyArtifact := func(root, p string, cfg frontend.ArtifactConfig) {
+	copyArtifact := func(root, p string, cfg dalec.ArtifactConfig) {
 		targetDir := filepath.Join(root, cfg.SubPath)
 		fmt.Fprintln(b, "mkdir -p", targetDir)
 
@@ -271,13 +274,13 @@ func (w *specWrapper) Install() fmt.Stringer {
 		fmt.Fprintln(b, "cp -r", p, targetPath)
 	}
 
-	binKeys := sortMapKeys(w.Spec.Artifacts.Binaries)
+	binKeys := dalec.SortMapKeys(w.Spec.Artifacts.Binaries)
 	for _, p := range binKeys {
 		cfg := w.Spec.Artifacts.Binaries[p]
 		copyArtifact(`%{buildroot}/%{_bindir}`, p, cfg)
 	}
 
-	manKeys := sortMapKeys(w.Spec.Artifacts.Manpages)
+	manKeys := dalec.SortMapKeys(w.Spec.Artifacts.Manpages)
 	for _, p := range manKeys {
 		cfg := w.Spec.Artifacts.Manpages[p]
 		copyArtifact(`%{buildroot}/%{_mandir}`, p, cfg)
@@ -294,7 +297,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 		return b
 	}
 
-	binKeys := sortMapKeys(w.Spec.Artifacts.Binaries)
+	binKeys := dalec.SortMapKeys(w.Spec.Artifacts.Binaries)
 	for _, p := range binKeys {
 		cfg := w.Spec.Artifacts.Binaries[p]
 		full := filepath.Join(`%{_bindir}/`, cfg.SubPath, filepath.Base(p))
@@ -305,4 +308,15 @@ func (w *specWrapper) Files() fmt.Stringer {
 		fmt.Fprintln(b, `%{_mandir}/*/*`)
 	}
 	return b
+}
+
+// WriteSpec generates an rpm spec from the provided [dalec.Spec] and distro target and writes it to the passed in writer
+func WriteSpec(spec *dalec.Spec, target string, w io.Writer) error {
+	s := &specWrapper{spec, target}
+
+	err := specTmpl.Execute(w, s)
+	if err != nil {
+		return fmt.Errorf("error executing spec template: %w", err)
+	}
+	return nil
 }

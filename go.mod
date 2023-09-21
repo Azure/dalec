@@ -7,6 +7,7 @@ require (
 	github.com/goccy/go-yaml v1.11.0
 	github.com/moby/buildkit v0.12.2
 	github.com/opencontainers/image-spec v1.1.0-rc4
+	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
 	go.etcd.io/bbolt v1.3.7
 	google.golang.org/grpc v1.57.0
@@ -68,7 +69,6 @@ require (
 	github.com/opencontainers/selinux v1.11.0 // indirect
 	github.com/package-url/packageurl-go v0.1.1-0.20220428063043-89078438f170 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.4.0 // indirect
 	github.com/shibumi/go-pathspec v1.3.0 // indirect

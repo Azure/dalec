@@ -12,24 +12,29 @@ version: ${VERSION}
 revision: ${REVISION}
 vendor: Moby
 
-dependencies:
-  build:
-    libseccomp-devel:
-    libtool-ltdl-devel:
-    which:
-    gcc:
-    git:
-    golang:
-      - ">= 1.19"
-    go-md2man:
-    libtool:
-    make:
-    pkgconfig:
-    tar:
-  runtime:
-    libseccomp:
-      - ">= 2.3"
-    "/bin/sh":
+targets:
+  mariner2:
+    image:
+      base: mcr.microsoft.com/cbl-mariner/distroless/base:2.0
+      entrypoint: ["runc"]
+    dependencies:
+      build:
+        libseccomp-devel:
+        libtool-ltdl-devel:
+        which:
+        gcc:
+        git:
+        golang:
+          - ">= 1.19"
+        go-md2man:
+        libtool:
+        make:
+        pkgconfig:
+        tar:
+      runtime:
+        libseccomp:
+          - ">= 2.3"
+        "/bin/sh":
 
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
@@ -66,6 +71,3 @@ artifacts:
     src/man/man8/*:
       subpath: man8
 
-image:
-  base: mcr.microsoft.com/cbl-mariner/distroless/base:2.0
-  entrypoint: ["runc"]

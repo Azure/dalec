@@ -1,9 +1,10 @@
-package mariner2
+package rpm
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/azure/dalec"
 	"github.com/azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
@@ -11,11 +12,13 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 )
 
-func handleBuildRoot(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
+func HandleBuildRoot(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToBuildrootLLB(spec, noMerge, client, frontend.ForwarderFromClient(ctx, client))
+	t, _ := frontend.GetBuildArg(client, distroTargetKey)
+
+	st, err := specToBuildrootLLB(spec, noMerge, client, frontend.ForwarderFromClient(ctx, client), t)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -36,11 +39,11 @@ func handleBuildRoot(ctx context.Context, client gwclient.Client, spec *frontend
 	return ref, nil, err
 }
 
-func specToBuildrootLLB(spec *frontend.Spec, noMerge bool, mr llb.ImageMetaResolver, forward frontend.ForwarderFunc) (llb.State, error) {
-	sources, err := specToSourcesLLB(spec, mr, forward)
+func specToBuildrootLLB(spec *dalec.Spec, noMerge bool, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc, target string) (llb.State, error) {
+	sources, err := Dalec2SourcesLLB(spec, mr, forward)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	return specToRpmSpecLLB(spec, mergeOrCopy(llb.Scratch(), sources, "SOURCES", noMerge), "")
+	return Dalec2SpecLLB(spec, mergeOrCopy(llb.Scratch(), sources, "SOURCES", noMerge), target, "")
 }

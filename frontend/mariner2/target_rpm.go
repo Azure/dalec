@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/azure/dalec"
 	"github.com/azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
@@ -52,7 +53,7 @@ var (
 	goBuildCache = llb.AddMount("/root/.cache/go-build", llb.Scratch(), llb.AsPersistentCacheDir("go-build-cache", llb.CacheMountShared))
 )
 
-func handleRPM(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
+func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
@@ -81,8 +82,8 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
-func specToRpmLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward frontend.ForwarderFunc) (llb.State, error) {
-	br, err := specToMariner2BuildrootLLB(spec, noMerge, getDigest, mr, forward)
+func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc) (llb.State, error) {
+	br, err := spec2ToolkitRootLLB(spec, noMerge, getDigest, mr, forward)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -110,7 +111,7 @@ func specToRpmLLB(spec *frontend.Spec, noMerge bool, getDigest getDigestFunc, mr
 		).State
 
 	return llb.Scratch().File(
-		llb.Copy(st, "/build/out", "/", frontend.WithDirContentsOnly(), frontend.WithIncludes([]string{"RPMS", "SRPMS"})),
+		llb.Copy(st, "/build/out", "/", dalec.WithDirContentsOnly(), dalec.WithIncludes([]string{"RPMS", "SRPMS"})),
 	), nil
 }
 

@@ -1,17 +1,17 @@
-package mariner2
+package debug
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/azure/dalec/frontend"
-	"github.com/goccy/go-yaml"
+	"github.com/azure/dalec"
+	yaml "github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
-func handleResolve(ctx context.Context, client gwclient.Client, spec *frontend.Spec) (gwclient.Reference, *image.Image, error) {
+func HandleResolve(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	dt, err := yaml.Marshal(spec)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error marshalling spec: %w", err)
