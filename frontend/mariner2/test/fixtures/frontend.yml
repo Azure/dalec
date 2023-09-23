@@ -40,7 +40,7 @@ sources:
           spec:
             ref: source://src
       steps:
-        - command: go mod vendor
+        - command: go mod download
           env:
             GOMODCACHE: /build/gomodcache
 
