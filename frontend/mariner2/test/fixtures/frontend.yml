@@ -22,28 +22,27 @@ sources:
       - golang
 
   src:
+    ref: context://
+    filters:
+      excludes:
+        - .github
+        - Dockerfile
+        - .dockerignore
+        - _output
+        - frontend/mariner2/test
+  gomodcache:
     ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.21
-    path: /build/src
+    path: /build/gomodcache
     cmd:
       dir: /build/src
       sources:
-        -
-          copy: true
-          path: /build/src
+        - path: /build/src
           spec:
-            ref: context://
-            filters:
-              excludes:
-                - .github
-                - Dockerfile
-                - .dockerignore
-                - _output
-                - frontend/mariner2/test
-      cache_dirs:
-        /go/pkg/mod:
-          key: go-pkg-mod
+            ref: source://src
       steps:
         - command: go mod vendor
+          env:
+            GOMODCACHE: /build/gomodcache
 
 build:
   env:
@@ -56,13 +55,14 @@ build:
     - command: |
         export GOROOT="$(pwd)/golang"
         export PATH="${GOROOT}/bin:$PATH"
+        export GOMODCACHE="$(pwd)/gomodcache"
 
         cd src
-        go build -mod=vendor ./cmd/frontend-rpm-bundle
+        go build -o ../frontend ./cmd/frontend
 
 artifacts:
   binaries:
-    src/frontend-rpm-bundle:
+    frontend:
 
 image:
-  entrypoint: ["frontend-rpm-bundle"]
+  entrypoint: ["frontend"]

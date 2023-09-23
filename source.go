@@ -15,6 +15,7 @@ const (
 	// Custom source type to generate output from a command.
 	sourceTypeContext = "context"
 	sourceTypeBuild   = "build"
+	sourceTypeSource  = "source"
 )
 
 type LLBGetter func(forwarder ForwarderFunc, opts ...llb.ConstraintsOpt) (llb.State, error)
@@ -194,6 +195,9 @@ func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bo
 			}
 
 			return forward(st, src.Build)
+		case sourceTypeSource:
+			src := s.Sources[ref]
+			return source2LLBGetter(s, src, mr, forMount)(forward, opts...)
 		default:
 			return llb.Scratch(), fmt.Errorf("unsupported source type: %s", scheme)
 		}
