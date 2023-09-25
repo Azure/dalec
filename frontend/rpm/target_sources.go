@@ -11,7 +11,6 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
-	"github.com/moby/buildkit/solver/pb"
 )
 
 // TarImageRef is the image used to create tarballs of sources
@@ -45,42 +44,14 @@ func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	return llb.Scratch().File(llb.Copy(st, base, dest, dalec.WithCreateDestPath()))
 }
 
-// mergeOrCopy merges(or copies if noMerge=true) the given states into the given destination path in the given input state.
-func mergeOrCopy(input llb.State, states []llb.State, dest string, noMerge bool) llb.State {
-	output := input
-
-	if noMerge {
-		for _, src := range states {
-			if noMerge {
-				output = output.File(llb.Copy(src, "/", "/SOURCES/", dalec.WithCreateDestPath()))
-			}
-		}
-		return output
-	}
-
-	diffs := make([]llb.State, 0, len(states))
-	for _, src := range states {
-		st := src
-		if dest != "" && dest != "/" {
-			st = llb.Scratch().
-				File(llb.Copy(src, "/", dest, dalec.WithCreateDestPath()))
-		}
-		diffs = append(diffs, llb.Diff(input, st))
-	}
-	return llb.Merge(diffs)
-}
-
 func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	caps := client.BuildOpts().LLBCaps
-
 	sources, err := Dalec2SourcesLLB(spec, client, frontend.ForwarderFromClient(ctx, client))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	noMerge := !caps.Contains(pb.CapMergeOp)
 	// Now we can merge sources into the desired path
-	st := mergeOrCopy(llb.Scratch(), sources, "/SOURCES", noMerge)
+	st := dalec.MergeAtPath(llb.Scratch(), sources, "/SOURCES")
 
 	def, err := st.Marshal(ctx)
 	if err != nil {

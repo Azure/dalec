@@ -112,30 +112,5 @@ func spec2ToolkitRootLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc
 		llb.Mkfile(spec.Name+".signatures.json", 0600, dt),
 	))
 
-	return mergeOrCopy(llb.Scratch(), inputs, filepath.Join("/SPECS", spec.Name), noMerge), nil
-}
-
-// mergeOrCopy merges(or copies if noMerge=true) the given states into the given destination path in the given input state.
-func mergeOrCopy(input llb.State, states []llb.State, dest string, noMerge bool) llb.State {
-	output := input
-
-	if noMerge {
-		for _, src := range states {
-			if noMerge {
-				output = output.File(llb.Copy(src, "/", "/SOURCES/", dalec.WithCreateDestPath()))
-			}
-		}
-		return output
-	}
-
-	diffs := make([]llb.State, 0, len(states))
-	for _, src := range states {
-		st := src
-		if dest != "" && dest != "/" {
-			st = llb.Scratch().
-				File(llb.Copy(src, "/", dest, dalec.WithCreateDestPath()))
-		}
-		diffs = append(diffs, llb.Diff(input, st))
-	}
-	return llb.Merge(diffs)
+	return dalec.MergeAtPath(llb.Scratch(), inputs, filepath.Join("/SPECS", spec.Name)), nil
 }

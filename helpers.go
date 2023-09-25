@@ -81,3 +81,19 @@ func SortMapKeys[T any](m map[string]T) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// MergeAtPath merges the given states into the given destination path in the given input state.
+func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
+	diffs := make([]llb.State, 0, len(states)+1)
+	diffs = append(diffs, input)
+
+	for _, src := range states {
+		st := src
+		if dest != "" && dest != "/" {
+			st = llb.Scratch().
+				File(llb.Copy(src, "/", dest, WithCreateDestPath()))
+		}
+		diffs = append(diffs, llb.Diff(input, st))
+	}
+	return llb.Merge(diffs)
+}
