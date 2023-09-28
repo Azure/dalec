@@ -19,9 +19,8 @@ jobs:
         name: Checkout
       - uses: ./.github/actions/build-image
         with:
-          repo: mariner2/toolkit
+          repo: mariner2/toolchain
           tag: ${{ github.event.inputs.tag }}
-          target: toolkit
+          target: toolchain
           token: ${{ secrets.GITHUB_TOKEN }}
-          privileged: true
  
