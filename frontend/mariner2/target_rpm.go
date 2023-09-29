@@ -23,34 +23,8 @@ const (
 	marinerToolkitPath  = "/usr/local/toolkit"
 )
 
-var baseMarinerPackages = []string{
-	"acl",
-	"binutils",
-	"bison",
-	"ca-certificates",
-	"curl",
-	"dnf-utils",
-	"gawk",
-	"git",
-	"glibc-devel",
-	"kernel-headers",
-	"make",
-	"msft-golang",
-	"python",
-	"rpm",
-	"rpm-build",
-	"wget",
-}
-
 var (
 	marinerTdnfCache = llb.AddMount("/var/tdnf/cache", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
-
-	marinerBase = llb.Image(marinerRef).
-			Run(
-			shArgs("tdnf install -y "+strings.Join(baseMarinerPackages, " ")),
-			marinerTdnfCache,
-		).
-		State
 )
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
