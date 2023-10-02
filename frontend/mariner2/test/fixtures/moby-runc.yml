@@ -17,8 +17,8 @@ targets: # Distro specific build requirements
     # Uncomment to test forwarding this build to another frontend
     # You'll need to set `image` to a valid frontend image.
     # This must be a dalec-compatible frontend.
-    frontend:
-      image: local/rpmbundle
+    # frontend:
+    #   image: local/rpmbundle
     image:
       base: mcr.microsoft.com/cbl-mariner/distroless/base:2.0
       entrypoint: ["runc"]
@@ -37,9 +37,9 @@ targets: # Distro specific build requirements
         pkgconfig:
         tar:
       runtime:
+        bash:
         libseccomp:
           - ">= 2.3"
-        "/bin/sh":
 
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0

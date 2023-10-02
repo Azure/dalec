@@ -20,13 +20,14 @@ type getDigestFunc func(intput llb.State) (string, string, error)
 
 func getDigestFromClientFn(ctx context.Context, client gwclient.Client) getDigestFunc {
 	return func(input llb.State) (name string, dgst string, _ error) {
-		st := marinerBase.Run(
+		base := llb.Image(marinerRef, llb.WithMetaResolver(client))
+		st := base.Run(
 			llb.AddMount("/tmp/st", input, llb.Readonly),
 			llb.Dir("/tmp/st"),
 			shArgs("set -e -o pipefail; sha256sum * >> /digest"),
 		).State
 
-		def, err := llb.Diff(marinerBase, st).Marshal(ctx)
+		def, err := llb.Diff(base, st).Marshal(ctx)
 		if err != nil {
 			return "", "", err
 		}

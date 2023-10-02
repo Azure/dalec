@@ -1,3 +1,7 @@
 _output
 Dockerfile
 .git
+docker-bake.hcl
+*.md
+LICENSE
+.github

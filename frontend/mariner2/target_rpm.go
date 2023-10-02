@@ -3,6 +3,8 @@ package mariner2
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/azure/dalec"
@@ -14,43 +16,15 @@ import (
 )
 
 const (
-	marinerRef = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+	marinerRef      = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+	toolchainImgRef = "ghcr.io/azure/dalec/mariner/toolchain:latest"
 
 	cachedToolkitRPMDir = "/root/.cache/mariner2-toolkit-rpm-cache"
 	marinerToolkitPath  = "/usr/local/toolkit"
 )
 
-var baseMarinerPackages = []string{
-	"binutils",
-	"bison",
-	"ca-certificates",
-	"curl",
-	"gawk",
-	"git",
-	"glibc-devel",
-	"kernel-headers",
-	"make",
-	"msft-golang",
-	"python",
-	"rpm",
-	"rpm-build",
-	"wget",
-}
-
-var marinerTdnfCache = llb.AddMount("/var/tdnf/cache", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
-
-var marinerBase = llb.Image(marinerRef).
-	Run(
-		shArgs("tdnf install -y "+strings.Join(baseMarinerPackages, " ")),
-		marinerTdnfCache,
-	).
-	State
-
-var toolkitImg = llb.Image("ghcr.io/azure/dalec/mariner2/toolkit:latest@sha256:bad684e29b21a92ca61e46257c7b0e7e96895f6b23d9825f4f526f313b4a203f")
-
 var (
-	goModCache   = llb.AddMount("/go/pkg/mod", llb.Scratch(), llb.AsPersistentCacheDir("go-pkg-mod", llb.CacheMountShared))
-	goBuildCache = llb.AddMount("/root/.cache/go-build", llb.Scratch(), llb.AsPersistentCacheDir("go-build-cache", llb.CacheMountShared))
+	marinerTdnfCache = llb.AddMount("/var/tdnf/cache", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
 )
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -82,32 +56,72 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
+func getBuildDeps(spec *dalec.Spec) []string {
+	var deps *dalec.PackageDependencies
+	if t, ok := spec.Targets[targetKey]; ok {
+		deps = t.Dependencies
+	}
+
+	if deps == nil {
+		deps = spec.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	var out []string
+	for p := range deps.Build {
+		out = append(out, p)
+	}
+
+	sort.Strings(out)
+	return out
+}
+
 func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc) (llb.State, error) {
 	br, err := spec2ToolkitRootLLB(spec, noMerge, getDigest, mr, forward)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	st := marinerBase.
-		Dir(marinerToolkitPath).
+	st := llb.Image(toolchainImgRef, llb.WithMetaResolver(mr)).
+		// /.dockerenv is used by the toolkit to detect it's running in a container.
+		// This makes the toolkit use a different strategy for setting up chroots.
+		// Namely, it makes so the toolkit won't use "mount" to mount the stuff into the chroot which requires CAP_SYS_ADMIN.
+		// (CAP_SYS_ADMIN is not enabled in our build).
+		File(llb.Mkfile("/.dockerenv", 0o600, []byte{})).
+		Dir("/build/toolkit").
+		AddEnv("SPECS_DIR", "/build/SPECS-dalec").
+		AddEnv("CONFIG_FILE", ""). // This is needed for VM images(?), don't need this for our case anyway and the default value is wrong for us.
+		AddEnv("OUT_DIR", "/build/out").
+		AddEnv("LOG_LEVEL", "debug").
+		AddEnv("CACHED_RPMS_DIR", cachedToolkitRPMDir).
 		Run(
-			shArgs("make -j$(nproc) toolchain chroot-tools REBUILD_TOOLS=y"),
-			withMarinerToolkit(),
+			shArgs("dnf download -y --releasever=2.0 --resolve --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " ")),
+			llb.AddMount(cachedToolkitRPMDir, llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked)),
 		).
 		Run(
-			shArgs("make -j$(nproc) build-packages || (cat /usr/local/build/logs/pkggen/rpmbuilding/*; exit 1)"),
-			withMarinerToolkit(),
-			withRunMarinerPkgBuildCache(),
-			llb.AddMount("/build/rpmbuild/SPECS", br, llb.SourcePath("/SPECS")),
-			llb.AddEnv("SPECS_DIR", "/build/rpmbuild/SPECS"),
-			llb.AddEnv("OUT_DIR", "/build/out"),
-			llb.AddEnv("PROJECT_DIR", "/build/project"),
+			shArgs("make -j$(nproc) build-packages || (cat /build/logs/pkggen/rpmbuilding/*; exit 1)"),
+			llb.AddMount(cachedToolkitRPMDir, llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked)),
+			// Mount cached packages into the chroot dirs so they are available to the chrooted build.
+			// The toolchain has built-in (yum) repo files that points to "/upstream-cached-rpms",
+			// so "tdnf install" as performed by the toolchain will read files from this location in the chroot.
+			//
+			// The toolchain can also run things in parallel so it will use multiple chroots.
+			// See https://github.com/microsoft/CBL-Mariner/blob/8b1db59e9b011798e8e7750907f58b1bc9577da7/toolkit/tools/internal/buildpipeline/buildpipeline.go#L37-L117 for implementation of this.
+			//
+			// This is needed because the toolkit cannot mount anything into the chroot as it doesn't have CAP_SYS_ADMIN in our build.
+			// So we have to mount the cached packages into the chroot dirs ourselves.
+			runOptFunc(func(ei *llb.ExecInfo) {
+				for i := 0; i < 8; i++ {
+					llb.AddMount("/tmp/chroot/dalec"+strconv.Itoa(i)+"/upstream-cached-rpms", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked), llb.SourcePath("/cache")).SetRunOption(ei)
+				}
+			}),
+
+			llb.AddMount("/build/SPECS-dalec", br, llb.SourcePath("/SPECS")),
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
 			llb.AddEnv("REFRESH_WORKER_CHROOT", "n"),
-			llb.Security(pb.SecurityMode_INSECURE),
-			goBuildCache,
-			goModCache,
 		).State
 
 	return llb.Scratch().File(
@@ -115,27 +129,8 @@ func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr ll
 	), nil
 }
 
-func withMarinerToolkit() llb.RunOption {
-	return runOptionFunc(func(es *llb.ExecInfo) {
-		llb.AddMount(marinerToolkitPath, toolkitImg, llb.AsPersistentCacheDir("mariner2-toolkit-cache", llb.CacheMountPrivate)).SetRunOption(es)
+type runOptFunc func(*llb.ExecInfo)
 
-		llb.AddEnv("CHROOT_DIR", "/tmp/chroot").SetRunOption(es)
-		llb.AddMount("/tmp/chroot", llb.Scratch(), llb.Tmpfs()).SetRunOption(es)
-
-		llb.AddEnv("CACHED_RPMS_DIR", cachedToolkitRPMDir).SetRunOption(es)
-		llb.AddMount(cachedToolkitRPMDir, llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked)).SetRunOption(es)
-	})
-}
-
-func withRunMarinerPkgBuildCache() llb.RunOption {
-	return runOptionFunc(func(es *llb.ExecInfo) {
-		llb.AddEnv("PKGBUILD_DIR", "/tmp/pkg_build_dir").SetRunOption(es)
-		llb.AddMount("/tmp/pkg_build_dir", llb.Scratch(), llb.Tmpfs()).SetRunOption(es)
-	})
-}
-
-type runOptionFunc func(es *llb.ExecInfo)
-
-func (f runOptionFunc) SetRunOption(es *llb.ExecInfo) {
-	f(es)
+func (f runOptFunc) SetRunOption(ei *llb.ExecInfo) {
+	f(ei)
 }
