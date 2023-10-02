@@ -52,15 +52,7 @@ jobs:
           sudo systemctl restart docker
       - name: build frontend tooling
         run: |
-          docker buildx bake \
-            --set frontend.cache-from=type=gha,scope=dalec.frontend \
-            --set frontend.cache-to=type=gha,mode=max,scope=dalec.frontend \
-            --set mariner2-toolchain.cache-from=type=gha,scope=dalec.mariner2-toolchain \
-            --set frontend.cache-to=type=gha,mode=max,scope=dalec.mariner2-toolchain \
-            frontend mariner2-toolchain
+          docker buildx bake frontend mariner2-toolchain
       - name: test
         run: |
-          docker buildx bake \
-            --set frontend.cache-from=type=gha,scope=dalec.test-runc \
-            --set frontend.cache-to=type=gha,mode=max,scope=dalec.test-runc \
-            test-runc
+          docker buildx bake test-runc
