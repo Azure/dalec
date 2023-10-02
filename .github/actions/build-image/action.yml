@@ -18,6 +18,10 @@ inputs:
     description: The repo name to use for the image
     required: false
     default: ""
+  dockerfile:
+    description: The dockerfile to use
+    required: false
+    default: "Dockerfile"
 
 runs:
   using: composite
@@ -48,6 +52,7 @@ runs:
 
         docker buildx build \
           --target=${{inputs.target}} \
+          -f ${{ inputs.dockerfile }} \
           -t "ghcr.io/${FULL_REPO}:${{ inputs.tag }}" \
           --push \
           --cache-to=type=gha,mode=max,scope=${GITHUB_REF_NAME}-${{ inputs.target }} \

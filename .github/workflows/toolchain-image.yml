@@ -23,4 +23,5 @@ jobs:
           tag: ${{ github.event.inputs.tag }}
           target: toolchain
           token: ${{ secrets.GITHUB_TOKEN }}
+          dockerfile: frontend/mariner2/Dockerfile
  
