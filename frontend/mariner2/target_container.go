@@ -56,7 +56,7 @@ func specToContainerLLB(spec *dalec.Spec, target string, noMerge bool, getDigest
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
 	}
 
-	installBase := llb.Image(marinerRef)
+	installBase := llb.Image(marinerRef, llb.WithMetaResolver(mr))
 	installed := installBase.
 		Run(
 			shArgs("tdnf install -y /tmp/rpms/$(uname -m)/*.rpm"),

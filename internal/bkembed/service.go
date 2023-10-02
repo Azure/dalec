@@ -122,7 +122,7 @@ func NewController(ctx context.Context, root string, frontends map[string]fronte
 		return nil, err
 	}
 
-	wc.Add(w)
+	wc.Add(w) //nolint:errcheck
 
 	cm := solver.NewCacheManager(ctx, "local", cacheStorage, worker.NewCacheResultStorage(wc))
 

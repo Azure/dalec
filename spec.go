@@ -111,7 +111,7 @@ func (a *Artifacts) IsEmpty() bool {
 type ImageConfig struct {
 	Entrypoint []string            `yaml:"entrypoint" json:"entrypoint"`
 	Cmd        []string            `yaml:"cmd" json:"cmd"`
-	Env        []string            `yaml:"env" 	json:"env"`
+	Env        []string            `yaml:"env" json:"env"`
 	Labels     map[string]string   `yaml:"labels" json:"labels"`
 	Volumes    map[string]struct{} `yaml:"volumes" json:"volumes"`
 	WorkingDir string              `yaml:"working_dir" json:"working_dir"`

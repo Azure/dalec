@@ -1,5 +1,8 @@
 # syntax=ghcr.io/azure/dalec/frontend:latest
 
+# TODO: The spec is not currently setting the revision in the runc version
+# This should be fixed before this spec is used to build a real package.
+
 args:
   RUNC_COMMIT:
   REVISION: 1
@@ -20,7 +23,6 @@ targets: # Distro specific build requirements
     # frontend:
     #   image: local/rpmbundle
     image:
-      base: mcr.microsoft.com/cbl-mariner/distroless/base:2.0
       entrypoint: ["runc"]
     dependencies:
       build:
@@ -37,7 +39,7 @@ targets: # Distro specific build requirements
         pkgconfig:
         tar:
       runtime:
-        bash:
+        /bin/sh:
         libseccomp:
           - ">= 2.3"
 

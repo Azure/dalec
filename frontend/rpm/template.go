@@ -52,13 +52,6 @@ type specWrapper struct {
 	Target string
 }
 
-func newSpecWrapper(spec *dalec.Spec) *specWrapper {
-	w := &specWrapper{
-		Spec: spec,
-	}
-	return w
-}
-
 func (w *specWrapper) Provides() fmt.Stringer {
 	b := &strings.Builder{}
 
@@ -234,7 +227,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 		return b
 	}
 
-	fmt.Fprintln(b, `%build`)
+	fmt.Fprintln(b, `%build`) //nolint:govet
 
 	fmt.Fprintln(b, "set -e")
 
@@ -299,7 +292,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 func (w *specWrapper) Files() fmt.Stringer {
 	b := &strings.Builder{}
 
-	fmt.Fprintln(b, "%files")
+	fmt.Fprintln(b, "%files") //nolint:govet
 	if w.Spec.Artifacts.IsEmpty() {
 		return b
 	}

@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  pull_request:
+    branches: 
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: false
+      # Use the golang-ci lint action which automattically sets up GHA caching and other things
+      # Note: There is also a "lint" target in docker-bake.hcl for local linting
+      # If you make changes to this, please make sure to also update the local linting target
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.54
+
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: false
+      - name: build frontend
+        run: docker buildx bake
+      - name: test
+        run: docker buildx bake test-runc
