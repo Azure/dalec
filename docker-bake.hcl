@@ -11,7 +11,7 @@ target "frontend" {
 target "mariner2-toolchain" {
     dockerfile = "./frontend/mariner2/Dockerfile"
     target = "toolchain"
-    tags = ["ghcr.io/azure/dalec/mariner/toolchain:latest", "local/dalec/mariner/toolchain"]
+    tags = ["ghcr.io/azure/dalec/mariner2/toolchain:latest", "local/dalec/mariner2/toolchain"]
 }
 
 # Run linters

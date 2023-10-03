@@ -17,7 +17,7 @@ import (
 
 const (
 	marinerRef      = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
-	toolchainImgRef = "ghcr.io/azure/dalec/mariner/toolchain:latest"
+	toolchainImgRef = "ghcr.io/azure/dalec/mariner2/toolchain:latest"
 
 	cachedToolkitRPMDir = "/root/.cache/mariner2-toolkit-rpm-cache"
 	marinerToolkitPath  = "/usr/local/toolkit"
