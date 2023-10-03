@@ -1,13 +1,12 @@
 group "default" {
-    targets = ["frontend", "mariner2-toolchain"]
+    targets = ["frontend"]
 }
 
 target "frontend" {
     target = "frontend"
-    tags = ["ghcr.io/azure/dalec/frontend:latest", "local/dalec/frontend", BUILDKIT_SYNTAX]
+    tags = ["ghcr.io/azure/dalec/frontend:latest", BUILDKIT_SYNTAX]
 }
 
-// Toolchain builds the full mariner container with the mariner build tookit
 target "mariner2-toolchain" {
     dockerfile = "./frontend/mariner2/Dockerfile"
     target = "toolchain"
@@ -42,7 +41,6 @@ variable "RUNC_REVISION" {
     default = "1"
 }
 
-
 variable "BUILDKIT_SYNTAX" {
     default = "local/dalec/frontend"
 }
@@ -58,6 +56,9 @@ target "runc" {
     matrix = {
         distro = ["mariner2"]
         tgt = ["rpm", "container", "toolkitroot"]
+    }
+    contexts = {
+        "mariner2-toolchain" = "target:mariner2-toolchain"
     }
     target = "${distro}/${tgt}"
     // only tag the container target
