@@ -8,6 +8,7 @@ RUN \
         bison \
         ca-certificates \
         curl \
+        dnf \
         dnf-utils \
         gawk \
         git \
