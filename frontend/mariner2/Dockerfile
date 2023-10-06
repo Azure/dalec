@@ -36,5 +36,8 @@ RUN \
     # /.dockerenv is used by the toolkit to detect if we are running in a
     # container which will prevent this build from requring CAP_SYS_ADMIN
     trap 'rm /.dockerenv' EXIT; touch /.dockerenv; make -j$(nproc) go-tools REBUILD_TOOLS=y
-RUN make toolchain -j$(nproc) chroot-tools REBUILD_TOOLS=n
-
+RUN <<EOF
+set -e;
+make toolchain -j$(nproc) chroot-tools REBUILD_TOOLS=n
+rm -rf /build/build/worker/worker_chroot
+EOF
