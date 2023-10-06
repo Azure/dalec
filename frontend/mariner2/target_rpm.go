@@ -2,6 +2,7 @@ package mariner2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -11,13 +12,15 @@ import (
 	"github.com/azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
+	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 )
 
 const (
-	marinerRef      = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
-	toolchainImgRef = "ghcr.io/azure/dalec/mariner2/toolchain:latest"
+	marinerRef            = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+	toolchainImgRef       = "ghcr.io/azure/dalec/mariner2/toolchain:latest"
+	toolchainNamedContext = "mariner2-toolchain"
 
 	cachedToolkitRPMDir = "/root/.cache/mariner2-toolkit-rpm-cache"
 	marinerToolkitPath  = "/usr/local/toolkit"
@@ -27,11 +30,23 @@ var (
 	marinerTdnfCache = llb.AddMount("/var/tdnf/cache", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
 )
 
+var _ dockerUIClient = (*dockerui.Client)(nil)
+
+type dockerUIClient interface {
+	MainContext(ctx context.Context, opts ...llb.LocalOption) (*llb.State, error)
+	NamedContext(ctx context.Context, name string, opts dockerui.ContextOpt) (*llb.State, *image.Image, error)
+}
+
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToRpmLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client))
+	baseImg, err := getBaseBuilderImg(ctx, client)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	st, err := specToRpmLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client), baseImg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -78,13 +93,56 @@ func getBuildDeps(spec *dalec.Spec) []string {
 	return out
 }
 
-func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc) (llb.State, error) {
+func getBaseBuilderImg(ctx context.Context, client gwclient.Client) (llb.State, error) {
+	dc, err := dockerui.NewClient(client)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	// Check if the client passed in a named context for the toolkit.
+	namedSt, cfg, err := dc.NamedContext(ctx, toolchainNamedContext, dockerui.ContextOpt{})
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	if namedSt != nil {
+		if cfg != nil {
+			dt, err := json.Marshal(cfg)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+			return namedSt.WithImageConfig(dt)
+		}
+		return *namedSt, nil
+	}
+
+	// See if there is a named context using the toolchain image ref
+	namedSt, cfg, err = dc.NamedContext(ctx, toolchainImgRef, dockerui.ContextOpt{})
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	if namedSt != nil {
+		if cfg != nil {
+			dt, err := json.Marshal(cfg)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+			return namedSt.WithImageConfig(dt)
+		}
+		return *namedSt, nil
+	}
+
+	return llb.Image(marinerRef, llb.WithMetaResolver(client)), nil
+}
+
+func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc, baseImg llb.State) (llb.State, error) {
 	br, err := spec2ToolkitRootLLB(spec, noMerge, getDigest, mr, forward)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	st := llb.Image(toolchainImgRef, llb.WithMetaResolver(mr)).
+	st := baseImg.
 		// /.dockerenv is used by the toolkit to detect it's running in a container.
 		// This makes the toolkit use a different strategy for setting up chroots.
 		// Namely, it makes so the toolkit won't use "mount" to mount the stuff into the chroot which requires CAP_SYS_ADMIN.

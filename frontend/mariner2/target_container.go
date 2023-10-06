@@ -17,7 +17,12 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
 
-	st, err := specToContainerLLB(spec, targetKey, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client))
+	baseImg, err := getBaseBuilderImg(ctx, client)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	st, err := specToContainerLLB(spec, targetKey, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client), baseImg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -50,8 +55,8 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	return ref, &img, err
 }
 
-func specToContainerLLB(spec *dalec.Spec, target string, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc) (llb.State, error) {
-	st, err := specToRpmLLB(spec, noMerge, getDigest, mr, forward)
+func specToContainerLLB(spec *dalec.Spec, target string, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc, baseImg llb.State) (llb.State, error) {
+	st, err := specToRpmLLB(spec, noMerge, getDigest, mr, forward, baseImg)
 	if err != nil {
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
 	}

@@ -45,14 +45,29 @@ jobs:
           cache: false
       - name: Expose GitHub tokens for caching
         uses: crazy-max/ghaction-github-runtime@v3
-      - name: Setup dockerd
+      - name: Setup builder
         run: |
-          cp /etc/docker/daemon.json /tmp/daemon.json || echo "{}" > /tmp/daemon.json
-          jq '.features += {"containerd-snapshotter": true}' /tmp/daemon.json | sudo tee /etc/docker/daemon.json
-          sudo systemctl restart docker
+          docker run -d --net=host registry
+          docker buildx create --use --driver-opt network=host
       - name: build frontend tooling
         run: |
-          docker buildx bake frontend mariner2-toolchain
+          set -e
+
+          # Build the frontend image and push it to the local registry
+          docker buildx bake \
+            --set frontend.output=type=registry \
+            --set frontend.tags=localhost:5000/dalec/frontend \
+            --set frontend.cache-from=type=gha,scope=dalec/frontend/ci \
+            --set frontend.cache-to=type=gha,scope=dalec/frontend/ci,mode=max \
+            frontend
       - name: test
         run: |
-          docker buildx bake test-runc
+          # Set the buildkit syntax to the one we stored in the local registry
+          # The bakefile will read this and pass it along to the runc target
+          export BUILDKIT_SYNTAX=localhost:5000/dalec/frontend
+
+          docker buildx bake \
+            --set mariner2-toolchain.cache-from=type=gha,scope=dalec/mariner2-toolchain/ci \
+            --set mariner2-toolchain.cache-to=type=gha,scope=dalec/mariner2-toolchain/ci,mode=max \
+            --set runc-mariner2-*.contexts.mariner2-toolchain=target:mariner2-toolchain \
+            test-runc
