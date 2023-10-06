@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,8 +24,9 @@ const (
 	toolchainImgRef       = "ghcr.io/azure/dalec/mariner2/toolchain:latest"
 	toolchainNamedContext = "mariner2-toolchain"
 
-	cachedToolkitRPMDir = "/root/.cache/mariner2-toolkit-rpm-cache"
-	marinerToolkitPath  = "/usr/local/toolkit"
+	cachedRpmsDir      = "/root/.cache/mariner2-toolkit-rpm-cache"
+	cachedRpmsName     = "mariner2-toolkit-cached-rpms"
+	marinerToolkitPath = "/usr/local/toolkit"
 )
 
 var (
@@ -142,41 +145,54 @@ func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr ll
 		return llb.Scratch(), err
 	}
 
-	st := baseImg.
+	specsDir := "/build/SPECS"
+
+	work := baseImg.
 		// /.dockerenv is used by the toolkit to detect it's running in a container.
 		// This makes the toolkit use a different strategy for setting up chroots.
 		// Namely, it makes so the toolkit won't use "mount" to mount the stuff into the chroot which requires CAP_SYS_ADMIN.
 		// (CAP_SYS_ADMIN is not enabled in our build).
 		File(llb.Mkfile("/.dockerenv", 0o600, []byte{})).
 		Dir("/build/toolkit").
-		AddEnv("SPECS_DIR", "/build/SPECS-dalec").
+		AddEnv("SPECS_DIR", specsDir).
 		AddEnv("CONFIG_FILE", ""). // This is needed for VM images(?), don't need this for our case anyway and the default value is wrong for us.
 		AddEnv("OUT_DIR", "/build/out").
 		AddEnv("LOG_LEVEL", "debug").
-		AddEnv("CACHED_RPMS_DIR", cachedToolkitRPMDir).
+		AddEnv("CACHED_RPMS_DIR", cachedRpmsDir)
+
+	prepareChroot := runOptFunc(func(ei *llb.ExecInfo) {
+		// Mount cached packages into the chroot dirs so they are available to the chrooted build.
+		// The toolchain has built-in (yum) repo files that points to "/upstream-cached-rpms",
+		// so "tdnf install" as performed by the toolchain will read files from this location in the chroot.
+		//
+		// The toolchain can also run things in parallel so it will use multiple chroots.
+		// See https://github.com/microsoft/CBL-Mariner/blob/8b1db59e9b011798e8e7750907f58b1bc9577da7/toolkit/tools/internal/buildpipeline/buildpipeline.go#L37-L117 for implementation of this.
+		//
+		// This is needed because the toolkit cannot mount anything into the chroot as it doesn't have CAP_SYS_ADMIN in our build.
+		// So we have to mount the cached packages into the chroot dirs ourselves.
+		dir := func(i int, p string) string {
+			return filepath.Join("/tmp/chroot", "dalec"+strconv.Itoa(i), p)
+		}
+		for i := 0; i < runtime.NumCPU(); i++ {
+			llb.AddMount(dir(i, "upstream-cached-rpms"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountLocked)).SetRunOption(ei)
+			llb.AddMount(dir(i, "toolchainrpms"), work, llb.SourcePath("/build/build/toolchain_rpms"))
+		}
+	})
+
+	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
+	cachedRPMsMount := llb.AddMount(filepath.Join(cachedRpmsDir, "cache"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountLocked))
+
+	st := work.
 		Run(
 			shArgs("dnf download -y --releasever=2.0 --resolve --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " ")),
-			llb.AddMount(cachedToolkitRPMDir, llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked)),
+			cachedRPMsMount,
 		).
 		Run(
-			shArgs("make -j$(nproc) build-packages || (cat /build/logs/pkggen/rpmbuilding/*; exit 1)"),
-			llb.AddMount(cachedToolkitRPMDir, llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked)),
-			// Mount cached packages into the chroot dirs so they are available to the chrooted build.
-			// The toolchain has built-in (yum) repo files that points to "/upstream-cached-rpms",
-			// so "tdnf install" as performed by the toolchain will read files from this location in the chroot.
-			//
-			// The toolchain can also run things in parallel so it will use multiple chroots.
-			// See https://github.com/microsoft/CBL-Mariner/blob/8b1db59e9b011798e8e7750907f58b1bc9577da7/toolkit/tools/internal/buildpipeline/buildpipeline.go#L37-L117 for implementation of this.
-			//
-			// This is needed because the toolkit cannot mount anything into the chroot as it doesn't have CAP_SYS_ADMIN in our build.
-			// So we have to mount the cached packages into the chroot dirs ourselves.
-			runOptFunc(func(ei *llb.ExecInfo) {
-				for i := 0; i < 8; i++ {
-					llb.AddMount("/tmp/chroot/dalec"+strconv.Itoa(i)+"/upstream-cached-rpms", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-toolkit-rpm-cache", llb.CacheMountLocked), llb.SourcePath("/cache")).SetRunOption(ei)
-				}
-			}),
-
-			llb.AddMount("/build/SPECS-dalec", br, llb.SourcePath("/SPECS")),
+			shArgs("make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; exit 1)"),
+			prepareChroot,
+			cachedRPMsMount,
+			specsMount,
+			marinerTdnfCache,
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
 			llb.AddEnv("REFRESH_WORKER_CHROOT", "n"),
