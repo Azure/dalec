@@ -52,6 +52,7 @@ target "runc" {
         "RUNC_COMMIT" = RUNC_COMMIT
         "VERSION" = RUNC_VERSION
         "BUILDKIT_SYNTAX" = BUILDKIT_SYNTAX
+        "REVISION" = RUNC_REVISION
     }
     matrix = {
         distro = ["mariner2"]
