@@ -136,14 +136,6 @@ type Source struct {
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
 	Excludes []string `yaml:"excludes" json:"excludes"`
 
-	// Satisfies is the list of build dependencies that this source satisfies.
-	// This needs to match the name of the dependency in the
-	// [PackageDependencies.Build] list.  You can specify multiple dependencies
-	// that are satisfied by this source.  This will cause the output packaging
-	// spec to elide the dependency from the package metadata but should include
-	// the dependency in the build source.
-	Satisfies []string `yaml:"satisfies,omitempty" json:"satisfies,omitempty"`
-
 	// KeepGitDir is used to keep the .git directory after fetching the source for git references.
 	KeepGitDir bool `yaml:"keep_git_dir" json:"keep_git_dir"`
 

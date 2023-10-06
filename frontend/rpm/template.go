@@ -83,18 +83,8 @@ func (w *specWrapper) Requires() fmt.Stringer {
 		return b
 	}
 
-	satisfies := make(map[string]bool)
-	for _, src := range w.Spec.Sources {
-		for _, s := range src.Satisfies {
-			satisfies[s] = true
-		}
-	}
-
 	buildKeys := dalec.SortMapKeys(deps.Build)
 	for _, name := range buildKeys {
-		if satisfies[name] {
-			continue
-		}
 		constraints := deps.Build[name]
 		writeDep(b, "BuildRequires", name, constraints)
 	}

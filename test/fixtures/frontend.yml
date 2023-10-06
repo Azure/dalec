@@ -7,19 +7,12 @@ version: 0.0.1
 revision: 1
 vendor: Microsoft
 
-dependencies:
-  build:
-    golang:
-      - ">= 1.19"
-
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 sources:
   golang:
     ref: docker-image://golang:1.21
     path: /usr/local/go
-    satisfies:
-      - golang
 
   src:
     ref: context://
@@ -53,10 +46,8 @@ build:
     GOPATH: /go
   steps:
     - command: |
-        export GOROOT="$(pwd)/golang"
-        export PATH="${GOROOT}/bin:$PATH"
         export GOMODCACHE="$(pwd)/gomodcache"
-
+        GOROOT=/usr/lib/golang
         cd src
         go build -o ../frontend ./cmd/frontend
 

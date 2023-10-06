@@ -186,7 +186,6 @@ func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bo
 					Excludes:   src.Excludes,
 					KeepGitDir: src.KeepGitDir,
 					Cmd:        src.Cmd,
-					Satisfies:  src.Satisfies,
 				}
 				st, err = source2LLBGetter(s, src2, mr, forMount)(forward, opts...)
 				if err != nil {

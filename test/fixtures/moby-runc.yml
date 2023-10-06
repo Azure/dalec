@@ -32,7 +32,6 @@ targets: # Distro specific build requirements
         gcc:
         git:
         golang:
-          - ">= 1.19"
         go-md2man:
         libtool:
         make:
@@ -54,23 +53,18 @@ provides:
 sources:
   src:
     ref: https://github.com/opencontainers/runc.git#${RUNC_COMMIT}
-  golang:
-    ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.20
-    path: /usr/local/go
-    satisfies:
-      - golang
 
 build:
   env:
-    GOPROXY: direct
     CGO_ENABLED: 1 
     GOGC: off
     GOFLAGS: -trimpath
+    GOROOT: /usr/lib/golang
   steps:
     - command: |
-        export PATH="$(pwd)/golang/bin:${PATH}"
-        export GOROOT="$(pwd)/golang"
+        set -e
         cd src
+        export GOROOT=/usr/lib/golang
         make man runc BUILDTAGS=seccomp
 artifacts:
   binaries:
