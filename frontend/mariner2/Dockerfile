@@ -40,4 +40,9 @@ RUN <<EOF
 set -e;
 make toolchain -j$(nproc) chroot-tools REBUILD_TOOLS=n
 rm -rf /build/build/worker/worker_chroot
+rm -rf /build/build/toolchain_rpms/*
 EOF
+# These manifest files are used to populate the toolchain rpms.  Since we've
+# removed the rpms if we don't remove these manifests the toolkit will want to
+# install them again when we build packages.
+RUN for i in resources/manifests/package/*.txt; do [ -f "$i" ] || continue; echo "" > "$i"; done

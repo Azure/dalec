@@ -175,7 +175,6 @@ func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr ll
 		}
 		for i := 0; i < runtime.NumCPU(); i++ {
 			llb.AddMount(dir(i, "upstream-cached-rpms"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountLocked)).SetRunOption(ei)
-			llb.AddMount(dir(i, "toolchainrpms"), work, llb.SourcePath("/build/build/toolchain_rpms"))
 		}
 	})
 
