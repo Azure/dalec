@@ -181,11 +181,16 @@ func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr ll
 	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
 	cachedRPMsMount := llb.AddMount(filepath.Join(cachedRpmsDir, "cache"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountLocked))
 
-	st := work.
-		Run(
+	st := work.With(func(st llb.State) llb.State {
+		deps := getBuildDeps(spec)
+		if len(deps) == 0 {
+			return st
+		}
+		return st.Run(
 			shArgs("dnf download -y --releasever=2.0 --resolve --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " ")),
 			cachedRPMsMount,
-		).
+		).State
+	}).
 		Run(
 			shArgs("make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; exit 1)"),
 			prepareChroot,
