@@ -86,3 +86,6 @@ target "test-runc" {
     EOT
 }
 
+group "test" {
+    targets = ["test-runc"]
+}

@@ -86,7 +86,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, resolver llb.ImageMetaResolver, forward 
 		}
 
 		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+src.Ref, false)
-		st, err := dalec.Source2LLBGetter(spec, src, resolver)(forward, pg)
+		st, err := dalec.Source2LLBGetter(spec, src, k, resolver)(forward, pg)
 		if err != nil {
 			return nil, err
 		}

@@ -22,7 +22,7 @@ type LLBGetter func(forwarder ForwarderFunc, opts ...llb.ConstraintsOpt) (llb.St
 
 type ForwarderFunc func(llb.State, *BuildSpec) (llb.State, error)
 
-func generateSourceFromImage(s *Spec, st llb.State, cmd *CmdSpec, resolver llb.ImageMetaResolver, forward ForwarderFunc, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, resolver llb.ImageMetaResolver, forward ForwarderFunc, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if cmd == nil {
 		return st, nil
 	}
@@ -53,7 +53,7 @@ func generateSourceFromImage(s *Spec, st llb.State, cmd *CmdSpec, resolver llb.I
 	}
 
 	for _, src := range cmd.Sources {
-		srcSt, err := source2LLBGetter(s, src.Spec, resolver, true)(forward, opts...)
+		srcSt, err := source2LLBGetter(s, src.Spec, name, resolver, true)(forward, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -86,11 +86,11 @@ func generateSourceFromImage(s *Spec, st llb.State, cmd *CmdSpec, resolver llb.I
 	return st, nil
 }
 
-func Source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver) LLBGetter {
-	return source2LLBGetter(s, src, mr, false)
+func Source2LLBGetter(s *Spec, src Source, name string, mr llb.ImageMetaResolver) LLBGetter {
+	return source2LLBGetter(s, src, name, mr, false)
 }
 
-func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bool) LLBGetter {
+func source2LLBGetter(s *Spec, src Source, name string, mr llb.ImageMetaResolver, forMount bool) LLBGetter {
 	return func(forward ForwarderFunc, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
 		scheme, ref, err := SplitSourceRef(src.Ref)
 		if err != nil {
@@ -134,7 +134,7 @@ func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bo
 
 		switch scheme {
 		case sourcetypes.DockerImageScheme:
-			return generateSourceFromImage(s, llb.Image(ref, llb.WithMetaResolver(mr)), src.Cmd, mr, forward, opts...)
+			return generateSourceFromImage(s, name, llb.Image(ref, llb.WithMetaResolver(mr)), src.Cmd, mr, forward, opts...)
 		case sourcetypes.GitScheme:
 			// TODO: Pass git secrets
 			ref, err := gitutil.ParseGitRef(ref)
@@ -159,7 +159,9 @@ func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bo
 				gOpts = append(gOpts, withConstraints(opts))
 				return llb.Git(ref.Remote, ref.Commit, gOpts...), nil
 			} else {
-				return llb.HTTP(src.Ref, withConstraints(opts)), nil
+				opts := []llb.HTTPOption{withConstraints(opts)}
+				opts = append(opts, llb.Filename(name))
+				return llb.HTTP(src.Ref, opts...), nil
 			}
 		case sourceTypeContext:
 			lOpts := []llb.LocalOption{withConstraints(opts)}
@@ -187,7 +189,7 @@ func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bo
 					KeepGitDir: src.KeepGitDir,
 					Cmd:        src.Cmd,
 				}
-				st, err = source2LLBGetter(s, src2, mr, forMount)(forward, opts...)
+				st, err = source2LLBGetter(s, src2, name, mr, forMount)(forward, opts...)
 				if err != nil {
 					return llb.Scratch(), err
 				}
@@ -196,7 +198,7 @@ func source2LLBGetter(s *Spec, src Source, mr llb.ImageMetaResolver, forMount bo
 			return forward(st, src.Build)
 		case sourceTypeSource:
 			src := s.Sources[ref]
-			return source2LLBGetter(s, src, mr, forMount)(forward, opts...)
+			return source2LLBGetter(s, src, name, mr, forMount)(forward, opts...)
 		default:
 			return llb.Scratch(), fmt.Errorf("unsupported source type: %s", scheme)
 		}
