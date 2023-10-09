@@ -136,7 +136,7 @@ func getBaseBuilderImg(ctx context.Context, client gwclient.Client) (llb.State, 
 		return *namedSt, nil
 	}
 
-	return llb.Image(marinerRef, llb.WithMetaResolver(client)), nil
+	return llb.Image(toolchainImgRef, llb.WithMetaResolver(client)), nil
 }
 
 func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc, baseImg llb.State) (llb.State, error) {
