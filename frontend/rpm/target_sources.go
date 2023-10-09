@@ -45,7 +45,11 @@ func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 }
 
 func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	sources, err := Dalec2SourcesLLB(spec, client, frontend.ForwarderFromClient(ctx, client))
+	sOpt := dalec.SourceOpts{
+		Resolver: client,
+		Forward:  frontend.ForwarderFromClient(ctx, client),
+	}
+	sources, err := Dalec2SourcesLLB(spec, sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -69,7 +73,7 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 	return ref, &image.Image{}, err
 }
 
-func Dalec2SourcesLLB(spec *dalec.Spec, resolver llb.ImageMetaResolver, forward dalec.ForwarderFunc) ([]llb.State, error) {
+func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, error) {
 	pgID := identity.NewID()
 
 	// Sort the map keys so that the order is consistent This shouldn't be
@@ -86,7 +90,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, resolver llb.ImageMetaResolver, forward 
 		}
 
 		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+src.Ref, false)
-		st, err := dalec.Source2LLBGetter(spec, src, k, resolver)(forward, pg)
+		st, err := dalec.Source2LLBGetter(spec, src, k)(sOpt, pg)
 		if err != nil {
 			return nil, err
 		}

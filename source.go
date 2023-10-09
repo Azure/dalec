@@ -2,7 +2,6 @@ package dalec
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
@@ -18,11 +17,17 @@ const (
 	sourceTypeSource  = "source"
 )
 
-type LLBGetter func(forwarder ForwarderFunc, opts ...llb.ConstraintsOpt) (llb.State, error)
+type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 
 type ForwarderFunc func(llb.State, *BuildSpec) (llb.State, error)
 
-func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, resolver llb.ImageMetaResolver, forward ForwarderFunc, opts ...llb.ConstraintsOpt) (llb.State, error) {
+type SourceOpts struct {
+	Resolver   llb.ImageMetaResolver
+	Forward    ForwarderFunc
+	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
+}
+
+func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if cmd == nil {
 		return st, nil
 	}
@@ -53,7 +58,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, r
 	}
 
 	for _, src := range cmd.Sources {
-		srcSt, err := source2LLBGetter(s, src.Spec, name, resolver, true)(forward, opts...)
+		srcSt, err := source2LLBGetter(s, src.Spec, name, true)(sOpts, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -86,12 +91,12 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, r
 	return st, nil
 }
 
-func Source2LLBGetter(s *Spec, src Source, name string, mr llb.ImageMetaResolver) LLBGetter {
-	return source2LLBGetter(s, src, name, mr, false)
+func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
+	return source2LLBGetter(s, src, name, false)
 }
 
-func source2LLBGetter(s *Spec, src Source, name string, mr llb.ImageMetaResolver, forMount bool) LLBGetter {
-	return func(forward ForwarderFunc, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
+func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter {
+	return func(sOpt SourceOpts, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
 		scheme, ref, err := SplitSourceRef(src.Ref)
 		if err != nil {
 			return llb.Scratch(), err
@@ -134,7 +139,7 @@ func source2LLBGetter(s *Spec, src Source, name string, mr llb.ImageMetaResolver
 
 		switch scheme {
 		case sourcetypes.DockerImageScheme:
-			return generateSourceFromImage(s, name, llb.Image(ref, llb.WithMetaResolver(mr)), src.Cmd, mr, forward, opts...)
+			return generateSourceFromImage(s, name, llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver)), src.Cmd, sOpt, opts...)
 		case sourcetypes.GitScheme:
 			// TODO: Pass git secrets
 			ref, err := gitutil.ParseGitRef(ref)
@@ -164,18 +169,16 @@ func source2LLBGetter(s *Spec, src Source, name string, mr llb.ImageMetaResolver
 				return llb.HTTP(src.Ref, opts...), nil
 			}
 		case sourceTypeContext:
-			lOpts := []llb.LocalOption{withConstraints(opts)}
-			if len(src.Includes) > 0 {
-				lOpts = append(lOpts, llb.IncludePatterns(src.Includes))
+			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
+			if err != nil {
+				return llb.Scratch(), err
 			}
-			if len(src.Excludes) > 0 {
-				lOpts = append(lOpts, llb.ExcludePatterns(src.Excludes))
-			}
+
 			includeExcludeHandled = true
 			if src.Path == "" && ref != "" {
 				src.Path = ref
 			}
-			return llb.Local(filepath.Join(dockerui.DefaultLocalNameContext), lOpts...), nil
+			return *st, nil
 		case sourceTypeBuild:
 			var st llb.State
 			if ref == "" {
@@ -189,16 +192,16 @@ func source2LLBGetter(s *Spec, src Source, name string, mr llb.ImageMetaResolver
 					KeepGitDir: src.KeepGitDir,
 					Cmd:        src.Cmd,
 				}
-				st, err = source2LLBGetter(s, src2, name, mr, forMount)(forward, opts...)
+				st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
 				if err != nil {
 					return llb.Scratch(), err
 				}
 			}
 
-			return forward(st, src.Build)
+			return sOpt.Forward(st, src.Build)
 		case sourceTypeSource:
 			src := s.Sources[ref]
-			return source2LLBGetter(s, src, name, mr, forMount)(forward, opts...)
+			return source2LLBGetter(s, src, name, forMount)(sOpt, opts...)
 		default:
 			return llb.Scratch(), fmt.Errorf("unsupported source type: %s", scheme)
 		}

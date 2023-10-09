@@ -13,7 +13,12 @@ import (
 
 func BuildrootHandler(target string) frontend.BuildFunc {
 	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-		st, err := specToBuildrootLLB(spec, client, frontend.ForwarderFromClient(ctx, client), target)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		st, err := specToBuildrootLLB(spec, target, sOpt)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -35,8 +40,8 @@ func BuildrootHandler(target string) frontend.BuildFunc {
 	}
 }
 
-func specToBuildrootLLB(spec *dalec.Spec, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc, target string) (llb.State, error) {
-	sources, err := Dalec2SourcesLLB(spec, mr, forward)
+func specToBuildrootLLB(spec *dalec.Spec, target string, sOpt dalec.SourceOpts) (llb.State, error) {
+	sources, err := Dalec2SourcesLLB(spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
 	}

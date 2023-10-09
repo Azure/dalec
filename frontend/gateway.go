@@ -46,7 +46,6 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.Forw
 		if spec.Inline != "" {
 			dockerfileDt = []byte(spec.Inline)
 		} else {
-
 			// First we need to read the dockerfile to determine what frontend to forward to
 			res, err := client.Solve(ctx, gwclient.SolveRequest{
 				Definition: defPb,
@@ -179,4 +178,27 @@ func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
 
 		return ref, &cfg, nil
 	}
+}
+
+func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOpts, error) {
+	dc, err := dockerui.NewClient(c)
+	if err != nil {
+		return dalec.SourceOpts{}, err
+	}
+	return dalec.SourceOpts{
+		Resolver: c,
+		Forward:  ForwarderFromClient(ctx, c),
+		GetContext: func(ref string, opts ...llb.LocalOption) (*llb.State, error) {
+			if ref == dockerui.DefaultLocalNameContext {
+				return dc.MainContext(ctx, opts...)
+			}
+			st, _, err := dc.NamedContext(ctx, ref, dockerui.ContextOpt{
+				ResolveMode: dc.ImageResolveMode.String(),
+			})
+			if err != nil {
+				return nil, err
+			}
+			return st, nil
+		},
+	}, nil
 }

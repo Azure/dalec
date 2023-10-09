@@ -1,0 +1,58 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-test-fixutre-local-context
+description: A test fixture for checking local context sources
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+sources:
+  src:
+    ref: context://
+  src2:
+    ref: context://go.mod
+  src3:
+    ref: context://
+    includes:
+      - go.mod
+      - go.sum
+  src4:
+    ref: context://
+    excludes:
+      - go.mod
+      - go.sum
+  src5:
+    ref: context://
+    includes:
+      - go.*
+    excludes:
+      - go.sum
+
+build:
+  steps:
+    - command: |
+        set -x
+        # .dockerignore is ignored so should not be there
+        [ ! -f "./src/.dockerignore" ]
+
+        # These should always be there.
+        [ -d "./src/cmd" ]
+        [ -f "./src2/go.mod" ]
+
+        # These should be there if include is respected.
+        [ -f "./src3/go.mod" ]
+        [ -f "./src3/go.sum" ]
+        # And nothing else should be
+        [ "$(ls -A ./src3 | wc -l)" -eq 2 ]
+
+        [ ! -f "./src4/go.mod" ]
+        [ ! -f "./src4/go.sum" ]
+        [ ! -f "./src4/.dockerignore" ]
+        [ -d "./src4/cmd" ]
+
+        # Now with mixed include/exclude
+        [ -f "./src5/go.mod" ]
+        [ "$(ls -A ./src5 | wc -l)" -eq 1 ]

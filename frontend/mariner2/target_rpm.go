@@ -33,13 +33,6 @@ var (
 	marinerTdnfCache = llb.AddMount("/var/tdnf/cache", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
 )
 
-var _ dockerUIClient = (*dockerui.Client)(nil)
-
-type dockerUIClient interface {
-	MainContext(ctx context.Context, opts ...llb.LocalOption) (*llb.State, error)
-	NamedContext(ctx context.Context, name string, opts dockerui.ContextOpt) (*llb.State, *image.Image, error)
-}
-
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	caps := client.BuildOpts().LLBCaps
 	noMerge := !caps.Contains(pb.CapMergeOp)
@@ -49,7 +42,11 @@ func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 		return nil, nil, err
 	}
 
-	st, err := specToRpmLLB(spec, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client), baseImg)
+	sOpt, err := frontend.SourceOptFromClient(ctx, client)
+	if err != nil {
+		return nil, nil, err
+	}
+	st, err := specToRpmLLB(spec, noMerge, getDigestFromClientFn(ctx, client), baseImg, sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,8 +136,8 @@ func getBaseBuilderImg(ctx context.Context, client gwclient.Client) (llb.State, 
 	return llb.Image(toolchainImgRef, llb.WithMetaResolver(client)), nil
 }
 
-func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc, baseImg llb.State) (llb.State, error) {
-	br, err := spec2ToolkitRootLLB(spec, noMerge, getDigest, mr, forward)
+func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
+	br, err := spec2ToolkitRootLLB(spec, noMerge, getDigest, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
 	}

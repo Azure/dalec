@@ -1,6 +1,7 @@
 package dalec
 
 import (
+	"encoding/json"
 	"sort"
 
 	"github.com/moby/buildkit/client/llb"
@@ -96,4 +97,38 @@ func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
 		diffs = append(diffs, llb.Diff(input, st))
 	}
 	return llb.Merge(diffs)
+}
+
+type localOptionFunc func(*llb.LocalInfo)
+
+func (f localOptionFunc) SetLocalOption(li *llb.LocalInfo) {
+	f(li)
+}
+
+func localIncludeExcludeMerge(src *Source) localOptionFunc {
+	return func(li *llb.LocalInfo) {
+		if len(src.Excludes) > 0 {
+			excludes := src.Excludes
+			if li.ExcludePatterns != "" {
+				var ls []string
+				if err := json.Unmarshal([]byte(li.ExcludePatterns), &ls); err != nil {
+					panic(err)
+				}
+				excludes = append(excludes, ls...)
+			}
+			llb.ExcludePatterns(excludes).SetLocalOption(li)
+		}
+
+		if len(src.Includes) > 0 {
+			includes := src.Includes
+			if li.IncludePatterns != "" {
+				var ls []string
+				if err := json.Unmarshal([]byte(li.IncludePatterns), &ls); err != nil {
+					panic(err)
+				}
+				includes = append(includes, ls...)
+			}
+			llb.IncludePatterns(includes).SetLocalOption(li)
+		}
+	}
 }

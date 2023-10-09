@@ -22,7 +22,11 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	st, err := specToContainerLLB(spec, targetKey, noMerge, getDigestFromClientFn(ctx, client), client, frontend.ForwarderFromClient(ctx, client), baseImg)
+	sOpt, err := frontend.SourceOptFromClient(ctx, client)
+	if err != nil {
+		return nil, nil, err
+	}
+	st, err := specToContainerLLB(spec, targetKey, noMerge, getDigestFromClientFn(ctx, client), baseImg, sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,13 +59,13 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	return ref, &img, err
 }
 
-func specToContainerLLB(spec *dalec.Spec, target string, noMerge bool, getDigest getDigestFunc, mr llb.ImageMetaResolver, forward dalec.ForwarderFunc, baseImg llb.State) (llb.State, error) {
-	st, err := specToRpmLLB(spec, noMerge, getDigest, mr, forward, baseImg)
+func specToContainerLLB(spec *dalec.Spec, target string, noMerge bool, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
+	st, err := specToRpmLLB(spec, noMerge, getDigest, baseImg, sOpt)
 	if err != nil {
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
 	}
 
-	installBase := llb.Image(marinerRef, llb.WithMetaResolver(mr))
+	installBase := llb.Image(marinerRef, llb.WithMetaResolver(sOpt.Resolver))
 	installed := installBase.
 		Run(
 			shArgs("tdnf install -y /tmp/rpms/$(uname -m)/*.rpm"),

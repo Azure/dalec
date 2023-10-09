@@ -1,7 +1,9 @@
 _output
 Dockerfile
+.dockerignore
 .git
 docker-bake.hcl
 *.md
 LICENSE
 .github
+test/fixtures/*.yml

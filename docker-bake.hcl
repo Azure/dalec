@@ -75,7 +75,6 @@ target "runc" {
     cache-to = ["type=gha,scope=dalec/${distro}/${tgt},mode=max"]
 }
 
-
 target "test-runc" {
     name = "test-runc-${distro}"
     matrix = {
@@ -97,13 +96,14 @@ target "test-runc" {
 target "test-fixture" {
     name = "test-fixture-${f}"
     matrix = {
-        f = ["http-src", "nested", "frontend"]
+        f = ["http-src", "nested", "frontend", "local-context"]
         tgt = ["mariner2/rpm"]
     }
     contexts = {
         "mariner2-toolchain" = "target:mariner2-toolchain"
     }
     dockerfile = "test/fixtures/${f}.yml"
+
     args = {
         "BUILDKIT_SYNTAX" = BUILDKIT_SYNTAX
     }
