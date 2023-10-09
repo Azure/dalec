@@ -2,6 +2,10 @@ group "default" {
     targets = ["frontend"]
 }
 
+group "test" {
+    targets = ["test-runc", "test-fixture"]
+}
+
 target "frontend" {
     target = "frontend"
     tags = ["ghcr.io/azure/dalec/frontend:latest", BUILDKIT_SYNTAX]
@@ -66,10 +70,14 @@ target "runc" {
     tags = tgt == "container" ? ["runc:${distro}"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
+
+    cache-from = ["type=gha,scope=dalec/${distro}/${tgt}"]
+    cache-to = ["type=gha,scope=dalec/${distro}/${tgt},mode=max"]
 }
 
 
 target "test-runc" {
+    name = "test-runc-${distro}"
     matrix = {
         distro = ["mariner2"]
     }
@@ -86,6 +94,20 @@ target "test-runc" {
     EOT
 }
 
-group "test" {
-    targets = ["test-runc"]
+target "test-fixture" {
+    name = "test-fixture-${f}"
+    matrix = {
+        f = ["http-src", "nested", "frontend"]
+        tgt = ["mariner2/rpm"]
+    }
+    contexts = {
+        "mariner2-toolchain" = "target:mariner2-toolchain"
+    }
+    dockerfile = "test/fixtures/${f}.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = BUILDKIT_SYNTAX
+    }
+    target = tgt
+    cache-from = ["type=gha,scope=dalec/${tgt}/${f}"]
+    cache-to = ["type=gha,scope=dalec/${tgt}/${f},mode=max"]
 }

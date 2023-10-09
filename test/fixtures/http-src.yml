@@ -1,0 +1,22 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-test-fixutre-sources
+description: A test fixture for checking build sources
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+sources:
+  readme:
+    ref: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md
+  SOMEOTHERNAME.md:
+    ref: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md
+
+build:
+  steps:
+    - command: |
+        [ -f readme ]
+        [ -f SOMEOTHERNAME.md ]

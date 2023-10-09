@@ -69,5 +69,4 @@ jobs:
           docker buildx bake \
             --set mariner2-toolchain.cache-from=type=gha,scope=dalec/mariner2-toolchain/ci \
             --set mariner2-toolchain.cache-to=type=gha,scope=dalec/mariner2-toolchain/ci,mode=max \
-            --set runc-mariner2-*.contexts.mariner2-toolchain=target:mariner2-toolchain \
-            test-runc
+            test

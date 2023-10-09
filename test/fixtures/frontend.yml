@@ -10,10 +10,6 @@ vendor: Microsoft
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 sources:
-  golang:
-    ref: docker-image://golang:1.21
-    path: /usr/local/go
-
   src:
     ref: context://
     filters:
@@ -37,6 +33,10 @@ sources:
           env:
             GOMODCACHE: /build/gomodcache
 
+dependencies:
+  build:
+    golang:
+
 build:
   env:
     GOPROXY: direct
@@ -44,10 +44,10 @@ build:
     GOGC: off
     GOFLAGS: -trimpath
     GOPATH: /go
+    GOROOT: /usr/lib/golang
   steps:
     - command: |
         export GOMODCACHE="$(pwd)/gomodcache"
-        GOROOT=/usr/lib/golang
         cd src
         go build -o ../frontend ./cmd/frontend
 
