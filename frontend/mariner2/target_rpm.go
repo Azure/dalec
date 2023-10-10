@@ -171,12 +171,52 @@ func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, baseI
 			return filepath.Join("/tmp/chroot", "dalec"+strconv.Itoa(i), p)
 		}
 		for i := 0; i < runtime.NumCPU(); i++ {
-			llb.AddMount(dir(i, "upstream-cached-rpms"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountLocked)).SetRunOption(ei)
+			llb.AddMount(dir(i, "upstream-cached-rpms"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountShared)).SetRunOption(ei)
 		}
 	})
 
 	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
-	cachedRPMsMount := llb.AddMount(filepath.Join(cachedRpmsDir, "cache"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountLocked))
+
+	cachedRPMsMount := func(write bool) llb.RunOption {
+		mode := llb.CacheMountShared
+		if write {
+			mode = llb.CacheMountLocked
+		}
+		return llb.AddMount(filepath.Join(cachedRpmsDir, "cache"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, mode))
+	}
+
+	// Setup a lockfile so that any instances sharing the rpms cache mount can take a lock before downloading rpms.
+	// We don't want multiple things writing to the cache at the same time, nor do we want a reader to read a file that is being written to.
+	lockFile := llb.AddMount("/rpmcachelock", llb.Scratch(), llb.AsPersistentCacheDir("dalec-mariner2-rpmcachelock", llb.CacheMountShared))
+	const lockFilePath = "/rpmcachelock/lock"
+
+	// Wraps the command in an flock call with either a shared or exclusive lock.
+	// See https://linux.die.net/man/1/flock for more details and examples.
+	withRpmsLock := func(cmd string, exclusive bool) string {
+		lockFl := "-s" // shared lock
+		if exclusive {
+			lockFl = "-x" // exclusive lock
+		}
+		return fmt.Sprintf(`
+(
+	set -e
+	flock %s 42	
+	%s
+) 42>%s
+`, lockFl, cmd, lockFilePath)
+	}
+
+	dlCmd := withRpmsLock("dnf download -y --releasever=2.0 --resolve --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " "), true)
+	buildCmd := withRpmsLock(`
+make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; exit 1)
+for i in "${CHROOT_DIR}/"*; do
+(
+	if [  -d "${i}" ]; then
+		cd "${i}"; find . ! -path "./upstream-cached-rpms/*" ! -path "./upstream-cached-rpms" ! -path "." -delete -print || exit 42
+	fi
+)
+done	
+`, false)
 
 	st := work.With(func(st llb.State) llb.State {
 		deps := getBuildDeps(spec)
@@ -184,20 +224,23 @@ func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, baseI
 			return st
 		}
 		return st.Run(
-			shArgs("dnf download -y --releasever=2.0 --resolve --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " ")),
-			cachedRPMsMount,
+			shArgs(dlCmd),
+			cachedRPMsMount(false),
+			lockFile,
 		).State
 	}).
 		Run(
-			shArgs("make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; exit 1)"),
+			shArgs(buildCmd),
 			prepareChroot,
-			cachedRPMsMount,
+			cachedRPMsMount(false),
 			specsMount,
+			lockFile,
 			marinerTdnfCache,
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
 			llb.AddEnv("REFRESH_WORKER_CHROOT", "n"),
-		).State
+		).
+		State
 
 	return llb.Scratch().File(
 		llb.Copy(st, "/build/out", "/", dalec.WithDirContentsOnly(), dalec.WithIncludes([]string{"RPMS", "SRPMS"})),
