@@ -56,3 +56,10 @@ build:
         # Now with mixed include/exclude
         [ -f "./src5/go.mod" ]
         [ "$(ls -A ./src5 | wc -l)" -eq 1 ]
+
+changelog:
+  -
+    date: 2023-10-10
+    author: Brian Goff <brgoff@microsoft.com>
+    changes:
+      - Added a changelog item

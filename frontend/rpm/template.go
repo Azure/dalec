@@ -33,23 +33,35 @@ BuildArch: noarch
 
 %description
 {{.Description}}
-
 {{ .PrepareSources }}
-
 {{ .BuildSteps }}
-
 {{ .Install }}
-
 {{ .Files }}
-
-%changelog
-* Mon Aug 28 2023 Brian Goff <brgoff@microsoft.com>
-- Dummy changelog entry
+{{ .Changelog }}
 `)))
 
 type specWrapper struct {
 	*dalec.Spec
 	Target string
+}
+
+func (w *specWrapper) Changelog() (fmt.Stringer, error) {
+	b := &strings.Builder{}
+
+	if len(w.Spec.Changelog) == 0 {
+		return b, nil
+	}
+
+	fmt.Fprintln(b, "%changelog") //nolint:govet
+	for _, log := range w.Spec.Changelog {
+		fmt.Fprintln(b, "* "+log.Date.Format("Mon Jan 2 2006")+" "+log.Author)
+
+		for _, change := range log.Changes {
+			fmt.Fprintln(b, "- "+change)
+		}
+	}
+
+	return b, nil
 }
 
 func (w *specWrapper) Provides() fmt.Stringer {

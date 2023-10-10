@@ -3,6 +3,7 @@ package dalec
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
@@ -76,6 +77,20 @@ type Spec struct {
 	// Image is the image configuration when the target output is a container image.
 	// This is overwritten if specified in the target map for the requested distro.
 	Image *ImageConfig `yaml:"image,omitempty" json:"image,omitempty"`
+
+	// Changelog is the list of changes to the package.
+	Changelog []ChangelogEntry `yaml:"changelog,omitempty" json:"changelog,omitempty"`
+}
+
+// ChangelogEntry is an entry in the changelog.
+// This is used to generate the changelog for the package.
+type ChangelogEntry struct {
+	// Date is the date of the changelog entry.
+	Date time.Time `yaml:"date" json:"date"`
+	// Author is the author of the changelog entry. e.g. `John Smith <john.smith@example.com>`
+	Author string `yaml:"author" json:"author"`
+	// Changes is the list of changes in the changelog entry.
+	Changes []string `yaml:"changes" json:"changes"`
 }
 
 type Artifacts struct {

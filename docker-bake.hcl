@@ -111,3 +111,30 @@ target "test-fixture" {
     cache-from = ["type=gha,scope=dalec/${tgt}/${f}"]
     cache-to = ["type=gha,scope=dalec/${tgt}/${f},mode=max"]
 }
+
+variable "BUILD_SPEC" {
+    default = "\"ERROR: must set BUILD_SPEC variable to the path to the build spec file\""
+}
+
+target "build" {
+    name = "build-${distro}-${tgt}"
+    matrix = {
+        distro = ["mariner2"]
+        tgt = ["rpm", "container", "toolkitroot"]
+    }
+    contexts = {
+        "mariner2-toolchain" = "target:mariner2-toolchain"
+    }
+    dockerfile = BUILD_SPEC
+    args = {
+        "BUILDKIT_SYNTAX" = BUILDKIT_SYNTAX
+    }
+    target = "${distro}/${tgt}"
+    // only tag the container target
+    tags = tgt == "container" ? ["build:${distro}"] : []
+    // only output non-container targets to the fs
+    output = tgt != "container" ? ["_output"] : []
+
+    cache-from = ["type=gha,scope=dalec/${distro}/${tgt}"]
+    cache-to = ["type=gha,scope=dalec/${distro}/${tgt},mode=max"]
+}
