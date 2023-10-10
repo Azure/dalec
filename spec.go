@@ -286,6 +286,33 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 			return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
 		src.Ref = updated
+		if src.Cmd != nil {
+			for i, smnt := range src.Cmd.Sources {
+				updated, err := lex.ProcessWordWithMap(smnt.Spec.Ref, args)
+				if err != nil {
+					return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
+				}
+				src.Cmd.Sources[i].Spec.Ref = updated
+			}
+			for k, v := range src.Cmd.Env {
+				updated, err := lex.ProcessWordWithMap(v, args)
+				if err != nil {
+					return nil, fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
+				}
+				src.Cmd.Env[k] = updated
+			}
+			for i, step := range src.Cmd.Steps {
+				for k, v := range step.Env {
+					updated, err := lex.ProcessWordWithMap(v, args)
+					if err != nil {
+						return nil, fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
+					}
+					step.Env[k] = updated
+					src.Cmd.Steps[i] = step
+				}
+			}
+		}
+
 		spec.Sources[name] = src
 	}
 
@@ -301,6 +328,23 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 	}
 	spec.Revision = updated
 
+	for k, v := range spec.Build.Env {
+		updated, err := lex.ProcessWordWithMap(v, args)
+		if err != nil {
+			return nil, fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
+		}
+		spec.Build.Env[k] = updated
+	}
+
+	for name, step := range spec.Build.Steps {
+		for k, v := range step.Env {
+			updated, err := lex.ProcessWordWithMap(v, args)
+			if err != nil {
+				return nil, fmt.Errorf("error performing shell expansion on env var %q for step %q: %w", k, name, err)
+			}
+			step.Env[k] = updated
+		}
+	}
 	return &spec, nil
 }
 

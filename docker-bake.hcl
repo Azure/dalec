@@ -96,7 +96,7 @@ target "test-runc" {
 target "test-fixture" {
     name = "test-fixture-${f}"
     matrix = {
-        f = ["http-src", "nested", "frontend", "local-context"]
+        f = ["http-src", "nested", "frontend", "local-context", "cmd-src-ref"]
         tgt = ["mariner2/rpm"]
     }
     contexts = {
