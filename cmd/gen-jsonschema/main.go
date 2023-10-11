@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/azure/dalec"
+	"github.com/Azure/dalec"
 	"github.com/invopop/jsonschema"
 )
 
 func main() {
 	var r jsonschema.Reflector
-	if err := r.AddGoComments("github.com/azure/dalec", "./"); err != nil {
+	if err := r.AddGoComments("github.com/Azure/dalec", "./"); err != nil {
 		panic(err)
 	}
 

@@ -1,4 +1,4 @@
-module github.com/azure/dalec
+module github.com/Azure/dalec
 
 go 1.20
 

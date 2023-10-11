@@ -1,6 +1,6 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
-	"$id": "https://github.com/azure/dalec/spec",
+	"$id": "https://github.com/Azure/dalec/spec",
 	"$ref": "#/$defs/Spec",
 	"$defs": {
 		"ArtifactBuild": {

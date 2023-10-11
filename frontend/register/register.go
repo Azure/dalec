@@ -3,8 +3,8 @@
 package register
 
 import (
-	"github.com/azure/dalec/frontend/debug"
-	"github.com/azure/dalec/frontend/mariner2"
+	"github.com/Azure/dalec/frontend/debug"
+	"github.com/Azure/dalec/frontend/mariner2"
 )
 
 func init() {

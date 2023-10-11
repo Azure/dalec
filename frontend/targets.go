@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/azure/dalec"
+	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"

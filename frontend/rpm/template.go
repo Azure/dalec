@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/azure/dalec"
+	"github.com/Azure/dalec"
 )
 
 var specTmpl = template.Must(template.New("spec").Parse(strings.TrimSpace(`
