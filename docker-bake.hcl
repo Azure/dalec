@@ -26,7 +26,7 @@ target "mariner2-toolchain" {
     dockerfile = "./frontend/mariner2/Dockerfile"
     target = "toolchain"
     tags = ["ghcr.io/azure/dalec/mariner2/toolchain:latest"]
-    # cache-from = ["type=registry,ref=ghcr.io/azure/dalec/mariner2/toolchain:cache"]
+    cache-from = ["type=registry,ref=ghcr.io/azure/dalec/mariner2/toolchain:cache"]
 }
 
 # Run linters
