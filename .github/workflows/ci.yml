@@ -76,9 +76,12 @@ jobs:
         run: |
           # Set the buildkit syntax to the one we stored in the local registry
           # The bakefile will read this and pass it along to the runc target
-          export BUILDKIT_SYNTAX=localhost:5000/dalec/frontend
+
+          export CACHE_REF="$(tr '[:upper:]' '[:lower:]' <<<"${CACHE_REF}")"
 
           docker buildx bake \
-            --set mariner2-toolchain.cache-from=type=gha,scope=dalec/mariner2-toolchain/ci \
-            --set mariner2-toolchain.cache-to=type=gha,scope=dalec/mariner2-toolchain/ci,mode=max \
+            --set mariner2-toolchain.cache-from=type=registry,ref=${CACHE_REF} \
             test
+        env:
+          FRONTEND_REF: localhost:5000/dalec/frontend
+          CACHE_REF: ghcr.io/${{ github.repository }}/mariner2/toolchain:cache

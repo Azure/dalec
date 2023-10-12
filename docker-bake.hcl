@@ -99,6 +99,9 @@ target "test-runc" {
     # TODO: The spec is not currently setting the revision in the runc version
     RUN runc --version | tee /dev/stderr | grep "runc version ${replace(RUNC_VERSION, ".", "\\.")}"
     EOT
+
+    cache-from = ["type=gha,scope=dalec/test-runc/${distro}"]
+    cache-to = ["type=gha,scope=dalec/test-runc/${distro},mode=max"]
 }
 
 target "test-fixture" {
