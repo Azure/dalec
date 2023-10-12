@@ -11,7 +11,7 @@ on:
         description: 'Tag to publish'
         required: true
         default: 'latest'
-      
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -28,6 +28,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: |
+          export FRONTEND_REF="$(tr '[:upper:]' '[:lower:]' <<<"${FRONTEND_REF}")"
           docker buildx create --use
           docker buildx bake --push \
             --set frontend.platform=linux/amd64,linux/arm64 \
