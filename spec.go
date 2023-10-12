@@ -1,4 +1,4 @@
-//go:generate go run ./cmd/gen-jsonschema ./spec.schema.json
+//go:generate go run ./cmd/gen-jsonschema docs/spec.schema.json
 package dalec
 
 import (
@@ -19,12 +19,12 @@ type Spec struct {
 	Website string `yaml:"website" json:"website"`
 
 	Version  string `yaml:"version" json:"version" jsonschema:"required"`
-	Revision string `yaml:"revision" json:"revision" jsonschema:"required"`
+	Revision string `yaml:"revision" json:"revision" jsonschema:"required,oneof_type=string;integer"`
 
 	// Marks the package as architecture independent.
 	// It is up to the package author to ensure that the package is actually architecture independent.
 	// This is metadata only.
-	NoArch bool `yaml:"noarch" json:"noarch"`
+	NoArch bool `yaml:"noarch,omitempty" json:"noarch,omitempty"`
 
 	// Conflicts is the list of packages that conflict with the generated package.
 	// This will prevent the package from being installed if any of these packages are already installed or vice versa.
@@ -143,16 +143,16 @@ type Source struct {
 	// example: "docker-image://busybox:latest", "https://github.com/moby/buildkit.git#master", "local://some/local/path
 	Ref string `yaml:"ref" json:"ref" jsonschema:"required"`
 	// Path is the path to the source after fetching it based on the identifier.
-	Path string `yaml:"path" json:"path"`
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 
 	// Includes is a list of paths underneath `Path` to include, everything else is execluded
 	// If empty, everything is included (minus the excludes)
-	Includes []string `yaml:"includes" json:"includes"`
+	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
-	Excludes []string `yaml:"excludes" json:"excludes"`
+	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
 
 	// KeepGitDir is used to keep the .git directory after fetching the source for git references.
-	KeepGitDir bool `yaml:"keep_git_dir" json:"keep_git_dir"`
+	KeepGitDir bool `yaml:"keep_git_dir,omitempty" json:"keep_git_dir,omitempty"`
 
 	// Cmd is used to generate the source from a command.
 	// This is used when `Ref` is "cmd://"
@@ -171,18 +171,18 @@ type Source struct {
 type BuildSpec struct {
 	// Target specifies the build target to use.
 	// If unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default).
-	Target string `yaml:"target" json:"target"`
+	Target string `yaml:"target,omitempty" json:"target,omitempty"`
 	// Args are the build args to pass to the build.
-	Args map[string]string `yaml:"args" json:"args"`
-	// File is the path to the build file in the b uild context
+	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
+	// File is the path to the build file in the build context
 	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
 	// This is exclusive with [Inline]
-	File string `yaml:"file" json:"file"`
+	File string `yaml:"file,omitempty" json:"file,omitempty"`
 
 	// Inline is an inline build spec to use.
 	// This can be used to specify a dockerfile instead of using one in the build context
 	// This is exclusive with [File]
-	Inline string `yaml:"inline" json:"inline"`
+	Inline string `yaml:"inline,omitempty" json:"inline,omitempty"`
 }
 
 // PackageDependencies is a list of dependencies for a package.
@@ -225,7 +225,7 @@ type SourceMount struct {
 	// Path is the destination directory to mount to
 	Path string `yaml:"path" json:"path" jsonschema:"required"`
 	// Copy is used to copy the source into the destination directory rather than mount it
-	Copy bool `yaml:"copy" json:"copy"`
+	Copy bool `yaml:"copy,omitempty" json:"copy,omitempty"`
 	// Spec specifies the source to mount
 	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
 }
@@ -256,11 +256,11 @@ type CacheDirConfig struct {
 	// IncludeDistroKey is used to include the distro key as part of the cache key
 	// What this key is depends on the frontend implementation
 	// Example for Debian Buster may be "buster"
-	IncludeDistroKey bool `yaml:"include_distro_key" json:"include_distro_key,omitempty"`
+	IncludeDistroKey bool `yaml:"include_distro_key,omitempty" json:"include_distro_key,omitempty"`
 	// IncludeArchKey is used to include the architecture key as part of the cache key
 	// What this key is depends on the frontend implementation
 	// Frontends SHOULD use the buildkit platform arch
-	IncludeArchKey bool `yaml:"include_arch_key" json:"include_arch_key,omitempty"`
+	IncludeArchKey bool `yaml:"include_arch_key,omitempty" json:"include_arch_key,omitempty"`
 }
 
 func knownArg(key string) bool {

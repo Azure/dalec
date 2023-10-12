@@ -1,7 +1,7 @@
 package debug
 
 import (
-	"github.com/azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend"
 	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 )
 

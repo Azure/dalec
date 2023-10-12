@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/azure/dalec"
+	"github.com/Azure/dalec"
 	yaml "github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"

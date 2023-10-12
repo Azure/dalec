@@ -1,8 +1,8 @@
 package mariner2
 
 import (
-	"github.com/azure/dalec/frontend"
-	"github.com/azure/dalec/frontend/rpm"
+	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/rpm"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 )
 

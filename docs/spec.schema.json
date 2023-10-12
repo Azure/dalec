@@ -1,0 +1,558 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/Azure/dalec/spec",
+	"$ref": "#/$defs/Spec",
+	"$defs": {
+		"ArtifactBuild": {
+			"properties": {
+				"steps": {
+					"items": {
+						"$ref": "#/$defs/BuildStep"
+					},
+					"type": "array",
+					"description": "Steps is the list of commands to run to build the artifact(s).\nEach step is run sequentially and will be cached accordingly depending on the frontend implementation."
+				},
+				"cache_dirs": {
+					"additionalProperties": {
+						"$ref": "#/$defs/CacheDirConfig"
+					},
+					"type": "object",
+					"description": "List of CacheDirs which will be used across all Steps"
+				},
+				"env": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Env is the list of environment variables to set for all commands in this step group."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"steps"
+			],
+			"description": "ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s)."
+		},
+		"ArtifactConfig": {
+			"properties": {
+				"subpath": {
+					"type": "string",
+					"description": "Subpath is the subpath to use in the package for the artifact type.\n\nAs an example, binaries are typically placed in /usr/bin when installed.\nIf you want to nest them in a subdirectory, you can specify it here."
+				},
+				"name": {
+					"type": "string",
+					"description": "Name is file or dir name to use for the artifact in the package.\nIf empty, the file or dir name from the produced artifact will be used."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"subpath",
+				"name"
+			]
+		},
+		"Artifacts": {
+			"properties": {
+				"binaries": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "NOTE: Using a struct as a map value for future expansion"
+				},
+				"manpages": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"binaries",
+				"manpages"
+			]
+		},
+		"BuildSpec": {
+			"properties": {
+				"target": {
+					"type": "string",
+					"description": "Target specifies the build target to use.\nIf unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default)."
+				},
+				"args": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Args are the build args to pass to the build."
+				},
+				"file": {
+					"type": "string",
+					"description": "File is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.\nThis is exclusive with [Inline]"
+				},
+				"inline": {
+					"type": "string",
+					"description": "Inline is an inline build spec to use.\nThis can be used to specify a dockerfile instead of using one in the build context\nThis is exclusive with [File]"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "BuildSpec is used to generate source from a build."
+		},
+		"BuildStep": {
+			"properties": {
+				"command": {
+					"type": "string",
+					"description": "Command is the command to run to build the artifact(s).\nThis will always be wrapped as /bin/sh -c \"\u003ccommand\u003e\", or whatever the equivalent is for the target distro."
+				},
+				"cache_dirs": {
+					"additionalProperties": {
+						"$ref": "#/$defs/CacheDirConfig"
+					},
+					"type": "object",
+					"description": "CacheDirs is the list of CacheDirs which will be used for this build step.\nNote that this list will be merged with the list of CacheDirs from the StepGroup."
+				},
+				"env": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Env is the list of environment variables to set for the command."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"command"
+			],
+			"description": "BuildStep is used to execute a command to build the artifact(s)."
+		},
+		"CacheDirConfig": {
+			"properties": {
+				"mode": {
+					"type": "string",
+					"description": "Mode is the locking mode to set on the cache directory\nvalues: shared, private, locked\ndefault: shared"
+				},
+				"key": {
+					"type": "string",
+					"description": "Key is the cache key to use to cache the directory\ndefault: Value of `Path`"
+				},
+				"include_distro_key": {
+					"type": "boolean",
+					"description": "IncludeDistroKey is used to include the distro key as part of the cache key\nWhat this key is depends on the frontend implementation\nExample for Debian Buster may be \"buster\""
+				},
+				"include_arch_key": {
+					"type": "boolean",
+					"description": "IncludeArchKey is used to include the architecture key as part of the cache key\nWhat this key is depends on the frontend implementation\nFrontends SHOULD use the buildkit platform arch"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "CacheDirConfig configures a persistent cache to be used across builds."
+		},
+		"ChangelogEntry": {
+			"properties": {
+				"date": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Date is the date of the changelog entry."
+				},
+				"author": {
+					"type": "string",
+					"description": "Author is the author of the changelog entry. e.g. `John Smith \u003cjohn.smith@example.com\u003e`"
+				},
+				"changes": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Changes is the list of changes in the changelog entry."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"date",
+				"author",
+				"changes"
+			],
+			"description": "ChangelogEntry is an entry in the changelog."
+		},
+		"CmdSpec": {
+			"properties": {
+				"dir": {
+					"type": "string",
+					"description": "Dir is the working directory to run the command in."
+				},
+				"sources": {
+					"items": {
+						"$ref": "#/$defs/SourceMount"
+					},
+					"type": "array",
+					"description": "Sources is the list of sources to mount into the build steps."
+				},
+				"cache_dirs": {
+					"additionalProperties": {
+						"$ref": "#/$defs/CacheDirConfig"
+					},
+					"type": "object",
+					"description": "List of CacheDirs which will be used across all Steps"
+				},
+				"env": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Env is the list of environment variables to set for all commands in this step group."
+				},
+				"steps": {
+					"items": {
+						"$ref": "#/$defs/BuildStep"
+					},
+					"type": "array"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"steps"
+			]
+		},
+		"Frontend": {
+			"properties": {
+				"image": {
+					"type": "string",
+					"description": "Image specifies the frontend image to forward the build to.\nThis can be left unspecified *if* the original frontend has builtin support for the distro.\n\nIf the original frontend does not have builtin support for the distro, this must be specified or the build will fail.\nIf this is specified then it MUST be used."
+				},
+				"cmdline": {
+					"type": "string",
+					"description": "CmdLine is the command line to use to forward the build to the frontend.\nBy default the frontend image's entrypoint/cmd is used."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"image"
+			],
+			"description": "Frontend encapsulates the configuration for a frontend to forward a build target to."
+		},
+		"ImageConfig": {
+			"properties": {
+				"entrypoint": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array"
+				},
+				"cmd": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array"
+				},
+				"env": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array"
+				},
+				"labels": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object"
+				},
+				"volumes": {
+					"additionalProperties": {
+						"properties": {},
+						"additionalProperties": false,
+						"type": "object"
+					},
+					"type": "object"
+				},
+				"working_dir": {
+					"type": "string"
+				},
+				"stop_signal": {
+					"type": "string"
+				},
+				"base": {
+					"type": "string",
+					"description": "Base is the base image to use for the output image.\nThis only affects the output image, not the build image."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"entrypoint",
+				"cmd",
+				"env",
+				"labels",
+				"volumes",
+				"working_dir",
+				"stop_signal",
+				"base"
+			]
+		},
+		"PackageDependencies": {
+			"properties": {
+				"build": {
+					"additionalProperties": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"type": "object",
+					"description": "Build is the list of packagese required to build the package."
+				},
+				"runtime": {
+					"additionalProperties": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"type": "object",
+					"description": "Runtime is the list of packages required to install/run the package."
+				},
+				"recommends": {
+					"additionalProperties": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"type": "object",
+					"description": "Recommends is the list of packages recommended to install with the generated package.\nNote: Not all package managers support this (e.g. rpm)"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "PackageDependencies is a list of dependencies for a package."
+		},
+		"Source": {
+			"properties": {
+				"ref": {
+					"type": "string",
+					"description": "Ref is a unique identifier for the source.\nexample: \"docker-image://busybox:latest\", \"https://github.com/moby/buildkit.git#master\", \"local://some/local/path"
+				},
+				"path": {
+					"type": "string",
+					"description": "Path is the path to the source after fetching it based on the identifier."
+				},
+				"includes": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Includes is a list of paths underneath `Path` to include, everything else is execluded\nIf empty, everything is included (minus the excludes)"
+				},
+				"excludes": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Excludes is a list of paths underneath `Path` to exclude, everything else is included"
+				},
+				"keep_git_dir": {
+					"type": "boolean",
+					"description": "KeepGitDir is used to keep the .git directory after fetching the source for git references."
+				},
+				"cmd": {
+					"$ref": "#/$defs/CmdSpec",
+					"description": "Cmd is used to generate the source from a command.\nThis is used when `Ref` is \"cmd://\"\nIf ref is \"cmd://\", this is required."
+				},
+				"build": {
+					"$ref": "#/$defs/BuildSpec",
+					"description": "Build is used to generate source from a build.\nThis is used when [Ref]` is \"build://\"\nThe context for the build is assumed too be specified in after `build://` in the ref, e.g. `build://https://github.com/moby/buildkit.git#master`\nWhen nothing is specified after `build://`, the context is assumed to be the current build context."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"ref"
+			],
+			"description": "Source defines a source to be used in the build."
+		},
+		"SourceMount": {
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "Path is the destination directory to mount to"
+				},
+				"copy": {
+					"type": "boolean",
+					"description": "Copy is used to copy the source into the destination directory rather than mount it"
+				},
+				"spec": {
+					"$ref": "#/$defs/Source",
+					"description": "Spec specifies the source to mount"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"path",
+				"spec"
+			]
+		},
+		"Spec": {
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Name is the name of the package."
+				},
+				"description": {
+					"type": "string",
+					"description": "Description is a short description of the package."
+				},
+				"website": {
+					"type": "string",
+					"description": "Website is the URL to store in the metadata of the package."
+				},
+				"version": {
+					"type": "string"
+				},
+				"revision": {
+					"oneOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "integer"
+						}
+					]
+				},
+				"noarch": {
+					"type": "boolean",
+					"description": "Marks the package as architecture independent.\nIt is up to the package author to ensure that the package is actually architecture independent.\nThis is metadata only."
+				},
+				"conflicts": {
+					"additionalProperties": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"type": "object",
+					"description": "Conflicts is the list of packages that conflict with the generated package.\nThis will prevent the package from being installed if any of these packages are already installed or vice versa."
+				},
+				"replaces": {
+					"additionalProperties": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"type": "object",
+					"description": "Replaces is the list of packages that are replaced by the generated package."
+				},
+				"provides": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Provides is the list of things that the generated package provides.\nThis can be used to satisfy dependencies of other packages.\nAs an example, the moby-runc package provides \"runc\", other packages could depend on \"runc\" and be satisfied by moby-runc.\nThis is an advanced use case and consideration should be taken to ensure that the package actually provides the thing it claims to provide."
+				},
+				"sources": {
+					"additionalProperties": {
+						"$ref": "#/$defs/Source"
+					},
+					"type": "object",
+					"description": "Sources is the list of sources to use to build the artifact(s).\nThe map key is the name of the source and the value is the source configuration.\nThe source configuration is used to fetch the source and filter the files to include/exclude.\nThis can be mounted into the build using the \"Mounts\" field in the StepGroup.\n\nSources can be embedded in the main spec as here or overriden in a build request."
+				},
+				"patches": {
+					"additionalProperties": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array"
+					},
+					"type": "object",
+					"description": "Patches is the list of patches to apply to the sources.\nThe map key is the name of the source to apply the patches to.\nThe value is the list of patches to apply to the source.\nThe patch must be present in the `Sources` map.\nEach patch is applied in order and the result is used as the source for the build."
+				},
+				"build": {
+					"$ref": "#/$defs/ArtifactBuild",
+					"description": "Build is the configuration for building the artifacts in the package."
+				},
+				"args": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Args is the list of arguments that can be used for shell-style expansion in (certain fields of) the spec.\nAny arg supplied in the build request which does not appear in this list will cause an error.\nAttempts to use an arg in the spec which is not specified here will assume to be a literal string.\nThe map value is the default value to use if the arg is not supplied in the build request."
+				},
+				"license": {
+					"type": "string"
+				},
+				"vendor": {
+					"type": "string"
+				},
+				"packager": {
+					"type": "string"
+				},
+				"artifacts": {
+					"$ref": "#/$defs/Artifacts",
+					"description": "Artifacts is the list of artifacts to include in the package."
+				},
+				"targets": {
+					"additionalProperties": {
+						"$ref": "#/$defs/Target"
+					},
+					"type": "object",
+					"description": "The list of distro targets to build the package for."
+				},
+				"dependencies": {
+					"$ref": "#/$defs/PackageDependencies",
+					"description": "Dependencies are the different dependencies that need to be specified in the package.\nDependencies are overwritten if specified in the target map for the requested distro."
+				},
+				"image": {
+					"$ref": "#/$defs/ImageConfig",
+					"description": "Image is the image configuration when the target output is a container image.\nThis is overwritten if specified in the target map for the requested distro."
+				},
+				"changelog": {
+					"items": {
+						"$ref": "#/$defs/ChangelogEntry"
+					},
+					"type": "array",
+					"description": "Changelog is the list of changes to the package."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name",
+				"description",
+				"website",
+				"version",
+				"revision",
+				"license",
+				"vendor",
+				"packager"
+			],
+			"description": "Spec is the specification for a package build."
+		},
+		"Target": {
+			"properties": {
+				"dependencies": {
+					"$ref": "#/$defs/PackageDependencies",
+					"description": "Dependencies are the different dependencies that need to be specified in the package."
+				},
+				"image": {
+					"$ref": "#/$defs/ImageConfig",
+					"description": "Image is the image configuration when the target output is a container image."
+				},
+				"frontend": {
+					"$ref": "#/$defs/Frontend",
+					"description": "Frontend is the frontend configuration to use for the target.\nThis is used to forward the build to a different, dalec-compatabile frontend.\nThis can be useful when testing out new distros or using a different version of the frontend for a given distro."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "Target defines a distro-specific build target."
+		}
+	}
+}

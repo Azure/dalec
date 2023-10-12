@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/azure/dalec"
+	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"

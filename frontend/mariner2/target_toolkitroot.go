@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/azure/dalec"
-	"github.com/azure/dalec/frontend"
-	"github.com/azure/dalec/frontend/rpm"
+	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/rpm"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"

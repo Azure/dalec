@@ -10,13 +10,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/grpclog"
 
-	"github.com/azure/dalec/frontend"
-	_ "github.com/azure/dalec/frontend/register" // register all known targets
+	"github.com/Azure/dalec/frontend"
+	_ "github.com/Azure/dalec/frontend/register" // register all known targets
 	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
 )
 
 const (
-	Package = "github.com/azure/dalec/cmd/mariner2"
+	Package = "github.com/Azure/dalec/cmd/frontend"
 )
 
 func main() {
