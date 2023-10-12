@@ -15,12 +15,12 @@ RUN \
         glibc-devel \
         kernel-headers \
         make \
-        msft-golang \
+        golang \
         python \
         rpm \
         rpm-build \
         wget
-ARG TOOLKIT_COMMIT=8b1db59e9b011798e8e7750907f58b1bc9577da7
+ARG TOOLKIT_COMMIT=ae993d0b3288b1bb291f5f468169fa36b681b4d4
 ADD --keep-git-dir https://github.com/microsoft/CBL-Mariner.git#${TOOLKIT_COMMIT} /build
 ENV CONFIG_FILE="" CHROOT_DIR="/tmp/chroot"
 # The toolchain can also run things in parallel so it will use multiple chroots.
