@@ -6,15 +6,27 @@ group "test" {
     targets = ["test-runc", "test-fixture"]
 }
 
+variable "FRONTEND_REF" {
+    // Buildkit always checks the registry for the frontend image.
+    // AFAIK there is no way to tell it not to.
+    // Even if we have the image locally it will still check the registry and use that instead.
+    // As such we need to use a local only ref to ensure we always use the local image when testing things.
+    //
+    // We'll use this var to set the `BUILDKIT_SYNTAX` var in the builds that consume the frontend which will
+    // cause buildkit to use the local image.
+    default = "local/dalec/frontend"
+}
+
 target "frontend" {
     target = "frontend"
-    tags = ["ghcr.io/azure/dalec/frontend:latest", BUILDKIT_SYNTAX]
+    tags = [FRONTEND_REF]
 }
 
 target "mariner2-toolchain" {
     dockerfile = "./frontend/mariner2/Dockerfile"
     target = "toolchain"
-    tags = ["ghcr.io/azure/dalec/mariner2/toolchain:latest", "local/dalec/mariner2/toolchain"]
+    tags = ["ghcr.io/azure/dalec/mariner2/toolchain:latest"]
+    # cache-from = ["type=registry,ref=ghcr.io/azure/dalec/mariner2/toolchain:cache"]
 }
 
 # Run linters
@@ -45,18 +57,14 @@ variable "RUNC_REVISION" {
     default = "1"
 }
 
-variable "BUILDKIT_SYNTAX" {
-    default = "local/dalec/frontend"
-}
-
 target "runc" {
     name = "runc-${distro}-${tgt}"
     dockerfile = "test/fixtures/moby-runc.yml"
     args = {
         "RUNC_COMMIT" = RUNC_COMMIT
         "VERSION" = RUNC_VERSION
-        "BUILDKIT_SYNTAX" = BUILDKIT_SYNTAX
         "REVISION" = RUNC_REVISION
+        "BUILDKIT_SYNTAX" = FRONTEND_REF
     }
     matrix = {
         distro = ["mariner2"]
@@ -105,7 +113,7 @@ target "test-fixture" {
     dockerfile = "test/fixtures/${f}.yml"
 
     args = {
-        "BUILDKIT_SYNTAX" = BUILDKIT_SYNTAX
+        "BUILDKIT_SYNTAX" = FRONTEND_REF
     }
     target = tgt
     cache-from = ["type=gha,scope=dalec/${tgt}/${f}"]
@@ -127,7 +135,7 @@ target "build" {
     }
     dockerfile = BUILD_SPEC
     args = {
-        "BUILDKIT_SYNTAX" = BUILDKIT_SYNTAX
+        "BUILDKIT_SYNTAX" = FRONTEND_REF
     }
     target = "${distro}/${tgt}"
     // only tag the container target

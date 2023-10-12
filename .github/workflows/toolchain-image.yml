@@ -21,11 +21,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: Checkout
-      - uses: ./.github/actions/build-image
+      - uses: docker/login-action@v2
+        name: Login to GHCR
         with:
-          repo: mariner2/toolchain
-          tag: ${{ github.event.inputs.tag }}
-          target: toolchain
-          token: ${{ secrets.GITHUB_TOKEN }}
-          dockerfile: frontend/mariner2/Dockerfile
- 
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          docker buildx create --use
+
+          export TAG_REF="$(tr '[:upper:]' '[:lower:]' <<<"${TAG_REF}")"
+          export CACHE_REF="$(tr '[:upper:]' '[:lower:]' <<<"${CACHE_REF}")"
+
+          # For the toolchain we'll provide a separate cache image with a known tag
+          # This makes it easier when making changes to the toolchain image to have a easily targetable cache ref.
+          cache="type=registry,ref=${CACHE_REF}"
+          docker buildx bake --push \
+            --set mariner2-toolchain.tags=${TAG_REF} \
+            --set mariner2-toolchain.cache-to=${cache} \
+            --set mariner2-toolchain.cache-from=${cache} \
+            mariner2-toolchain
+        env:
+          TAG_REF: ghcr.io/${{ github.repository }}/mariner2/toolchain:${{ github.event.inputs.tag }}
+          CACHE_REF: ghcr.io/${{ github.repository }}/mariner2/toolchain:cache
