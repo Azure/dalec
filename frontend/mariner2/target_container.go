@@ -10,13 +10,10 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/solver/pb"
+)
 )
 
 func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	caps := client.BuildOpts().LLBCaps
-	noMerge := !caps.Contains(pb.CapMergeOp)
-
 	baseImg, err := getBaseBuilderImg(ctx, client)
 	if err != nil {
 		return nil, nil, err
@@ -26,7 +23,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := specToContainerLLB(spec, targetKey, noMerge, getDigestFromClientFn(ctx, client), baseImg, sOpt)
+	st, err := specToContainerLLB(spec, targetKey, getDigestFromClientFn(ctx, client), baseImg, sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -59,8 +56,8 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	return ref, &img, err
 }
 
-func specToContainerLLB(spec *dalec.Spec, target string, noMerge bool, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-	st, err := specToRpmLLB(spec, noMerge, getDigest, baseImg, sOpt)
+func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
+	st, err := specToRpmLLB(spec, getDigest, baseImg, sOpt)
 	if err != nil {
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
 	}

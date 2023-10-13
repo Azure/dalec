@@ -13,7 +13,6 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/solver/pb"
 )
 
 type getDigestFunc func(intput llb.State) (string, string, error)
@@ -52,14 +51,11 @@ func getDigestFromClientFn(ctx context.Context, client gwclient.Client) getDiges
 }
 
 func handleToolkitRoot(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	caps := client.BuildOpts().LLBCaps
-	noMerge := !caps.Contains(pb.CapMergeOp)
-
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := spec2ToolkitRootLLB(spec, noMerge, getDigestFromClientFn(ctx, client), sOpt)
+	st, err := spec2ToolkitRootLLB(spec, getDigestFromClientFn(ctx, client), sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -80,7 +76,7 @@ func handleToolkitRoot(ctx context.Context, client gwclient.Client, spec *dalec.
 	return ref, &image.Image{}, err
 }
 
-func spec2ToolkitRootLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, sOpt dalec.SourceOpts) (llb.State, error) {
+func spec2ToolkitRootLLB(spec *dalec.Spec, getDigest getDigestFunc, sOpt dalec.SourceOpts) (llb.State, error) {
 	specs, err := rpm.Dalec2SpecLLB(spec, llb.Scratch(), targetKey, "/")
 	if err != nil {
 		return llb.Scratch(), err

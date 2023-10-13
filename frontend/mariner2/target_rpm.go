@@ -16,7 +16,6 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/solver/pb"
 )
 
 const (
@@ -34,9 +33,6 @@ var (
 )
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	caps := client.BuildOpts().LLBCaps
-	noMerge := !caps.Contains(pb.CapMergeOp)
-
 	baseImg, err := getBaseBuilderImg(ctx, client)
 	if err != nil {
 		return nil, nil, err
@@ -46,7 +42,7 @@ func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := specToRpmLLB(spec, noMerge, getDigestFromClientFn(ctx, client), baseImg, sOpt)
+	st, err := specToRpmLLB(spec, getDigestFromClientFn(ctx, client), baseImg, sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -136,8 +132,8 @@ func getBaseBuilderImg(ctx context.Context, client gwclient.Client) (llb.State, 
 	return llb.Image(toolchainImgRef, llb.WithMetaResolver(client)), nil
 }
 
-func specToRpmLLB(spec *dalec.Spec, noMerge bool, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-	br, err := spec2ToolkitRootLLB(spec, noMerge, getDigest, sOpt)
+func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
+	br, err := spec2ToolkitRootLLB(spec, getDigest, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
 	}
