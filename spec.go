@@ -170,7 +170,7 @@ type Source struct {
 	// Example: "docker-image://busybox:latest", "https://github.com/moby/buildkit.git#master", "context://
 	//
 	// When a source is specified as part of a [CmdSpec], it may also be used to reference a top-level source.
-	Ref string `yaml:"ref" json:"ref" jsonschema:"required`
+	Ref string `yaml:"ref" json:"ref" jsonschema:"required"`
 	// Path is the path to the source after fetching it based on the identifier.
 	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 
