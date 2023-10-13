@@ -12,13 +12,6 @@ license: Apache 2.0
 sources:
   src:
     ref: context://
-    filters:
-      excludes:
-        - .github
-        - Dockerfile
-        - .dockerignore
-        - _output
-        - frontend/mariner2/test
   gomodcache:
     ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.21
     path: /build/gomodcache
@@ -35,12 +28,12 @@ sources:
 
 dependencies:
   build:
-    golang:
+    golang: []
 
 build:
   env:
     GOPROXY: direct
-    CGO_ENABLED: 0
+    CGO_ENABLED: "0"
     GOGC: off
     GOFLAGS: -trimpath
     GOPATH: /go
@@ -53,7 +46,7 @@ build:
 
 artifacts:
   binaries:
-    frontend:
+    frontend: {}
 
 image:
   entrypoint: ["frontend"]
