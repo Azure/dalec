@@ -8,9 +8,23 @@ on:
   pull_request:
     branches: 
       - main
+    paths:
+        - "*.go"
+        - "**/*.go"
+        - Dockerfile
+        - docker-bake.hcl
+        - .github/workflows/ci.yml
+        - frontend/mariner2/Dockerfile
   push:
     branches:
       - main
+    paths:
+      - "*.go"
+      - "**/*.go"
+      - Dockerfile
+      - docker-bake.hcl
+      - .github/workflows/ci.yml
+      - frontend/mariner2/Dockerfile
 
 permissions:
   contents: read
