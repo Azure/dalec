@@ -12,13 +12,6 @@
 					"type": "array",
 					"description": "Steps is the list of commands to run to build the artifact(s).\nEach step is run sequentially and will be cached accordingly depending on the frontend implementation."
 				},
-				"cache_dirs": {
-					"additionalProperties": {
-						"$ref": "#/$defs/CacheDirConfig"
-					},
-					"type": "object",
-					"description": "List of CacheDirs which will be used across all Steps"
-				},
 				"env": {
 					"additionalProperties": {
 						"type": "string"
@@ -47,10 +40,7 @@
 			},
 			"additionalProperties": false,
 			"type": "object",
-			"required": [
-				"subpath",
-				"name"
-			]
+			"description": "ArtifactConfig is the configuration for a given artifact type."
 		},
 		"Artifacts": {
 			"properties": {
@@ -59,21 +49,19 @@
 						"$ref": "#/$defs/ArtifactConfig"
 					},
 					"type": "object",
-					"description": "NOTE: Using a struct as a map value for future expansion"
+					"description": "Binaries is the list of binaries to include in the package."
 				},
 				"manpages": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactConfig"
 					},
-					"type": "object"
+					"type": "object",
+					"description": "Manpages is the list of manpages to include in the package."
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
-			"required": [
-				"binaries",
-				"manpages"
-			]
+			"description": "Artifacts describes all the artifacts to include in the package."
 		},
 		"BuildSpec": {
 			"properties": {
@@ -94,7 +82,10 @@
 				},
 				"inline": {
 					"type": "string",
-					"description": "Inline is an inline build spec to use.\nThis can be used to specify a dockerfile instead of using one in the build context\nThis is exclusive with [File]"
+					"description": "Inline is an inline build spec to use.\nThis can be used to specify a dockerfile instead of using one in the build context\nThis is exclusive with [File]",
+					"examples": [
+						"FROM busybox\nRUN echo hello world"
+					]
 				}
 			},
 			"additionalProperties": false,
@@ -106,13 +97,6 @@
 				"command": {
 					"type": "string",
 					"description": "Command is the command to run to build the artifact(s).\nThis will always be wrapped as /bin/sh -c \"\u003ccommand\u003e\", or whatever the equivalent is for the target distro."
-				},
-				"cache_dirs": {
-					"additionalProperties": {
-						"$ref": "#/$defs/CacheDirConfig"
-					},
-					"type": "object",
-					"description": "CacheDirs is the list of CacheDirs which will be used for this build step.\nNote that this list will be merged with the list of CacheDirs from the StepGroup."
 				},
 				"env": {
 					"additionalProperties": {
@@ -133,6 +117,11 @@
 			"properties": {
 				"mode": {
 					"type": "string",
+					"enum": [
+						"shared",
+						"private",
+						"locked"
+					],
 					"description": "Mode is the locking mode to set on the cache directory\nvalues: shared, private, locked\ndefault: shared"
 				},
 				"key": {
@@ -141,11 +130,11 @@
 				},
 				"include_distro_key": {
 					"type": "boolean",
-					"description": "IncludeDistroKey is used to include the distro key as part of the cache key\nWhat this key is depends on the frontend implementation\nExample for Debian Buster may be \"buster\""
+					"description": "IncludeDistroKey is used to include the distro key as part of the cache key\nWhat this key is depends on the frontend implementation\nExample for Debian Buster may be \"buster\"\n\nAn example use for this is with a Go(lang) build cache when CGO is included.\nGo is unable to invalidate cgo and re-using the same cache across different distros may cause issues."
 				},
 				"include_arch_key": {
 					"type": "boolean",
-					"description": "IncludeArchKey is used to include the architecture key as part of the cache key\nWhat this key is depends on the frontend implementation\nFrontends SHOULD use the buildkit platform arch"
+					"description": "IncludeArchKey is used to include the architecture key as part of the cache key\nWhat this key is depends on the frontend implementation\nFrontends SHOULD use the buildkit platform arch\n\nAs with [IncludeDistroKey], this is useful for Go(lang) builds with CGO."
 				}
 			},
 			"additionalProperties": false,
@@ -153,6 +142,14 @@
 			"description": "CacheDirConfig configures a persistent cache to be used across builds."
 		},
 		"ChangelogEntry": {
+			"oneOf": [
+				{
+					"required": [
+						"date"
+					],
+					"title": "date"
+				}
+			],
 			"properties": {
 				"date": {
 					"type": "string",
@@ -211,20 +208,25 @@
 					"items": {
 						"$ref": "#/$defs/BuildStep"
 					},
-					"type": "array"
+					"type": "array",
+					"description": "Steps is the list of commands to run to generate the source."
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
 			"required": [
 				"steps"
-			]
+			],
+			"description": "CmdSpec is used to execute a command to generate a source from a docker image."
 		},
 		"Frontend": {
 			"properties": {
 				"image": {
 					"type": "string",
-					"description": "Image specifies the frontend image to forward the build to.\nThis can be left unspecified *if* the original frontend has builtin support for the distro.\n\nIf the original frontend does not have builtin support for the distro, this must be specified or the build will fail.\nIf this is specified then it MUST be used."
+					"description": "Image specifies the frontend image to forward the build to.\nThis can be left unspecified *if* the original frontend has builtin support for the distro.\n\nIf the original frontend does not have builtin support for the distro, this must be specified or the build will fail.\nIf this is specified then it MUST be used.",
+					"examples": [
+						"docker.io/my/frontend:latest"
+					]
 				},
 				"cmdline": {
 					"type": "string",
@@ -244,25 +246,29 @@
 					"items": {
 						"type": "string"
 					},
-					"type": "array"
+					"type": "array",
+					"description": "Entrypoint sets the image's \"entrypoint\" field.\nThis is used to control the default command to run when the image is run."
 				},
 				"cmd": {
 					"items": {
 						"type": "string"
 					},
-					"type": "array"
+					"type": "array",
+					"description": "Cmd sets the image's \"cmd\" field.\nWhen entrypoint is set, this is used as the default arguments to the entrypoint.\nWhen entrypoint is not set, this is used as the default command to run."
 				},
 				"env": {
 					"items": {
 						"type": "string"
 					},
-					"type": "array"
+					"type": "array",
+					"description": "Env is the list of environment variables to set in the image."
 				},
 				"labels": {
 					"additionalProperties": {
 						"type": "string"
 					},
-					"type": "object"
+					"type": "object",
+					"description": "Labels is the list of labels to set in the image metadata."
 				},
 				"volumes": {
 					"additionalProperties": {
@@ -270,31 +276,28 @@
 						"additionalProperties": false,
 						"type": "object"
 					},
-					"type": "object"
+					"type": "object",
+					"description": "Volumes is the list of volumes for the image.\nVolumes instruct the runtime to bypass the any copy-on-write filesystems and mount the volume directly to the container."
 				},
 				"working_dir": {
-					"type": "string"
+					"type": "string",
+					"description": "WorkingDir is the working directory to set in the image.\nThis sets the directory the container will start in."
 				},
 				"stop_signal": {
-					"type": "string"
+					"type": "string",
+					"description": "StopSignal is the signal to send to the container to stop it.\nThis is used to stop the container gracefully.",
+					"examples": [
+						"SIGTERM"
+					]
 				},
 				"base": {
 					"type": "string",
-					"description": "Base is the base image to use for the output image.\nThis only affects the output image, not the build image."
+					"description": "Base is the base image to use for the output image.\nThis only affects the output image, not the intermediate build image."
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
-			"required": [
-				"entrypoint",
-				"cmd",
-				"env",
-				"labels",
-				"volumes",
-				"working_dir",
-				"stop_signal",
-				"base"
-			]
+			"description": "ImageConfig is the configuration for the output image."
 		},
 		"PackageDependencies": {
 			"properties": {
@@ -337,7 +340,15 @@
 			"properties": {
 				"ref": {
 					"type": "string",
-					"description": "Ref is a unique identifier for the source.\nexample: \"docker-image://busybox:latest\", \"https://github.com/moby/buildkit.git#master\", \"local://some/local/path"
+					"pattern": "^((context|docker-image|git|http|https|source)://.+)|((context|build)://)$",
+					"description": "Ref is a unique identifier for the source.\nExample: \"docker-image://busybox:latest\", \"https://github.com/moby/buildkit.git#master\", \"context://\n\nWhen a source is specified as part of a [CmdSpec], it may also be used to reference a top-level source.",
+					"examples": [
+						"docker-image://busybox:latest",
+						"https://github.com/moby/buildkit.git#master",
+						"build://",
+						"context://",
+						"context://some/path/in/build/context"
+					]
 				},
 				"path": {
 					"type": "string",
@@ -363,7 +374,7 @@
 				},
 				"cmd": {
 					"$ref": "#/$defs/CmdSpec",
-					"description": "Cmd is used to generate the source from a command.\nThis is used when `Ref` is \"cmd://\"\nIf ref is \"cmd://\", this is required."
+					"description": "Cmd is used to generate the source from a command.\nThis can be used when Ref is \"docker-image://\"\nIf ref is \"cmd://\", this is required."
 				},
 				"build": {
 					"$ref": "#/$defs/BuildSpec",
@@ -397,7 +408,8 @@
 			"required": [
 				"path",
 				"spec"
-			]
+			],
+			"description": "SourceMount is used to take a [Source] and mount it into a build step."
 		},
 		"Spec": {
 			"properties": {
@@ -414,7 +426,8 @@
 					"description": "Website is the URL to store in the metadata of the package."
 				},
 				"version": {
-					"type": "string"
+					"type": "string",
+					"description": "Version setst he version of the package."
 				},
 				"revision": {
 					"oneOf": [
@@ -424,7 +437,8 @@
 						{
 							"type": "integer"
 						}
-					]
+					],
+					"description": "Revision sets the package revision.\nThis will generally get merged into the package version when generating the package."
 				},
 				"noarch": {
 					"type": "boolean",
@@ -486,13 +500,16 @@
 					"description": "Args is the list of arguments that can be used for shell-style expansion in (certain fields of) the spec.\nAny arg supplied in the build request which does not appear in this list will cause an error.\nAttempts to use an arg in the spec which is not specified here will assume to be a literal string.\nThe map value is the default value to use if the arg is not supplied in the build request."
 				},
 				"license": {
-					"type": "string"
+					"type": "string",
+					"description": "License is the license of the package."
 				},
 				"vendor": {
-					"type": "string"
+					"type": "string",
+					"description": "Vendor is the vendor of the package."
 				},
 				"packager": {
-					"type": "string"
+					"type": "string",
+					"description": "Packager is the name of the person,team,company that packaged the package."
 				},
 				"artifacts": {
 					"$ref": "#/$defs/Artifacts",

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/invopop/jsonschema"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 )
 
@@ -18,7 +19,10 @@ type Spec struct {
 	// Website is the URL to store in the metadata of the package.
 	Website string `yaml:"website" json:"website"`
 
-	Version  string `yaml:"version" json:"version" jsonschema:"required"`
+	// Version setst he version of the package.
+	Version string `yaml:"version" json:"version" jsonschema:"required"`
+	// Revision sets the package revision.
+	// This will generally get merged into the package version when generating the package.
 	Revision string `yaml:"revision" json:"revision" jsonschema:"required,oneof_type=string;integer"`
 
 	// Marks the package as architecture independent.
@@ -61,8 +65,11 @@ type Spec struct {
 	// The map value is the default value to use if the arg is not supplied in the build request.
 	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
 
-	License  string `yaml:"license" json:"license"`
-	Vendor   string `yaml:"vendor" json:"vendor"`
+	// License is the license of the package.
+	License string `yaml:"license" json:"license"`
+	// Vendor is the vendor of the package.
+	Vendor string `yaml:"vendor" json:"vendor"`
+	// Packager is the name of the person,team,company that packaged the package.
 	Packager string `yaml:"packager" json:"packager"`
 
 	// Artifacts is the list of artifacts to include in the package.
@@ -86,30 +93,35 @@ type Spec struct {
 // This is used to generate the changelog for the package.
 type ChangelogEntry struct {
 	// Date is the date of the changelog entry.
-	Date time.Time `yaml:"date" json:"date"`
+	Date time.Time `yaml:"date" json:"date" jsonschema:"oneof_required=date"`
 	// Author is the author of the changelog entry. e.g. `John Smith <john.smith@example.com>`
 	Author string `yaml:"author" json:"author"`
 	// Changes is the list of changes in the changelog entry.
 	Changes []string `yaml:"changes" json:"changes"`
 }
 
+// Artifacts describes all the artifacts to include in the package.
+// Artifacts are broken down into types, e.g. binaries, manpages, etc.
+// This differentiation is used to determine where to place the artifact on install.
 type Artifacts struct {
-	// NOTE: Using a struct as a map value for future expansion
-	Binaries map[string]ArtifactConfig `yaml:"binaries" json:"binaries"`
-	Manpages map[string]ArtifactConfig `yaml:"manpages" json:"manpages"`
+	// Binaries is the list of binaries to include in the package.
+	Binaries map[string]ArtifactConfig `yaml:"binaries,omitempty" json:"binaries,omitempty"`
+	// Manpages is the list of manpages to include in the package.
+	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
 	// TODO: other types of artifacts (systtemd units, libexec, configs, etc)
-	// NOTE: When other artifact types are added, you must also update [ArtifactsConfig.IsEmpty]
 }
 
+// ArtifactConfig is the configuration for a given artifact type.
+// This is used to customize where an artifact will be placed when installed.
 type ArtifactConfig struct {
 	// Subpath is the subpath to use in the package for the artifact type.
 	//
 	// As an example, binaries are typically placed in /usr/bin when installed.
 	// If you want to nest them in a subdirectory, you can specify it here.
-	SubPath string `yaml:"subpath" json:"subpath"`
+	SubPath string `yaml:"subpath,omitempty" json:"subpath,omitempty"`
 	// Name is file or dir name to use for the artifact in the package.
 	// If empty, the file or dir name from the produced artifact will be used.
-	Name string `yaml:"name" json:"name"`
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 }
 
 // IsEmpty is used to determine if there are any artifacts to include in the package.
@@ -123,25 +135,42 @@ func (a *Artifacts) IsEmpty() bool {
 	return true
 }
 
+// ImageConfig is the configuration for the output image.
+// When the target output is a container image, this is used to configure the image.
 type ImageConfig struct {
-	Entrypoint []string            `yaml:"entrypoint" json:"entrypoint"`
-	Cmd        []string            `yaml:"cmd" json:"cmd"`
-	Env        []string            `yaml:"env" json:"env"`
-	Labels     map[string]string   `yaml:"labels" json:"labels"`
-	Volumes    map[string]struct{} `yaml:"volumes" json:"volumes"`
-	WorkingDir string              `yaml:"working_dir" json:"working_dir"`
-	StopSignal string              `yaml:"stop_signal" json:"stop_signal"`
+	// Entrypoint sets the image's "entrypoint" field.
+	// This is used to control the default command to run when the image is run.
+	Entrypoint []string `yaml:"entrypoint,omitempty" json:"entrypoint,omitempty"`
+	// Cmd sets the image's "cmd" field.
+	// When entrypoint is set, this is used as the default arguments to the entrypoint.
+	// When entrypoint is not set, this is used as the default command to run.
+	Cmd []string `yaml:"cmd,omitempty" json:"cmd,omitempty"`
+	// Env is the list of environment variables to set in the image.
+	Env []string `yaml:"env,omitempty" json:"env,omitempty"`
+	// Labels is the list of labels to set in the image metadata.
+	Labels map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
+	// Volumes is the list of volumes for the image.
+	// Volumes instruct the runtime to bypass the any copy-on-write filesystems and mount the volume directly to the container.
+	Volumes map[string]struct{} `yaml:"volumes,omitempty" json:"volumes,omitempty"`
+	// WorkingDir is the working directory to set in the image.
+	// This sets the directory the container will start in.
+	WorkingDir string `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+	// StopSignal is the signal to send to the container to stop it.
+	// This is used to stop the container gracefully.
+	StopSignal string `yaml:"stop_signal,omitempty" json:"stop_signal,omitempty" jsonschema:"example=SIGTERM"`
 	// Base is the base image to use for the output image.
-	// This only affects the output image, not the build image.
-	Base string `yaml:"base" json:"base"`
+	// This only affects the output image, not the intermediate build image.
+	Base string `yaml:"base,omitempty" json:"base,omitempty"`
 }
 
 // Source defines a source to be used in the build.
 // A source can be a local directory, a git repositoryt, http(s) URL, etc.
 type Source struct {
 	// Ref is a unique identifier for the source.
-	// example: "docker-image://busybox:latest", "https://github.com/moby/buildkit.git#master", "local://some/local/path
-	Ref string `yaml:"ref" json:"ref" jsonschema:"required"`
+	// Example: "docker-image://busybox:latest", "https://github.com/moby/buildkit.git#master", "context://
+	//
+	// When a source is specified as part of a [CmdSpec], it may also be used to reference a top-level source.
+	Ref string `yaml:"ref" json:"ref" jsonschema:"required`
 	// Path is the path to the source after fetching it based on the identifier.
 	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 
@@ -155,7 +184,7 @@ type Source struct {
 	KeepGitDir bool `yaml:"keep_git_dir,omitempty" json:"keep_git_dir,omitempty"`
 
 	// Cmd is used to generate the source from a command.
-	// This is used when `Ref` is "cmd://"
+	// This can be used when Ref is "docker-image://"
 	// If ref is "cmd://", this is required.
 	Cmd *CmdSpec `yaml:"cmd,omitempty" json:"cmd,omitempty"`
 
@@ -164,6 +193,22 @@ type Source struct {
 	// The context for the build is assumed too be specified in after `build://` in the ref, e.g. `build://https://github.com/moby/buildkit.git#master`
 	// When nothing is specified after `build://`, the context is assumed to be the current build context.
 	Build *BuildSpec `yaml:"build,omitempty" json:"build,omitempty"`
+}
+
+func (Source) JSONSchemaExtend(schema *jsonschema.Schema) {
+	s, ok := schema.Properties.Get("ref")
+	if !ok {
+		panic("ref property not found")
+	}
+	s.Pattern = `^((context|docker-image|git|http|https|source)://.+)|((context|build)://)$`
+
+	s.Examples = []interface{}{
+		"docker-image://busybox:latest",
+		"https://github.com/moby/buildkit.git#master",
+		"build://",
+		"context://",
+		"context://some/path/in/build/context",
+	}
 }
 
 // BuildSpec is used to generate source from a build.
@@ -182,7 +227,7 @@ type BuildSpec struct {
 	// Inline is an inline build spec to use.
 	// This can be used to specify a dockerfile instead of using one in the build context
 	// This is exclusive with [File]
-	Inline string `yaml:"inline,omitempty" json:"inline,omitempty"`
+	Inline string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
 }
 
 // PackageDependencies is a list of dependencies for a package.
@@ -203,8 +248,6 @@ type ArtifactBuild struct {
 	// Steps is the list of commands to run to build the artifact(s).
 	// Each step is run sequentially and will be cached accordingly depending on the frontend implementation.
 	Steps []BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
-	// List of CacheDirs which will be used across all Steps
-	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 }
@@ -214,13 +257,11 @@ type BuildStep struct {
 	// Command is the command to run to build the artifact(s).
 	// This will always be wrapped as /bin/sh -c "<command>", or whatever the equivalent is for the target distro.
 	Command string `yaml:"command" json:"command" jsonschema:"required"`
-	// CacheDirs is the list of CacheDirs which will be used for this build step.
-	// Note that this list will be merged with the list of CacheDirs from the StepGroup.
-	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
 	// Env is the list of environment variables to set for the command.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 }
 
+// SourceMount is used to take a [Source] and mount it into a build step.
 type SourceMount struct {
 	// Path is the destination directory to mount to
 	Path string `yaml:"path" json:"path" jsonschema:"required"`
@@ -230,6 +271,7 @@ type SourceMount struct {
 	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
 }
 
+// CmdSpec is used to execute a command to generate a source from a docker image.
 type CmdSpec struct {
 	// Dir is the working directory to run the command in.
 	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
@@ -241,6 +283,7 @@ type CmdSpec struct {
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 
+	// Steps is the list of commands to run to generate the source.
 	Steps []*BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
 }
 
@@ -249,17 +292,22 @@ type CacheDirConfig struct {
 	// Mode is the locking mode to set on the cache directory
 	// values: shared, private, locked
 	// default: shared
-	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty" jsonschema:"enum=shared,enum=private,enum=locked"`
 	// Key is the cache key to use to cache the directory
 	// default: Value of `Path`
 	Key string `yaml:"key,omitempty" json:"key,omitempty"`
 	// IncludeDistroKey is used to include the distro key as part of the cache key
 	// What this key is depends on the frontend implementation
 	// Example for Debian Buster may be "buster"
+	//
+	// An example use for this is with a Go(lang) build cache when CGO is included.
+	// Go is unable to invalidate cgo and re-using the same cache across different distros may cause issues.
 	IncludeDistroKey bool `yaml:"include_distro_key,omitempty" json:"include_distro_key,omitempty"`
 	// IncludeArchKey is used to include the architecture key as part of the cache key
 	// What this key is depends on the frontend implementation
 	// Frontends SHOULD use the buildkit platform arch
+	//
+	// As with [IncludeDistroKey], this is useful for Go(lang) builds with CGO.
 	IncludeArchKey bool `yaml:"include_arch_key,omitempty" json:"include_arch_key,omitempty"`
 }
 
@@ -370,7 +418,7 @@ type Frontend struct {
 	//
 	// If the original frontend does not have builtin support for the distro, this must be specified or the build will fail.
 	// If this is specified then it MUST be used.
-	Image string `yaml:"image,omitempty" json:"image,omitempty" jsonschema:"required"`
+	Image string `yaml:"image,omitempty" json:"image,omitempty" jsonschema:"required,example=docker.io/my/frontend:latest"`
 	// CmdLine is the command line to use to forward the build to the frontend.
 	// By default the frontend image's entrypoint/cmd is used.
 	CmdLine string `yaml:"cmdline,omitempty" json:"cmdline,omitempty"`
