@@ -98,6 +98,11 @@ target "test-runc" {
     RUN for i in /usr/share/man/man8/runc-*; do [ -f "$i" ]; done
     # TODO: The spec is not currently setting the revision in the runc version
     RUN runc --version | tee /dev/stderr | grep "runc version ${replace(RUNC_VERSION, ".", "\\.")}"
+
+    # Make sure this is setup correctly as a distroless image
+    RUN [ -f /var/lib/rpmmanifest/container-manifest-1 ] && grep -q "moby-runc-${RUNC_VERSION}" /var/lib/rpmmanifest/container-manifest-1
+    RUN [ -f /var/lib/rpmmanifest/container-manifest-2 ] && grep -q "moby-runc[[:space:]]${RUNC_VERSION}" /var/lib/rpmmanifest/container-manifest-2
+    RUN [ ! -d /var/lib/rpm ]
     EOT
 
     cache-from = ["type=gha,scope=dalec/test-runc/${distro}"]

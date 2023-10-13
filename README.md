@@ -50,7 +50,7 @@ $ docker build -f test/fixtures/moby-runc.yml --target mariner2/container -t tes
 
 This container will have the rpm along with all its dependencies installed.
 The base image used for the container is determined by the target.
-For mariner2 this is `mcr.microsoft.com/cbl-mariner/base/core:2.0`.
+For mariner2 this is `mcr.microsoft.com/cbl-mariner/distroless/base:2.0`.
 This can be customized in your yaml spec for the target.
 Example:
 
@@ -58,8 +58,13 @@ Example:
 targets:
     mariner2:
         image:
-            base: mcr.microsoft.com/cbl-mariner/distroless/base:2.0
+            base: mcr.microsoft.com/cbl-mariner/base/core:2.0
 ```
+
+Dalec will try to detect if the image is a "distroless" image by checking if the `rpm` binary is present.
+If it is present then dalec assumes the image is *not* distroless and installs the rpm like normal.
+When the image is distroless the rpm is installed and then the rpm database is cleaned up and
+rpm manifests are created at `/var/lib/rpmmanifest`.
 
 To print a list of available build targets:
 

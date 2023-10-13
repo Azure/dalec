@@ -30,6 +30,12 @@ const (
 
 var (
 	marinerTdnfCache = llb.AddMount("/var/tdnf/cache", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
+	// Setup a lockfile so that any instances sharing the rpms cache mount can take a lock before downloading rpms.
+	// We don't want multiple things writing to the cache at the same time, nor do we want a reader to read a file that is being written to.
+	rpmLockFile     = llb.AddMount("/rpmcachelock", llb.Scratch(), llb.AsPersistentCacheDir("dalec-mariner2-rpmcachelock", llb.CacheMountShared))
+	rpmLockFilePath = "/rpmcachelock/lock"
+
+	cachedRPMsMount = llb.AddMount(filepath.Join(cachedRpmsDir, "cache"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountShared))
 )
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -132,6 +138,22 @@ func getBaseBuilderImg(ctx context.Context, client gwclient.Client) (llb.State, 
 	return llb.Image(toolchainImgRef, llb.WithMetaResolver(client)), nil
 }
 
+// withRpmsLock wraps the command in an flock call with either a shared or exclusive lock.
+// See https://linux.die.net/man/1/flock for more details and examples.
+func withRpmsLock(cmd string, exclusive bool) string {
+	lockFl := "-s" // shared lock
+	if exclusive {
+		lockFl = "-x" // exclusive lock
+	}
+	return fmt.Sprintf(`
+(
+	set -e
+	flock %s 42
+	%s
+) 42>%s
+`, lockFl, cmd, rpmLockFilePath)
+}
+
 func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
 	br, err := spec2ToolkitRootLLB(spec, getDigest, sOpt)
 	if err != nil {
@@ -173,35 +195,6 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 
 	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
 
-	cachedRPMsMount := func(write bool) llb.RunOption {
-		mode := llb.CacheMountShared
-		if write {
-			mode = llb.CacheMountLocked
-		}
-		return llb.AddMount(filepath.Join(cachedRpmsDir, "cache"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, mode))
-	}
-
-	// Setup a lockfile so that any instances sharing the rpms cache mount can take a lock before downloading rpms.
-	// We don't want multiple things writing to the cache at the same time, nor do we want a reader to read a file that is being written to.
-	lockFile := llb.AddMount("/rpmcachelock", llb.Scratch(), llb.AsPersistentCacheDir("dalec-mariner2-rpmcachelock", llb.CacheMountShared))
-	const lockFilePath = "/rpmcachelock/lock"
-
-	// Wraps the command in an flock call with either a shared or exclusive lock.
-	// See https://linux.die.net/man/1/flock for more details and examples.
-	withRpmsLock := func(cmd string, exclusive bool) string {
-		lockFl := "-s" // shared lock
-		if exclusive {
-			lockFl = "-x" // exclusive lock
-		}
-		return fmt.Sprintf(`
-(
-	set -e
-	flock %s 42	
-	%s
-) 42>%s
-`, lockFl, cmd, lockFilePath)
-	}
-
 	dlCmd := withRpmsLock("dnf download -y --releasever=2.0 --resolve --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " "), true)
 	buildCmd := withRpmsLock(`
 make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; exit 1)
@@ -221,16 +214,16 @@ done
 		}
 		return st.Run(
 			shArgs(dlCmd),
-			cachedRPMsMount(false),
-			lockFile,
+			cachedRPMsMount,
+			rpmLockFile,
 		).State
 	}).
 		Run(
 			shArgs(buildCmd),
 			prepareChroot,
-			cachedRPMsMount(false),
+			cachedRPMsMount,
 			specsMount,
-			lockFile,
+			rpmLockFile,
 			marinerTdnfCache,
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),

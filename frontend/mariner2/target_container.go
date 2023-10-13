@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
@@ -11,6 +13,9 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
+
+const (
+	marinerDistrolessRef = "mcr.microsoft.com/cbl-mariner/distroless/base:2.0"
 )
 
 func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -23,6 +28,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	if err != nil {
 		return nil, nil, err
 	}
+
 	st, err := specToContainerLLB(spec, targetKey, getDigestFromClientFn(ctx, client), baseImg, sOpt)
 	if err != nil {
 		return nil, nil, err
@@ -56,27 +62,61 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	return ref, &img, err
 }
 
-func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-	st, err := specToRpmLLB(spec, getDigest, baseImg, sOpt)
+func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc, builderImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
+	st, err := specToRpmLLB(spec, getDigest, builderImg, sOpt)
 	if err != nil {
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
 	}
 
-	installBase := llb.Image(marinerRef, llb.WithMetaResolver(sOpt.Resolver))
-	installed := installBase.
-		Run(
-			shArgs("tdnf install -y /tmp/rpms/$(uname -m)/*.rpm"),
-			llb.AddMount("/tmp/rpms", st, llb.SourcePath("/RPMS")),
-			marinerTdnfCache,
-		).State
+	const workPath = "/tmp/rootfs"
 
-	img := spec.Targets[target].Image
-	if img == nil || img.Base == "" {
-		return installed, nil
+	baseRef := marinerDistrolessRef
+	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
+		baseRef = spec.Targets[target].Image.Base
 	}
 
-	diff := llb.Diff(installBase, installed)
-	return llb.Merge([]llb.State{llb.Image(img.Base), diff}), nil
+	baseImg := llb.Image(baseRef, llb.WithMetaResolver(sOpt.Resolver))
+	mfstDir := filepath.Join(workPath, "var/lib/rpmmanifest")
+	mfst1 := filepath.Join(mfstDir, "container-manifest-1")
+	mfst2 := filepath.Join(mfstDir, "container-manifest-2")
+	rpmdbDir := filepath.Join(workPath, "var/lib/rpm")
+
+	chrootedPaths := []string{
+		filepath.Join(workPath, "/usr/local/bin"),
+		filepath.Join(workPath, "/usr/local/sbin"),
+		filepath.Join(workPath, "/usr/bin"),
+		filepath.Join(workPath, "/usr/sbin"),
+		filepath.Join(workPath, "/bin"),
+		filepath.Join(workPath, "/sbin"),
+	}
+	chrootedPathEnv := strings.Join(chrootedPaths, ":")
+
+	mfstCmd := `
+# If the rpm command is in the rootfs then we don't need to do anything
+# If not then this is a distroless image and we need to generate manifests of the installed rpms and cleanup the rpmdb.
+
+PATH="` + chrootedPathEnv + `" command -v rpm && exit 0
+
+set -e
+mkdir -p ` + mfstDir + `
+rpm --dbpath=` + rpmdbDir + ` -qa > ` + mfst1 + `
+rpm --dbpath=` + rpmdbDir + ` -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{INSTALLTIME}\t%{BUILDTIME}\t%{VENDOR}\t(none)\t%{SIZE}\t%{ARCH}\t%{EPOCHNUM}\t%{SOURCERPM}\n" > ` + mfst2 + `
+rm -rf ` + rpmdbDir + `
+`
+
+	workSt := builderImg.
+		File(llb.Copy(baseImg, "/", workPath, dalec.WithDirContentsOnly(), dalec.WithCreateDestPath())).
+		Run(
+			shArgs("tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "+workPath+" --setopt=reposdir=/etc/yum.repos.d /tmp/rpms/$(uname -m)/*.rpm"),
+			marinerTdnfCache,
+			llb.AddMount("/tmp/rpms", st, llb.SourcePath("/RPMS")),
+		).
+		Run(shArgs(mfstCmd)).
+		State
+
+	// Flatten our changes to a single layer.
+	diff := llb.Diff(baseImg, llb.Scratch().File(llb.Copy(workSt, workPath, "/", dalec.WithDirContentsOnly())))
+	return llb.Merge([]llb.State{baseImg, diff}), nil
 }
 
 func copyImageConfig(dst *image.Image, src *dalec.ImageConfig) {
