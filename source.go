@@ -27,15 +27,12 @@ type SourceOpts struct {
 	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
 }
 
-func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	if cmd == nil {
-		return st, nil
-	}
-
+// must not be called with a nil cmd pointer
+func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.ExecState, error) {
+	var zero llb.ExecState
 	if len(cmd.Steps) == 0 {
-		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
+		return zero, fmt.Errorf("no steps defined for image source")
 	}
-
 	for k, v := range cmd.Env {
 		st = st.AddEnv(k, v)
 	}
@@ -52,7 +49,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 
 		m, err := sharingMode(cfg.Mode)
 		if err != nil {
-			return llb.Scratch(), err
+			return zero, err
 		}
 		mounts = append(mounts, llb.AddMount(p, llb.Scratch(), llb.AsPersistentCacheDir(id, m)))
 	}
@@ -60,7 +57,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 	for _, src := range cmd.Sources {
 		srcSt, err := source2LLBGetter(s, src.Spec, name, true)(sOpts, opts...)
 		if err != nil {
-			return llb.Scratch(), err
+			return zero, err
 		}
 		if src.Copy {
 			st = st.File(llb.Copy(srcSt, src.Spec.Path, src.Path, WithCreateDestPath(), WithDirContentsOnly()))
@@ -73,6 +70,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 		}
 	}
 
+	var cmdSt llb.ExecState
 	for _, step := range cmd.Steps {
 		rOpts := []llb.RunOption{llb.Args([]string{
 			"/bin/sh", "-c", step.Command,
@@ -85,10 +83,10 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 		}
 
 		rOpts = append(rOpts, withConstraints(opts))
-		cmdSt := st.Run(rOpts...)
-		st = cmdSt.State
+		cmdSt = st.Run(rOpts...)
 	}
-	return st, nil
+
+	return cmdSt, nil
 }
 
 func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
@@ -102,14 +100,17 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			return llb.Scratch(), err
 		}
 
-		var includeExcludeHandled bool
+		var (
+			includeExcludeHandled bool
+			pathHandled           bool
+		)
 
 		defer func() {
 			if retErr != nil {
 				return
 			}
 			needsFilter := func() bool {
-				if src.Path != "" && !forMount {
+				if src.Path != "" && !forMount && !pathHandled {
 					return true
 				}
 				if includeExcludeHandled {
@@ -123,11 +124,17 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			if !needsFilter() {
 				return
 			}
+
+			srcPath := "/"
+			if !pathHandled {
+				srcPath = src.Path
+			}
+
 			orig := ret
 			ret = llb.Scratch().File(
 				llb.Copy(
 					orig,
-					src.Path,
+					srcPath,
 					"/",
 					WithIncludes(src.Includes),
 					WithExcludes(src.Excludes),
@@ -139,7 +146,21 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 
 		switch scheme {
 		case sourcetypes.DockerImageScheme:
-			return generateSourceFromImage(s, name, llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver)), src.Cmd, sOpt, opts...)
+			st := llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), withConstraints(opts))
+
+			if src.Cmd == nil {
+				return st, nil
+			}
+
+			eSt, err := generateSourceFromImage(s, name, st, src.Cmd, sOpt, opts...)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+			if src.Path != "" {
+				pathHandled = true
+				return eSt.AddMount(src.Path, llb.Scratch()), nil
+			}
+			return eSt.Root(), nil
 		case sourcetypes.GitScheme:
 			// TODO: Pass git secrets
 			ref, err := gitutil.ParseGitRef(ref)

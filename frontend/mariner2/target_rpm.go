@@ -207,7 +207,7 @@ for i in "${CHROOT_DIR}/"*; do
 done	
 `, false)
 
-	st := work.With(func(st llb.State) llb.State {
+	worker := work.With(func(st llb.State) llb.State {
 		deps := getBuildDeps(spec)
 		if len(deps) == 0 {
 			return st
@@ -228,12 +228,12 @@ done
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
 			llb.AddEnv("REFRESH_WORKER_CHROOT", "n"),
-		).
-		State
+		)
 
-	return llb.Scratch().File(
-		llb.Copy(st, "/build/out", "/", dalec.WithDirContentsOnly(), dalec.WithIncludes([]string{"RPMS", "SRPMS"})),
-	), nil
+	st := worker.
+		AddMount("/build/out", llb.Scratch()).
+		File(llb.Rm("images"))
+	return st, nil
 }
 
 type runOptFunc func(*llb.ExecInfo)

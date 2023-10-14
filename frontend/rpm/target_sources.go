@@ -23,25 +23,23 @@ func shArgs(cmd string) llb.RunOption {
 }
 
 func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
-	// This runs a dummy command to ensure dirs like /proc and /sys are created in the produced state
-	// This way we can use llb.Diff to get just the tarball.
-
-	tarImg := llb.Image(TarImageRef).Run(shArgs(":"), dalec.WithConstraints(opts...)).State
+	tarImg := llb.Image(TarImageRef)
 
 	// Put the output tar in a consistent location regardless of `dest`
 	// This way if `dest` changes we don't have to rebuild the tarball, which can be expensive.
-	base := filepath.Base(dest)
-	st := tarImg.Run(
+	outBase := "/tmp/out"
+	out := filepath.Join(outBase, filepath.Dir(dest))
+	worker := tarImg.Run(
 		llb.AddMount("/src", src, llb.Readonly),
-		shArgs("tar -C /src -cvzf "+base+" ."),
+		shArgs("tar -C /src -cvzf /tmp/st ."),
 		dalec.WithConstraints(opts...),
-	).State
+	).
+		Run(
+			shArgs("mkdir -p "+out+" && mv /tmp/st "+filepath.Join(out, filepath.Base(dest))),
+			dalec.WithConstraints(opts...),
+		)
 
-	if base == dest {
-		return llb.Diff(tarImg, st)
-	}
-
-	return llb.Scratch().File(llb.Copy(st, base, dest, dalec.WithCreateDestPath()))
+	return worker.AddMount(outBase, llb.Scratch())
 }
 
 func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -96,9 +94,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 		}
 
 		if isDir {
-			// use /tmp/st as the output tar name so that caching doesn't break based on file path.
-			tarSt := tar(st, "/tmp/st", pg)
-			out = append(out, llb.Scratch().File(llb.Copy(tarSt, "/tmp/st", k+".tar.gz"), pg))
+			out = append(out, tar(st, k+".tar.gz", pg))
 		} else {
 			out = append(out, st)
 		}

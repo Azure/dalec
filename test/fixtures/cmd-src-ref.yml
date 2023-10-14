@@ -24,7 +24,7 @@ sources:
       steps:
         - env:
             FILE_TO_IMPORT: ${file_to_import}
-          command: set -e; mkdir /bar; cp "/foo/${FILE_TO_IMPORT}" "/bar/${FILE_TO_IMPORT}"
+          command: set -e; mkdir -p /bar; cp "/foo/${FILE_TO_IMPORT}" "/bar/${FILE_TO_IMPORT}"
 
 
 build:
