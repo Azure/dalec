@@ -75,7 +75,6 @@ func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc
 		baseRef = spec.Targets[target].Image.Base
 	}
 
-	baseImg := llb.Image(baseRef, llb.WithMetaResolver(sOpt.Resolver))
 	mfstDir := filepath.Join(workPath, "var/lib/rpmmanifest")
 	mfst1 := filepath.Join(mfstDir, "container-manifest-1")
 	mfst2 := filepath.Join(mfstDir, "container-manifest-2")
@@ -91,7 +90,28 @@ func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc
 	}
 	chrootedPathEnv := strings.Join(chrootedPaths, ":")
 
-	mfstCmd := `
+	installCmd := `
+check_non_empty() {
+	test -e "${1}/"* 2>/dev/null
+}
+
+arch_dir="/tmp/rpms/$(uname -m)"
+noarch_dir="/tmp/rpms/noarch"
+
+rpms=""
+
+if check_non_empty "${noarch_dir}"; then
+	rpms="${noarch_dir}/*.rpm"
+fi
+
+if check_non_empty "${arch_dir}"; then
+	rpms="${rpms} ${arch_dir}/*.rpm"
+fi
+
+if [ -n "${rpms}" ]; then
+	tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "` + workPath + `" --setopt=reposdir=/etc/yum.repos.d ${rpms} || exit
+fi
+
 # If the rpm command is in the rootfs then we don't need to do anything
 # If not then this is a distroless image and we need to generate manifests of the installed rpms and cleanup the rpmdb.
 
@@ -104,19 +124,19 @@ rpm --dbpath=` + rpmdbDir + ` -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{INSTAL
 rm -rf ` + rpmdbDir + `
 `
 
-	workSt := builderImg.
-		File(llb.Copy(baseImg, "/", workPath, dalec.WithDirContentsOnly(), dalec.WithCreateDestPath())).
+	baseImg := llb.Image(baseRef, llb.WithMetaResolver(sOpt.Resolver))
+	worker := builderImg.
 		Run(
-			shArgs("tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "+workPath+" --setopt=reposdir=/etc/yum.repos.d /tmp/rpms/$(uname -m)/*.rpm"),
+			shArgs(installCmd),
 			marinerTdnfCache,
 			llb.AddMount("/tmp/rpms", st, llb.SourcePath("/RPMS")),
-		).
-		Run(shArgs(mfstCmd)).
-		State
+		)
 
-	// Flatten our changes to a single layer.
-	diff := llb.Diff(baseImg, llb.Scratch().File(llb.Copy(workSt, workPath, "/", dalec.WithDirContentsOnly())))
-	return llb.Merge([]llb.State{baseImg, diff}), nil
+	// This adds a mount to the worker so that all the commands are run with this mount added
+	// The return value is the state representing the contents of the mounted directory after the commands are run
+	rootfs := worker.AddMount(workPath, baseImg)
+
+	return rootfs, nil
 }
 
 func copyImageConfig(dst *image.Image, src *dalec.ImageConfig) {
