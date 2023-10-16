@@ -195,7 +195,7 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 
 	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
 
-	dlCmd := withRpmsLock("dnf download -y --releasever=2.0 --resolve --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " "), true)
+	dlCmd := withRpmsLock("tdnf install --downloadonly -y --releasever=2.0 --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " "), true)
 	buildCmd := withRpmsLock(`
 make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; exit 1)
 for i in "${CHROOT_DIR}/"*; do
