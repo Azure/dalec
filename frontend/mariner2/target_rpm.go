@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	marinerTdnfCache = llb.AddMount("/var/tdnf/cache", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
+	marinerTdnfCache = llb.AddMount("/var/cache/tdnf", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
 	// Setup a lockfile so that any instances sharing the rpms cache mount can take a lock before downloading rpms.
 	// We don't want multiple things writing to the cache at the same time, nor do we want a reader to read a file that is being written to.
 	rpmLockFile     = llb.AddMount("/rpmcachelock", llb.Scratch(), llb.AsPersistentCacheDir("dalec-mariner2-rpmcachelock", llb.CacheMountShared))
