@@ -40,19 +40,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 		st = st.Dir(cmd.Dir)
 	}
 
-	var mounts []llb.RunOption
-	for p, cfg := range cmd.CacheDirs {
-		id := cfg.Key
-		if id == "" {
-			id = p
-		}
-
-		m, err := sharingMode(cfg.Mode)
-		if err != nil {
-			return zero, err
-		}
-		mounts = append(mounts, llb.AddMount(p, llb.Scratch(), llb.AsPersistentCacheDir(id, m)))
-	}
+	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
 	for _, src := range cmd.Sources {
 		srcSt, err := source2LLBGetter(s, src.Spec, name, true)(sOpts, opts...)
@@ -66,7 +54,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 			if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 {
 				mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
 			}
-			mounts = append(mounts, llb.AddMount(src.Path, srcSt, mountOpt...))
+			baseRunOpts = append(baseRunOpts, llb.AddMount(src.Path, srcSt, mountOpt...))
 		}
 	}
 
@@ -76,7 +64,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 			"/bin/sh", "-c", step.Command,
 		})}
 
-		rOpts = append(rOpts, mounts...)
+		rOpts = append(rOpts, baseRunOpts...)
 
 		for k, v := range step.Env {
 			rOpts = append(rOpts, llb.AddEnv(k, v))

@@ -177,6 +177,40 @@
 			],
 			"description": "ChangelogEntry is an entry in the changelog."
 		},
+		"CheckOutput": {
+			"properties": {
+				"equals": {
+					"type": "string",
+					"description": "Equals is the exact string to compare the output to."
+				},
+				"contains": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Contains is the list of strings to check if they are contained in the output."
+				},
+				"matches": {
+					"type": "string",
+					"description": "Matches is the regular expression to match the output against."
+				},
+				"starts_with": {
+					"type": "string",
+					"description": "StartsWith is the string to check if the output starts with."
+				},
+				"ends_with": {
+					"type": "string",
+					"description": "EndsWith is the string to check if the output ends with."
+				},
+				"empty": {
+					"type": "boolean",
+					"description": "Empty is used to check if the output is empty."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "CheckOutput is used to specify the exepcted output of a check, such as stdout/stderr or a file."
+		},
 		"CmdSpec": {
 			"properties": {
 				"dir": {
@@ -209,7 +243,7 @@
 						"$ref": "#/$defs/BuildStep"
 					},
 					"type": "array",
-					"description": "Steps is the list of commands to run to generate the source."
+					"description": "Steps is the list of commands to run to generate the source.\nSteps are run sequentially and results of each step should be cached."
 				}
 			},
 			"additionalProperties": false,
@@ -218,6 +252,52 @@
 				"steps"
 			],
 			"description": "CmdSpec is used to execute a command to generate a source from a docker image."
+		},
+		"FileCheckOutput": {
+			"properties": {
+				"equals": {
+					"type": "string",
+					"description": "Equals is the exact string to compare the output to."
+				},
+				"contains": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Contains is the list of strings to check if they are contained in the output."
+				},
+				"matches": {
+					"type": "string",
+					"description": "Matches is the regular expression to match the output against."
+				},
+				"starts_with": {
+					"type": "string",
+					"description": "StartsWith is the string to check if the output starts with."
+				},
+				"ends_with": {
+					"type": "string",
+					"description": "EndsWith is the string to check if the output ends with."
+				},
+				"empty": {
+					"type": "boolean",
+					"description": "Empty is used to check if the output is empty."
+				},
+				"permissions": {
+					"type": "integer",
+					"description": "Permissions is the expected permissions of the file."
+				},
+				"is_dir": {
+					"type": "boolean",
+					"description": "IsDir is used to set the expected file mode to a directory."
+				},
+				"not_exist": {
+					"type": "boolean",
+					"description": "NotExist is used to check that the file does not exist."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "FileCheckOutput is used to specify the expected output of a file."
 		},
 		"Frontend": {
 			"properties": {
@@ -330,6 +410,13 @@
 					},
 					"type": "object",
 					"description": "Recommends is the list of packages recommended to install with the generated package.\nNote: Not all package managers support this (e.g. rpm)"
+				},
+				"test": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Test lists any extra packages required for running tests"
 				}
 			},
 			"additionalProperties": false,
@@ -536,6 +623,13 @@
 					},
 					"type": "array",
 					"description": "Changelog is the list of changes to the package."
+				},
+				"tests": {
+					"items": {
+						"$ref": "#/$defs/TestSpec"
+					},
+					"type": "array",
+					"description": "Tests are the list of tests to run for the package that should work regardless of target OS\nEach item in this list is run with a separate rootfs and cannot interact with other tests.\nEach [TestSpec] is run with a separate rootfs, asyncronously from other [TestSpec]."
 				}
 			},
 			"additionalProperties": false,
@@ -565,11 +659,105 @@
 				"frontend": {
 					"$ref": "#/$defs/Frontend",
 					"description": "Frontend is the frontend configuration to use for the target.\nThis is used to forward the build to a different, dalec-compatabile frontend.\nThis can be useful when testing out new distros or using a different version of the frontend for a given distro."
+				},
+				"tests": {
+					"items": {
+						"$ref": "#/$defs/TestSpec"
+					},
+					"type": "array",
+					"description": "Tests are the list of tests to run which are specific to the target.\nTests are appended to the list of tests in the main [Spec]"
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
 			"description": "Target defines a distro-specific build target."
+		},
+		"TestSpec": {
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Name is the name of the test\nThis will be used to output the test results"
+				},
+				"dir": {
+					"type": "string",
+					"description": "Dir is the working directory to run the command in."
+				},
+				"sources": {
+					"items": {
+						"$ref": "#/$defs/SourceMount"
+					},
+					"type": "array",
+					"description": "Sources is the list of sources to mount into the build steps."
+				},
+				"cache_dirs": {
+					"additionalProperties": {
+						"$ref": "#/$defs/CacheDirConfig"
+					},
+					"type": "object",
+					"description": "List of CacheDirs which will be used across all Steps"
+				},
+				"env": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Env is the list of environment variables to set for all commands in this step group."
+				},
+				"steps": {
+					"items": {
+						"$ref": "#/$defs/TestStep"
+					},
+					"type": "array",
+					"description": "Steps is the list of commands to run to test the package."
+				},
+				"files": {
+					"additionalProperties": {
+						"$ref": "#/$defs/FileCheckOutput"
+					},
+					"type": "object",
+					"description": "Files is the list of files to check after running the steps."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name",
+				"steps"
+			],
+			"description": "TestSpec is used to execute tests against a container with the package installed in it."
+		},
+		"TestStep": {
+			"properties": {
+				"command": {
+					"type": "string",
+					"description": "Command is the command to run to build the artifact(s).\nThis will always be wrapped as /bin/sh -c \"\u003ccommand\u003e\", or whatever the equivalent is for the target distro."
+				},
+				"env": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Env is the list of environment variables to set for the command."
+				},
+				"stdout": {
+					"$ref": "#/$defs/CheckOutput",
+					"description": "Stdout is the expected output on stdout"
+				},
+				"stderr": {
+					"$ref": "#/$defs/CheckOutput",
+					"description": "Stderr is the expected output on stderr"
+				},
+				"stdin": {
+					"type": "string",
+					"description": "Stdin is the input to pass to stdin for the command"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"command"
+			],
+			"description": "TestStep is a wrapper for [BuildStep] to include checks on stdio streams"
 		}
 	}
 }

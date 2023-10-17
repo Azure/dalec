@@ -41,6 +41,19 @@ targets: # Distro specific build requirements
         /bin/sh:
         libseccomp:
           - ">= 2.3"
+    tests:
+      - name: mariner rpm manifest files
+        files:
+          /var/lib/rpmmanifest/container-manifest-1:
+            contains:
+              - "moby-runc-${VERSION}-"
+              - "libseccomp-"
+          /var/lib/rpmmanifest/container-manifest-2:
+            contains:
+              - "moby-runc-${VERSION}-"
+              - "libseccomp-"
+          /var/lib/rpm:
+            not_exist: true
 
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
@@ -73,3 +86,18 @@ artifacts:
     src/man/man8/*:
       subpath: man8
 
+tests:
+  - name: package files
+    files:
+      /usr/bin/runc:
+        permissions: 0755
+      /usr/share/man/man8/runc-create.8.gz:
+  - name: version reporting
+    steps:
+      - command: runc --version
+        stdout:
+          starts_with: "runc version ${VERSION}"
+          contains:
+            - "libseccomp: "
+        stderr:
+          empty: true

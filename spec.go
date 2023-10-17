@@ -3,11 +3,12 @@ package dalec
 
 import (
 	"fmt"
+	"io/fs"
+	"regexp"
+	"strings"
 	"time"
 
-	"github.com/goccy/go-yaml"
 	"github.com/invopop/jsonschema"
-	"github.com/moby/buildkit/frontend/dockerfile/shell"
 )
 
 // Spec is the specification for a package build.
@@ -87,6 +88,11 @@ type Spec struct {
 
 	// Changelog is the list of changes to the package.
 	Changelog []ChangelogEntry `yaml:"changelog,omitempty" json:"changelog,omitempty"`
+
+	// Tests are the list of tests to run for the package that should work regardless of target OS
+	// Each item in this list is run with a separate rootfs and cannot interact with other tests.
+	// Each [TestSpec] is run with a separate rootfs, asyncronously from other [TestSpec].
+	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
 }
 
 // ChangelogEntry is an entry in the changelog.
@@ -241,6 +247,9 @@ type PackageDependencies struct {
 	// Recommends is the list of packages recommended to install with the generated package.
 	// Note: Not all package managers support this (e.g. rpm)
 	Recommends map[string][]string `yaml:"recommends,omitempty" json:"recommends,omitempty"`
+
+	// Test lists any extra packages required for running tests
+	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
@@ -275,15 +284,18 @@ type SourceMount struct {
 type CmdSpec struct {
 	// Dir is the working directory to run the command in.
 	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
+
 	// Sources is the list of sources to mount into the build steps.
 	Sources []SourceMount `yaml:"sources,omitempty" json:"sources,omitempty"`
 
 	// List of CacheDirs which will be used across all Steps
 	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
+
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 
 	// Steps is the list of commands to run to generate the source.
+	// Steps are run sequentially and results of each step should be cached.
 	Steps []*BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
 }
 
@@ -309,106 +321,6 @@ type CacheDirConfig struct {
 	//
 	// As with [IncludeDistroKey], this is useful for Go(lang) builds with CGO.
 	IncludeArchKey bool `yaml:"include_arch_key,omitempty" json:"include_arch_key,omitempty"`
-}
-
-func knownArg(key string) bool {
-	switch key {
-	case "BUILDKIT_SYNTAX":
-		return true
-	default:
-		return false
-	}
-}
-
-// LoadSpec loads a spec from the given data.
-// env is a map of environment variables to use for shell-style expansion in the spec.
-func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
-	var spec Spec
-	if err := yaml.Unmarshal(dt, &spec); err != nil {
-		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
-	}
-
-	lex := shell.NewLex('\\')
-
-	args := make(map[string]string)
-	for k, v := range spec.Args {
-		args[k] = v
-	}
-	for k, v := range env {
-		if _, ok := args[k]; !ok {
-			if !knownArg(k) {
-				return nil, fmt.Errorf("unknown arg %q", k)
-			}
-		}
-		args[k] = v
-	}
-
-	for name, src := range spec.Sources {
-		updated, err := lex.ProcessWordWithMap(src.Ref, args)
-		if err != nil {
-			return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
-		}
-		src.Ref = updated
-		if src.Cmd != nil {
-			for i, smnt := range src.Cmd.Sources {
-				updated, err := lex.ProcessWordWithMap(smnt.Spec.Ref, args)
-				if err != nil {
-					return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
-				}
-				src.Cmd.Sources[i].Spec.Ref = updated
-			}
-			for k, v := range src.Cmd.Env {
-				updated, err := lex.ProcessWordWithMap(v, args)
-				if err != nil {
-					return nil, fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
-				}
-				src.Cmd.Env[k] = updated
-			}
-			for i, step := range src.Cmd.Steps {
-				for k, v := range step.Env {
-					updated, err := lex.ProcessWordWithMap(v, args)
-					if err != nil {
-						return nil, fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
-					}
-					step.Env[k] = updated
-					src.Cmd.Steps[i] = step
-				}
-			}
-		}
-
-		spec.Sources[name] = src
-	}
-
-	updated, err := lex.ProcessWordWithMap(spec.Version, args)
-	if err != nil {
-		return nil, fmt.Errorf("error performing shell expansion on version: %w", err)
-	}
-	spec.Version = updated
-
-	updated, err = lex.ProcessWordWithMap(spec.Revision, args)
-	if err != nil {
-		return nil, fmt.Errorf("error performing shell expansion on revision: %w", err)
-	}
-	spec.Revision = updated
-
-	for k, v := range spec.Build.Env {
-		updated, err := lex.ProcessWordWithMap(v, args)
-		if err != nil {
-			return nil, fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
-		}
-		spec.Build.Env[k] = updated
-	}
-
-	for name, step := range spec.Build.Steps {
-		for k, v := range step.Env {
-			updated, err := lex.ProcessWordWithMap(v, args)
-			if err != nil {
-				return nil, fmt.Errorf("error performing shell expansion on env var %q for step %q: %w", k, name, err)
-			}
-			step.Env[k] = updated
-		}
-	}
-	return &spec, nil
 }
 
 // Frontend encapsulates the configuration for a frontend to forward a build target to.
@@ -437,4 +349,135 @@ type Target struct {
 	// This is used to forward the build to a different, dalec-compatabile frontend.
 	// This can be useful when testing out new distros or using a different version of the frontend for a given distro.
 	Frontend *Frontend `yaml:"frontend,omitempty" json:"frontend,omitempty"`
+
+	// Tests are the list of tests to run which are specific to the target.
+	// Tests are appended to the list of tests in the main [Spec]
+	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
+}
+
+// TestSpec is used to execute tests against a container with the package installed in it.
+type TestSpec struct {
+	// Name is the name of the test
+	// This will be used to output the test results
+	Name    string `yaml:"name" json:"name" jsonschema:"required"`
+	CmdSpec `yaml:",inline"`
+	// Steps is the list of commands to run to test the package.
+	Steps []TestStep `yaml:"steps" json:"steps" jsonschema:"required"`
+	// Files is the list of files to check after running the steps.
+	Files map[string]FileCheckOutput `yaml:"files,omitempty" json:"files,omitempty"`
+}
+
+// TestStep is a wrapper for [BuildStep] to include checks on stdio streams
+type TestStep struct {
+	BuildStep `yaml:",inline"`
+	// Stdout is the expected output on stdout
+	Stdout CheckOutput `yaml:"stdout,omitempty" json:"stdout,omitempty"`
+	// Stderr is the expected output on stderr
+	Stderr CheckOutput `yaml:"stderr,omitempty" json:"stderr,omitempty"`
+	// Stdin is the input to pass to stdin for the command
+	Stdin string `yaml:"stdin,omitempty" json:"stdin,omitempty"`
+}
+
+// CheckOutput is used to specify the exepcted output of a check, such as stdout/stderr or a file.
+// All non-empty fields will be checked.
+type CheckOutput struct {
+	// Equals is the exact string to compare the output to.
+	Equals string `yaml:"equals,omitempty" json:"equals,omitempty"`
+	// Contains is the list of strings to check if they are contained in the output.
+	Contains []string `yaml:"contains,omitempty" json:"contains,omitempty"`
+	// Matches is the regular expression to match the output against.
+	Matches string `yaml:"matches,omitempty" json:"matches,omitempty"`
+	// StartsWith is the string to check if the output starts with.
+	StartsWith string `yaml:"starts_with,omitempty" json:"starts_with,omitempty"`
+	// EndsWith is the string to check if the output ends with.
+	EndsWith string `yaml:"ends_with,omitempty" json:"ends_with,omitempty"`
+	// Empty is used to check if the output is empty.
+	Empty bool `yaml:"empty,omitempty" json:"empty,omitempty"`
+}
+
+// IsEmpty is used to determine if there are any checks to perform.
+func (c CheckOutput) IsEmpty() bool {
+	return c.Equals == "" && len(c.Contains) == 0 && c.Matches == "" && c.StartsWith == "" && c.EndsWith == "" && !c.Empty
+}
+
+// Check is used to check the output stream.
+func (c CheckOutput) Check(dt string, p string) (retErr error) {
+	if c.Empty {
+		if dt != "" {
+			return &CheckOutputError{Kind: "empty", Expected: "", Actual: dt, Path: p}
+		}
+
+		// Anything else would be nonsensical and it would make sense to return early...
+		// But we'll check it anyway and it should fail since this would be an invalid CheckOutput
+	}
+
+	if c.Equals != "" && c.Equals != dt {
+		return &CheckOutputError{Expected: c.Equals, Actual: dt, Path: p}
+	}
+
+	for _, contains := range c.Contains {
+		if contains != "" && !strings.Contains(dt, contains) {
+			return &CheckOutputError{Kind: "contains", Expected: contains, Actual: dt, Path: p}
+		}
+	}
+	if c.Matches != "" {
+		regexp, err := regexp.Compile(c.Matches)
+		if err != nil {
+			return err
+		}
+
+		if !regexp.Match([]byte(dt)) {
+			return &CheckOutputError{Kind: "matches", Expected: c.Matches, Actual: dt, Path: p}
+		}
+	}
+
+	if c.StartsWith != "" && !strings.HasPrefix(dt, c.StartsWith) {
+		return &CheckOutputError{Kind: "starts_with", Expected: c.StartsWith, Actual: dt, Path: p}
+	}
+
+	if c.EndsWith != "" && !strings.HasSuffix(dt, c.EndsWith) {
+		return &CheckOutputError{Kind: "ends_with", Expected: c.EndsWith, Actual: dt, Path: p}
+	}
+
+	return nil
+}
+
+// FileCheckOutput is used to specify the expected output of a file.
+type FileCheckOutput struct {
+	CheckOutput `yaml:",inline"`
+	// Permissions is the expected permissions of the file.
+	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	// IsDir is used to set the expected file mode to a directory.
+	IsDir bool `yaml:"is_dir,omitempty" json:"is_dir,omitempty"`
+	// NotExist is used to check that the file does not exist.
+	NotExist bool `yaml:"not_exist,omitempty" json:"not_exist,omitempty"`
+}
+
+// Check is used to check the output file.
+func (c FileCheckOutput) Check(dt string, mode fs.FileMode, isDir bool, p string) error {
+	if c.IsDir && !isDir {
+		return &CheckOutputError{Kind: "mode", Expected: "ModeDir", Actual: "ModeFile", Path: p}
+	}
+
+	if !c.IsDir && isDir {
+		return &CheckOutputError{Kind: "mode", Expected: "ModeFile", Actual: "ModeDir", Path: p}
+	}
+
+	if c.Permissions != 0 && c.Permissions != mode {
+		return &CheckOutputError{Kind: "permissions", Expected: c.Permissions.String(), Actual: mode.String(), Path: p}
+	}
+
+	return c.CheckOutput.Check(dt, p)
+}
+
+// CheckOutputError is used to build an error message for a failed output check for a test case.
+type CheckOutputError struct {
+	Kind     string
+	Expected string
+	Actual   string
+	Path     string
+}
+
+func (c *CheckOutputError) Error() string {
+	return fmt.Sprintf("expected %q %s %q, got %q", c.Path, c.Kind, c.Expected, c.Actual)
 }

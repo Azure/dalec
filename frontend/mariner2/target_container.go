@@ -68,6 +68,14 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	copyImageConfig(&img, spec.Targets[targetKey].Image)
 
 	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := frontend.RunTests(ctx, client, spec, ref, targetKey); err != nil {
+		return nil, nil, err
+	}
+
 	return ref, &img, err
 }
 
