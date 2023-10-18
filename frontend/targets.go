@@ -214,7 +214,11 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 	}
 
 	register := func(group string) error {
-		t := spec.Targets[group]
+		t, ok := spec.Targets[group]
+		if !ok {
+			return nil
+		}
+
 		if t.Frontend == nil || t.Frontend.Image == "" {
 			return nil
 		}

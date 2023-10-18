@@ -11,6 +11,7 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
+	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
@@ -46,7 +47,15 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	_, _, dt, err := client.ResolveImageConfig(ctx, marinerRef, llb.ResolveImageConfigOpt{})
+	dc, err := dockerui.NewClient(client)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	baseImgRef := getBaseOutputImage(spec, targetKey)
+	_, _, dt, err := client.ResolveImageConfig(ctx, baseImgRef, llb.ResolveImageConfigOpt{
+		ResolveMode: dc.ImageResolveMode.String(),
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("error resolving image config: %w", err)
 	}
@@ -59,7 +68,23 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	copyImageConfig(&img, spec.Targets[targetKey].Image)
 
 	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := frontend.RunTests(ctx, client, spec, ref, targetKey); err != nil {
+		return nil, nil, err
+	}
+
 	return ref, &img, err
+}
+
+func getBaseOutputImage(spec *dalec.Spec, target string) string {
+	baseRef := marinerDistrolessRef
+	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
+		baseRef = spec.Targets[target].Image.Base
+	}
+	return baseRef
 }
 
 func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc, builderImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
@@ -69,11 +94,6 @@ func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc
 	}
 
 	const workPath = "/tmp/rootfs"
-
-	baseRef := marinerDistrolessRef
-	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
-		baseRef = spec.Targets[target].Image.Base
-	}
 
 	mfstDir := filepath.Join(workPath, "var/lib/rpmmanifest")
 	mfst1 := filepath.Join(mfstDir, "container-manifest-1")
@@ -124,7 +144,7 @@ rpm --dbpath=` + rpmdbDir + ` -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{INSTAL
 rm -rf ` + rpmdbDir + `
 `
 
-	baseImg := llb.Image(baseRef, llb.WithMetaResolver(sOpt.Resolver))
+	baseImg := llb.Image(getBaseOutputImage(spec, target), llb.WithMetaResolver(sOpt.Resolver))
 	worker := builderImg.
 		Run(
 			shArgs(installCmd),

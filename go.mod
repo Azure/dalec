@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/containerd/containerd v1.7.2
 	github.com/goccy/go-yaml v1.11.0
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/invopop/jsonschema v0.12.0
 	github.com/moby/buildkit v0.12.2
 	github.com/opencontainers/image-spec v1.1.0-rc4
@@ -47,7 +48,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
-	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
