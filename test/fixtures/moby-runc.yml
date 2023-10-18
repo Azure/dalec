@@ -23,7 +23,8 @@ targets: # Distro specific build requirements
     # frontend:
     #   image: local/rpmbundle
     image:
-      entrypoint: ["runc"]
+      entrypoint: runc
+      cmd: --help
     dependencies:
       build:
         libseccomp-devel:

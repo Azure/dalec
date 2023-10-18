@@ -323,17 +323,11 @@
 		"ImageConfig": {
 			"properties": {
 				"entrypoint": {
-					"items": {
-						"type": "string"
-					},
-					"type": "array",
+					"type": "string",
 					"description": "Entrypoint sets the image's \"entrypoint\" field.\nThis is used to control the default command to run when the image is run."
 				},
 				"cmd": {
-					"items": {
-						"type": "string"
-					},
-					"type": "array",
+					"type": "string",
 					"description": "Cmd sets the image's \"cmd\" field.\nWhen entrypoint is set, this is used as the default arguments to the entrypoint.\nWhen entrypoint is not set, this is used as the default command to run."
 				},
 				"env": {

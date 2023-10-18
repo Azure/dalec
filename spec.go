@@ -146,11 +146,11 @@ func (a *Artifacts) IsEmpty() bool {
 type ImageConfig struct {
 	// Entrypoint sets the image's "entrypoint" field.
 	// This is used to control the default command to run when the image is run.
-	Entrypoint []string `yaml:"entrypoint,omitempty" json:"entrypoint,omitempty"`
+	Entrypoint string `yaml:"entrypoint,omitempty" json:"entrypoint,omitempty"`
 	// Cmd sets the image's "cmd" field.
 	// When entrypoint is set, this is used as the default arguments to the entrypoint.
 	// When entrypoint is not set, this is used as the default command to run.
-	Cmd []string `yaml:"cmd,omitempty" json:"cmd,omitempty"`
+	Cmd string `yaml:"cmd,omitempty" json:"cmd,omitempty"`
 	// Env is the list of environment variables to set in the image.
 	Env []string `yaml:"env,omitempty" json:"env,omitempty"`
 	// Labels is the list of labels to set in the image metadata.
