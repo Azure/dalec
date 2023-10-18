@@ -1,3 +1,5 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
 name: dalec-test-framework
 description: Spec to run some tests on the dalec test framework
 website: http://github.com/Azure/dalec
@@ -31,3 +33,4 @@ tests:
         command: /bin/sh -c 'echo "Hello, world!" >&2'
         stderr: 
           equals: "Hello, world!\n"
+

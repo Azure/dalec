@@ -141,3 +141,17 @@ target "build" {
     cache-from = ["type=gha,scope=dalec/${distro}/${tgt}"]
     cache-to = ["type=gha,scope=dalec/${distro}/${tgt},mode=max"]
 }
+
+target "examples" {
+    name = "examples-${f}"
+    matrix = {
+        distro = ["mariner2"]
+        f = ["go-md2man-2"]
+    }
+    args = {
+        "BUILDKIT_SYNTAX" = FRONTEND_REF
+    }
+    target = "${distro}/container"
+    dockerfile = "docs/examples/${f}.yml"
+    tags = ["local/dalec/examples/${f}:${distro}"]
+}

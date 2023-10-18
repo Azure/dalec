@@ -1,0 +1,33 @@
+name: go-md2man
+version: 2.0.3
+packager: Dalec Example
+vendor: Dalec Example
+license: MIT
+description: A tool to convert markdown into man pages (roff).
+website: https://github.com/cpuguy83/go-md2man
+
+sources:
+  src:
+    ref: https://github.com/cpuguy83/go-md2man.git#v2.0.3
+
+dependencies:
+  build:
+    golang:
+
+build:
+  env:
+    GOROOT: /usr/lib/golang # Note: This is needed due to a bug in the golang package for mariner
+    CGO_ENABLED: "0"
+  steps:
+    - command: |
+        export GOMODCACHE="$(pwd)/gomods"
+        cd src
+        go build -o go-md2man .
+
+artifacts:
+  binaries:
+    src/go-md2man:
+
+image:
+  entrypoint: go-md2man
+  cmd: --help

@@ -1,0 +1,55 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+name: go-md2man
+version: 2.0.3
+packager: Dalec Example
+vendor: Dalec Example
+license: MIT
+description: A tool to convert markdown into man pages (roff).
+website: https://github.com/cpuguy83/go-md2man
+
+sources:
+  src:
+    ref: https://github.com/cpuguy83/go-md2man.git#v2.0.3
+  gomods: # This is required when the build environment does not allow network access. This downloads all the go modules.
+    ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.21
+    path: /build/gomodcache # This is the path we will be extracing after running the command below.
+    cmd:
+      dir: /build/src
+      sources:
+        # Mount the "src" source, specified above, so our command has access to it.
+        - path: /build/src
+          spec:
+            ref: source://src
+      steps:
+        - command: go mod download
+          env:
+            # This variable controls where the go modules are downloaded to.
+            GOMODCACHE: /build/gomodcache
+
+dependencies:
+  build:
+    golang:
+
+build:
+  env:
+    GOROOT: /usr/lib/golang # Note: This is needed due to a bug in the golang package for mariner
+    CGO_ENABLED: "0"
+  steps:
+    - command: |
+        export GOMODCACHE="$(pwd)/gomods"
+        cd src
+        go build -o go-md2man .
+
+artifacts:
+  binaries:
+    src/go-md2man:
+
+image:
+  entrypoint: go-md2man
+  cmd: --help
+
+tests:
+  - name: Check bin
+    files:
+      /usr/bin/go-md2man:
+        permissions: 0755
