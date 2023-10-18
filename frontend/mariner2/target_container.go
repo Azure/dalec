@@ -9,10 +9,12 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/google/shlex"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -65,7 +67,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, fmt.Errorf("error unmarshalling image config: %w", err)
 	}
 
-	copyImageConfig(&img, spec.Targets[targetKey].Image)
+	copyImageConfig(&img, mergeSpecImage(spec, targetKey))
 
 	ref, err := res.SingleRef()
 	if err != nil {
@@ -77,6 +79,48 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	}
 
 	return ref, &img, err
+}
+
+func mergeSpecImage(spec *dalec.Spec, target string) *dalec.ImageConfig {
+	var cfg dalec.ImageConfig
+
+	if spec.Image != nil {
+		cfg = *spec.Image
+	}
+
+	if i := spec.Targets[target].Image; i != nil {
+		if i.Entrypoint != "" {
+			cfg.Entrypoint = spec.Targets[target].Image.Entrypoint
+		}
+
+		if i.Cmd != "" {
+			cfg.Cmd = spec.Targets[target].Image.Cmd
+		}
+
+		cfg.Env = append(cfg.Env, i.Env...)
+
+		for k, v := range i.Volumes {
+			cfg.Volumes[k] = v
+		}
+
+		for k, v := range i.Labels {
+			cfg.Labels[k] = v
+		}
+
+		if i.WorkingDir != "" {
+			cfg.WorkingDir = i.WorkingDir
+		}
+
+		if i.StopSignal != "" {
+			cfg.StopSignal = i.StopSignal
+		}
+
+		if i.Base != "" {
+			cfg.Base = i.Base
+		}
+	}
+
+	return &cfg
 }
 
 func getBaseOutputImage(spec *dalec.Spec, target string) string {
@@ -159,19 +203,27 @@ rm -rf ` + rpmdbDir + `
 	return rootfs, nil
 }
 
-func copyImageConfig(dst *image.Image, src *dalec.ImageConfig) {
+func copyImageConfig(dst *image.Image, src *dalec.ImageConfig) error {
 	if src == nil {
-		return
+		return nil
 	}
 
-	if src.Entrypoint != nil {
-		dst.Config.Entrypoint = src.Entrypoint
+	if src.Entrypoint != "" {
+		split, err := shlex.Split(src.Entrypoint)
+		if err != nil {
+			return errors.Wrap(err, "error splitting entrypoint into args")
+		}
+		dst.Config.Entrypoint = split
 		// Reset cmd as this may be totally invalid now
 		// This is the same behavior as the Dockerfile frontend
 		dst.Config.Cmd = nil
 	}
-	if src.Cmd != nil {
-		dst.Config.Cmd = src.Cmd
+	if src.Cmd != "" {
+		split, err := shlex.Split(src.Cmd)
+		if err != nil {
+			return errors.Wrap(err, "error splitting cmd into args")
+		}
+		dst.Config.Cmd = split
 	}
 
 	if len(src.Env) > 0 {
@@ -197,4 +249,6 @@ func copyImageConfig(dst *image.Image, src *dalec.ImageConfig) {
 	if src.StopSignal != "" {
 		dst.Config.StopSignal = src.StopSignal
 	}
+
+	return nil
 }
