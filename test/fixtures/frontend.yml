@@ -49,4 +49,4 @@ artifacts:
     frontend: {}
 
 image:
-  entrypoint: ["frontend"]
+  entrypoint: frontend
