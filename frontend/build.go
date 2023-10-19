@@ -83,11 +83,16 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 
 	t := registeredTargets.Get(bc.Target)
 	if t == nil {
-		var have []string
-		for _, t := range registeredTargets.All() {
-			have = append(have, t.Name)
+		if bc.Target == "" {
+			t = registeredTargets.Default()
 		}
-		return nil, fmt.Errorf("unknown target %q: available targets: %s", bc.Target, strings.Join(have, ", "))
+		if t == nil {
+			var have []string
+			for _, t := range registeredTargets.All() {
+				have = append(have, t.Name)
+			}
+			return nil, fmt.Errorf("unknown target %q: available targets: %s", bc.Target, strings.Join(have, ", "))
+		}
 	}
 
 	rb, err := bc.Build(ctx, func(ctx context.Context, platform *oicspecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
