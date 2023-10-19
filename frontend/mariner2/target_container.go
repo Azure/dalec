@@ -67,7 +67,9 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, fmt.Errorf("error unmarshalling image config: %w", err)
 	}
 
-	copyImageConfig(&img, mergeSpecImage(spec, targetKey))
+	if err := copyImageConfig(&img, mergeSpecImage(spec, targetKey)); err != nil {
+		return nil, nil, err
+	}
 
 	ref, err := res.SingleRef()
 	if err != nil {
