@@ -1,6 +1,7 @@
 package rpm
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -156,6 +157,18 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 			ref += ".tar.gz"
 		}
 
+		doc, err := src.Doc()
+		if err != nil {
+			return nil, fmt.Errorf("error getting doc for source %s: %w", name, err)
+		}
+
+		scanner := bufio.NewScanner(doc)
+		for scanner.Scan() {
+			fmt.Fprintf(b, "# %s\n", scanner.Text())
+		}
+		if scanner.Err() != nil {
+			return nil, scanner.Err()
+		}
 		fmt.Fprintf(b, "Source%d: %s\n", idx, ref)
 	}
 	return b, nil

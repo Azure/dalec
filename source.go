@@ -1,7 +1,10 @@
 package dalec
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
@@ -268,4 +271,138 @@ func SourceIsDir(src Source) (bool, error) {
 func isGitRef(ref string) bool {
 	_, err := gitutil.ParseGitRef(ref)
 	return err == nil
+}
+
+// Doc returns the details of how the source was created.
+// This should be included, where applicable, in build in build specs (such as RPM spec files)
+// so that others can reproduce the build.
+func (s Source) Doc() (io.Reader, error) {
+	b := bytes.NewBuffer(nil)
+	scheme, ref, err := SplitSourceRef(s.Ref)
+	if err != nil {
+		return nil, err
+	}
+
+	switch scheme {
+	case sourceTypeSource:
+		fmt.Fprintln(b, "Generated from another source named:", ref)
+	case sourceTypeContext:
+		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
+	case sourceTypeBuild:
+		fmt.Fprintln(b, "Generated from a docker build:")
+		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
+		fmt.Fprintln(b, "	Docker Build Ref:", ref)
+
+		if len(s.Build.Args) > 0 {
+			sorted := SortMapKeys(s.Build.Args)
+			fmt.Fprintln(b, "	Build Args:")
+			for _, k := range sorted {
+				fmt.Fprintf(b, "		%s=%s\n", k, s.Build.Args[k])
+			}
+		}
+
+		if s.Build.Inline != "" {
+			fmt.Fprintln(b, "	Dockerfile:")
+
+			scanner := bufio.NewScanner(strings.NewReader(s.Build.Inline))
+			for scanner.Scan() {
+				fmt.Fprintf(b, "		%s\n", scanner.Text())
+			}
+			if scanner.Err() != nil {
+				return nil, scanner.Err()
+			}
+		} else {
+			p := "Dockerfile"
+			if s.Build.File != "" {
+				p = s.Build.File
+			}
+			fmt.Fprintln(b, "	Dockerfile path in context:", p)
+		}
+	case sourcetypes.HTTPScheme, sourcetypes.HTTPSScheme:
+		ref, err := gitutil.ParseGitRef(ref)
+		if err == nil {
+			// git ref
+			fmt.Fprintln(b, "Generated from a git repository:")
+			fmt.Fprintln(b, "	Remote:", scheme+"://"+ref.Remote)
+			fmt.Fprintln(b, "	Ref:", ref.Commit)
+			if ref.SubDir != "" {
+				fmt.Fprintln(b, "	Subdir:", ref.SubDir)
+			}
+			if s.Path != "" {
+				fmt.Fprintln(b, "	Extraced path:", s.Path)
+			}
+		} else {
+			fmt.Fprintln(b, "Generated from a http(s) source:")
+			fmt.Fprintln(b, "	URL:", ref)
+		}
+	case sourcetypes.GitScheme:
+		ref, err := gitutil.ParseGitRef(ref)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Fprintln(b, "Generated from a git repository:")
+		fmt.Fprintln(b, "	Remote:", ref.Remote)
+		fmt.Fprintln(b, "	Ref:", ref.Commit)
+		if s.Path != "" {
+			fmt.Fprintln(b, "	Extraced path:", s.Path)
+		}
+	case sourcetypes.DockerImageScheme:
+		if s.Cmd == nil {
+			fmt.Fprintln(b, "Generated from a docker image:")
+			fmt.Fprintln(b, "	Image:", ref)
+			if s.Path != "" {
+				fmt.Fprintln(b, "	Extraced path:", s.Path)
+			}
+		} else {
+			fmt.Fprintln(b, "Generated from running a command(s) in a docker image:")
+			fmt.Fprintln(b, "	Image:", ref)
+			if s.Path != "" {
+				fmt.Fprintln(b, "	Extraced path:", s.Path)
+			}
+			if len(s.Cmd.Env) > 0 {
+				fmt.Fprintln(b, "	With the following environment variables set for all commands:")
+
+				sorted := SortMapKeys(s.Cmd.Env)
+				for _, k := range sorted {
+					fmt.Fprintf(b, "		%s=%s\n", k, s.Cmd.Env[k])
+				}
+			}
+			fmt.Fprintln(b, "	Command(s):")
+			for _, step := range s.Cmd.Steps {
+				fmt.Fprintf(b, "		%s\n", step.Command)
+				if len(step.Env) > 0 {
+					fmt.Fprintln(b, "			With the following environment variables set for this command:")
+					sorted := SortMapKeys(step.Env)
+					for _, k := range sorted {
+						fmt.Fprintf(b, "				%s=%s\n", k, step.Env[k])
+					}
+				}
+			}
+			if len(s.Cmd.Sources) > 0 {
+				fmt.Fprintln(b, "	With the following items mounted:")
+				for _, src := range s.Cmd.Sources {
+					sub, err := src.Spec.Doc()
+					if err != nil {
+						return nil, err
+					}
+
+					fmt.Fprintln(b, "		Destination Path:", src.Path)
+					scanner := bufio.NewScanner(sub)
+					for scanner.Scan() {
+						fmt.Fprintf(b, "			%s\n", scanner.Text())
+					}
+					if scanner.Err() != nil {
+						return nil, scanner.Err()
+					}
+				}
+			}
+			return b, nil
+		}
+	default:
+		// This should be unrecable.
+		// We could panic here, but ultimately this is just a doc string and parsing user generated content.
+		fmt.Fprintln(b, "Generated from an unknown source type:", s.Ref)
+	}
+
+	return b, nil
 }
