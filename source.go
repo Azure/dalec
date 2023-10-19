@@ -341,7 +341,7 @@ func (s Source) Doc() (io.Reader, error) {
 			return nil, err
 		}
 		fmt.Fprintln(b, "Generated from a git repository:")
-		fmt.Fprintln(b, "	Remote:", ref.Remote)
+		fmt.Fprintln(b, "	Remote:", scheme+"://"+ref.Remote)
 		fmt.Fprintln(b, "	Ref:", ref.Commit)
 		if s.Path != "" {
 			fmt.Fprintln(b, "	Extraced path:", s.Path)
@@ -366,6 +366,9 @@ func (s Source) Doc() (io.Reader, error) {
 				for _, k := range sorted {
 					fmt.Fprintf(b, "		%s=%s\n", k, s.Cmd.Env[k])
 				}
+			}
+			if s.Cmd.Dir != "" {
+				fmt.Fprintln(b, "	Working Directory:", s.Cmd.Dir)
 			}
 			fmt.Fprintln(b, "	Command(s):")
 			for _, step := range s.Cmd.Steps {
