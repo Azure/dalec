@@ -32,14 +32,14 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	st, err := specToContainerLLB(spec, targetKey, getDigestFromClientFn(ctx, client), baseImg, sOpt)
+	st, err := specToContainerLLB(spec, targetKey, getDigestFromClientFn(ctx, client), &baseImg, sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	def, err := st.Marshal(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+		return nil, nil, fmt.Errorf("error marshaling llb: %w", err)
 	}
 
 	res, err := client.Solve(ctx, gwclient.SolveRequest{
@@ -133,7 +133,7 @@ func getBaseOutputImage(spec *dalec.Spec, target string) string {
 	return baseRef
 }
 
-func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc, builderImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
+func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc, builderImg *llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
 	st, err := specToRpmLLB(spec, getDigest, builderImg, sOpt)
 	if err != nil {
 		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)

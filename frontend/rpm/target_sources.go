@@ -15,14 +15,14 @@ import (
 
 // TarImageRef is the image used to create tarballs of sources
 // This is purposefully exported so it can be overridden at compile time if needed.
-// Currently this image needs /bin/sh and tar in $PATH
+// Currently this image needs /bin/sh and tar in $PATH.
 var TarImageRef = "busybox:latest"
 
 func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
-func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
+func tar(src *llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	tarImg := llb.Image(TarImageRef)
 
 	// Put the output tar in a consistent location regardless of `dest`
@@ -30,7 +30,7 @@ func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	outBase := "/tmp/out"
 	out := filepath.Join(outBase, filepath.Dir(dest))
 	worker := tarImg.Run(
-		llb.AddMount("/src", src, llb.Readonly),
+		llb.AddMount("/src", *src, llb.Readonly),
 		shArgs("tar -C /src -cvzf /tmp/st ."),
 		dalec.WithConstraints(opts...),
 	).
@@ -53,11 +53,12 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 	}
 
 	// Now we can merge sources into the desired path
-	st := dalec.MergeAtPath(llb.Scratch(), sources, "/SOURCES")
+	scratch := llb.Scratch()
+	st := dalec.MergeAtPath(&scratch, sources, "/SOURCES")
 
 	def, err := st.Marshal(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+		return nil, nil, fmt.Errorf("error marshaling llb: %w", err)
 	}
 
 	res, err := client.Solve(ctx, gwclient.SolveRequest{
@@ -82,19 +83,19 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 	out := make([]llb.State, 0, len(spec.Sources))
 	for _, k := range sorted {
 		src := spec.Sources[k]
-		isDir, err := dalec.SourceIsDir(src)
+		isDir, err := dalec.SourceIsDir(&src)
 		if err != nil {
 			return nil, err
 		}
 
 		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+src.Ref, false)
-		st, err := dalec.Source2LLBGetter(spec, src, k)(sOpt, pg)
+		st, err := dalec.Source2LLBGetter(spec, &src, k)(sOpt, pg)
 		if err != nil {
 			return nil, err
 		}
 
 		if isDir {
-			out = append(out, tar(st, k+".tar.gz", pg))
+			out = append(out, tar(&st, k+".tar.gz", pg))
 		} else {
 			out = append(out, st)
 		}

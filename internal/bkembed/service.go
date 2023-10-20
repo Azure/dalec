@@ -38,7 +38,7 @@ type ServerConfig struct {
 	Health     *health.Server
 }
 
-func NewServer(ctx context.Context, controller *control.Controller) *grpc.Server {
+func NewServer(controller *control.Controller) *grpc.Server {
 	server := grpc.NewServer()
 
 	controller.Register(server)
@@ -82,7 +82,7 @@ func NewController(ctx context.Context, root string, frontends map[string]fronte
 		timeout = 30 * time.Second
 	}
 
-	db, err := bbolt.Open(filepath.Join(root, "metadata.db"), 0600, &bbolt.Options{
+	db, err := bbolt.Open(filepath.Join(root, "metadata.db"), 0o600, &bbolt.Options{
 		Timeout: timeout,
 	})
 	if err != nil {
@@ -97,7 +97,7 @@ func NewController(ctx context.Context, root string, frontends map[string]fronte
 	} else {
 		timeout = 30 * time.Second
 	}
-	historyDB, err := bbolt.Open(filepath.Join(root, "history.db"), 0600, &bbolt.Options{
+	historyDB, err := bbolt.Open(filepath.Join(root, "history.db"), 0o600, &bbolt.Options{
 		Timeout: timeout,
 	})
 	if err != nil {

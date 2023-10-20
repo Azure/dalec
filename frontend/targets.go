@@ -151,14 +151,14 @@ var registeredTargets = &targetList{
 // This can be changed by calling [SetDefault].
 //
 // Registered targets may be overridden by targets from a [dalec.Spec].
-func RegisterTarget(group string, t bktargets.Target, build BuildFunc) {
-	registeredTargets.Add(group, &targetWrapper{Target: t, Build: build})
+func RegisterTarget(group string, t *bktargets.Target, build BuildFunc) {
+	registeredTargets.Add(group, &targetWrapper{Target: *t, Build: build})
 }
 
 // RegisterBuiltin registers a builtin target.
 // This is similar to [RegisterTarget], but the target is not overridable by a [dalec.Spec].
-func RegisterBuiltin(group string, t bktargets.Target, build BuildFunc) {
-	registeredTargets.AddBuiltin(group, &targetWrapper{Target: t, Build: build})
+func RegisterBuiltin(group string, t *bktargets.Target, build BuildFunc) {
+	registeredTargets.AddBuiltin(group, &targetWrapper{Target: *t, Build: build})
 }
 
 // SetDefault sets the default target for when no target is specified.
@@ -192,7 +192,7 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 		if err != nil {
 			return nil, err
 		}
-		llbDef, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0600, dt)).Marshal(ctx)
+		llbDef, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0o600, dt)).Marshal(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +203,7 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 	opts := client.BuildOpts().Opts
 	// Prevent infinite recursion in from forwarded builds
 	// This means we only support 1 level of forwarding.
-	// We could add a second opt to check for further nesting, but it is probaly not worth it.
+	// We could add a second opt to check for further nesting, but it is probably not worth it.
 	switch opts[requestIDKey] {
 	case bktargets.SubrequestsTargetsDefinition.Name:
 		if _, ok := opts[dalecTargetOptKey]; ok {
@@ -255,7 +255,7 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 			// capture loop variables
 			bkt := bkt
 			t := t
-			RegisterTarget(group, bkt, makeTargetForwarder(t, bkt))
+			RegisterTarget(group, &bkt, makeTargetForwarder(t, &bkt))
 		}
 		return nil
 	}
@@ -264,10 +264,7 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 	// ... unless this is a target list request, in which case we register all targets.
 	if opts[requestIDKey] != bktargets.SubrequestsTargetsDefinition.Name {
 		if t := opts["target"]; t != "" {
-			if err := register(t); err != nil {
-				return err
-			}
-			return nil
+			return register(t)
 		}
 	}
 

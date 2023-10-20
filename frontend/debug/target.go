@@ -6,7 +6,7 @@ import (
 )
 
 func RegisterTargets() {
-	frontend.RegisterBuiltin("debug", bktargets.Target{
+	frontend.RegisterBuiltin("debug", &bktargets.Target{
 		Name:        "resolve",
 		Description: "Outputs the resolved dalec spec file with build args applied.",
 	}, HandleResolve)

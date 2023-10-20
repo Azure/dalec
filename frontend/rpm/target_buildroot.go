@@ -25,7 +25,7 @@ func BuildrootHandler(target string) frontend.BuildFunc {
 
 		def, err := st.Marshal(ctx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+			return nil, nil, fmt.Errorf("error marshaling llb: %w", err)
 		}
 
 		res, err := client.Solve(ctx, gwclient.SolveRequest{
@@ -46,5 +46,6 @@ func specToBuildrootLLB(spec *dalec.Spec, target string, sOpt dalec.SourceOpts) 
 		return llb.Scratch(), err
 	}
 
-	return Dalec2SpecLLB(spec, dalec.MergeAtPath(llb.Scratch(), sources, "SOURCES"), target, "")
+	scratch := llb.Scratch()
+	return Dalec2SpecLLB(spec, dalec.MergeAtPath(&scratch, sources, "SOURCES"), target, "")
 }

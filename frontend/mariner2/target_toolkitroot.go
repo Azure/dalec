@@ -62,7 +62,7 @@ func handleToolkitRoot(ctx context.Context, client gwclient.Client, spec *dalec.
 
 	def, err := st.Marshal(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+		return nil, nil, fmt.Errorf("error marshaling llb: %w", err)
 	}
 
 	res, err := client.Solve(ctx, gwclient.SolveRequest{
@@ -76,25 +76,27 @@ func handleToolkitRoot(ctx context.Context, client gwclient.Client, spec *dalec.
 	return ref, &image.Image{}, err
 }
 
-func spec2ToolkitRootLLB(spec *dalec.Spec, getDigest getDigestFunc, sOpt dalec.SourceOpts) (llb.State, error) {
-	specs, err := rpm.Dalec2SpecLLB(spec, llb.Scratch(), targetKey, "/")
+func spec2ToolkitRootLLB(spec *dalec.Spec, getDigest getDigestFunc, sOpt dalec.SourceOpts) (*llb.State, error) {
+	scratch := llb.Scratch()
+	specs, err := rpm.Dalec2SpecLLB(spec, &scratch, targetKey, "/")
 	if err != nil {
-		return llb.Scratch(), err
+		return &scratch, err
 	}
 
 	sources, err := rpm.Dalec2SourcesLLB(spec, sOpt)
 	if err != nil {
-		return llb.Scratch(), err
+		return &scratch, err
 	}
 
-	inputs := append(sources, specs)
+	inputs := sources
+	inputs = append(inputs, specs)
 
 	// The mariner toolkit wants a signatures file in the spec dir (next to the spec file) that contains the sha256sum of all sources.
 	sigs := make(map[string]string, len(sources))
 	for _, src := range sources {
 		fName, dgst, err := getDigest(src)
 		if err != nil {
-			return llb.Scratch(), fmt.Errorf("could not get digest for source: %w", err)
+			return &scratch, fmt.Errorf("could not get digest for source: %w", err)
 		}
 		sigs[fName] = dgst
 	}
@@ -107,11 +109,11 @@ func spec2ToolkitRootLLB(spec *dalec.Spec, getDigest getDigestFunc, sOpt dalec.S
 	sd.Signatures = sigs
 	dt, err := json.Marshal(sd)
 	if err != nil {
-		return llb.Scratch(), fmt.Errorf("could not marshal signatures: %w", err)
+		return &scratch, fmt.Errorf("could not marshal signatures: %w", err)
 	}
 	inputs = append(inputs, llb.Scratch().File(
-		llb.Mkfile(spec.Name+".signatures.json", 0600, dt),
+		llb.Mkfile(spec.Name+".signatures.json", 0o600, dt),
 	))
 
-	return dalec.MergeAtPath(llb.Scratch(), inputs, filepath.Join("/SPECS", spec.Name)), nil
+	return dalec.MergeAtPath(&scratch, inputs, filepath.Join("/SPECS", spec.Name)), nil
 }

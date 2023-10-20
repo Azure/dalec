@@ -11,9 +11,7 @@ import (
 func main() {
 	args := os.Args[1:]
 
-	var (
-		stdin, stdout, stderr int
-	)
+	var stdin, stdout, stderr int
 
 	if p := os.Getenv("STDIN_FILE"); p != "" {
 		f, err := os.Open(p)

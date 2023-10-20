@@ -74,7 +74,7 @@ func withConstraints(opts []llb.ConstraintsOpt) llb.ConstraintsOpt {
 	return WithConstraints(opts...)
 }
 
-// SortMapKeys is a convenience generic function to sort the keys of a map[string]T
+// SortMapKeys is a convenience generic function to sort the keys of a map[string]T.
 func SortMapKeys[T any](m map[string]T) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -85,9 +85,9 @@ func SortMapKeys[T any](m map[string]T) []string {
 }
 
 // MergeAtPath merges the given states into the given destination path in the given input state.
-func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
+func MergeAtPath(input *llb.State, states []llb.State, dest string) *llb.State {
 	diffs := make([]llb.State, 0, len(states)+1)
-	diffs = append(diffs, input)
+	diffs = append(diffs, *input)
 
 	for _, src := range states {
 		st := src
@@ -95,9 +95,10 @@ func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
 			st = llb.Scratch().
 				File(llb.Copy(src, "/", dest, WithCreateDestPath()))
 		}
-		diffs = append(diffs, llb.Diff(input, st))
+		diffs = append(diffs, llb.Diff(*input, st))
 	}
-	return llb.Merge(diffs)
+	merge := llb.Merge(diffs)
+	return &merge
 }
 
 type localOptionFunc func(*llb.LocalInfo)

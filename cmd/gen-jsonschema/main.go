@@ -24,10 +24,10 @@ func main() {
 	}
 
 	if len(os.Args) > 1 {
-		if err := os.MkdirAll(filepath.Dir(os.Args[1]), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(os.Args[1]), 0o755); err != nil {
 			panic(err)
 		}
-		if err := os.WriteFile(os.Args[1], dt, 0644); err != nil {
+		if err := os.WriteFile(os.Args[1], dt, 0o600); err != nil {
 			panic(err)
 		}
 		return

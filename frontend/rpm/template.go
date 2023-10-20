@@ -109,7 +109,7 @@ func (w *specWrapper) Requires() fmt.Stringer {
 	runtimeKeys := dalec.SortMapKeys(deps.Runtime)
 	for _, name := range runtimeKeys {
 		constraints := deps.Build[name]
-		// satisifes is only for build deps, not runtime deps
+		// satisfies is only for build deps, not runtime deps
 		// TODO: consider if it makes sense to support sources satisfying runtime deps
 		writeDep(b, "Requires", name, constraints)
 	}
@@ -149,7 +149,7 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 	for idx, name := range keys {
 		src := w.Spec.Sources[name]
 		ref := name
-		isDir, err := dalec.SourceIsDir(src)
+		isDir, err := dalec.SourceIsDir(&src)
 		if err != nil {
 			return nil, fmt.Errorf("error checking if source %s is a directory: %w", name, err)
 		}
@@ -208,7 +208,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 				return nil
 			}
 
-			isDir, err := dalec.SourceIsDir(src)
+			isDir, err := dalec.SourceIsDir(&src)
 			if err != nil {
 				return err
 			}
@@ -325,7 +325,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 	return b
 }
 
-// WriteSpec generates an rpm spec from the provided [dalec.Spec] and distro target and writes it to the passed in writer
+// WriteSpec generates an rpm spec from the provided [dalec.Spec] and distro target and writes it to the passed in writer.
 func WriteSpec(spec *dalec.Spec, target string, w io.Writer) error {
 	s := &specWrapper{spec, target}
 

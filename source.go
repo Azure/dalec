@@ -30,34 +30,34 @@ type SourceOpts struct {
 	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
 }
 
-// must not be called with a nil cmd pointer
-func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.ExecState, error) {
+// must not be called with a nil cmd pointer.
+func generateSourceFromImage(s *Spec, name string, st *llb.State, cmd *CmdSpec, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.ExecState, error) {
 	var zero llb.ExecState
 	if len(cmd.Steps) == 0 {
 		return zero, fmt.Errorf("no steps defined for image source")
 	}
 	for k, v := range cmd.Env {
-		st = st.AddEnv(k, v)
+		*st = st.AddEnv(k, v)
 	}
 	if cmd.Dir != "" {
-		st = st.Dir(cmd.Dir)
+		*st = st.Dir(cmd.Dir)
 	}
 
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
-	for _, src := range cmd.Sources {
-		srcSt, err := source2LLBGetter(s, src.Spec, name, true)(sOpts, opts...)
+	for i := range cmd.Sources {
+		srcSt, err := source2LLBGetter(s, &cmd.Sources[i].Spec, name, true)(sOpts, opts...)
 		if err != nil {
 			return zero, err
 		}
-		if src.Copy {
-			st = st.File(llb.Copy(srcSt, src.Spec.Path, src.Path, WithCreateDestPath(), WithDirContentsOnly()))
+		if cmd.Sources[i].Copy {
+			*st = st.File(llb.Copy(srcSt, cmd.Sources[i].Spec.Path, cmd.Sources[i].Path, WithCreateDestPath(), WithDirContentsOnly()))
 		} else {
 			var mountOpt []llb.MountOption
-			if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 {
-				mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
+			if cmd.Sources[i].Spec.Path != "" && len(cmd.Sources[i].Spec.Includes) == 0 && len(cmd.Sources[i].Spec.Excludes) == 0 {
+				mountOpt = append(mountOpt, llb.SourcePath(cmd.Sources[i].Spec.Path))
 			}
-			baseRunOpts = append(baseRunOpts, llb.AddMount(src.Path, srcSt, mountOpt...))
+			baseRunOpts = append(baseRunOpts, llb.AddMount(cmd.Sources[i].Path, srcSt, mountOpt...))
 		}
 	}
 
@@ -80,11 +80,11 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 	return cmdSt, nil
 }
 
-func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
+func Source2LLBGetter(s *Spec, src *Source, name string) LLBGetter {
 	return source2LLBGetter(s, src, name, false)
 }
 
-func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter {
+func source2LLBGetter(s *Spec, src *Source, name string, forMount bool) LLBGetter {
 	return func(sOpt SourceOpts, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
 		scheme, ref, err := SplitSourceRef(src.Ref)
 		if err != nil {
@@ -143,7 +143,7 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				return st, nil
 			}
 
-			eSt, err := generateSourceFromImage(s, name, st, src.Cmd, sOpt, opts...)
+			eSt, err := generateSourceFromImage(s, name, &st, src.Cmd, sOpt, opts...)
 			if err != nil {
 				return llb.Scratch(), err
 			}
@@ -175,13 +175,12 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				}
 				gOpts = append(gOpts, withConstraints(opts))
 				return llb.Git(ref.Remote, ref.Commit, gOpts...), nil
-			} else {
-				opts := []llb.HTTPOption{withConstraints(opts)}
-				opts = append(opts, llb.Filename(name))
-				return llb.HTTP(src.Ref, opts...), nil
 			}
+			opts := []llb.HTTPOption{withConstraints(opts)}
+			opts = append(opts, llb.Filename(name))
+			return llb.HTTP(src.Ref, opts...), nil
 		case sourceTypeContext:
-			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
+			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(src))
 			if err != nil {
 				return llb.Scratch(), err
 			}
@@ -204,7 +203,7 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 					KeepGitDir: src.KeepGitDir,
 					Cmd:        src.Cmd,
 				}
-				st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
+				st, err = source2LLBGetter(s, &src2, name, forMount)(sOpt, opts...)
 				if err != nil {
 					return llb.Scratch(), err
 				}
@@ -213,7 +212,7 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			return sOpt.Forward(st, src.Build)
 		case sourceTypeSource:
 			src := s.Sources[ref]
-			return source2LLBGetter(s, src, name, forMount)(sOpt, opts...)
+			return source2LLBGetter(s, &src, name, forMount)(sOpt, opts...)
 		default:
 			return llb.Scratch(), fmt.Errorf("unsupported source type: %s", scheme)
 		}
@@ -247,7 +246,7 @@ func WithCreateDestPath() llb.CopyOption {
 	})
 }
 
-func SourceIsDir(src Source) (bool, error) {
+func SourceIsDir(src *Source) (bool, error) {
 	scheme, _, err := SplitSourceRef(src.Ref)
 	if err != nil {
 		return false, err
@@ -276,7 +275,7 @@ func isGitRef(ref string) bool {
 // Doc returns the details of how the source was created.
 // This should be included, where applicable, in build in build specs (such as RPM spec files)
 // so that others can reproduce the build.
-func (s Source) Doc() (io.Reader, error) {
+func (s *Source) Doc() (io.Reader, error) {
 	b := bytes.NewBuffer(nil)
 	scheme, ref, err := SplitSourceRef(s.Ref)
 	if err != nil {
@@ -383,13 +382,13 @@ func (s Source) Doc() (io.Reader, error) {
 			}
 			if len(s.Cmd.Sources) > 0 {
 				fmt.Fprintln(b, "	With the following items mounted:")
-				for _, src := range s.Cmd.Sources {
-					sub, err := src.Spec.Doc()
+				for i := range s.Cmd.Sources {
+					sub, err := s.Cmd.Sources[i].Spec.Doc()
 					if err != nil {
 						return nil, err
 					}
 
-					fmt.Fprintln(b, "		Destination Path:", src.Path)
+					fmt.Fprintln(b, "		Destination Path:", s.Cmd.Sources[i].Path)
 					scanner := bufio.NewScanner(sub)
 					for scanner.Scan() {
 						fmt.Fprintf(b, "			%s\n", scanner.Text())

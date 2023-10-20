@@ -48,14 +48,14 @@ func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := specToRpmLLB(spec, getDigestFromClientFn(ctx, client), baseImg, sOpt)
+	st, err := specToRpmLLB(spec, getDigestFromClientFn(ctx, client), &baseImg, sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	def, err := st.Marshal(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+		return nil, nil, fmt.Errorf("error marshaling llb: %w", err)
 	}
 
 	res, err := client.Solve(ctx, gwclient.SolveRequest{
@@ -154,7 +154,7 @@ func withRpmsLock(cmd string, exclusive bool) string {
 `, lockFl, cmd, rpmLockFilePath)
 }
 
-func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
+func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg *llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
 	br, err := spec2ToolkitRootLLB(spec, getDigest, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
@@ -193,7 +193,7 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 		}
 	})
 
-	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
+	specsMount := llb.AddMount(specsDir, *br, llb.SourcePath("/SPECS"))
 
 	dlCmd := withRpmsLock("tdnf install --downloadonly -y --releasever=2.0 --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " "), true)
 	buildCmd := withRpmsLock(`
@@ -204,7 +204,7 @@ for i in "${CHROOT_DIR}/"*; do
 		cd "${i}"; find . ! -path "./upstream-cached-rpms/*" ! -path "./upstream-cached-rpms" ! -path "." -delete -print || exit 42
 	fi
 )
-done	
+done
 `, false)
 
 	worker := work.With(func(st llb.State) llb.State {

@@ -44,7 +44,7 @@ func (l *pipeListener) Close() error {
 
 	close(l.ch)
 	l.closers.Range(func(key, value interface{}) bool {
-		c := key.(net.Conn)
+		c := key.(net.Conn) // nolint: forcetypeassert
 		c.Close()
 		return true
 	})
@@ -58,8 +58,7 @@ func (l *pipeListener) Addr() net.Addr {
 	return &pipeAddr{}
 }
 
-type pipeAddr struct {
-}
+type pipeAddr struct{}
 
 func (a pipeAddr) Network() string {
 	return "pipe"
@@ -69,7 +68,7 @@ func (a pipeAddr) String() string {
 	return ""
 }
 
-func (l *pipeListener) Dial(ctx context.Context) (net.Conn, error) {
+func (l *pipeListener) Dial(_ context.Context) (net.Conn, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.closed {

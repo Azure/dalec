@@ -14,12 +14,12 @@ import (
 func HandleResolve(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	dt, err := yaml.Marshal(spec)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling spec: %w", err)
+		return nil, nil, fmt.Errorf("error marshaling spec: %w", err)
 	}
-	st := llb.Scratch().File(llb.Mkfile("spec.yaml", 0640, dt), llb.WithCustomName("Generate resolved spec file - spec.yaml"))
+	st := llb.Scratch().File(llb.Mkfile("spec.yaml", 0o640, dt), llb.WithCustomName("Generate resolved spec file - spec.yaml"))
 	def, err := st.Marshal(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+		return nil, nil, fmt.Errorf("error marshaling llb: %w", err)
 	}
 	res, err := client.Solve(ctx, gwclient.SolveRequest{
 		Definition: def.ToPB(),

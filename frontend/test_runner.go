@@ -57,12 +57,12 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 
 		pg := llb.ProgressGroup(identity.NewID(), "Test: "+path.Join(target, test.Name), false)
 
-		for _, sm := range test.Sources {
-			st, err := dalec.Source2LLBGetter(spec, sm.Spec, sm.Path)(sOpt, pg)
+		for i := range test.Sources {
+			st, err := dalec.Source2LLBGetter(spec, &test.Sources[i].Spec, test.Sources[i].Path)(sOpt, pg)
 			if err != nil {
 				return err
 			}
-			opts = append(opts, llb.AddMount(sm.Path, st, llb.SourcePath(sm.Path)))
+			opts = append(opts, llb.AddMount(test.Sources[i].Path, st, llb.SourcePath(test.Sources[i].Path)))
 		}
 
 		opts = append(opts, pg)
@@ -70,28 +70,28 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 			var worker llb.State
 			var needsStdioMount bool
 			ios := map[int]llb.State{}
-			for i, step := range test.Steps {
+			for i := range test.Steps {
 				var stepOpts []llb.RunOption
 				id := identity.NewID()
 				ioSt := llb.Scratch()
-				if step.Stdin != "" {
+				if test.Steps[i].Stdin != "" {
 					needsStdioMount = true
 					stepOpts = append(stepOpts, llb.AddEnv("STDIN_FILE", filepath.Join("/tmp", id, "stdin")))
-					ioSt = ioSt.File(llb.Mkfile("stdin", 0444, []byte(step.Stdin)))
+					ioSt = ioSt.File(llb.Mkfile("stdin", 0o444, []byte(test.Steps[i].Stdin)))
 				}
-				if !step.Stdout.IsEmpty() {
+				if !test.Steps[i].Stdout.IsEmpty() {
 					needsStdioMount = true
 					stepOpts = append(stepOpts, llb.AddEnv("STDOUT_FILE", path.Join("/tmp", id, "stdout")))
-					ioSt = ioSt.File(llb.Mkfile("stdout", 0664, nil))
+					ioSt = ioSt.File(llb.Mkfile("stdout", 0o664, nil))
 				}
 
-				if !step.Stderr.IsEmpty() {
+				if !test.Steps[i].Stderr.IsEmpty() {
 					needsStdioMount = true
 					stepOpts = append(stepOpts, llb.AddEnv("STDERR_FILE", path.Join("/tmp", id, "stderr")))
-					ioSt = ioSt.File(llb.Mkfile("stderr", 0664, nil))
+					ioSt = ioSt.File(llb.Mkfile("stderr", 0o664, nil))
 				}
 
-				cmd, err := shlex.Split(step.Command)
+				cmd, err := shlex.Split(test.Steps[i].Command)
 				if err != nil {
 					return err
 				}
@@ -105,9 +105,8 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 					cmd = append([]string{p}, cmd...)
 				}
 
-				stepOpts = append(stepOpts, llb.Args(cmd))
-				stepOpts = append(stepOpts, llb.With(func(s llb.State) llb.State {
-					for k, v := range step.Env {
+				stepOpts = append(stepOpts, llb.Args(cmd), llb.With(func(s llb.State) llb.State {
+					for k, v := range test.Steps[i].Env {
 						s = s.AddEnv(k, v)
 					}
 
@@ -140,7 +139,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		pair := pair
 		wg.Add(1)
 		go func() {
-			if err := runTest(ctx, pair.t, pair.st, pair.stdios, client); err != nil {
+			if err := runTest(ctx, pair.t, &pair.st, pair.stdios, client); err != nil {
 				errs.Append(errors.Wrap(err, "FAILED: "+path.Join(target, pair.t.Name)))
 			}
 			wg.Done()
@@ -156,7 +155,7 @@ type frontendClient interface {
 	CurrentFrontend() (*llb.State, error)
 }
 
-func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]llb.State, client gwclient.Client) error {
+func runTest(ctx context.Context, t *dalec.TestSpec, st *llb.State, ios map[int]llb.State, client gwclient.Client) error {
 	def, err := st.Marshal(ctx)
 	if err != nil {
 		return err

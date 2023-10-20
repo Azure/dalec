@@ -27,7 +27,7 @@ func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error)
 	return spec, nil
 }
 
-func makeRequestHandler(spec *dalec.Spec, client gwclient.Client) dockerui.RequestHandler {
+func makeRequestHandler(_ *dalec.Spec, client gwclient.Client) dockerui.RequestHandler {
 	h := dockerui.RequestHandler{AllowOther: true}
 
 	h.ListTargets = func(ctx context.Context) (*targets.List, error) {

@@ -47,7 +47,7 @@ type Spec struct {
 	// The source configuration is used to fetch the source and filter the files to include/exclude.
 	// This can be mounted into the build using the "Mounts" field in the StepGroup.
 	//
-	// Sources can be embedded in the main spec as here or overriden in a build request.
+	// Sources can be embedded in the main spec as here or overridden in a build request.
 	Sources map[string]Source `yaml:"sources,omitempty" json:"sources,omitempty"`
 
 	// Patches is the list of patches to apply to the sources.
@@ -346,7 +346,7 @@ type Target struct {
 	Image *ImageConfig `yaml:"image,omitempty" json:"image,omitempty"`
 
 	// Frontend is the frontend configuration to use for the target.
-	// This is used to forward the build to a different, dalec-compatabile frontend.
+	// This is used to forward the build to a different, dalec-compatible frontend.
 	// This can be useful when testing out new distros or using a different version of the frontend for a given distro.
 	Frontend *Frontend `yaml:"frontend,omitempty" json:"frontend,omitempty"`
 
@@ -367,7 +367,7 @@ type TestSpec struct {
 	Files map[string]FileCheckOutput `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
-// TestStep is a wrapper for [BuildStep] to include checks on stdio streams
+// TestStep is a wrapper for [BuildStep] to include checks on stdio streams.
 type TestStep struct {
 	BuildStep `yaml:",inline"`
 	// Stdout is the expected output on stdout
@@ -396,12 +396,12 @@ type CheckOutput struct {
 }
 
 // IsEmpty is used to determine if there are any checks to perform.
-func (c CheckOutput) IsEmpty() bool {
+func (c *CheckOutput) IsEmpty() bool {
 	return c.Equals == "" && len(c.Contains) == 0 && c.Matches == "" && c.StartsWith == "" && c.EndsWith == "" && !c.Empty
 }
 
 // Check is used to check the output stream.
-func (c CheckOutput) Check(dt string, p string) (retErr error) {
+func (c *CheckOutput) Check(dt string, p string) (retErr error) {
 	if c.Empty {
 		if dt != "" {
 			return &CheckOutputError{Kind: "empty", Expected: "", Actual: dt, Path: p}
@@ -426,7 +426,7 @@ func (c CheckOutput) Check(dt string, p string) (retErr error) {
 			return err
 		}
 
-		if !regexp.Match([]byte(dt)) {
+		if !regexp.MatchString(dt) {
 			return &CheckOutputError{Kind: "matches", Expected: c.Matches, Actual: dt, Path: p}
 		}
 	}
@@ -454,7 +454,7 @@ type FileCheckOutput struct {
 }
 
 // Check is used to check the output file.
-func (c FileCheckOutput) Check(dt string, mode fs.FileMode, isDir bool, p string) error {
+func (c *FileCheckOutput) Check(dt string, mode fs.FileMode, isDir bool, p string) error {
 	if c.IsDir && !isDir {
 		return &CheckOutputError{Kind: "mode", Expected: "ModeDir", Actual: "ModeFile", Path: p}
 	}

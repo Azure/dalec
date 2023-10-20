@@ -25,7 +25,7 @@ const (
 )
 
 // ForwarderFromClient creates a [dalec.ForwarderFunc] from a gateway client.
-// This is used for forwarding builds to other frontends in [dalec.Source2LLBGetter]
+// This is used for forwarding builds to other frontends in [dalec.Source2LLBGetter].
 func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.ForwarderFunc {
 	return func(st llb.State, spec *dalec.BuildSpec) (llb.State, error) {
 		if spec == nil {
@@ -73,7 +73,7 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.Forw
 		}
 
 		dockerfile := llb.Scratch().File(
-			llb.Mkfile("Dockerfile", 0600, dockerfileDt),
+			llb.Mkfile("Dockerfile", 0o600, dockerfileDt),
 		)
 		dockerfileDef, err := dockerfile.Marshal(ctx)
 		if err != nil {
@@ -126,7 +126,7 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 	return "", false
 }
 
-func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
+func makeTargetForwarder(specT dalec.Target, bkt *bktargets.Target) BuildFunc {
 	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (_ gwclient.Reference, _ *image.Image, retErr error) {
 		defer func() {
 			if retErr != nil {
@@ -136,9 +136,9 @@ func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
 
 		dt, err := yaml.Marshal(spec)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "error marshalling spec to yaml")
+			return nil, nil, errors.Wrap(err, "error marshaling spec to yaml")
 		}
-		def, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0600, dt)).Marshal(ctx)
+		def, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0o600, dt)).Marshal(ctx)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error marshaling dockerfile to LLB")
 		}

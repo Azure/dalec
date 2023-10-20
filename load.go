@@ -71,11 +71,10 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 			return nil, fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
 		}
 		spec.Build.Env[k] = updated
-
 	}
 
-	for i, step := range spec.Build.Steps {
-		s := &step
+	for i := range spec.Build.Steps {
+		s := &spec.Build.Steps[i]
 		if err := s.processBuildArgs(lex, args, i); err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on build step %d: %w", i, err)
 		}
@@ -114,8 +113,8 @@ func (c *CmdSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 	if c == nil {
 		return nil
 	}
-	for i, smnt := range c.Sources {
-		updated, err := lex.ProcessWordWithMap(smnt.Spec.Ref, args)
+	for i := range c.Sources {
+		updated, err := lex.ProcessWordWithMap(c.Sources[i].Spec.Ref, args)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
@@ -142,7 +141,7 @@ func (c *CmdSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 	return nil
 }
 
-func (s Spec) Validate() error {
+func (s *Spec) Validate() error {
 	for name, src := range s.Sources {
 		if src.Cmd != nil {
 			for p, cfg := range src.Cmd.CacheDirs {
@@ -204,20 +203,18 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 		return err
 	}
 
-	for i, step := range c.Steps {
-		stdout := step.Stdout
+	for i := range c.Steps {
+		stdout := c.Steps[i].Stdout
 		if err := stdout.processBuildArgs(lex, args); err != nil {
 			return err
 		}
-		step.Stdout = stdout
+		c.Steps[i].Stdout = stdout
 
-		stderr := step.Stderr
+		stderr := c.Steps[i].Stderr
 		if err := stderr.processBuildArgs(lex, args); err != nil {
 			return err
 		}
-		step.Stderr = stderr
-
-		c.Steps[i] = step
+		c.Steps[i].Stderr = stderr
 	}
 
 	for name, f := range c.Files {

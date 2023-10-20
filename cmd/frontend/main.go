@@ -4,15 +4,14 @@ import (
 	_ "embed"
 	"os"
 
+	"github.com/Azure/dalec/frontend"
+	_ "github.com/Azure/dalec/frontend/register" // register all known targets
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/bklog"
+	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/grpclog"
-
-	"github.com/Azure/dalec/frontend"
-	_ "github.com/Azure/dalec/frontend/register" // register all known targets
-	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
 )
 
 const (

@@ -557,7 +557,7 @@
 						"$ref": "#/$defs/Source"
 					},
 					"type": "object",
-					"description": "Sources is the list of sources to use to build the artifact(s).\nThe map key is the name of the source and the value is the source configuration.\nThe source configuration is used to fetch the source and filter the files to include/exclude.\nThis can be mounted into the build using the \"Mounts\" field in the StepGroup.\n\nSources can be embedded in the main spec as here or overriden in a build request."
+					"description": "Sources is the list of sources to use to build the artifact(s).\nThe map key is the name of the source and the value is the source configuration.\nThe source configuration is used to fetch the source and filter the files to include/exclude.\nThis can be mounted into the build using the \"Mounts\" field in the StepGroup.\n\nSources can be embedded in the main spec as here or overridden in a build request."
 				},
 				"patches": {
 					"additionalProperties": {
@@ -652,7 +652,7 @@
 				},
 				"frontend": {
 					"$ref": "#/$defs/Frontend",
-					"description": "Frontend is the frontend configuration to use for the target.\nThis is used to forward the build to a different, dalec-compatabile frontend.\nThis can be useful when testing out new distros or using a different version of the frontend for a given distro."
+					"description": "Frontend is the frontend configuration to use for the target.\nThis is used to forward the build to a different, dalec-compatible frontend.\nThis can be useful when testing out new distros or using a different version of the frontend for a given distro."
 				},
 				"tests": {
 					"items": {
@@ -751,7 +751,7 @@
 			"required": [
 				"command"
 			],
-			"description": "TestStep is a wrapper for [BuildStep] to include checks on stdio streams"
+			"description": "TestStep is a wrapper for [BuildStep] to include checks on stdio streams."
 		}
 	}
 }
