@@ -227,18 +227,18 @@ name: My Package
 tests:
     -
         name: My Test case
-        sources:
+        mounts:
             -
-                path: /target/mount/path
+                dest: /target/mount/path
                 spec:
-                ref: build://
-                build:
-                    inline: |
-                        FROM busybox
-                        RUN echo hello > /hello
+                    ref: build://
+                    build:
+                        inline: |
+                            FROM busybox
+                            RUN echo hello > /hello
 
-                        FROM scratch
-                        COPY --from=busybox /hello /hello
+                            FROM scratch
+                            COPY --from=busybox /hello /hello
         steps:
             -
                 command: cat /path/in/container

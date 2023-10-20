@@ -17,8 +17,8 @@ sources:
     path: /build/gomodcache
     cmd:
       dir: /build/src
-      sources:
-        - path: /build/src
+      mounts:
+        - dest: /build/src
           spec:
             ref: source://src
       steps:

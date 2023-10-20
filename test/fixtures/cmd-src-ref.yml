@@ -17,8 +17,8 @@ sources:
     ref: docker-image://busybox:latest
     path: /bar
     cmd:
-      sources:
-        - path: "/foo"
+      mounts:
+        - dest: "/foo"
           spec:
             ref: context://
       steps:

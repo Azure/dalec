@@ -217,12 +217,12 @@
 					"type": "string",
 					"description": "Dir is the working directory to run the command in."
 				},
-				"sources": {
+				"mounts": {
 					"items": {
 						"$ref": "#/$defs/SourceMount"
 					},
 					"type": "array",
-					"description": "Sources is the list of sources to mount into the build steps."
+					"description": "Mounts is the list of sources to mount into the build steps."
 				},
 				"cache_dirs": {
 					"additionalProperties": {
@@ -471,13 +471,9 @@
 		},
 		"SourceMount": {
 			"properties": {
-				"path": {
+				"dest": {
 					"type": "string",
-					"description": "Path is the destination directory to mount to"
-				},
-				"copy": {
-					"type": "boolean",
-					"description": "Copy is used to copy the source into the destination directory rather than mount it"
+					"description": "Dest is the destination directory to mount to"
 				},
 				"spec": {
 					"$ref": "#/$defs/Source",
@@ -487,7 +483,7 @@
 			"additionalProperties": false,
 			"type": "object",
 			"required": [
-				"path",
+				"dest",
 				"spec"
 			],
 			"description": "SourceMount is used to take a [Source] and mount it into a build step."
@@ -676,12 +672,12 @@
 					"type": "string",
 					"description": "Dir is the working directory to run the command in."
 				},
-				"sources": {
+				"mounts": {
 					"items": {
 						"$ref": "#/$defs/SourceMount"
 					},
 					"type": "array",
-					"description": "Sources is the list of sources to mount into the build steps."
+					"description": "Mounts is the list of sources to mount into the build steps."
 				},
 				"cache_dirs": {
 					"additionalProperties": {

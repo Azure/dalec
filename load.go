@@ -114,12 +114,12 @@ func (c *CmdSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 	if c == nil {
 		return nil
 	}
-	for i, smnt := range c.Sources {
+	for i, smnt := range c.Mounts {
 		updated, err := lex.ProcessWordWithMap(smnt.Spec.Ref, args)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
-		c.Sources[i].Spec.Ref = updated
+		c.Mounts[i].Spec.Ref = updated
 	}
 	for k, v := range c.Env {
 		updated, err := lex.ProcessWordWithMap(v, args)

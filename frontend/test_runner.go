@@ -57,12 +57,12 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 
 		pg := llb.ProgressGroup(identity.NewID(), "Test: "+path.Join(target, test.Name), false)
 
-		for _, sm := range test.Sources {
-			st, err := dalec.Source2LLBGetter(spec, sm.Spec, sm.Path)(sOpt, pg)
+		for _, sm := range test.Mounts {
+			st, err := dalec.Source2LLBGetter(spec, sm.Spec, sm.Dest)(sOpt, pg)
 			if err != nil {
 				return err
 			}
-			opts = append(opts, llb.AddMount(sm.Path, st, llb.SourcePath(sm.Path)))
+			opts = append(opts, llb.AddMount(sm.Dest, st, llb.SourcePath(sm.Dest)))
 		}
 
 		opts = append(opts, pg)

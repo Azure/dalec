@@ -206,9 +206,9 @@ sources:
     path: /build/gomodcache # This is the path we will be extracing after running the command below.
     cmd:
       dir: /build/src
-      sources:
+      mounts:
         # Mount the "src" source, specified above, so our command has access to it.
-        - path: /build/src
+        - dest: /build/src
           spec:
             ref: source://src
       steps:

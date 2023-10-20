@@ -45,20 +45,16 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
-	for _, src := range cmd.Sources {
+	for _, src := range cmd.Mounts {
 		srcSt, err := source2LLBGetter(s, src.Spec, name, true)(sOpts, opts...)
 		if err != nil {
 			return zero, err
 		}
-		if src.Copy {
-			st = st.File(llb.Copy(srcSt, src.Spec.Path, src.Path, WithCreateDestPath(), WithDirContentsOnly()))
-		} else {
-			var mountOpt []llb.MountOption
-			if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 {
-				mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
-			}
-			baseRunOpts = append(baseRunOpts, llb.AddMount(src.Path, srcSt, mountOpt...))
+		var mountOpt []llb.MountOption
+		if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 {
+			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
 		}
+		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
 	}
 
 	var cmdSt llb.ExecState
@@ -381,15 +377,15 @@ func (s Source) Doc() (io.Reader, error) {
 					}
 				}
 			}
-			if len(s.Cmd.Sources) > 0 {
+			if len(s.Cmd.Mounts) > 0 {
 				fmt.Fprintln(b, "	With the following items mounted:")
-				for _, src := range s.Cmd.Sources {
+				for _, src := range s.Cmd.Mounts {
 					sub, err := src.Spec.Doc()
 					if err != nil {
 						return nil, err
 					}
 
-					fmt.Fprintln(b, "		Destination Path:", src.Path)
+					fmt.Fprintln(b, "		Destination Path:", src.Dest)
 					scanner := bufio.NewScanner(sub)
 					for scanner.Scan() {
 						fmt.Fprintf(b, "			%s\n", scanner.Text())

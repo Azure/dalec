@@ -272,10 +272,8 @@ type BuildStep struct {
 
 // SourceMount is used to take a [Source] and mount it into a build step.
 type SourceMount struct {
-	// Path is the destination directory to mount to
-	Path string `yaml:"path" json:"path" jsonschema:"required"`
-	// Copy is used to copy the source into the destination directory rather than mount it
-	Copy bool `yaml:"copy,omitempty" json:"copy,omitempty"`
+	// Dest is the destination directory to mount to
+	Dest string `yaml:"dest" json:"dest" jsonschema:"required"`
 	// Spec specifies the source to mount
 	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
 }
@@ -285,8 +283,8 @@ type CmdSpec struct {
 	// Dir is the working directory to run the command in.
 	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
 
-	// Sources is the list of sources to mount into the build steps.
-	Sources []SourceMount `yaml:"sources,omitempty" json:"sources,omitempty"`
+	// Mounts is the list of sources to mount into the build steps.
+	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
 
 	// List of CacheDirs which will be used across all Steps
 	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
