@@ -75,6 +75,10 @@ jobs:
 
           docker run -d --net=host registry
           docker buildx create --use --driver-opt network=host
+      - name: Check frontend platforms
+        run:  |
+          # Make sure the frontend image builds on all platforms
+          docker buildx bake --set frontend.tags="" --set frontend.platform=linux/amd64,linux/arm64 frontend
       - name: build frontend tooling
         run: |
           set -e

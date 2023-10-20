@@ -5,7 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -43,19 +44,19 @@ func main() {
 	}
 
 	if stdin != 0 {
-		if err := syscall.Dup2(stdin, 0); err != nil {
+		if err := unix.Dup2(stdin, 0); err != nil {
 			panic(err)
 		}
 	}
 
 	if stdout != 0 {
-		if err := syscall.Dup2(stdout, 1); err != nil {
+		if err := unix.Dup2(stdout, 1); err != nil {
 			panic(err)
 		}
 	}
 
 	if stderr != 0 {
-		if err := syscall.Dup2(stderr, 2); err != nil {
+		if err := unix.Dup2(stderr, 2); err != nil {
 			panic(err)
 		}
 	}
@@ -65,7 +66,7 @@ func main() {
 		panic(err)
 	}
 
-	if err := syscall.Exec(cmd, args, os.Environ()); err != nil {
+	if err := unix.Exec(cmd, args, os.Environ()); err != nil {
 		panic(fmt.Errorf("%q: %w", strings.Join(args, " "), err))
 	}
 }
