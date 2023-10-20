@@ -274,8 +274,6 @@ type BuildStep struct {
 type SourceMount struct {
 	// Dest is the destination directory to mount to
 	Dest string `yaml:"dest" json:"dest" jsonschema:"required"`
-	// Copy is used to copy the source into the destination directory rather than mount it
-	Copy bool `yaml:"copy,omitempty" json:"copy,omitempty"`
 	// Spec specifies the source to mount
 	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
 }

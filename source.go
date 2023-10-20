@@ -50,15 +50,11 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 		if err != nil {
 			return zero, err
 		}
-		if src.Copy {
-			st = st.File(llb.Copy(srcSt, src.Spec.Path, src.Dest, WithCreateDestPath(), WithDirContentsOnly()))
-		} else {
-			var mountOpt []llb.MountOption
-			if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 {
-				mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
-			}
-			baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
+		var mountOpt []llb.MountOption
+		if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 {
+			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
 		}
+		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
 	}
 
 	var cmdSt llb.ExecState

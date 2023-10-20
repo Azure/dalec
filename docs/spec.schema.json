@@ -473,11 +473,7 @@
 			"properties": {
 				"dest": {
 					"type": "string",
-					"description": "Path is the destination directory to mount to"
-				},
-				"copy": {
-					"type": "boolean",
-					"description": "Copy is used to copy the source into the destination directory rather than mount it"
+					"description": "Dest is the destination directory to mount to"
 				},
 				"spec": {
 					"$ref": "#/$defs/Source",
