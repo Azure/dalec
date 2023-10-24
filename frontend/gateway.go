@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
@@ -185,6 +187,7 @@ func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOp
 	if err != nil {
 		return dalec.SourceOpts{}, err
 	}
+
 	return dalec.SourceOpts{
 		Resolver: c,
 		Forward:  ForwarderFromClient(ctx, c),
@@ -201,4 +204,33 @@ func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOp
 			return st, nil
 		},
 	}, nil
+}
+
+var (
+	supportsDiffMergeOnce sync.Once
+	supportsDiffMerge     atomic.Bool
+)
+
+// SupportsDiffMerge checks if the given client supports the diff and merge operations.
+func SupportsDiffMerge(client gwclient.Client) bool {
+	supportsDiffMergeOnce.Do(func() {
+		if client.BuildOpts().Opts["build-arg:DALEC_DISABLE_DIFF_MERGE"] == "1" {
+			supportsDiffMerge.Store(false)
+			return
+		}
+		supportsDiffMerge.Store(checkDiffMerge(client))
+	})
+	return supportsDiffMerge.Load()
+}
+
+func checkDiffMerge(client gwclient.Client) bool {
+	caps := client.BuildOpts().LLBCaps
+	if caps.Supports(pb.CapMergeOp) != nil {
+		return false
+	}
+
+	if caps.Supports(pb.CapDiffOp) != nil {
+		return false
+	}
+	return true
 }

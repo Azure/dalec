@@ -4,9 +4,24 @@ import (
 	"encoding/json"
 	"path"
 	"sort"
+	"sync/atomic"
 
 	"github.com/moby/buildkit/client/llb"
 )
+
+var disableDiffMerge atomic.Bool
+
+// DisableDiffMerge allows disabling the use of [llb.Diff] and [llb.Merge] in favor of [llb.Copy].
+// This is needed when the buildkit version does not support [llb.Diff] and [llb.Merge].
+//
+// Mainly this would be to allow dockerd with the (current)
+// standard setup of dockerd which uses "graphdrivers" to work as these ops are not
+// supported by the graphdriver backend.
+// When this is false and the graphdriver backend is used, the build will fail when buildkit
+// checks the capabilities of the backend.
+func DisableDiffMerge(v bool) {
+	disableDiffMerge.Store(v)
+}
 
 type copyOptionFunc func(*llb.CopyInfo)
 
@@ -86,6 +101,15 @@ func SortMapKeys[T any](m map[string]T) []string {
 
 // MergeAtPath merges the given states into the given destination path in the given input state.
 func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
+	if disableDiffMerge.Load() {
+		output := input
+		for _, st := range states {
+			output = output.
+				File(llb.Copy(st, "/", dest, WithCreateDestPath()))
+		}
+		return output
+	}
+
 	diffs := make([]llb.State, 0, len(states)+1)
 	diffs = append(diffs, input)
 
