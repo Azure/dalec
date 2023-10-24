@@ -57,13 +57,27 @@ jobs:
           fi
 
 
-  test:
+  integration:
+    runs-on: ubuntu-22.04
+    # TODO: support diff/merge
+    # Right now this is handled by the e2e suite, but we can migrate that here.
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: false
+      - name: Run integaration tests
+        run: go test -v ./test
+
+  e2e:
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         disable_diff_merge: ["1", "0"]
-    name: "Test (disable diff/merge: ${{ matrix.disable_diff_merge }})"
+    name: "Test E2E (disable diff/merge: ${{ matrix.disable_diff_merge }})"
     env:
       DALEC_DISABLE_DIFF_MERGE: ${{ matrix.disable_diff_merge }}
       FRONTEND_REF: localhost:5000/dalec/frontend

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/exporter/containerimage/image"
@@ -27,21 +26,32 @@ func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error)
 	return spec, nil
 }
 
-func makeRequestHandler(spec *dalec.Spec, client gwclient.Client) dockerui.RequestHandler {
+func listBuildTargets(group string) []*targetWrapper {
+	if group != "" {
+		return registeredHandlers.GetGroup(group)
+	}
+	return registeredHandlers.All()
+}
+
+func lookupHandler(target string) (BuildFunc, error) {
+	if target == "" {
+		return registeredHandlers.Default().Build, nil
+	}
+
+	t := registeredHandlers.Get(target)
+	if t == nil {
+		return nil, fmt.Errorf("unknown target %q", target)
+	}
+	return t.Build, nil
+}
+
+func makeRequestHandler(target string) dockerui.RequestHandler {
 	h := dockerui.RequestHandler{AllowOther: true}
 
 	h.ListTargets = func(ctx context.Context) (*targets.List, error) {
 		var ls targets.List
-
-		group := client.BuildOpts().Opts[dalecTargetOptKey]
-		if group != "" {
-			for _, t := range registeredTargets.GetGroup(group) {
-				ls.Targets = append(ls.Targets, t.Target)
-			}
-		} else {
-			for _, t := range registeredTargets.All() {
-				ls.Targets = append(ls.Targets, t.Target)
-			}
+		for _, tw := range listBuildTargets(target) {
+			ls.Targets = append(ls.Targets, tw.Target)
 		}
 		return &ls, nil
 	}
@@ -65,18 +75,18 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, err
 	}
 
-	if err := registerSpecTargets(ctx, spec, client); err != nil {
+	if err := registerSpecHandlers(ctx, spec, client); err != nil {
 		return nil, err
 	}
 
-	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(spec, client))
+	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(bc.Target))
 	if err != nil || handled {
 		return res, err
 	}
 
-	// Handle additional subrequests supported by dalec
-	requestID := client.BuildOpts().Opts[requestIDKey]
 	if !handled {
+		// Handle additional subrequests supported by dalec
+		requestID := client.BuildOpts().Opts[requestIDKey]
 		switch requestID {
 		case dalecSubrequstForwardBuild:
 		case "":
@@ -85,22 +95,13 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 	}
 
-	t := registeredTargets.Get(bc.Target)
-	if t == nil {
-		if bc.Target == "" {
-			t = registeredTargets.Default()
-		}
-		if t == nil {
-			var have []string
-			for _, t := range registeredTargets.All() {
-				have = append(have, t.Name)
-			}
-			return nil, fmt.Errorf("unknown target %q: available targets: %s", bc.Target, strings.Join(have, ", "))
-		}
+	f, err := lookupHandler(bc.Target)
+	if err != nil {
+		return nil, err
 	}
 
 	rb, err := bc.Build(ctx, func(ctx context.Context, platform *oicspecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
-		return t.Build(ctx, client, spec)
+		return f(ctx, client, spec)
 	})
 	if err != nil {
 		return nil, err

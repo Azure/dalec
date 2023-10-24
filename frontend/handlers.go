@@ -15,6 +15,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/util/bklog"
 	"github.com/pkg/errors"
 )
 
@@ -27,16 +28,15 @@ type targetWrapper struct {
 	Build BuildFunc
 }
 
-type targetList struct {
-	mu            sync.Mutex
-	ls            map[string]*targetWrapper
-	groupIdx      map[string][]*targetWrapper
-	defaultTarget *targetWrapper
-	lastTarget    *targetWrapper
-	builtins      map[string]*targetWrapper
+type handlerList struct {
+	mu             sync.Mutex
+	ls             map[string]*targetWrapper
+	groupIdx       map[string][]*targetWrapper
+	defaultHandler *targetWrapper
+	lastHandler    *targetWrapper
 }
 
-func (s *targetList) Add(group string, value *targetWrapper) {
+func (s *handlerList) Add(group string, value *targetWrapper) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -44,63 +44,28 @@ func (s *targetList) Add(group string, value *targetWrapper) {
 		value.Name = path.Join(group, value.Name)
 	}
 
-	if _, ok := s.builtins[value.Name]; ok {
-		panic("builtin target already exists: " + value.Name)
-	}
-
 	s.ls[value.Name] = value
 	s.groupIdx[group] = append(s.groupIdx[group], value)
 	if value.Default {
-		if _, ok := s.ls[group]; !ok {
-			v := *value
-			v.Default = false
-			v.Name = group
-			v.Description = "Alias for target " + value.Name
-			s.ls[group] = &v
-			s.groupIdx[group] = append(s.groupIdx[group], &v)
-		}
-		if s.defaultTarget == nil {
-			s.defaultTarget = value
+		if s.defaultHandler == nil {
+			s.defaultHandler = value
 		}
 	}
-	s.lastTarget = value
+	s.lastHandler = value
 }
 
-func (s *targetList) AddBuiltin(group string, value *targetWrapper) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if value.Default {
-		panic("builtin targets cannot be default")
-	}
-
-	name := path.Join(group, value.Name)
-	if _, ok := s.builtins[name]; ok {
-		panic("builtin target already exists: " + name)
-	}
-
-	if _, ok := s.ls[name]; ok {
-		panic("registered target with same name already exists: " + name)
-	}
-	value.Name = name
-	s.builtins[name] = value
-}
-
-func (s *targetList) Get(name string) *targetWrapper {
+func (s *handlerList) Get(name string) *targetWrapper {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.ls[name]
 }
 
-func (s *targetList) All() []*targetWrapper {
+func (s *handlerList) All() []*targetWrapper {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	ls := make([]*targetWrapper, 0, len(s.ls))
 	for _, t := range s.ls {
-		ls = append(ls, t)
-	}
-	for _, t := range s.builtins {
 		ls = append(ls, t)
 	}
 
@@ -111,77 +76,59 @@ func (s *targetList) All() []*targetWrapper {
 	return ls
 }
 
-func (s *targetList) GetGroup(group string) []*targetWrapper {
+func (s *handlerList) GetGroup(group string) []*targetWrapper {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	return s.groupIdx[group]
 }
 
-func (s *targetList) Builtin() []*targetWrapper {
+func (s *handlerList) Default() *targetWrapper {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	ls := make([]*targetWrapper, 0, len(s.builtins))
-	for _, t := range s.builtins {
-		ls = append(ls, t)
+	if s.defaultHandler != nil {
+		return s.defaultHandler
 	}
-	return ls
+	return s.lastHandler
 }
 
-func (s *targetList) Default() *targetWrapper {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.defaultTarget != nil {
-		return s.defaultTarget
-	}
-	return s.lastTarget
-}
-
-var registeredTargets = &targetList{
+var registeredHandlers = &handlerList{
 	ls:       make(map[string]*targetWrapper),
 	groupIdx: make(map[string][]*targetWrapper),
-	builtins: make(map[string]*targetWrapper),
 }
 
-// RegisterTarget registers a target.
-// The default target is determined by the order in which targets are registered.
-// The first target which has Default=true is the default target.
+// RegisterHandler registers a target.
+// The default target is determined by the order in which handlers are registered.
+// The first handler which has Default=true is the default handler.
 // This can be changed by calling [SetDefault].
 //
-// Registered targets may be overridden by targets from a [dalec.Spec].
-func RegisterTarget(group string, t bktargets.Target, build BuildFunc) {
-	registeredTargets.Add(group, &targetWrapper{Target: t, Build: build})
+// Registered handlers may be overridden by [dalec.Spec.Targets].
+func RegisterHandler(group string, t bktargets.Target, build BuildFunc) {
+	registeredHandlers.Add(group, &targetWrapper{Target: t, Build: build})
 }
 
-// RegisterBuiltin registers a builtin target.
-// This is similar to [RegisterTarget], but the target is not overridable by a [dalec.Spec].
-func RegisterBuiltin(group string, t bktargets.Target, build BuildFunc) {
-	registeredTargets.AddBuiltin(group, &targetWrapper{Target: t, Build: build})
-}
-
-// SetDefault sets the default target for when no target is specified.
+// SetDefault sets the default handler for when no handler is specified.
 func SetDefault(group, name string) {
-	registeredTargets.mu.Lock()
-	defer registeredTargets.mu.Unlock()
+	registeredHandlers.mu.Lock()
+	defer registeredHandlers.mu.Unlock()
 
-	t := registeredTargets.ls[group+"/"+name]
+	t := registeredHandlers.ls[group+"/"+name]
 	if t == nil {
 		panic("target not found: " + group + "/" + name)
 	}
 	t.Default = true
 
-	registeredTargets.ls[group] = &targetWrapper{
+	registeredHandlers.ls[group] = &targetWrapper{
 		Target: bktargets.Target{
 			Name:        group,
 			Description: "Alias for target " + t.Name,
 		},
 	}
-	registeredTargets.defaultTarget = t
+	registeredHandlers.defaultHandler = t
 }
 
-func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.Client) error {
+func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient.Client) error {
 	var def *pb.Definition
 	marshlSpec := func() (*pb.Definition, error) {
 		if def != nil {
@@ -214,8 +161,11 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 	}
 
 	register := func(group string) error {
-		t, ok := spec.Targets[group]
+		spec := spec
+		grp, _, _ := strings.Cut(group, "/")
+		t, ok := spec.Targets[grp]
 		if !ok {
+			bklog.G(ctx).WithField("group", group).Debug("No target found in forwarded build")
 			return nil
 		}
 
@@ -228,19 +178,28 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 			return err
 		}
 
-		res, err := client.Solve(ctx, gwclient.SolveRequest{
+		req := gwclient.SolveRequest{
 			Frontend: "gateway.v0",
 			FrontendInputs: map[string]*pb.Definition{
 				"dockerfile": def,
 			},
 			FrontendOpt: map[string]string{
-				requestIDKey:      bktargets.SubrequestsTargetsDefinition.Name,
 				"source":          t.Frontend.Image,
 				"cmdline":         t.Frontend.CmdLine,
-				"frontend.caps":   "moby.buildkit.frontend.subrequests",
 				dalecTargetOptKey: group,
+				requestIDKey:      bktargets.SubrequestsTargetsDefinition.Name,
 			},
-		})
+		}
+
+		if err := copyForForward(ctx, client, &req); err != nil {
+			return err
+		}
+
+		caps := req.FrontendOpt["frontend.caps"]
+		req.FrontendOpt["frontend.caps"] = strings.Join(append(strings.Split(caps, ","), "moby.buildkit.frontend.subrequests"), ",")
+
+		bklog.G(ctx).WithField("group", group).WithField("target", t.Frontend.Image).Debug("Requesting target list")
+		res, err := client.Solve(ctx, req)
 		if err != nil {
 			return errors.Wrapf(err, "error getting targets from frontend %q", t.Frontend.Image)
 		}
@@ -253,10 +212,15 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 
 		for _, bkt := range tl.Targets {
 			// capture loop variables
-			bkt := bkt
-			t := t
-			RegisterTarget(group, bkt, makeTargetForwarder(t, bkt))
+			grp := strings.TrimSuffix(group, "/"+bkt.Name)
+			bklog.G(ctx).WithField("group", grp).WithField("target", bkt.Name).Debug("Registering forwarded target")
+			RegisterHandler(grp, bkt, makeTargetForwarder(t, bkt))
 		}
+
+		if len(tl.Targets) == 0 {
+			bklog.G(ctx).WithField("group", group).Debug("No targets found in forwarded build")
+		}
+
 		return nil
 	}
 
@@ -264,10 +228,7 @@ func registerSpecTargets(ctx context.Context, spec *dalec.Spec, client gwclient.
 	// ... unless this is a target list request, in which case we register all targets.
 	if opts[requestIDKey] != bktargets.SubrequestsTargetsDefinition.Name {
 		if t := opts["target"]; t != "" {
-			if err := register(t); err != nil {
-				return err
-			}
-			return nil
+			return register(t)
 		}
 	}
 

@@ -2,11 +2,11 @@ package debug
 
 import (
 	"github.com/Azure/dalec/frontend"
-	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
+	"github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
-func RegisterTargets() {
-	frontend.RegisterBuiltin("debug", bktargets.Target{
+func RegisterHandlers() {
+	frontend.RegisterHandler("debug", targets.Target{
 		Name:        "resolve",
 		Description: "Outputs the resolved dalec spec file with build args applied.",
 	}, HandleResolve)
