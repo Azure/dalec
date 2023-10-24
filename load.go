@@ -13,6 +13,8 @@ func knownArg(key string) bool {
 	switch key {
 	case "BUILDKIT_SYNTAX":
 		return true
+	case "DALEC_DISABLE_DIFF_MERGE":
+		return true
 	default:
 		return false
 	}

@@ -51,6 +51,10 @@ func makeRequestHandler(spec *dalec.Spec, client gwclient.Client) dockerui.Reque
 
 // Build is the main entrypoint for the dalec frontend.
 func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+	if !SupportsDiffMerge(client) {
+		dalec.DisableDiffMerge(true)
+	}
+
 	bc, err := dockerui.NewClient(client)
 	if err != nil {
 		return nil, fmt.Errorf("could not create build client: %w", err)

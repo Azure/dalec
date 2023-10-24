@@ -23,10 +23,11 @@ func getDigestFromClientFn(ctx context.Context, client gwclient.Client) getDiges
 		st := base.Run(
 			llb.AddMount("/tmp/st", input, llb.Readonly),
 			llb.Dir("/tmp/st"),
-			shArgs("set -e -o pipefail; sha256sum * >> /digest"),
-		).State
+			shArgs("set -e -o pipefail; sha256sum * >> /tmp/out/digest"),
+		).
+			AddMount("/tmp/out", llb.Scratch())
 
-		def, err := llb.Diff(base, st).Marshal(ctx)
+		def, err := st.Marshal(ctx)
 		if err != nil {
 			return "", "", err
 		}

@@ -59,6 +59,12 @@ jobs:
 
   test:
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        disable_diff_merge: ["1", "0"]
+    name: "Test (diff/merge: ${{ matrix.disable_diff_merge }})"
+    env:
+      DALEC_DISABLE_DIFF_MERGE: ${{ matrix.disable_diff_merge }}
     steps:
       - name: checkout
         uses: actions/checkout@v3
@@ -74,7 +80,12 @@ jobs:
           docker image prune -a -f
 
           docker run -d --net=host registry
-          docker buildx create --use --driver-opt network=host
+
+          # If diff/merge are enabled we need to use a buildx builder to make sure the feature is supported.
+          # Otherwise we can just use the default docker builder.
+          if [ -n "${DALEC_DISABLE_DIFF_MERGE}" ] || [ "${DALEC_DISABLE_DIFF_MERGE}" = "0" ]; then
+            docker buildx create --use --driver-opt network=host
+          fi
       - name: Check frontend platforms
         run:  |
           # Make sure the frontend image builds on all platforms

@@ -17,6 +17,12 @@ variable "FRONTEND_REF" {
     default = "local/dalec/frontend"
 }
 
+// This is used to forcibly diff/merge ops in the frontend for testing purposes.
+// Set to "1" to disable diff/merge ops.
+variable "DALEC_DISABLE_DIFF_MERGE" {
+    default = "0"
+}
+
 target "frontend" {
     target = "frontend"
     tags = [FRONTEND_REF]
@@ -58,17 +64,18 @@ variable "RUNC_REVISION" {
 }
 
 target "runc" {
-    name = "runc-${distro}-${tgt}"
+    name = "runc-${distro}-${replace(tgt, "/", "-")}"
     dockerfile = "test/fixtures/moby-runc.yml"
     args = {
         "RUNC_COMMIT" = RUNC_COMMIT
         "VERSION" = RUNC_VERSION
         "REVISION" = RUNC_REVISION
         "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     matrix = {
         distro = ["mariner2"]
-        tgt = ["rpm", "container", "toolkitroot"]
+        tgt = ["rpm", "container", "toolkitroot", "rpm/spec"]
     }
     contexts = {
         "mariner2-toolchain" = "target:mariner2-toolchain"
@@ -109,6 +116,7 @@ target "test-fixture" {
 
     args = {
         "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     target = tgt
     cache-from = ["type=gha,scope=dalec/${tgt}/${f}"]

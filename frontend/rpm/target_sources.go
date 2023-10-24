@@ -43,10 +43,11 @@ func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 }
 
 func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	sOpt := dalec.SourceOpts{
-		Resolver: client,
-		Forward:  frontend.ForwarderFromClient(ctx, client),
+	sOpt, err := frontend.SourceOptFromClient(ctx, client)
+	if err != nil {
+		return nil, nil, err
 	}
+
 	sources, err := Dalec2SourcesLLB(spec, sOpt)
 	if err != nil {
 		return nil, nil, err

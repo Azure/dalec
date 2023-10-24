@@ -17,18 +17,6 @@ You will need to add a `syntax` directive at the top of your spec file to enable
 # syntax=ghcr.io/azure/dalec/frontend:latest
 ```
 
-Dalec currently requires support for Buildkit's `DiffOp` and `MergeOp`.
-These are currently not available with the default installation of docker.
-To use this with docker you must
-[enable the containerd image store](https://docs.docker.com/storage/containerd/#enable-containerd-image-store-on-docker-engine)
-in the docker daemon config.
-
-Alternatively you can use `docker buildx` to create a builder, which should have support for these features.
-
-```console
-$ docker buildx create --use
-```
-
 ### Exmples:
 
 You can look at the [test/fixtures](./test/fixtures) directory for examples of dalec specs.
