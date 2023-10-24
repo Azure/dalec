@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -26,6 +25,38 @@ const (
 	dalecSubrequstForwardBuild = "dalec.forward.build"
 )
 
+func getDockerfile(ctx context.Context, client gwclient.Client, spec *dalec.BuildSpec, defPb *pb.Definition) ([]byte, error) {
+	if spec.Inline != "" {
+		return []byte(spec.Inline), nil
+	}
+
+	dockerfilePath := dockerui.DefaultDockerfileName
+	if spec.File != "" {
+		dockerfilePath = spec.File
+	}
+
+	// First we need to read the dockerfile to determine what frontend to forward to
+	res, err := client.Solve(ctx, gwclient.SolveRequest{
+		Definition: defPb,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting build context")
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+		Filename: dockerfilePath,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "error reading dockerfile")
+	}
+	return dt, nil
+}
+
 // ForwarderFromClient creates a [dalec.ForwarderFunc] from a gateway client.
 // This is used for forwarding builds to other frontends in [dalec.Source2LLBGetter]
 func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.ForwarderFunc {
@@ -44,34 +75,9 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.Forw
 		}
 		defPb := def.ToPB()
 
-		var dockerfileDt []byte
-		if spec.Inline != "" {
-			dockerfileDt = []byte(spec.Inline)
-		} else {
-			// First we need to read the dockerfile to determine what frontend to forward to
-			res, err := client.Solve(ctx, gwclient.SolveRequest{
-				Definition: defPb,
-			})
-			if err != nil {
-				return llb.Scratch(), errors.Wrap(err, "error getting build context")
-			}
-
-			dockerfilePath := dockerui.DefaultDockerfileName
-			if spec != nil && spec.File != "" {
-				dockerfilePath = spec.File
-			}
-
-			ref, err := res.SingleRef()
-			if err != nil {
-				return llb.Scratch(), err
-			}
-
-			dockerfileDt, err = ref.ReadFile(ctx, gwclient.ReadRequest{
-				Filename: dockerfilePath,
-			})
-			if err != nil {
-				return llb.Scratch(), errors.Wrap(err, "error reading dockerfile")
-			}
+		dockerfileDt, err := getDockerfile(ctx, client, spec, defPb)
+		if err != nil {
+			return llb.Scratch(), err
 		}
 
 		dockerfile := llb.Scratch().File(
@@ -104,6 +110,10 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.Forw
 			for k, v := range spec.Args {
 				req.FrontendOpt["build-arg:"+k] = v
 			}
+		}
+
+		if err := copyForForward(ctx, client, &req); err != nil {
+			return llb.Scratch(), err
 		}
 
 		res, err := client.Solve(ctx, req)
@@ -140,6 +150,7 @@ func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error marshalling spec to yaml")
 		}
+
 		def, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0600, dt)).Marshal(ctx)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error marshaling dockerfile to LLB")
@@ -158,11 +169,10 @@ func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
 			},
 		}
 
-		for k, v := range client.BuildOpts().Opts {
-			if strings.HasPrefix(k, "build-arg:") {
-				req.FrontendOpt[k] = v
-			}
+		if err := copyForForward(ctx, client, &req); err != nil {
+			return nil, nil, err
 		}
+
 		res, err := client.Solve(ctx, req)
 		if err != nil {
 			return nil, nil, err
@@ -233,4 +243,54 @@ func checkDiffMerge(client gwclient.Client) bool {
 		return false
 	}
 	return true
+}
+
+// copyForForward copies all the inputs and build opts from the initial request in order to forward to another frontend.
+func copyForForward(ctx context.Context, client gwclient.Client, req *gwclient.SolveRequest) error {
+	// Inputs are any additional build contexts or really any llb that the client sent along.
+	inputs, err := client.Inputs(ctx)
+	if err != nil {
+		return err
+	}
+
+	if req.FrontendInputs == nil {
+		req.FrontendInputs = make(map[string]*pb.Definition, len(inputs))
+	}
+
+	for k, v := range inputs {
+		if _, ok := req.FrontendInputs[k]; ok {
+			// Do not overwrite existing inputs
+			continue
+		}
+
+		def, err := v.Marshal(ctx)
+		if err != nil {
+			return errors.Wrap(err, "error marshaling frontend input")
+		}
+		req.FrontendInputs[k] = def.ToPB()
+	}
+
+	opts := client.BuildOpts().Opts
+	if req.FrontendOpt == nil {
+		req.FrontendOpt = make(map[string]string, len(opts))
+	}
+
+	for k, v := range opts {
+
+		if k == "filename" || k == "dockerfilekey" || k == "target" {
+			// These are some well-known keys that the dockerfile frontend uses
+			// which we'll be overriding with our own values (as needed) in the
+			// caller.
+			// Basically there should not be a need, nor is it desirable, to forward these along.
+			continue
+		}
+
+		if _, ok := req.FrontendOpt[k]; ok {
+			// Do not overwrite existing opts
+			continue
+		}
+		req.FrontendOpt[k] = v
+	}
+
+	return nil
 }

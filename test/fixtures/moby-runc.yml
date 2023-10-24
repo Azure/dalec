@@ -17,11 +17,6 @@ vendor: Moby
 
 targets: # Distro specific build requirements
   mariner2:
-    # Uncomment to test forwarding this build to another frontend
-    # You'll need to set `image` to a valid frontend image.
-    # This must be a dalec-compatible frontend.
-    # frontend:
-    #   image: local/rpmbundle
     image:
       entrypoint: runc
       cmd: --help

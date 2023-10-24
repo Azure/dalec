@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/grpclog"
 
 	"github.com/Azure/dalec/frontend"
-	_ "github.com/Azure/dalec/frontend/register" // register all known targets
-	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
+	"github.com/Azure/dalec/frontend/debug"
+	"github.com/Azure/dalec/frontend/mariner2"
 )
 
 const (
@@ -24,6 +24,9 @@ func main() {
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(bklog.L.WriterLevel(logrus.InfoLevel), bklog.L.WriterLevel(logrus.WarnLevel), bklog.L.WriterLevel(logrus.ErrorLevel), 1))
 
 	ctx := appcontext.Context()
+
+	mariner2.RegisterHandlers()
+	debug.RegisterHandlers()
 
 	if err := grpcclient.RunFromEnvironment(ctx, frontend.Build); err != nil {
 		bklog.L.WithError(err).Fatal("error running frontend")
