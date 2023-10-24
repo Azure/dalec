@@ -17,7 +17,7 @@ variable "FRONTEND_REF" {
     default = "local/dalec/frontend"
 }
 
-// This is used to foribly diff/merge ops in the frontend for testing purposes.
+// This is used to forcibly diff/merge ops in the frontend for testing purposes.
 // Set to "1" to disable diff/merge ops.
 variable "DALEC_DISABLE_DIFF_MERGE" {
     default = "0"
