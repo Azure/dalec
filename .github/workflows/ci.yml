@@ -83,7 +83,7 @@ jobs:
 
           # If diff/merge are enabled we need to use a buildx builder to make sure the feature is supported.
           # Otherwise we can just use the default docker builder.
-          if [ -n "${DALEC_DISABLE_DIFF_MERGE}" ] || [ "${DALEC_DISABLE_DIFF_MERGE}" = "0" ]; then
+          if [ "${DALEC_DISABLE_DIFF_MERGE}" = "0" ]; then
             docker buildx create --use --driver-opt network=host
           fi
       - name: Check frontend platforms
