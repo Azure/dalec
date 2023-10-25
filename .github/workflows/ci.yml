@@ -85,21 +85,36 @@ jobs:
           # Otherwise we can just use the default docker builder.
           if [ "${DALEC_DISABLE_DIFF_MERGE}" = "0" ]; then
             docker buildx create --use --driver-opt network=host
+          else
+            echo DALEC_NO_CACHE_EXPORT="1" >> $GITHUB_ENV
           fi
       - name: Check frontend platforms
         run:  |
           # Make sure the frontend image builds on all platforms
-          docker buildx bake --set frontend.tags="" --set frontend.platform=linux/amd64,linux/arm64 frontend
+          platforms="linux/amd64,linux/arm64"
+          if [ "${DALEC_DISABLE_DIFF_MERGE}" = "1" ]; then
+            # We can only build one platform in this case because we are using vanilla docker which does not support multiplatform
+            # Plus arm64 is going to be built on the other builder anyway
+            # Only reason we build arm64 is to make sure the build works
+            platforms="linux/amd64"
+          fi
+          docker buildx bake --set frontend.tags="" --set "frontend.platform=${platforms}" frontend
       - name: build frontend tooling
         run: |
           set -e
+          cache_scope="dalec/frontend/ci"
+          cache_to="--set frontend.cache-to=type=gha,scope=${cache_scope},mode=max"
+
+          if [ "${DALEC_NO_CACHE_EXPORT}" = "1" ]; then
+            cache_to=""
+          fi
 
           # Build the frontend image and push it to the local registry
           docker buildx bake \
             --set frontend.output=type=registry \
             --set frontend.tags=localhost:5000/dalec/frontend \
-            --set frontend.cache-from=type=gha,scope=dalec/frontend/ci \
-            --set frontend.cache-to=type=gha,scope=dalec/frontend/ci,mode=max \
+            --set "frontend.cache-from=type=gha,scope=${cache_scope}" \
+            ${cache_to} \
             frontend
       - name: test
         run: |

@@ -23,6 +23,10 @@ variable "DALEC_DISABLE_DIFF_MERGE" {
     default = "0"
 }
 
+variable "DALEC_NO_CACHE_EXPORT" {
+    default = "0"
+}
+
 target "frontend" {
     target = "frontend"
     tags = [FRONTEND_REF]
@@ -87,7 +91,7 @@ target "runc" {
     output = tgt != "container" ? ["_output"] : []
 
     cache-from = ["type=gha,scope=dalec/runc/${distro}/${tgt}"]
-    cache-to = ["type=gha,scope=dalec/runc/${distro}/${tgt},mode=max"]
+    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/${distro}/${tgt},mode=max"] : []
 }
 
 target "runc-test" {
@@ -120,7 +124,7 @@ target "test-fixture" {
     }
     target = tgt
     cache-from = ["type=gha,scope=dalec/${f}/${tgt}/${f}"]
-    cache-to = ["type=gha,scope=dalec/${f}/${tgt}/${f},mode=max"]
+    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/${f}/${tgt}/${f},mode=max"] : []
 }
 
 variable "BUILD_SPEC" {
@@ -147,7 +151,7 @@ target "build" {
     output = tgt != "container" ? ["_output"] : []
 
     cache-from = ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt}"]
-    cache-to = ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt},mode=max"]
+    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt},mode=max"] : []
 }
 
 target "examples" {
@@ -163,3 +167,4 @@ target "examples" {
     dockerfile = "docs/examples/${f}.yml"
     tags = ["local/dalec/examples/${f}:${distro}"]
 }
+
