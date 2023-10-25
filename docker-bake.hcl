@@ -86,8 +86,8 @@ target "runc" {
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
 
-    cache-from = ["type=gha,scope=dalec/${distro}/${tgt}"]
-    cache-to = ["type=gha,scope=dalec/${distro}/${tgt},mode=max"]
+    cache-from = ["type=gha,scope=dalec/runc/${distro}/${tgt}"]
+    cache-to = ["type=gha,scope=dalec/runc/${distro}/${tgt},mode=max"]
 }
 
 target "runc-test" {
@@ -119,8 +119,8 @@ target "test-fixture" {
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     target = tgt
-    cache-from = ["type=gha,scope=dalec/${tgt}/${f}"]
-    cache-to = ["type=gha,scope=dalec/${tgt}/${f},mode=max"]
+    cache-from = ["type=gha,scope=dalec/${f}/${tgt}/${f}"]
+    cache-to = ["type=gha,scope=dalec/${f}/${tgt}/${f},mode=max"]
 }
 
 variable "BUILD_SPEC" {
@@ -146,8 +146,8 @@ target "build" {
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
 
-    cache-from = ["type=gha,scope=dalec/${distro}/${tgt}"]
-    cache-to = ["type=gha,scope=dalec/${distro}/${tgt},mode=max"]
+    cache-from = ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt}"]
+    cache-to = ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt},mode=max"]
 }
 
 target "examples" {
