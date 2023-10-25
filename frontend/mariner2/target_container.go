@@ -32,7 +32,12 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	st, err := specToContainerLLB(spec, targetKey, getDigestFromClientFn(ctx, client), baseImg, sOpt)
+	rpmDir, err := specToRpmLLB(spec, getDigestFromClientFn(ctx, client), baseImg, sOpt)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating rpm: %w", err)
+	}
+
+	st, err := specToContainerLLB(spec, targetKey, baseImg, rpmDir, sOpt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -49,25 +54,8 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	dc, err := dockerui.NewClient(client)
+	img, err := buildImageConfig(ctx, spec, targetKey, client)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	baseImgRef := getBaseOutputImage(spec, targetKey)
-	_, _, dt, err := client.ResolveImageConfig(ctx, baseImgRef, llb.ResolveImageConfigOpt{
-		ResolveMode: dc.ImageResolveMode.String(),
-	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("error resolving image config: %w", err)
-	}
-
-	var img image.Image
-	if err := json.Unmarshal(dt, &img); err != nil {
-		return nil, nil, fmt.Errorf("error unmarshalling image config: %w", err)
-	}
-
-	if err := copyImageConfig(&img, mergeSpecImage(spec, targetKey)); err != nil {
 		return nil, nil, err
 	}
 
@@ -80,7 +68,33 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	return ref, &img, err
+	return ref, img, err
+}
+
+func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, client gwclient.Client) (*image.Image, error) {
+	dc, err := dockerui.NewClient(client)
+	if err != nil {
+		return nil, err
+	}
+
+	baseImgRef := getBaseOutputImage(spec, targetKey)
+	_, _, dt, err := client.ResolveImageConfig(ctx, baseImgRef, llb.ResolveImageConfigOpt{
+		ResolveMode: dc.ImageResolveMode.String(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error resolving image config: %w", err)
+	}
+
+	var img image.Image
+	if err := json.Unmarshal(dt, &img); err != nil {
+		return nil, fmt.Errorf("error unmarshalling image config: %w", err)
+	}
+
+	if err := copyImageConfig(&img, mergeSpecImage(spec, targetKey)); err != nil {
+		return nil, err
+	}
+
+	return &img, nil
 }
 
 func mergeSpecImage(spec *dalec.Spec, target string) *dalec.ImageConfig {
@@ -133,11 +147,7 @@ func getBaseOutputImage(spec *dalec.Spec, target string) string {
 	return baseRef
 }
 
-func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc, builderImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-	st, err := specToRpmLLB(spec, getDigest, builderImg, sOpt)
-	if err != nil {
-		return llb.Scratch(), fmt.Errorf("error creating rpm: %w", err)
-	}
+func specToContainerLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDir llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
 
 	const workPath = "/tmp/rootfs"
 
@@ -157,8 +167,10 @@ func specToContainerLLB(spec *dalec.Spec, target string, getDigest getDigestFunc
 	chrootedPathEnv := strings.Join(chrootedPaths, ":")
 
 	installCmd := `
+set -x
+
 check_non_empty() {
-	test -e "${1}/"* 2>/dev/null
+	ls ${1} > /dev/null 2>&1
 }
 
 arch_dir="/tmp/rpms/$(uname -m)"
@@ -166,11 +178,11 @@ noarch_dir="/tmp/rpms/noarch"
 
 rpms=""
 
-if check_non_empty "${noarch_dir}"; then
+if check_non_empty "${noarch_dir}/*.rpm"; then
 	rpms="${noarch_dir}/*.rpm"
 fi
 
-if check_non_empty "${arch_dir}"; then
+if check_non_empty "${arch_dir}/*.rpm"; then
 	rpms="${rpms} ${arch_dir}/*.rpm"
 fi
 
@@ -195,7 +207,7 @@ rm -rf ` + rpmdbDir + `
 		Run(
 			shArgs(installCmd),
 			marinerTdnfCache,
-			llb.AddMount("/tmp/rpms", st, llb.SourcePath("/RPMS")),
+			llb.AddMount("/tmp/rpms", rpmDir, llb.SourcePath("/RPMS")),
 		)
 
 	// This adds a mount to the worker so that all the commands are run with this mount added

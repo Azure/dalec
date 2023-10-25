@@ -27,5 +27,10 @@ func RegisterTargets() {
 		Default:     true,
 	}, handleContainer)
 
+	frontend.RegisterTarget(targetKey, targets.Target{
+		Name:        "container/depsonly",
+		Description: "Builds a container with only the runtime dependencies installed.",
+	}, handleDepsOnly)
+
 	rpm.RegisterTargets(targetKey)
 }
