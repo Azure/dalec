@@ -87,6 +87,7 @@ jobs:
             docker buildx create --use --driver-opt network=host
           else
             echo DALEC_NO_CACHE_EXPORT="1" >> $GITHUB_ENV
+            echo DALEC_DISABLE_NESTED="1" >> $GITHUB_ENV
           fi
       - name: Check frontend platforms
         run:  |

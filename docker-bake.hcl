@@ -107,10 +107,22 @@ target "runc-test" {
     EOT
 }
 
+# When running with docker <= v24, the nested build will fail with the following error:
+#   missing provenance for 61xav4v751u8cuhj3ydxmgoob
+# This is due to a bug in buildkit. Its already been fixed but not yet backported to moby v24.
+# This should be removed once the bug is fixed.
+variable "DALEC_DISABLE_NESTED" {
+    default = "0"
+}
+
 target "test-fixture" {
     name = "test-fixture-${f}"
     matrix = {
-        f = ["http-src", "nested", "frontend", "local-context", "cmd-src-ref", "test-framework"]
+        f = DALEC_DISABLE_NESTED == "1" ? (
+            ["http-src", "frontend", "local-context", "cmd-src-ref", "test-framework"]
+         ) : (
+            ["http-src", "frontend", "local-context", "cmd-src-ref", "test-framework", "nested"]
+         )
         tgt = ["mariner2/container"]
     }
     contexts = {
