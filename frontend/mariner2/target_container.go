@@ -167,7 +167,7 @@ func specToContainerLLB(spec *dalec.Spec, target string, builderImg llb.State, r
 	chrootedPathEnv := strings.Join(chrootedPaths, ":")
 
 	installCmd := `
-set -x
+#!/usr/bin/env sh
 
 check_non_empty() {
 	ls ${1} > /dev/null 2>&1
@@ -202,12 +202,15 @@ rpm --dbpath=` + rpmdbDir + ` -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{INSTAL
 rm -rf ` + rpmdbDir + `
 `
 
+	installer := llb.Scratch().File(llb.Mkfile("install.sh", 0o755, []byte(installCmd)))
+
 	baseImg := llb.Image(getBaseOutputImage(spec, target), llb.WithMetaResolver(sOpt.Resolver))
 	worker := builderImg.
 		Run(
-			shArgs(installCmd),
+			shArgs("/tmp/install.sh"),
 			marinerTdnfCache,
 			llb.AddMount("/tmp/rpms", rpmDir, llb.SourcePath("/RPMS")),
+			llb.AddMount("/tmp/install.sh", installer, llb.SourcePath("install.sh")),
 		)
 
 	// This adds a mount to the worker so that all the commands are run with this mount added

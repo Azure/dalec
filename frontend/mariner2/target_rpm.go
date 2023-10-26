@@ -30,12 +30,6 @@ const (
 
 var (
 	marinerTdnfCache = llb.AddMount("/var/cache/tdnf", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
-	// Setup a lockfile so that any instances sharing the rpms cache mount can take a lock before downloading rpms.
-	// We don't want multiple things writing to the cache at the same time, nor do we want a reader to read a file that is being written to.
-	rpmLockFile     = llb.AddMount("/rpmcachelock", llb.Scratch(), llb.AsPersistentCacheDir("dalec-mariner2-rpmcachelock", llb.CacheMountShared))
-	rpmLockFilePath = "/rpmcachelock/lock"
-
-	cachedRPMsMount = llb.AddMount(filepath.Join(cachedRpmsDir, "cache"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountShared))
 )
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -138,20 +132,19 @@ func getBaseBuilderImg(ctx context.Context, client gwclient.Client) (llb.State, 
 	return llb.Image(toolchainImgRef, llb.WithMetaResolver(client)), nil
 }
 
-// withRpmsLock wraps the command in an flock call with either a shared or exclusive lock.
-// See https://linux.die.net/man/1/flock for more details and examples.
-func withRpmsLock(cmd string, exclusive bool) string {
-	lockFl := "-s" // shared lock
-	if exclusive {
-		lockFl = "-x" // exclusive lock
-	}
-	return fmt.Sprintf(`
+const cleanupScript = `
+#!/usr/bin/env sh
+for i in "${CHROOT_DIR}/"*; do
 (
-	set -e
-	flock %s 42
-	%s
-) 42>%s
-`, lockFl, cmd, rpmLockFilePath)
+	if [  -d "${i}" ]; then
+		cd "${i}"; find . ! -path "./upstream-cached-rpms/*" ! -path "./upstream-cached-rpms" ! -path "." -delete -print || exit 42
+	fi
+)
+done
+`
+
+func getAllDeps(spec *dalec.Spec) []string {
+	return sort.StringSlice(append(getBuildDeps(spec), getRuntimeDeps(spec)...))
 }
 
 func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
@@ -175,6 +168,22 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 		AddEnv("LOG_LEVEL", "debug").
 		AddEnv("CACHED_RPMS_DIR", cachedRpmsDir)
 
+	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
+
+	cachedRpms := llb.Scratch()
+	cacheDir := filepath.Join(cachedRpmsDir, "cache")
+
+	// The mariner toolkit is trying to resolve *all* dependencies and not just build dependencies.
+	// We need to make sure we have all the dependencies cached otherwise the build will fail.
+	if deps := getAllDeps(spec); len(deps) > 0 {
+		dlCmd := "tdnf install --downloadonly -y --releasever=2.0 --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" " + strings.Join(deps, " ")
+		cachedRpms = work.
+			Run(
+				shArgs(dlCmd),
+				marinerTdnfCache,
+			).AddMount(cacheDir, llb.Scratch())
+	}
+
 	prepareChroot := runOptFunc(func(ei *llb.ExecInfo) {
 		// Mount cached packages into the chroot dirs so they are available to the chrooted build.
 		// The toolchain has built-in (yum) repo files that points to "/upstream-cached-rpms",
@@ -189,45 +198,23 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 			return filepath.Join("/tmp/chroot", "dalec"+strconv.Itoa(i), p)
 		}
 		for i := 0; i < runtime.NumCPU(); i++ {
-			llb.AddMount(dir(i, "upstream-cached-rpms"), llb.Scratch(), llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountShared)).SetRunOption(ei)
+			llb.AddMount(dir(i, "upstream-cached-rpms"), cachedRpms).SetRunOption(ei)
 		}
 	})
 
-	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
-
-	dlCmd := withRpmsLock("tdnf install --downloadonly -y --releasever=2.0 --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" "+strings.Join(getBuildDeps(spec), " "), true)
-	buildCmd := withRpmsLock(`
-make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; exit 1)
-for i in "${CHROOT_DIR}/"*; do
-(
-	if [  -d "${i}" ]; then
-		cd "${i}"; find . ! -path "./upstream-cached-rpms/*" ! -path "./upstream-cached-rpms" ! -path "." -delete -print || exit 42
-	fi
-)
-done	
-`, false)
-
-	worker := work.With(func(st llb.State) llb.State {
-		deps := getBuildDeps(spec)
-		if len(deps) == 0 {
-			return st
-		}
-		return st.Run(
-			shArgs(dlCmd),
-			cachedRPMsMount,
-			rpmLockFile,
-		).State
-	}).
+	cleanupScript := llb.Scratch().File(llb.Mkfile("chroot-cleanup.sh", 0o755, []byte(cleanupScript)))
+	buildCmd := `trap '/tmp/chroot-cleanup.sh > /dev/null' EXIT; make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; ls -lh ${CACHED_RPMS_DIR}/cache; exit 1)`
+	worker := work.
 		Run(
 			shArgs(buildCmd),
 			prepareChroot,
-			cachedRPMsMount,
 			specsMount,
-			rpmLockFile,
 			marinerTdnfCache,
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
 			llb.AddEnv("REFRESH_WORKER_CHROOT", "n"),
+			llb.AddMount(cacheDir, cachedRpms),
+			llb.AddMount("/tmp/chroot-cleanup.sh", cleanupScript, llb.SourcePath("chroot-cleanup.sh")),
 		)
 
 	st := worker.
