@@ -124,6 +124,12 @@ jobs:
 
           export CACHE_REF="$(tr '[:upper:]' '[:lower:]' <<<"${CACHE_REF}")"
 
+          # Check if the mariner2 toolchain was modified and needs to be rebuilt
+          # The bake file will take care of rebuilding it if needed
+          git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | \
+            grep frontend/mariner2/Dockerfile && \
+            export REBUILD_MARINER2_TOOLCHAIN=1
+
           docker buildx bake \
             --set mariner2-toolchain.cache-from=type=registry,ref=${CACHE_REF} \
             test
