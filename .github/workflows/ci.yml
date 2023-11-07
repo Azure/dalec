@@ -62,7 +62,7 @@ jobs:
     strategy:
       matrix:
         disable_diff_merge: ["1", "0"]
-    name: "Test (diff/merge: ${{ matrix.disable_diff_merge }})"
+    name: "Test (disable diff/merge: ${{ matrix.disable_diff_merge }})"
     env:
       DALEC_DISABLE_DIFF_MERGE: ${{ matrix.disable_diff_merge }}
     steps:
