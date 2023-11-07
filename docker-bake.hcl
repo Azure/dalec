@@ -226,3 +226,21 @@ target "test-deps-only" {
         "deps-only-context" = "target:deps-only-mariner2"
     }
 }
+
+
+variable "CI_FRONTEND_CACHE_SCOPE" {
+    default = "dalec/frontend/ci"
+}
+
+target "frontend-ci" {
+    inherits = ["frontend"]
+    cache-from = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE}"]
+    output = ["type=registry"]
+}
+
+target "frontend-ci-full" {
+    inherits = ["frontend-ci"]
+    cache-to = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE},mode=max"]
+    platforms = ["linux/amd64", "linux/arm64"]
+}
+

@@ -60,18 +60,16 @@ jobs:
   test:
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         disable_diff_merge: ["1", "0"]
     name: "Test (disable diff/merge: ${{ matrix.disable_diff_merge }})"
     env:
       DALEC_DISABLE_DIFF_MERGE: ${{ matrix.disable_diff_merge }}
+      FRONTEND_REF: localhost:5000/dalec/frontend
     steps:
       - name: checkout
         uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-          cache: false
       - name: Expose GitHub tokens for caching
         uses: crazy-max/ghaction-github-runtime@v3
       - name: Setup builder
@@ -85,54 +83,24 @@ jobs:
           # Otherwise we can just use the default docker builder.
           if [ "${DALEC_DISABLE_DIFF_MERGE}" = "0" ]; then
             docker buildx create --use --driver-opt network=host
+            echo FRONTEND_BAKE_TARGET="frontend-ci-full" >> $GITHUB_ENV
           else
             echo DALEC_NO_CACHE_EXPORT="1" >> $GITHUB_ENV
             echo DALEC_DISABLE_NESTED="1" >> $GITHUB_ENV
+            echo FRONTEND_BAKE_TARGET="frontend-ci" >> $GITHUB_ENV
           fi
-      - name: Check frontend platforms
-        run:  |
-          # Make sure the frontend image builds on all platforms
-          platforms="linux/amd64,linux/arm64"
-          if [ "${DALEC_DISABLE_DIFF_MERGE}" = "1" ]; then
-            # We can only build one platform in this case because we are using vanilla docker which does not support multiplatform
-            # Plus arm64 is going to be built on the other builder anyway
-            # Only reason we build arm64 is to make sure the build works
-            platforms="linux/amd64"
-          fi
-          docker buildx bake --set frontend.tags="" --set "frontend.platform=${platforms}" frontend
-      - name: build frontend tooling
-        run: |
-          set -e
-          cache_scope="dalec/frontend/ci"
-          cache_to="--set frontend.cache-to=type=gha,scope=${cache_scope},mode=max"
-
-          if [ "${DALEC_NO_CACHE_EXPORT}" = "1" ]; then
-            cache_to=""
-          fi
-
-          # Build the frontend image and push it to the local registry
-          docker buildx bake \
-            --set frontend.output=type=registry \
-            --set frontend.tags=localhost:5000/dalec/frontend \
-            --set "frontend.cache-from=type=gha,scope=${cache_scope}" \
-            ${cache_to} \
-            frontend
-      - name: test
-        run: |
-          # Set the buildkit syntax to the one we stored in the local registry
-          # The bakefile will read this and pass it along to the runc target
-
-          export CACHE_REF="$(tr '[:upper:]' '[:lower:]' <<<"${CACHE_REF}")"
 
           # Check if the mariner2 toolchain was modified and needs to be rebuilt
           # The bake file will take care of rebuilding it if needed
           git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | \
             grep frontend/mariner2/Dockerfile && \
-            export REBUILD_MARINER2_TOOLCHAIN=1
+            echo REBUILD_MARINER2_TOOLCHAIN=1 >> $GITHUB_ENV || true
 
+          echo "MARINER2_TOOLCHAIN_CACHE_REF=$(tr '[:upper:]' '[:lower:]' <<< "ghcr.io/${{ github.repository }}/mariner2/toolchain:cache")" >> $GITHUB_ENV
+      - name: Build frontend image
+        run: docker buildx bake ${FRONTEND_BAKE_TARGET}
+      - name: test
+        run: |
           docker buildx bake \
-            --set mariner2-toolchain.cache-from=type=registry,ref=${CACHE_REF} \
+            --set mariner2-toolchain.cache-from=type=registry,ref=${MARINER2_TOOLCHAIN_CACHE_REF} \
             test
-        env:
-          FRONTEND_REF: localhost:5000/dalec/frontend
-          CACHE_REF: ghcr.io/${{ github.repository }}/mariner2/toolchain:cache

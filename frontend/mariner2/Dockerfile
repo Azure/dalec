@@ -1,7 +1,7 @@
 # syntax=mcr.microsoft.com/oss/moby/dockerfile:1.6.0
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0 AS toolchain
 RUN \
-    --mount=type=cache,target=/var/tdnf/cache,id=mariner2-tdnf-cache \
+    --mount=type=cache,target=/var/cache/tdnf,id=mariner2-tdnf-cache \
     tdnf install -y \
         acl \
         binutils \
