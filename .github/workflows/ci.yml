@@ -84,6 +84,7 @@ jobs:
           if [ "${DALEC_DISABLE_DIFF_MERGE}" = "0" ]; then
             docker buildx create --use --driver-opt network=host
             echo FRONTEND_BAKE_TARGET="frontend-ci-full" >> $GITHUB_ENV
+            echo USE_BUILDX=1 >> $GITHUB_ENV
           else
             echo DALEC_NO_CACHE_EXPORT="1" >> $GITHUB_ENV
             echo DALEC_DISABLE_NESTED="1" >> $GITHUB_ENV
@@ -104,3 +105,11 @@ jobs:
           docker buildx bake \
             --set mariner2-toolchain.cache-from=type=registry,ref=${MARINER2_TOOLCHAIN_CACHE_REF} \
             test
+      - name: dump logs
+        if: failure()
+        run: |
+          if [ "${USE_BUILDX}" = "1" ]; then
+            docker logs $(docker ps -lq)
+          else
+            sudo journalctl -u docker
+          fi
