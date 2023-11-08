@@ -16,6 +16,7 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/identity"
 )
 
 const (
@@ -23,7 +24,7 @@ const (
 	toolchainImgRef       = "ghcr.io/azure/dalec/mariner2/toolchain:latest"
 	toolchainNamedContext = "mariner2-toolchain"
 
-	cachedRpmsDir      = "/root/.cache/mariner2-toolkit-rpm-cache"
+	tookitRpmsCacheDir = "/root/.cache/mariner2-toolkit-rpm-cache"
 	cachedRpmsName     = "mariner2-toolkit-cached-rpms"
 	marinerToolkitPath = "/usr/local/toolkit"
 )
@@ -167,28 +168,37 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 		AddEnv("CONFIG_FILE", ""). // This is needed for VM images(?), don't need this for our case anyway and the default value is wrong for us.
 		AddEnv("OUT_DIR", "/build/out").
 		AddEnv("LOG_LEVEL", "debug").
-		AddEnv("CACHED_RPMS_DIR", cachedRpmsDir).
+		AddEnv("CACHED_RPMS_DIR", tookitRpmsCacheDir).
 		AddEnv("CHROOT_DIR", chrootDir)
 
 	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
 
-	cachedRpms := llb.Scratch()
-	cacheDir := filepath.Join(cachedRpmsDir, "cache")
+	// The actual rpm cache is stored under `./cache` in the cache dir.
+	// This is the dir we need to mount.
+	cachedRpmsDir := filepath.Join(tookitRpmsCacheDir, "cache")
+	// Use a persistent cache for the cached rpms so that the same dir gets
+	// bind-mounted everywhere its needed instead of each mount getting an
+	// overlay causing inconsistencies between mounts.
+	rpmsPeristCache := llb.AsPersistentCacheDir(identity.NewID(), llb.CacheMountShared)
+	mainCachedRpmsMount := llb.AddMount(cachedRpmsDir, llb.Scratch(), rpmsPeristCache)
 
 	// The mariner toolkit is trying to resolve *all* dependencies and not just build dependencies.
 	// We need to make sure we have all the dependencies cached otherwise the build will fail.
 	if deps := getAllDeps(spec); len(deps) > 0 {
 		depsFile := llb.Scratch().File(llb.Mkfile("deps", 0o644, []byte(strings.Join(deps, "\n"))))
 		// Use while loop with each package on a line in case there are too many packages to fit in a single command.
-		dlCmd := `set -x; while read -r pkg; do tdnf install -y --alldeps --downloadonly --releasever=2.0 --downloaddir ` + cacheDir + ` ${pkg}; done < /tmp/deps`
-		cachedRpms = work.Run(
+		dlCmd := `set -x; while read -r pkg; do tdnf install -y --alldeps --downloadonly --releasever=2.0 --downloaddir ` + cachedRpmsDir + ` ${pkg}; done < /tmp/deps`
+		work.Run(
 			shArgs(dlCmd),
 			marinerTdnfCache,
 			llb.AddMount("/tmp/deps", depsFile, llb.SourcePath("deps")),
-		).AddMount(cacheDir, llb.Scratch())
+			mainCachedRpmsMount,
+		)
 	}
 
-	prepareChroot := runOptFunc(func(ei *llb.ExecInfo) {
+	withCachedRpmsMounts := runOptFunc(func(ei *llb.ExecInfo) {
+		mainCachedRpmsMount.SetRunOption(ei)
+
 		// Mount cached packages into the chroot dirs so they are available to the chrooted build.
 		// The toolchain has built-in (yum) repo files that points to "/upstream-cached-rpms",
 		// so "tdnf install" as performed by the toolchain will read files from this location in the chroot.
@@ -202,12 +212,12 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 			return filepath.Join(chrootDir, "dalec"+strconv.Itoa(i), p)
 		}
 		for i := 0; i < runtime.NumCPU(); i++ {
-			llb.AddMount(dir(i, "upstream-cached-rpms"), cachedRpms).SetRunOption(ei)
+			llb.AddMount(dir(i, "upstream-cached-rpms"), llb.Scratch(), rpmsPeristCache).SetRunOption(ei)
 		}
 	})
 
 	cleanupScript := llb.Scratch().File(llb.Mkfile("chroot-cleanup.sh", 0o755, []byte(cleanupScript)))
-	buildCmd := `trap '/tmp/chroot-cleanup.sh > /dev/null' EXIT; make -j` + strconv.Itoa(runtime.NumCPU()) + ` build-packages || (set -x; ls -lh ` + cacheDir + `; cat /build/build/logs/pkggen/rpmbuilding/*; ls -lh ${CACHED_RPMS_DIR}/cache; exit 1)`
+	buildCmd := `trap '/tmp/chroot-cleanup.sh > /dev/null' EXIT; make -j` + strconv.Itoa(runtime.NumCPU()) + ` build-packages || (set -x; ls -lh ` + cachedRpmsDir + `; cat /build/build/logs/pkggen/rpmbuilding/*; ls -lh ${CACHED_RPMS_DIR}/cache; exit 1)`
 
 	worker := work.
 		Run(shArgs("rm -rf ${CHROOT_DIR}/dalec*")).
@@ -215,8 +225,7 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 			shArgs(buildCmd),
 			specsMount,
 			marinerTdnfCache,
-			llb.AddMount(cacheDir, cachedRpms),
-			prepareChroot,
+			withCachedRpmsMounts,
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
 			llb.AddEnv("REFRESH_WORKER_CHROOT", "n"),
