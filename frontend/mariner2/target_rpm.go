@@ -155,6 +155,7 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 
 	specsDir := "/build/SPECS"
 
+	chrootDir := "/tmp/chroot"
 	work := baseImg.
 		// /.dockerenv is used by the toolkit to detect it's running in a container.
 		// This makes the toolkit use a different strategy for setting up chroots.
@@ -166,7 +167,8 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 		AddEnv("CONFIG_FILE", ""). // This is needed for VM images(?), don't need this for our case anyway and the default value is wrong for us.
 		AddEnv("OUT_DIR", "/build/out").
 		AddEnv("LOG_LEVEL", "debug").
-		AddEnv("CACHED_RPMS_DIR", cachedRpmsDir)
+		AddEnv("CACHED_RPMS_DIR", cachedRpmsDir).
+		AddEnv("CHROOT_DIR", chrootDir)
 
 	specsMount := llb.AddMount(specsDir, br, llb.SourcePath("/SPECS"))
 
@@ -176,12 +178,14 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 	// The mariner toolkit is trying to resolve *all* dependencies and not just build dependencies.
 	// We need to make sure we have all the dependencies cached otherwise the build will fail.
 	if deps := getAllDeps(spec); len(deps) > 0 {
-		dlCmd := "tdnf install --downloadonly -y --releasever=2.0 --alldeps --downloaddir \"${CACHED_RPMS_DIR}/cache\" " + strings.Join(deps, " ")
-		cachedRpms = work.
-			Run(
-				shArgs(dlCmd),
-				marinerTdnfCache,
-			).AddMount(cacheDir, llb.Scratch())
+		depsFile := llb.Scratch().File(llb.Mkfile("deps", 0o644, []byte(strings.Join(deps, "\n"))))
+		// Use while loop with each package on a line in case there are too many packages to fit in a single command.
+		dlCmd := `set -x; while read -r pkg; do tdnf install -y --alldeps --downloadonly --releasever=2.0 --downloaddir ` + cacheDir + ` ${pkg}; done < /tmp/deps`
+		cachedRpms = work.Run(
+			shArgs(dlCmd),
+			marinerTdnfCache,
+			llb.AddMount("/tmp/deps", depsFile, llb.SourcePath("deps")),
+		).AddMount(cacheDir, llb.Scratch())
 	}
 
 	prepareChroot := runOptFunc(func(ei *llb.ExecInfo) {
@@ -195,7 +199,7 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 		// This is needed because the toolkit cannot mount anything into the chroot as it doesn't have CAP_SYS_ADMIN in our build.
 		// So we have to mount the cached packages into the chroot dirs ourselves.
 		dir := func(i int, p string) string {
-			return filepath.Join("/tmp/chroot", "dalec"+strconv.Itoa(i), p)
+			return filepath.Join(chrootDir, "dalec"+strconv.Itoa(i), p)
 		}
 		for i := 0; i < runtime.NumCPU(); i++ {
 			llb.AddMount(dir(i, "upstream-cached-rpms"), cachedRpms).SetRunOption(ei)
@@ -203,17 +207,19 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 	})
 
 	cleanupScript := llb.Scratch().File(llb.Mkfile("chroot-cleanup.sh", 0o755, []byte(cleanupScript)))
-	buildCmd := `trap '/tmp/chroot-cleanup.sh > /dev/null' EXIT; make -j$(nproc) build-packages || (cat /build/build/logs/pkggen/rpmbuilding/*; ls -lh ${CACHED_RPMS_DIR}/cache; exit 1)`
+	buildCmd := `trap '/tmp/chroot-cleanup.sh > /dev/null' EXIT; make -j` + strconv.Itoa(runtime.NumCPU()) + ` build-packages || (set -x; ls -lh ` + cacheDir + `; cat /build/build/logs/pkggen/rpmbuilding/*; ls -lh ${CACHED_RPMS_DIR}/cache; exit 1)`
+
 	worker := work.
+		Run(shArgs("rm -rf ${CHROOT_DIR}/dalec*")).
 		Run(
 			shArgs(buildCmd),
-			prepareChroot,
 			specsMount,
 			marinerTdnfCache,
+			llb.AddMount(cacheDir, cachedRpms),
+			prepareChroot,
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
 			llb.AddEnv("REFRESH_WORKER_CHROOT", "n"),
-			llb.AddMount(cacheDir, cachedRpms),
 			llb.AddMount("/tmp/chroot-cleanup.sh", cleanupScript, llb.SourcePath("chroot-cleanup.sh")),
 		)
 
