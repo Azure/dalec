@@ -30,7 +30,7 @@ const (
 )
 
 var (
-	marinerTdnfCache = llb.AddMount("/var/cache/tdnf", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
+	marinerTdnfCache = llb.AddMount("/var/cache/tdnf", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountShared))
 )
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -224,7 +224,6 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 		Run(
 			shArgs(buildCmd),
 			specsMount,
-			marinerTdnfCache,
 			withCachedRpmsMounts,
 			llb.AddEnv("VERSION", spec.Version),
 			llb.AddEnv("BUILD_NUMBER", spec.Revision),
