@@ -1,7 +1,7 @@
 # syntax=mcr.microsoft.com/oss/moby/dockerfile:1.6.0
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0 AS toolchain
 RUN \
-    --mount=type=cache,target=/var/tdnf/cache,id=mariner2-tdnf-cache \
+    --mount=type=cache,target=/var/cache/tdnf,id=mariner2-tdnf-cache \
     tdnf install -y \
         acl \
         binutils \
@@ -27,7 +27,6 @@ ENV CONFIG_FILE="" CHROOT_DIR="/tmp/chroot"
 # See
 # https://github.com/microsoft/CBL-Mariner/blob/8b1db59e9b011798e8e7750907f58b1bc9577da7/toolkit/tools/internal/buildpipeline/buildpipeline.go#L37-L117
 # for implementation of this.
-RUN set -e; for ((n=0;n<$(($(nproc)*2));n++)); do mkdir -p "${CHROOT_DIR}/dalec${n}"; done;
 RUN touch "${CHROOT_DIR}/chroot-pool.lock"
 WORKDIR /build/toolkit
 RUN \

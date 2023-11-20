@@ -67,6 +67,19 @@ variable "RUNC_REVISION" {
     default = "1"
 }
 
+variable "REBUILD_MARINER2_TOOLCHAIN" {
+    default = "0"
+}
+
+function "get_mariner2_toolchain" {
+    params = []
+    result = REBUILD_MARINER2_TOOLCHAIN == "1" ? (
+        "target:mariner2-toolchain"
+    ) : (
+        "docker-image://ghcr.io/azure/dalec/mariner2/toolchain:latest"
+    )
+}
+
 target "runc" {
     name = "runc-${distro}-${replace(tgt, "/", "-")}"
     dockerfile = "test/fixtures/moby-runc.yml"
@@ -82,7 +95,7 @@ target "runc" {
         tgt = ["rpm", "container", "toolkitroot", "rpm/spec"]
     }
     contexts = {
-        "mariner2-toolchain" = "target:mariner2-toolchain"
+        "mariner2-toolchain" = get_mariner2_toolchain()
     }
     target = "${distro}/${tgt}"
     // only tag the container target
@@ -126,7 +139,7 @@ target "test-fixture" {
         tgt = ["mariner2/container"]
     }
     contexts = {
-        "mariner2-toolchain" = "target:mariner2-toolchain"
+        "mariner2-toolchain" = get_mariner2_toolchain()
     }
     dockerfile = "test/fixtures/${f}.yml"
 
@@ -150,7 +163,7 @@ target "build" {
         tgt = ["rpm", "container", "toolkitroot"]
     }
     contexts = {
-        "mariner2-toolchain" = "target:mariner2-toolchain"
+        "mariner2-toolchain" = get_mariner2_toolchain()
     }
     dockerfile = BUILD_SPEC
     args = {
@@ -213,3 +226,21 @@ target "test-deps-only" {
         "deps-only-context" = "target:deps-only-mariner2"
     }
 }
+
+
+variable "CI_FRONTEND_CACHE_SCOPE" {
+    default = "dalec/frontend/ci"
+}
+
+target "frontend-ci" {
+    inherits = ["frontend"]
+    cache-from = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE}"]
+    output = ["type=registry"]
+}
+
+target "frontend-ci-full" {
+    inherits = ["frontend-ci"]
+    cache-to = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE},mode=max"]
+    platforms = ["linux/amd64", "linux/arm64"]
+}
+
