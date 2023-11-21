@@ -70,6 +70,9 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v3
+        with:
+          # We need to fetch all commits so that we can diff against the base branch
+          fetch-depth: 0
       - name: Expose GitHub tokens for caching
         uses: crazy-max/ghaction-github-runtime@v3
       - name: Setup builder
@@ -93,9 +96,12 @@ jobs:
 
           # Check if the mariner2 toolchain was modified and needs to be rebuilt
           # The bake file will take care of rebuilding it if needed
-          git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | \
-            grep frontend/mariner2/Dockerfile && \
-            echo REBUILD_MARINER2_TOOLCHAIN=1 >> $GITHUB_ENV || true
+          set -e
+          diff="$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} HEAD)"
+
+          set +e
+          grep frontend/mariner2/Dockerfile <<<"${diff}" && \
+            echo REBUILD_MARINER2_TOOLCHAIN=1 >> $GITHUB_ENV
 
           echo "MARINER2_TOOLCHAIN_CACHE_REF=$(tr '[:upper:]' '[:lower:]' <<< "ghcr.io/${{ github.repository }}/mariner2/toolchain:cache")" >> $GITHUB_ENV
       - name: Build frontend image
