@@ -22,19 +22,25 @@ RUN \
         wget
 ARG TOOLKIT_COMMIT=ae993d0b3288b1bb291f5f468169fa36b681b4d4
 ADD --keep-git-dir https://github.com/microsoft/CBL-Mariner.git#${TOOLKIT_COMMIT} /build
-ENV CONFIG_FILE="" CHROOT_DIR="/tmp/chroot"
+ENV CONFIG_FILE=""
+WORKDIR /build/toolkit
 # The toolchain can also run things in parallel so it will use multiple chroots.
 # See
 # https://github.com/microsoft/CBL-Mariner/blob/8b1db59e9b011798e8e7750907f58b1bc9577da7/toolkit/tools/internal/buildpipeline/buildpipeline.go#L37-L117
 # for implementation of this.
-RUN touch "${CHROOT_DIR}/chroot-pool.lock"
-WORKDIR /build/toolkit
 RUN \
     --mount=type=cache,target=/go/pkg/mod,id=go-pkg-mod \
     --mount=type=cache,target=/root/.cache/go-build,id=go-build-cache \
+    --mount=type=tmpfs,target=/tmp/tmp_chroot \
     # /.dockerenv is used by the toolkit to detect if we are running in a
     # container which will prevent this build from requring CAP_SYS_ADMIN
-    trap 'rm /.dockerenv' EXIT; touch /.dockerenv; make -j$(nproc) go-tools REBUILD_TOOLS=y
+    set -e; \
+    trap 'rm /.dockerenv'  EXIT; \
+    touch /.dockerenv; \
+    export CHROOT_DIR="/tmp/tmp_chroot"; \
+    mkdir -p "${CHROOT_DIR}/chroot0"; \
+    touch ${CHROOT_DIR}/chroot-pool.lock; \
+    make -j$(nproc) go-tools REBUILD_TOOLS=y
 RUN <<EOF
 set -e;
 make toolchain -j$(nproc) chroot-tools REBUILD_TOOLS=n
@@ -45,3 +51,5 @@ EOF
 # removed the rpms if we don't remove these manifests the toolkit will want to
 # install them again when we build packages.
 RUN for i in resources/manifests/package/*.txt; do [ -f "$i" ] || continue; echo "" > "$i"; done
+ENV CHROOT_DIR=/tmp/chroot
+RUN mkdir -p "${CHROOT_DIR}"; touch "${CHROOT_DIR}/chroot-pool.lock"
