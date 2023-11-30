@@ -66,14 +66,6 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	return ref, img, err
 }
 
-func getBaseOutputImage(spec *dalec.Spec, target string) string {
-	baseRef := marinerDistrolessRef
-	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
-		baseRef = spec.Targets[target].Image.Base
-	}
-	return baseRef
-}
-
 func specToContainerLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDir llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
@@ -131,7 +123,7 @@ rm -rf ` + rpmdbDir + `
 
 	installer := llb.Scratch().File(llb.Mkfile("install.sh", 0o755, []byte(installCmd)), opts...)
 
-	baseImg := llb.Image(getBaseOutputImage(spec, target), llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
+	baseImg := llb.Image(frontend.GetBaseOutputImage(spec, targetKey, marinerDistrolessRef), llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	worker := builderImg.
 		Run(
 			shArgs("/tmp/install.sh"),

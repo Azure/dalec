@@ -10,14 +10,14 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
-func BuildrootHandler(target string) frontend.BuildFunc {
+func BuildrootHandler(getWorker func(llb.ImageMetaResolver, ...llb.ConstraintsOpt) llb.State, target string) frontend.BuildFunc {
 	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		sOpt, err := frontend.SourceOptFromClient(ctx, client)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		st, err := SpecToBuildrootLLB(spec, target, sOpt)
+		st, err := SpecToBuildrootLLB(spec, target, sOpt, getWorker(client))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -40,12 +40,12 @@ func BuildrootHandler(target string) frontend.BuildFunc {
 }
 
 // SpecToBuildrootLLB converts a dalec.Spec to an rpm buildroot
-func SpecToBuildrootLLB(spec *dalec.Spec, target string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func SpecToBuildrootLLB(spec *dalec.Spec, target string, sOpt dalec.SourceOpts, worker llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if err := ValidateSpec(spec); err != nil {
 		return llb.Scratch(), fmt.Errorf("invalid spec: %w", err)
 	}
 	opts = append(opts, dalec.ProgressGroup("Create RPM buildroot"))
-	sources, err := Dalec2SourcesLLB(spec, sOpt, opts...)
+	sources, err := Dalec2SourcesLLB(spec, sOpt, worker, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}

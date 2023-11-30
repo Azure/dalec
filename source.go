@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
@@ -478,4 +479,75 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 	}
 
 	return states
+}
+
+// Tar creates a tar+gz from the provided state and puts it in the provided dest.
+// The provided work state is used to perform the neccessary operations to produce the tarball and requires the tar and gzip binaries.
+func Tar(work, src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
+	// Put the output tar in a consistent location regardless of `dest`
+	// This way if `dest` changes we don't have to rebuild the tarball, which can be expensive.
+	outBase := "/tmp/out"
+	out := filepath.Join(outBase, filepath.Dir(dest))
+	worker := work.Run(
+		llb.AddMount("/src", src, llb.Readonly),
+		llb.Args([]string{"/bin/sh", "-c", "tar -C /src -cvzf /tmp/st ."}),
+		WithConstraints(opts...),
+	).
+		Run(
+			llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + out + " && mv /tmp/st " + filepath.Join(out, filepath.Base(dest))}),
+			WithConstraints(opts...),
+		)
+
+	return worker.AddMount(outBase, llb.Scratch())
+}
+
+// SourceToTar provides a common [SourceFetchOption] that will produce a tarball from the provided source.
+// The tarball will be called <key>.tar.gz
+func SourceToTar(work llb.State) SourceModifierFunc {
+	return func(key string, src *Source, st llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
+		if isDir := SourceIsDir(*src); !isDir {
+			return st, nil
+		}
+		return Tar(work, st, key+".tar.gz", opts...), nil
+	}
+}
+
+func DefaultTarWorker(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State {
+	return llb.Image("busybox:latest", llb.WithMetaResolver(resolver), withConstraints(opts))
+}
+
+// SourceModifierFunc is a function that modifies the provided source LLB state.
+type SourceModifierFunc func(key string, src *Source, st llb.State, opts ...llb.ConstraintsOpt) (llb.State, error)
+
+// Sources calls [SourcesWithMod] without any source modifier.
+func Sources(spec *Spec, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+	return SourcesWithMod(spec, sOpt, nil, opts...)
+}
+
+// SourcesWithMod gets all the source LLB states from the spec.
+//
+// SourceModifierFunc can be provided to modify the source LLB state of every source.
+// The `key` argument to the SourceModifierFunc is the name of the source.
+func SourcesWithMod(spec *Spec, sOpt SourceOpts, mod SourceModifierFunc, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+	states := make(map[string]llb.State, len(spec.Sources))
+
+	for k, src := range spec.Sources {
+		pg := ProgressGroup("Prepare source: " + k)
+		opts := append(opts, pg)
+
+		st, err := src.AsState(k, sOpt)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not get source state for source: %s", k)
+		}
+
+		if mod != nil {
+			st, err = mod(k, &src, st, opts...)
+			if err != nil {
+				return nil, errors.Wrapf(err, "could not modify source state for source: %s", k)
+			}
+		}
+		states[k] = st
+	}
+
+	return states, nil
 }

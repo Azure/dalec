@@ -95,12 +95,13 @@ func installBuildDeps(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOpt
 }
 
 func specToRpmLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	br, err := rpm.SpecToBuildrootLLB(spec, targetKey, sOpt, opts...)
+	worker := getWorkerImage(sOpt, opts...)
+	br, err := rpm.SpecToBuildrootLLB(spec, targetKey, sOpt, worker, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 
-	base := getWorkerImage(sOpt, opts...).With(installBuildDeps(spec, opts...))
+	base := worker.With(installBuildDeps(spec, opts...))
 	return rpm.Build(br, base, specPath, opts...), nil
 }

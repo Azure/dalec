@@ -12,6 +12,7 @@ import (
 
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/debug"
+	"github.com/Azure/dalec/frontend/jammy"
 	"github.com/Azure/dalec/frontend/mariner2"
 	"github.com/Azure/dalec/frontend/windows"
 )
@@ -27,6 +28,7 @@ func main() {
 	ctx := appcontext.Context()
 
 	debug.RegisterHandlers()
+	jammy.RegisterHandlers()
 	mariner2.RegisterHandlers()
 	windows.RegisterHandlers()
 
