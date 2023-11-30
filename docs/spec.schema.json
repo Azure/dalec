@@ -373,34 +373,43 @@
 			"type": "object",
 			"description": "ImageConfig is the configuration for the output image."
 		},
+		"PackageConstraints": {
+			"properties": {
+				"version": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array"
+				},
+				"arch": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object"
+		},
 		"PackageDependencies": {
 			"properties": {
 				"build": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Build is the list of packagese required to build the package."
 				},
 				"runtime": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Runtime is the list of packages required to install/run the package."
 				},
 				"recommends": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Recommends is the list of packages recommended to install with the generated package.\nNote: Not all package managers support this (e.g. rpm)"
@@ -523,29 +532,23 @@
 				},
 				"conflicts": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Conflicts is the list of packages that conflict with the generated package.\nThis will prevent the package from being installed if any of these packages are already installed or vice versa."
 				},
 				"replaces": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Replaces is the list of packages that are replaced by the generated package."
 				},
 				"provides": {
-					"items": {
-						"type": "string"
+					"additionalProperties": {
+						"$ref": "#/$defs/PackageConstraints"
 					},
-					"type": "array",
+					"type": "object",
 					"description": "Provides is the list of things that the generated package provides.\nThis can be used to satisfy dependencies of other packages.\nAs an example, the moby-runc package provides \"runc\", other packages could depend on \"runc\" and be satisfied by moby-runc.\nThis is an advanced use case and consideration should be taken to ensure that the package actually provides the thing it claims to provide."
 				},
 				"sources": {

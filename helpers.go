@@ -179,15 +179,59 @@ func CacheDirsToRunOpt(mounts map[string]CacheDirConfig, distroKey, archKey stri
 		opts = append(opts, llb.AddMount(p, llb.Scratch(), llb.AsPersistentCacheDir(key, mode)))
 	}
 
-	return runOptFunc(func(ei *llb.ExecInfo) {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
 		for _, opt := range opts {
 			opt.SetRunOption(ei)
 		}
 	})
 }
 
-type runOptFunc func(*llb.ExecInfo)
+type RunOptFunc func(*llb.ExecInfo)
 
-func (f runOptFunc) SetRunOption(ei *llb.ExecInfo) {
+func (f RunOptFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
+}
+
+// MergeSpecImage merges the image config from the main part of the spec with the target's image config.
+// Settings in the target's image config take precedence over the main image config.
+func MergeSpecImage(spec *Spec, target string) *ImageConfig {
+	var cfg ImageConfig
+
+	if spec.Image != nil {
+		cfg = *spec.Image
+	}
+
+	if i := spec.Targets[target].Image; i != nil {
+		if i.Entrypoint != "" {
+			cfg.Entrypoint = spec.Targets[target].Image.Entrypoint
+		}
+
+		if i.Cmd != "" {
+			cfg.Cmd = spec.Targets[target].Image.Cmd
+		}
+
+		cfg.Env = append(cfg.Env, i.Env...)
+
+		for k, v := range i.Volumes {
+			cfg.Volumes[k] = v
+		}
+
+		for k, v := range i.Labels {
+			cfg.Labels[k] = v
+		}
+
+		if i.WorkingDir != "" {
+			cfg.WorkingDir = i.WorkingDir
+		}
+
+		if i.StopSignal != "" {
+			cfg.StopSignal = i.StopSignal
+		}
+
+		if i.Base != "" {
+			cfg.Base = i.Base
+		}
+	}
+
+	return &cfg
 }

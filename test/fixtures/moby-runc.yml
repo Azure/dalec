@@ -16,6 +16,23 @@ revision: ${REVISION}
 vendor: Moby
 
 targets: # Distro specific build requirements
+  jammy:
+    dependencies:
+      build:
+        libseccomp-dev:
+        gcc:
+        go-md2man:
+        git:
+        tar:
+        make:
+        golang:
+        libtool:
+        libltdl-dev:
+      runtime:
+        libseccomp2:
+          version:
+            - ">= 2.3"
+
   mariner2:
     image:
       entrypoint: runc
@@ -36,8 +53,12 @@ targets: # Distro specific build requirements
       runtime:
         /bin/sh:
         libseccomp:
-          - ">= 2.3"
+          version:
+            - ">= 2.3"
     tests:
+      - name: mariner manpages
+        files:
+          /usr/share/man/man8/runc-create.8.gz:
       - name: mariner rpm manifest files
         files:
           /var/lib/rpmmanifest/container-manifest-1:
@@ -58,7 +79,7 @@ conflicts:
   runc-io:
   containerd.io:
 provides:
-  - runc
+  runc:
 sources:
   src:
     ref: https://github.com/opencontainers/runc.git#${RUNC_COMMIT}
@@ -68,12 +89,14 @@ build:
     CGO_ENABLED: 1 
     GOGC: off
     GOFLAGS: -trimpath
-    GOROOT: /usr/lib/golang
   steps:
     - command: |
         set -e
         cd src
-        export GOROOT=/usr/lib/golang
+        if ! test -d $(go env GOROOT) && grep 'ID=mariner' /etc/os-release; then
+          # Workaround for https://github.com/microsoft/CBL-Mariner/issues/6363
+          export GOROOT=/usr/lib/golang
+        fi
         make man runc BUILDTAGS=seccomp
 artifacts:
   binaries:
@@ -87,7 +110,6 @@ tests:
     files:
       /usr/bin/runc:
         permissions: 0755
-      /usr/share/man/man8/runc-create.8.gz:
   - name: version reporting
     steps:
       - command: runc --version

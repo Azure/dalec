@@ -56,7 +56,12 @@ func handleToolkitRoot(ctx context.Context, client gwclient.Client, spec *dalec.
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := spec2ToolkitRootLLB(spec, getDigestFromClientFn(ctx, client), sOpt)
+
+	worker, err := getBaseBuilderImg(ctx, client)
+	if err != nil {
+		return nil, nil, err
+	}
+	st, err := spec2ToolkitRootLLB(spec, getDigestFromClientFn(ctx, client), sOpt, worker)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -77,13 +82,13 @@ func handleToolkitRoot(ctx context.Context, client gwclient.Client, spec *dalec.
 	return ref, &image.Image{}, err
 }
 
-func spec2ToolkitRootLLB(spec *dalec.Spec, getDigest getDigestFunc, sOpt dalec.SourceOpts) (llb.State, error) {
+func spec2ToolkitRootLLB(spec *dalec.Spec, getDigest getDigestFunc, sOpt dalec.SourceOpts, work llb.State) (llb.State, error) {
 	specs, err := rpm.Dalec2SpecLLB(spec, llb.Scratch(), targetKey, "/")
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	sources, err := rpm.Dalec2SourcesLLB(spec, sOpt)
+	sources, err := rpm.Dalec2SourcesLLB(spec, sOpt, work)
 	if err != nil {
 		return llb.Scratch(), err
 	}

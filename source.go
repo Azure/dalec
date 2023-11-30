@@ -5,12 +5,15 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
+	"github.com/moby/buildkit/identity"
 	sourcetypes "github.com/moby/buildkit/source/types"
 	"github.com/moby/buildkit/util/gitutil"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -76,6 +79,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 	return cmdSt, nil
 }
 
+// TODO: LLBGetter is a remnant of older implementations that shouldn't really be needed at this point.
 func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
 	return source2LLBGetter(s, src, name, false)
 }
@@ -404,4 +408,41 @@ func (s Source) Doc() (io.Reader, error) {
 	}
 
 	return b, nil
+}
+
+// Tar creates a tar+gz from the provided state and puts it in the provided dest.
+// The provided work state is used to perform the neccessary operations to produce the tarball and requires the tar and gzip binaries.
+func Tar(work, src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
+	// Put the output tar in a consistent location regardless of `dest`
+	// This way if `dest` changes we don't have to rebuild the tarball, which can be expensive.
+	outBase := "/tmp/out"
+	out := filepath.Join(outBase, filepath.Dir(dest))
+	worker := work.Run(
+		llb.AddMount("/src", src, llb.Readonly),
+		llb.Args([]string{"/bin/sh", "-c", "tar -C /src -cvzf /tmp/st ."}),
+		WithConstraints(opts...),
+	).
+		Run(
+			llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + out + " && mv /tmp/st " + filepath.Join(out, filepath.Base(dest))}),
+			WithConstraints(opts...),
+		)
+
+	return worker.AddMount(outBase, llb.Scratch())
+}
+
+// Sources gets all the source LLB states from the spec.
+func Sources(spec *Spec, sOpt SourceOpts) (map[string]llb.State, error) {
+	states := make(map[string]llb.State, len(spec.Sources))
+
+	pgID := identity.NewID()
+	for k, src := range spec.Sources {
+		pg := llb.ProgressGroup(pgID, "Add source: "+k+" "+src.Ref, false)
+		st, err := Source2LLBGetter(spec, src, k)(sOpt, pg)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error fetching source %q", k)
+		}
+		states[k] = st
+	}
+
+	return states, nil
 }

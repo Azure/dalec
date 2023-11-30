@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"text/template"
 
 	"github.com/Azure/dalec"
+	"golang.org/x/exp/maps"
 )
 
 var specTmpl = template.Must(template.New("spec").Parse(strings.TrimSpace(`
@@ -68,8 +70,10 @@ func (w *specWrapper) Changelog() (fmt.Stringer, error) {
 func (w *specWrapper) Provides() fmt.Stringer {
 	b := &strings.Builder{}
 
-	sort.Strings(w.Spec.Provides)
-	for _, name := range w.Spec.Provides {
+	ls := maps.Keys(w.Spec.Provides)
+	slices.Sort(ls)
+
+	for _, name := range ls {
 		fmt.Fprintln(b, "Provides:", name)
 	}
 	return b
@@ -117,15 +121,28 @@ func (w *specWrapper) Requires() fmt.Stringer {
 	return b
 }
 
-func writeDep(b *strings.Builder, kind, name string, constraints []string) {
-	if len(constraints) == 0 {
-		fmt.Fprintf(b, "%s: %s\n", kind, name)
+func writeDep(b *strings.Builder, kind, name string, constraints dalec.PackageConstraints) {
+	do := func() {
+		if len(constraints.Version) == 0 {
+			fmt.Fprintf(b, "%s: %s\n", kind, name)
+			return
+		}
+
+		sort.Strings(constraints.Version)
+		for _, c := range constraints.Version {
+			fmt.Fprintf(b, "%s: %s %s\n", kind, name, c)
+		}
+	}
+
+	if len(constraints.Arch) == 0 {
+		do()
 		return
 	}
 
-	sort.Strings(constraints)
-	for _, c := range constraints {
-		fmt.Fprintf(b, "%s: %s %s\n", kind, name, c)
+	for _, arch := range constraints.Arch {
+		fmt.Fprintln(b, "%ifarch", arch)
+		slices.Sort(constraints.Arch)
+		fmt.Fprintln(b, `%endif`) //nolint:govet
 	}
 }
 

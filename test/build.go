@@ -163,7 +163,7 @@ func withLocaFrontendInputs(ctx context.Context, gwc gwclient.Client, opts *gwcl
 		opts.FrontendOpt = make(map[string]string)
 	}
 
-	opts.FrontendOpt["source"] = fID
+	opts.FrontendOpt["source"] = fID // cpuguy83/frontend:v0
 	opts.FrontendOpt["context:"+fID] = "input:" + fID
 	opts.Frontend = "gateway.v0"
 

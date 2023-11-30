@@ -12,6 +12,7 @@ import (
 
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/debug"
+	"github.com/Azure/dalec/frontend/jammy"
 	"github.com/Azure/dalec/frontend/mariner2"
 )
 
@@ -26,6 +27,7 @@ func main() {
 	ctx := appcontext.Context()
 
 	mariner2.RegisterHandlers()
+	jammy.RegisterHandlers()
 	debug.RegisterHandlers()
 
 	if err := grpcclient.RunFromEnvironment(ctx, frontend.Build); err != nil {

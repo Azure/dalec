@@ -18,7 +18,7 @@ func BuildrootHandler(target string) frontend.BuildFunc {
 			return nil, nil, err
 		}
 
-		st, err := specToBuildrootLLB(spec, target, sOpt)
+		st, err := specToBuildrootLLB(spec, target, sOpt, llb.Image(TarImageRef, llb.WithMetaResolver(sOpt.Resolver)))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -40,8 +40,8 @@ func BuildrootHandler(target string) frontend.BuildFunc {
 	}
 }
 
-func specToBuildrootLLB(spec *dalec.Spec, target string, sOpt dalec.SourceOpts) (llb.State, error) {
-	sources, err := Dalec2SourcesLLB(spec, sOpt)
+func specToBuildrootLLB(spec *dalec.Spec, target string, sOpt dalec.SourceOpts, work llb.State) (llb.State, error) {
+	sources, err := Dalec2SourcesLLB(spec, sOpt, work)
 	if err != nil {
 		return llb.Scratch(), err
 	}

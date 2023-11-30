@@ -2,7 +2,7 @@ package mariner2
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/Azure/dalec"
@@ -10,6 +10,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"golang.org/x/exp/maps"
 )
 
 func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -23,8 +24,12 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spe
 		return nil, nil, err
 	}
 
+	depsSpec := dalec.GetDeps(spec, targetKey)
+	deps := maps.Keys(depsSpec.Runtime)
+	slices.Sort(deps)
+
 	rpmDir := baseImg.Run(
-		shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(getRuntimeDeps(spec), " ")),
+		shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(deps, " ")),
 		marinerTdnfCache,
 	).
 		AddMount("/tmp/rpms", llb.Scratch())
@@ -57,26 +62,4 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spe
 	}
 
 	return ref, img, nil
-}
-
-func getRuntimeDeps(spec *dalec.Spec) []string {
-	var deps *dalec.PackageDependencies
-	if t, ok := spec.Targets[targetKey]; ok {
-		deps = t.Dependencies
-	}
-
-	if deps == nil {
-		deps = spec.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
-	var out []string
-	for p := range deps.Runtime {
-		out = append(out, p)
-	}
-
-	sort.Strings(out)
-	return out
 }

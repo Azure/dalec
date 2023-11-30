@@ -33,14 +33,14 @@ type Spec struct {
 
 	// Conflicts is the list of packages that conflict with the generated package.
 	// This will prevent the package from being installed if any of these packages are already installed or vice versa.
-	Conflicts map[string][]string `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
+	Conflicts map[string]PackageConstraints `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
 	// Replaces is the list of packages that are replaced by the generated package.
-	Replaces map[string][]string `yaml:"replaces,omitempty" json:"replaces,omitempty"`
+	Replaces map[string]PackageConstraints `yaml:"replaces,omitempty" json:"replaces,omitempty"`
 	// Provides is the list of things that the generated package provides.
 	// This can be used to satisfy dependencies of other packages.
 	// As an example, the moby-runc package provides "runc", other packages could depend on "runc" and be satisfied by moby-runc.
 	// This is an advanced use case and consideration should be taken to ensure that the package actually provides the thing it claims to provide.
-	Provides []string `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Provides map[string]PackageConstraints `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Sources is the list of sources to use to build the artifact(s).
 	// The map key is the name of the source and the value is the source configuration.
@@ -236,17 +236,22 @@ type BuildSpec struct {
 	Inline string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
 }
 
+type PackageConstraints struct {
+	Version []string `yaml:"version,omitempty" json:"version,omitempty"`
+	Arch    []string `yaml:"arch,omitempty" json:"arch,omitempty"`
+}
+
 // PackageDependencies is a list of dependencies for a package.
 // This will be included in the package metadata so that the package manager can install the dependencies.
 // It also includes build-time dedendencies, which we'll install before running any build steps.
 type PackageDependencies struct {
 	// Build is the list of packagese required to build the package.
-	Build map[string][]string `yaml:"build,omitempty" json:"build,omitempty"`
+	Build map[string]PackageConstraints `yaml:"build,omitempty" json:"build,omitempty"`
 	// Runtime is the list of packages required to install/run the package.
-	Runtime map[string][]string `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Runtime map[string]PackageConstraints `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	// Recommends is the list of packages recommended to install with the generated package.
 	// Note: Not all package managers support this (e.g. rpm)
-	Recommends map[string][]string `yaml:"recommends,omitempty" json:"recommends,omitempty"`
+	Recommends map[string]PackageConstraints `yaml:"recommends,omitempty" json:"recommends,omitempty"`
 
 	// Test lists any extra packages required for running tests
 	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
@@ -478,4 +483,13 @@ type CheckOutputError struct {
 
 func (c *CheckOutputError) Error() string {
 	return fmt.Sprintf("expected %q %s %q, got %q", c.Path, c.Kind, c.Expected, c.Actual)
+}
+
+func GetDeps(spec *Spec, target string) *PackageDependencies {
+	if t, ok := spec.Targets[target]; ok {
+		if t.Dependencies != nil {
+			return t.Dependencies
+		}
+	}
+	return spec.Dependencies
 }

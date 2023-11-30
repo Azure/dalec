@@ -21,7 +21,24 @@ import (
 
 const dalecTargetOptKey = "dalec.target"
 
-type BuildFunc func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error)
+// These are various convenice type aliases to make it easier to use the buildkit API.
+// This mostly just helps with goimports choosing the wrong type when there are multiple packages with the same name.
+type (
+	// Image is a convenience type alias because goimports always preferse stdlib "image.Image"
+	// instead of "github.com/moby/buildkit/exporter/containerimage/image.Image"
+	Image = image.Image
+
+	// Client is a convenience type alias because there are multiple `client.Client`
+	// types in buildkit and other projects, and goimports always chooses the wrong
+	// one.
+	Client = gwclient.Client
+
+	Reference = gwclient.Reference
+
+	SolveRequest = gwclient.SolveRequest
+)
+
+type BuildFunc func(ctx context.Context, client Client, spec *dalec.Spec) (Reference, *Image, error)
 
 type targetWrapper struct {
 	bktargets.Target

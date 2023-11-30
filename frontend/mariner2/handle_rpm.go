@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -68,28 +68,6 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
-func getBuildDeps(spec *dalec.Spec) []string {
-	var deps *dalec.PackageDependencies
-	if t, ok := spec.Targets[targetKey]; ok {
-		deps = t.Dependencies
-	}
-
-	if deps == nil {
-		deps = spec.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
-	var out []string
-	for p := range deps.Build {
-		out = append(out, p)
-	}
-
-	sort.Strings(out)
-	return out
-}
-
 func getBaseBuilderImg(ctx context.Context, client gwclient.Client) (llb.State, error) {
 	dc, err := dockerui.NewClient(client)
 	if err != nil {
@@ -145,11 +123,29 @@ done
 `
 
 func getAllDeps(spec *dalec.Spec) []string {
-	return sort.StringSlice(append(getBuildDeps(spec), getRuntimeDeps(spec)...))
+	deps := dalec.GetDeps(spec, targetKey)
+	if deps == nil {
+		return nil
+	}
+
+	sz := len(deps.Build) + len(deps.Runtime)
+	if sz == 0 {
+		return nil
+	}
+
+	out := make([]string, 0, sz)
+	for p := range deps.Build {
+		out = append(out, p)
+	}
+	for p := range deps.Runtime {
+		out = append(out, p)
+	}
+	slices.Sort(out)
+	return out
 }
 
 func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-	br, err := spec2ToolkitRootLLB(spec, getDigest, sOpt)
+	br, err := spec2ToolkitRootLLB(spec, getDigest, sOpt, baseImg)
 	if err != nil {
 		return llb.Scratch(), err
 	}
