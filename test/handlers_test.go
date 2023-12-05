@@ -1,15 +1,14 @@
 package test
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
-	"github.com/goccy/go-yaml"
-	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/dockerui"
+	"github.com/Azure/dalec/test/fixtures"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/solver/pb"
 )
 
 // TestHandlerTargetForwarding tests that the frontend forwards the build to the specified frontend image.
@@ -19,80 +18,95 @@ import (
 // Note: Without instrumenting the frontend with special things for testing, it is difficult to tell if
 // the target was actually forwarded, but we can check that the target actually works.
 func TestHandlerTargetForwarding(t *testing.T) {
-	const expectedFOO = "hello"
-	doTest := func(ct *testing.T, target string) {
-		t.Run("target="+target, func(t *testing.T) {
-			t.Parallel()
+	t.Parallel()
 
-			testFrontend(t, func(ctx context.Context, t *testing.T, gwc gwclient.Client, frontendID string) {
-				spec := &dalec.Spec{
-					Args: map[string]string{
-						"FOO": "",
-					},
-					Version: "${FOO}",
-					Targets: map[string]dalec.Target{
-						"foo": {
-							Frontend: &dalec.Frontend{
-								Image: frontendID,
-							},
+	opts := []testSolveOpt{withFrontend("phony", fixtures.PhonyFrontend)}
+
+	testEnv(t, func(ctx context.Context, t *testing.T, gwc gwclient.Client) {
+		t.Run("forwarded target", func(t *testing.T) {
+			// First, make sure this target isn't in the base frontend.
+			sr := gwclient.SolveRequest{
+				FrontendOpt: map[string]string{
+					"target": "phony/check",
+				},
+			}
+			specToSolveRequest(ctx, t, &dalec.Spec{
+				Targets: map[string]dalec.Target{
+					"phony": {},
+				}}, &sr)
+
+			_, err := gwc.Solve(ctx, sr)
+			expectUnknown := "unknown target"
+			if err == nil || !strings.Contains(err.Error(), expectUnknown) {
+				t.Fatalf("expected error %q, got %v", expectUnknown, err)
+			}
+
+			// Now make sure the forwarded target works.
+			sr = gwclient.SolveRequest{
+				FrontendOpt: map[string]string{
+					"target": "phony/check",
+				},
+			}
+			specToSolveRequest(ctx, t, &dalec.Spec{
+				Targets: map[string]dalec.Target{
+					"phony": {
+						Frontend: &dalec.Frontend{
+							Image: "phony",
 						},
-						"mariner2": {
-							Frontend: &dalec.Frontend{
-								Image: frontendID,
-							},
-						},
 					},
-				}
+				}}, &sr)
 
-				dt, err := yaml.Marshal(spec)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				dfSt, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0o644, dt)).Marshal(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				opt := gwclient.SolveRequest{
-					FrontendOpt: map[string]string{
-						"build-arg:FOO": expectedFOO,
-						"target":        target,
-					},
-					FrontendInputs: map[string]*pb.Definition{
-						dockerui.DefaultLocalNameContext:    dfSt.ToPB(),
-						dockerui.DefaultLocalNameDockerfile: dfSt.ToPB(),
-					},
-				}
-
-				res, err := gwc.Solve(ctx, opt)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				ref, err := res.SingleRef()
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				dt, err = ref.ReadFile(ctx, gwclient.ReadRequest{Filename: "spec.yml"})
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				var got dalec.Spec
-				if err := yaml.Unmarshal(dt, &got); err != nil {
-					t.Fatal(err)
-				}
-
-				if got.Version != expectedFOO {
-					t.Fatalf("expected version %q, got %q", expectedFOO, got.Version)
-				}
-			})
+			res, err := gwc.Solve(ctx, sr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dt := readFileResult(ctx, t, "hello", res)
+			expect := []byte("phony hello")
+			if !bytes.Equal(dt, expect) {
+				t.Fatalf("expected %q, got %q", expect, string(dt))
+			}
 		})
+
+		t.Run("target not found", func(t *testing.T) {
+			sr := gwclient.SolveRequest{
+				FrontendOpt: map[string]string{
+					"target": "phony/does-not-exist",
+				},
+			}
+			specToSolveRequest(ctx, t, &dalec.Spec{
+				Targets: map[string]dalec.Target{
+					"phony": {
+						Frontend: &dalec.Frontend{
+							Image: "phony",
+						},
+					},
+				},
+			}, &sr)
+			_, err := gwc.Solve(ctx, sr)
+			expect := "unknown target"
+			if err == nil || !strings.Contains(err.Error(), expect) {
+				t.Fatalf("expected error %q, got %v", expect, err)
+			}
+		})
+
+	}, opts...)
+
+}
+
+func readFileResult(ctx context.Context, t *testing.T, name string, res *gwclient.Result) []byte {
+	t.Helper()
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	doTest(t, "foo/debug/resolve")
-	doTest(t, "mariner2/debug/resolve")
-	doTest(t, "debug/resolve")
+	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+		Filename: name,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return dt
 }
