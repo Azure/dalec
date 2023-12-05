@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"path"
+	"sync"
+	"testing"
 
 	"github.com/cpuguy83/go-docker"
 	"github.com/cpuguy83/go-docker/container"
 	"github.com/cpuguy83/go-docker/container/containerapi"
 	dockerimage "github.com/cpuguy83/go-docker/image"
-	dockerimageapi "github.com/cpuguy83/go-docker/image"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -24,12 +26,30 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// setupRegistry is used to setup a local registry for testing.
+var (
+	registryHostOnce sync.Once
+	regHost          string
+	regRelease       func(context.Context) error
+	regErr           error
+)
+
+func registryHost(ctx context.Context, t *testing.T) string {
+	registryHostOnce.Do(func() {
+		if buildxContainerID != "" {
+			regHost, regRelease, regErr = _setupRegistry(ctx)
+		}
+	})
+
+	if regErr != nil {
+		t.Fatal(regErr)
+	}
+	return regHost
+}
+
+// _setupRegistry is used to setup a local registry for testing.
 // It returns the host:port of the registry and a function to cleanup the registry.
-//
-// This is used by [_pushFrontendToRegistry] which gets called during the test suite under certain conditions.
-// This _should_ only be called once and then cached for the duration of the test suite.
-func setupRegistry(ctx context.Context) (host string, release func(context.Context) error, retErr error) {
+// Do not call this directly, use [registryHost] instead.
+func _setupRegistry(ctx context.Context) (host string, release func(context.Context) error, retErr error) {
 	ctx, span := otel.Tracer("").Start(ctx, "setupRegistry")
 	defer func() {
 		if retErr != nil {
@@ -100,71 +120,52 @@ func setupRegistry(ctx context.Context) (host string, release func(context.Conte
 	return regHost, release, nil
 }
 
-// _pushFrontendToRegistry is intended to only ever be called via sync.Once (specifically [pushFrontendToRegistry] in the test suite)
-// It builds the local frontend and pushes it to a registry or to docker, depending on what buildx builder is configured.
+func setRegistryExport(ref string, so *client.SolveOpt) {
+	so.Exports = []client.ExportEntry{
+		{
+			Type: func() string {
+				if buildxContainerID != "" {
+					return "image"
+				}
+				return "moby"
+			}(),
+			Attrs: map[string]string{
+				"name": ref,
+				"push": func() string {
+					if buildxContainerID != "" {
+						return "true"
+					}
+					return "false"
+				}(),
+			},
+		},
+	}
+}
+
+// buildFrontendImage builds the local frontend and pushes it to a registry or to docker, depending on what buildx builder is configured.
 // If the default builder is selected (which is determined when setting up the buildkit client), then it will just add the frontend to the local docker daemon.
 // Otherwise it needs to push it to a registry so that buildkit can fetch it accordingly.
 //
 // It returns the image name and a function to cleanup the image/registry.
-func _pushFrontendToRegistry(ctx context.Context, c *client.Client) (_ string, _ func(context.Context) error, retErr error) {
-	var (
-		release = func(context.Context) error { return nil }
-		imgName string
-	)
-	if buildxContainerID != "" {
-		var (
-			err  error
-			host string
-		)
-		host, release, err = setupRegistry(ctx)
-		if err != nil {
-			return "", nil, err
-		}
-		imgName = path.Join(host, identity.NewID())
-	} else {
-		imgName = path.Join("dalec/test", identity.NewID())
-		release = func(ctx context.Context) error {
+func buildFrontendImage(ctx context.Context, c *client.Client, t *testing.T) (_ string, retErr error) {
+	regHost := registryHost(ctx, t)
+	imgName := path.Join(regHost, "dalec/test", identity.NewID())
+
+	if regHost == "" {
+		// Image only lives in dockerd
+		t.Cleanup(func() {
 			images := docker.NewClient(docker.WithTransport(dockerTransport)).ImageService()
-			_, err := images.Remove(ctx, imgName, func(config *dockerimageapi.ImageRemoveConfig) error {
+			_, err := images.Remove(ctx, imgName, func(config *dockerimage.ImageRemoveConfig) error {
 				config.Force = true
 				return nil
 			})
-			return err
-		}
+			t.Log(err)
+		})
 	}
 
-	defer func() {
-		if retErr != nil {
-			if err := release(context.WithoutCancel(ctx)); err != nil {
-				retErr = stderrors.Join(retErr, err)
-			}
-		}
-	}()
-
-	so := client.SolveOpt{
-		Exports: []client.ExportEntry{
-			{
-				Type: func() string {
-					if buildxContainerID != "" {
-						return "image"
-					}
-					return "moby"
-				}(),
-				Attrs: map[string]string{
-					"name": imgName,
-					"push": func() string {
-						if buildxContainerID != "" {
-							return "true"
-						}
-						return "false"
-					}(),
-				},
-			},
-		},
-	}
-	if err := withProjectRoot(&so); err != nil {
-		return "", nil, err
-	}
+	var so client.SolveOpt
+	setRegistryExport(imgName, &so)
+	withProjectRoot(t, &so)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	ch := displaySolveStatus(ctx, eg)
@@ -175,14 +176,23 @@ func _pushFrontendToRegistry(ctx context.Context, c *client.Client) (_ string, _
 		}
 
 		rb, err := dc.Build(ctx, func(ctx context.Context, platform *v1.Platform, idx int) (gwclient.Reference, *image.Image, error) {
-			ref, dt, err := buildLocalFrontend(ctx, gwc)
+			res, err := buildLocalFrontend(ctx, gwc)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			var img image.Image
-			if err := json.Unmarshal(dt, &img); err != nil {
+			ref, err := res.SingleRef()
+			if err != nil {
 				return nil, nil, err
+			}
+
+			dt := res.Metadata[exptypes.ExporterImageConfigKey]
+
+			var img image.Image
+			if dt != nil {
+				if err := json.Unmarshal(dt, &img); err != nil {
+					return nil, nil, err
+				}
 			}
 			return ref, &img, nil
 		})
@@ -193,8 +203,8 @@ func _pushFrontendToRegistry(ctx context.Context, c *client.Client) (_ string, _
 	}, ch)
 
 	if err != nil {
-		return "", release, err
+		return "", err
 	}
 
-	return imgName, release, nil
+	return imgName, nil
 }

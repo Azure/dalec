@@ -185,11 +185,11 @@ type buildxConfig struct {
 	}
 }
 
-// _supportsFrontendNamedContexts check if we can overwrite the frontend ref via named contexts.
+// supportsFrontendNamedContexts checks if we can overwrite the frontend ref via named contexts.
 //
 // More info:
 // Buildkit treats the frontend ref (`#syntax=<ref>` or via the BUILDKIT_SYNTAX
-// var) as an docker image ref.
+// var) as a docker image ref.
 // Buildkit will always check the remote registry for a new version of the image.
 // As of buildkit v0.12 you can use named contexts to ovewrite the frontend ref
 // with another type of ref.
@@ -200,7 +200,7 @@ type buildxConfig struct {
 // In the future we'll just drop this version check and always use named
 // contexts, but for now we need to be able to run the test suite against older
 // versions of buildkit, where "older" means the version currently shipping with Docker (in v24).
-func _supportsFrontendNamedContexts(ctx context.Context, client *client.Client) bool {
+func supportsFrontendNamedContexts(ctx context.Context, client *client.Client) bool {
 	info, err := client.Info(ctx)
 	if err != nil {
 		return false
