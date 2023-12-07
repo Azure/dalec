@@ -3,12 +3,15 @@ package test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/fixtures"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
 // TestHandlerTargetForwarding tests that the frontend forwards the build to the specified frontend image.
@@ -24,37 +27,43 @@ func TestHandlerTargetForwarding(t *testing.T) {
 
 	testEnv(t, func(ctx context.Context, t *testing.T, gwc gwclient.Client) {
 		t.Run("forwarded target", func(t *testing.T) {
-			// First, make sure this target isn't in the base frontend.
-			sr := gwclient.SolveRequest{
-				FrontendOpt: map[string]string{
-					"target": "phony/check",
-				},
-			}
-			specToSolveRequest(ctx, t, &dalec.Spec{
+			// Make sure phony is not in the list of targets since it shouldn't be registered in the base frontend.
+			ls := listTargets(ctx, t, gwc, &dalec.Spec{
 				Targets: map[string]dalec.Target{
+					// Note: This is not setting the frontend image, so it should use the default frontend.
 					"phony": {},
-				}}, &sr)
-
-			_, err := gwc.Solve(ctx, sr)
-			expectUnknown := "unknown target"
-			if err == nil || !strings.Contains(err.Error(), expectUnknown) {
-				t.Fatalf("expected error %q, got %v", expectUnknown, err)
+				},
+			})
+			if slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
+				return strings.Contains(tgt.Name, "phony")
+			}) {
+				t.Fatal("found phony target")
 			}
 
 			// Now make sure the forwarded target works.
-			sr = gwclient.SolveRequest{
-				FrontendOpt: map[string]string{
-					"target": "phony/check",
-				},
-			}
-			specToSolveRequest(ctx, t, &dalec.Spec{
+			spec := &dalec.Spec{
 				Targets: map[string]dalec.Target{
 					"phony": {
 						Frontend: &dalec.Frontend{
 							Image: "phony",
 						},
 					},
-				}}, &sr)
+				}}
+
+			// Make sure phony is in the list of targets since it should be registered in the forwarded frontend.
+			ls = listTargets(ctx, t, gwc, spec)
+			if !slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
+				return tgt.Name == "phony/check"
+			}) {
+				t.Fatal("did not find phony/check target")
+			}
+
+			sr := gwclient.SolveRequest{
+				FrontendOpt: map[string]string{
+					"target": "phony/check",
+				},
+			}
+			specToSolveRequest(ctx, t, spec, &sr)
 
 			res, err := gwc.Solve(ctx, sr)
 			if err != nil {
@@ -109,4 +118,28 @@ func readFileResult(ctx context.Context, t *testing.T, name string, res *gwclien
 	}
 
 	return dt
+}
+
+func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec) targets.List {
+	sr := gwclient.SolveRequest{
+		FrontendOpt: map[string]string{"requestid": targets.RequestTargets},
+	}
+
+	specToSolveRequest(ctx, t, spec, &sr)
+
+	res, err := gwc.Solve(ctx, sr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dt, ok := res.Metadata["result.json"]
+	if !ok {
+		t.Fatal("missing result.json")
+	}
+
+	var ls targets.List
+	if err := json.Unmarshal(dt, &ls); err != nil {
+		t.Fatal(err)
+	}
+	return ls
 }
