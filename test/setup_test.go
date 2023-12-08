@@ -3,7 +3,6 @@ package test
 import (
 	"context"
 	"path"
-	"sync"
 	"testing"
 
 	"github.com/moby/buildkit/client"
@@ -15,8 +14,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func startTestSpan(ctx context.Context, t *testing.T) context.Context {
-	ctx, span := otel.Tracer("").Start(ctx, t.Name())
+func startTestSpan(t *testing.T) context.Context {
+	ctx, span := otel.Tracer("").Start(baseCtx, t.Name())
 	t.Cleanup(func() {
 		if t.Failed() {
 			span.SetStatus(codes.Error, "test failed")
@@ -34,6 +33,7 @@ type testSolveOpt func(*testSolveConfig)
 
 type testSolveFunc func(_ context.Context, t *testing.T, _ gwclient.Client)
 
+// withFrontend adds a frontend to the solve request.
 func withFrontend(name string, f gwclient.BuildFunc) testSolveOpt {
 	return func(c *testSolveConfig) {
 		if c.frontends == nil {
@@ -43,12 +43,19 @@ func withFrontend(name string, f gwclient.BuildFunc) testSolveOpt {
 	}
 }
 
+func makeFrontendRef(ctx context.Context, t *testing.T, name string) string {
+	if supportsFrontendNamedContexts {
+		return name
+	}
+	return path.Join(registryHost(ctx, t), "dalec/test", name)
+}
+
 // testWithFrontendNamedContext runs the provided function with the locally built frontend image.
 // This is done by piping the output of the frontend build directly to the gateway frontend.
 // The neccessary modifications are made to the solve request from the test function to make this happen.
 //
 // (note: its not actually piping results, just passing around the reference which, when consumed, will be built JIT).
-func testWithFrontendNamedContext(ctx context.Context, t *testing.T, c *client.Client, f testSolveFunc, opts ...testSolveOpt) {
+func testWithFrontendNamedContext(ctx context.Context, t *testing.T, f testSolveFunc, opts ...testSolveOpt) {
 	id := identity.NewID()
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -63,7 +70,7 @@ func testWithFrontendNamedContext(ctx context.Context, t *testing.T, c *client.C
 	}
 
 	eg.Go(func() error {
-		_, err := c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		_, err := baseClient.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 			gwc = &gatewayClientNamedContextFrontend{
 				Client: gwc,
 				id:     id,
@@ -103,8 +110,8 @@ func (c *gatewayClientNamedContextFrontend) Solve(ctx context.Context, req gwcli
 // frontend image that gets pushed to a local registry.
 // Because this requires the fontend to be exported (either to docker or a registry),
 // the frontend build is executed ahead of time rather than just-in-time.
-func testWithFrontendRegistry(ctx context.Context, t *testing.T, c *client.Client, f testSolveFunc, opts ...testSolveOpt) {
-	imgName, err := buildFrontendImage(ctx, c, t)
+func testWithFrontendRegistry(ctx context.Context, t *testing.T, f testSolveFunc, opts ...testSolveOpt) {
+	imgName, err := buildFrontendImage(ctx, baseClient, t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,25 +123,19 @@ func testWithFrontendRegistry(ctx context.Context, t *testing.T, c *client.Clien
 
 	var sp *spb.Policy
 	if len(cfg.frontends) > 0 {
-		// Build all the requested frontend images
-		// These either get pushed to the local registry or injected directly into dockerd's image store.
-		reg := registryHost(ctx, t)
-
 		sp = &spb.Policy{}
 
 		for name, f := range cfg.frontends {
 			// Note that the buildkit client closes out the solve status channel when it returns, so each build requires a new client.
-			eg, ctx := errgroup.WithContext(ctx)
+			eg, ctx := errgroup.WithContext(baseCtx)
 			ch := displaySolveStatus(ctx, eg)
-
-			img := path.Join(reg, "dalec/test", name)
 
 			eg.Go(func() error {
 				var so client.SolveOpt
-				setRegistryExport(img, &so)
+				setRegistryExport(name, &so)
 				withProjectRoot(t, &so)
 
-				_, err := c.Build(ctx, so, "", f, ch)
+				_, err := baseClient.Build(ctx, so, "", f, ch)
 				return err
 			})
 
@@ -142,24 +143,6 @@ func testWithFrontendRegistry(ctx context.Context, t *testing.T, c *client.Clien
 				t.Fatal(err)
 			}
 
-			// Use a source policy to update the frontend image ref to use the local registry.
-			// Note: this is not used to build the frontend, but rather to update the frontend ref for the test function.
-			// This allows whatever ref was passed in by the caller to be be rewritten transparently to use the local registry.
-			//
-			// How this ends up getting used is, in a test we'll see something like `withFrontend("foo", fixtures.FooFrontend)`.
-			// In this case the reference passed in here is `foo`.
-			// In the test itself, the frontend reference `foo` is used in the [dalec.Spec], like so:
-			// dalec.Spec{Targets: map[string]dalec.Target{"whatever": {Frontend: &dalec.Frontend{Image: "foo"}}}}
-			// This policy matches against that reference and converts it to the local registry.
-			sp.Rules = append(sp.Rules, &spb.Rule{
-				Action: spb.PolicyAction_CONVERT,
-				Selector: &spb.Selector{
-					Identifier: "docker-image://" + name,
-				},
-				Updates: &spb.Update{
-					Identifier: "docker-image://" + img,
-				},
-			})
 		}
 	}
 
@@ -170,7 +153,7 @@ func testWithFrontendRegistry(ctx context.Context, t *testing.T, c *client.Clien
 	eg, ctx := errgroup.WithContext(ctx)
 	ch := displaySolveStatus(ctx, eg)
 	eg.Go(func() error {
-		_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		_, err = baseClient.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 			gwc = &gatewayClientRegistryFrontend{gwc, imgName}
 			f(ctx, t, gwc)
 			return gwclient.NewResult(), nil
@@ -202,24 +185,17 @@ func (c *gatewayClientRegistryFrontend) Solve(ctx context.Context, req gwclient.
 }
 
 var (
-	supportsFrontendNamedContextsOnce sync.Once
-	supportsFrontendNamedContextsVal  bool
+	supportsFrontendNamedContexts bool
 )
 
 // testEnv sets up test environment fo rhte provided function.
 // It routes the test function to the appropriate test environment based on the capabilities of the buildkit backend.
 //
 // Buildkit solve requests performed by the testSolveFunc will have the correct frontend image injected into the solve request.
-func testEnv(t *testing.T, f testSolveFunc, opts ...testSolveOpt) {
-	ctx := startTestSpan(baseCtx, t)
-
-	supportsFrontendNamedContextsOnce.Do(func() {
-		supportsFrontendNamedContextsVal = supportsFrontendNamedContexts(ctx, baseClient)
-	})
-
-	if supportsFrontendNamedContextsVal {
-		testWithFrontendNamedContext(ctx, t, baseClient, f, opts...)
+func testEnv(ctx context.Context, t *testing.T, f testSolveFunc, opts ...testSolveOpt) {
+	if supportsFrontendNamedContexts {
+		testWithFrontendNamedContext(ctx, t, f, opts...)
 		return
 	}
-	testWithFrontendRegistry(ctx, t, baseClient, f, opts...)
+	testWithFrontendRegistry(ctx, t, f, opts...)
 }

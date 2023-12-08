@@ -51,20 +51,20 @@ func TestMain(m *testing.M) {
 	}
 
 	run := func() int {
-		ctx, stop := signal.NotifyContext(baseCtx, os.Interrupt)
+		ctx, _ := signal.NotifyContext(baseCtx, os.Interrupt)
 		baseCtx = ctx
 
-		defer func() {
-			stop()
+		supportsFrontendNamedContexts = doSupportsFrontendNamedContexts(ctx, baseClient)
 
+		defer func() {
 			if regRelease != nil {
-				err = regRelease(context.WithoutCancel(ctx))
+				err = regRelease(baseCtx)
 				if err != nil {
 					fmt.Fprintln(os.Stderr, "error releasing registry:", err)
 				}
 			}
 
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			if err := detect.Shutdown(ctx); err != nil {
 				fmt.Fprintln(os.Stderr, "error shutting down tracer:", err)
 			}
