@@ -23,10 +23,15 @@ import (
 func TestHandlerTargetForwarding(t *testing.T) {
 	t.Parallel()
 
-	opts := []testSolveOpt{withFrontend("phony", fixtures.PhonyFrontend)}
+	ctx := startTestSpan(t)
 
-	testEnv(t, func(ctx context.Context, t *testing.T, gwc gwclient.Client) {
+	phonyRef := makeFrontendRef(ctx, t, "phony")
+	opts := []testSolveOpt{withFrontend(phonyRef, fixtures.PhonyFrontend)}
+
+	testEnv(ctx, t, func(ctx context.Context, t *testing.T, gwc gwclient.Client) {
 		t.Run("forwarded target", func(t *testing.T) {
+			ctx := startTestSpan(t)
+
 			// Make sure phony is not in the list of targets since it shouldn't be registered in the base frontend.
 			ls := listTargets(ctx, t, gwc, &dalec.Spec{
 				Targets: map[string]dalec.Target{
@@ -45,7 +50,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 				Targets: map[string]dalec.Target{
 					"phony": {
 						Frontend: &dalec.Frontend{
-							Image: "phony",
+							Image: phonyRef,
 						},
 					},
 				}}
@@ -86,7 +91,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 				Targets: map[string]dalec.Target{
 					"phony": {
 						Frontend: &dalec.Frontend{
-							Image: "phony",
+							Image: phonyRef,
 						},
 					},
 				},
@@ -121,6 +126,8 @@ func readFileResult(ctx context.Context, t *testing.T, name string, res *gwclien
 }
 
 func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec) targets.List {
+	t.Helper()
+
 	sr := gwclient.SolveRequest{
 		FrontendOpt: map[string]string{"requestid": targets.RequestTargets},
 	}
@@ -129,17 +136,17 @@ func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *d
 
 	res, err := gwc.Solve(ctx, sr)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("could not solve list targets: %v", err)
 	}
 
 	dt, ok := res.Metadata["result.json"]
 	if !ok {
-		t.Fatal("missing result.json")
+		t.Fatal("missing result.json from list targets")
 	}
 
 	var ls targets.List
 	if err := json.Unmarshal(dt, &ls); err != nil {
-		t.Fatal(err)
+		t.Fatalf("could not unmsarshal list targets result: %v", err)
 	}
 	return ls
 }

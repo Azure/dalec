@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	stderrors "errors"
-	"path"
 	"sync"
 	"testing"
 
@@ -148,8 +147,7 @@ func setRegistryExport(ref string, so *client.SolveOpt) {
 //
 // It returns the image name and a function to cleanup the image/registry.
 func buildFrontendImage(ctx context.Context, c *client.Client, t *testing.T) (_ string, retErr error) {
-	regHost := registryHost(ctx, t)
-	imgName := path.Join(regHost, "dalec/test", identity.NewID())
+	imgName := makeFrontendRef(ctx, t, identity.NewID())
 
 	if regHost == "" {
 		// Image only lives in dockerd
