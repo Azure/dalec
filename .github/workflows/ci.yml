@@ -74,6 +74,10 @@ jobs:
           cache: false
       - name: Run integaration tests
         run: go test -v ./test
+      - name: dump logs
+        if: failure()
+        run: sudo journalctl -u docker
+
 
   e2e:
     runs-on: ubuntu-22.04
