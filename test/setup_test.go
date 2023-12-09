@@ -126,6 +126,8 @@ func testWithFrontendRegistry(ctx context.Context, t *testing.T, f testSolveFunc
 		sp = &spb.Policy{}
 
 		for name, f := range cfg.frontends {
+			name := name
+			f := f
 			// Note that the buildkit client closes out the solve status channel when it returns, so each build requires a new client.
 			eg, ctx := errgroup.WithContext(baseCtx)
 			ch := displaySolveStatus(ctx, eg)
