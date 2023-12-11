@@ -88,7 +88,12 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 			return nil, err
 		}
 
-		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+src.Ref, false)
+		ref, ok := src.GetRef()
+		if !ok {
+			continue
+		}
+
+		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+ref, false)
 		st, err := dalec.Source2LLBGetter(spec, src, k)(sOpt, pg)
 		if err != nil {
 			return nil, err

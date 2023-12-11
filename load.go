@@ -22,6 +22,59 @@ func knownArg(key string) bool {
 
 const DefaultPatchStrip int = 1
 
+// GetRef determines the Source variant and returns the value of the `Ref`
+// field, and the second return value will be `true`. If the variant doesn't
+// have a `Ref` field, the second return value will be `false`.
+func (s *Source) GetRef() (string, bool) {
+	switch {
+	case s.DockerImage != nil:
+		return s.DockerImage.Ref, true
+	case s.Git != nil:
+		return s.Git.Ref, true
+	case s.HTTPS != nil:
+		return s.HTTPS.Ref, true
+	case s.Context != nil:
+		return s.Context.Ref, true
+	case s.Build != nil:
+		return s.Build.Ref, true
+	case s.Source != nil:
+		return s.Source.Ref, true
+	case s.Cmd != nil:
+		return "", false
+	default:
+		return "", false
+	}
+}
+
+// SetRef determines the Source variant and sets the `Ref` field. If the Source
+// variant doesn't have a `Ref` field, SetRef does nothing and returns `false`.
+func (s *Source) SetRef(ref string) bool {
+	switch {
+	case s.DockerImage != nil:
+		s.DockerImage.Ref = ref
+		return true
+	case s.Git != nil:
+		s.Git.Ref = ref
+		return true
+	case s.HTTPS != nil:
+		s.HTTPS.Ref = ref
+		return true
+	case s.Context != nil:
+		s.Context.Ref = ref
+		return true
+	case s.Build != nil:
+		s.Build.Ref = ref
+		return true
+	case s.Source != nil:
+		s.Source.Ref = ref
+		return true
+	case s.Cmd != nil:
+		return false
+	default:
+		return false
+	}
+}
+
 // LoadSpec loads a spec from the given data.
 // env is a map of environment variables to use for shell-style expansion in the spec.
 func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
@@ -46,11 +99,15 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 	}
 
 	for name, src := range spec.Sources {
-		updated, err := lex.ProcessWordWithMap(src.Ref, args)
+		ref, ok := src.GetRef()
+		if !ok {
+			continue
+		}
+		updated, err := lex.ProcessWordWithMap(ref, args)
 		if err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
-		src.Ref = updated
+		_ = src.SetRef(updated)
 		if err := src.Cmd.processBuildArgs(lex, args, name); err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
 		}
@@ -124,16 +181,20 @@ func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i i
 	return nil
 }
 
-func (c *CmdSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
+func (c *SourceCommand) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
 	if c == nil {
 		return nil
 	}
 	for i, smnt := range c.Mounts {
-		updated, err := lex.ProcessWordWithMap(smnt.Spec.Ref, args)
+		ref, ok := smnt.Spec.GetRef()
+		if !ok {
+			continue
+		}
+		updated, err := lex.ProcessWordWithMap(ref, args)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
-		c.Mounts[i].Spec.Ref = updated
+		c.Mounts[i].Spec.SetRef(updated)
 	}
 	for k, v := range c.Env {
 		updated, err := lex.ProcessWordWithMap(v, args)
