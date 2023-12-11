@@ -7,11 +7,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/identity"
-	sourcetypes "github.com/moby/buildkit/source/types"
 	"github.com/moby/buildkit/util/gitutil"
 )
 
@@ -190,7 +188,7 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
 			} else {
 				src2 := Source{
-					Build:      &dalec.SourceBuild{Ref: build.Ref},
+					Build:      &SourceBuild{Ref: build.Ref},
 					Path:       src.Path,
 					Includes:   src.Includes,
 					Excludes:   src.Excludes,
@@ -242,23 +240,16 @@ func WithCreateDestPath() llb.CopyOption {
 }
 
 func SourceIsDir(src Source) (bool, error) {
-	scheme, _, err := SplitSourceRef(src.Ref)
-	if err != nil {
-		return false, err
-	}
-	switch scheme {
-	case sourcetypes.DockerImageScheme,
-		sourcetypes.GitScheme,
-		sourceTypeBuild,
-		sourceTypeContext:
+	switch {
+	case src.DockerImage != nil,
+		src.Git != nil,
+		src.Build != nil,
+		src.Context != nil:
 		return true, nil
-	case sourcetypes.HTTPScheme, sourcetypes.HTTPSScheme:
-		if isGitRef(src.Ref) {
-			return true, nil
-		}
+	case src.HTTPS != nil:
 		return false, nil
 	default:
-		return false, fmt.Errorf("unsupported source type: %s", scheme)
+		return false, fmt.Errorf("unsupported source type")
 	}
 }
 
@@ -272,20 +263,16 @@ func isGitRef(ref string) bool {
 // so that others can reproduce the build.
 func (s Source) Doc() (io.Reader, error) {
 	b := bytes.NewBuffer(nil)
-	scheme, ref, err := SplitSourceRef(s.Ref)
-	if err != nil {
-		return nil, err
-	}
-
-	switch scheme {
-	case sourceTypeSource:
-		fmt.Fprintln(b, "Generated from another source named:", ref)
-	case sourceTypeContext:
+	switch {
+	case s.Source != nil:
+		fmt.Fprintln(b, "Generated from another source named:", s.Source.Ref)
+	case s.Context != nil:
 		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
-	case sourceTypeBuild:
+	case s.Build != nil:
+		build := s.Build
 		fmt.Fprintln(b, "Generated from a docker build:")
 		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
-		fmt.Fprintln(b, "	Docker Build Ref:", ref)
+		fmt.Fprintln(b, "	Docker Build Ref:", build.Ref)
 
 		if len(s.Build.Args) > 0 {
 			sorted := SortMapKeys(s.Build.Args)
@@ -312,44 +299,31 @@ func (s Source) Doc() (io.Reader, error) {
 			}
 			fmt.Fprintln(b, "	Dockerfile path in context:", p)
 		}
-	case sourcetypes.HTTPScheme, sourcetypes.HTTPSScheme:
-		ref, err := gitutil.ParseGitRef(ref)
-		if err == nil {
-			// git ref
-			fmt.Fprintln(b, "Generated from a git repository:")
-			fmt.Fprintln(b, "	Remote:", scheme+"://"+ref.Remote)
-			fmt.Fprintln(b, "	Ref:", ref.Commit)
-			if ref.SubDir != "" {
-				fmt.Fprintln(b, "	Subdir:", ref.SubDir)
-			}
-			if s.Path != "" {
-				fmt.Fprintln(b, "	Extraced path:", s.Path)
-			}
-		} else {
-			fmt.Fprintln(b, "Generated from a http(s) source:")
-			fmt.Fprintln(b, "	URL:", ref)
-		}
-	case sourcetypes.GitScheme:
-		ref, err := gitutil.ParseGitRef(ref)
+	case s.HTTPS != nil:
+		fmt.Fprintln(b, "Generated from a http(s) source:")
+		fmt.Fprintln(b, "	URL:", s.HTTPS.Ref)
+	case s.Git != nil:
+		git := s.Git
+		ref, err := gitutil.ParseGitRef(git.Ref)
 		if err != nil {
 			return nil, err
 		}
 		fmt.Fprintln(b, "Generated from a git repository:")
-		fmt.Fprintln(b, "	Remote:", scheme+"://"+ref.Remote)
 		fmt.Fprintln(b, "	Ref:", ref.Commit)
 		if s.Path != "" {
 			fmt.Fprintln(b, "	Extraced path:", s.Path)
 		}
-	case sourcetypes.DockerImageScheme:
+	case s.DockerImage != nil:
+		img := s.DockerImage
 		if s.Cmd == nil {
 			fmt.Fprintln(b, "Generated from a docker image:")
-			fmt.Fprintln(b, "	Image:", ref)
+			fmt.Fprintln(b, "	Image:", img.Ref)
 			if s.Path != "" {
 				fmt.Fprintln(b, "	Extraced path:", s.Path)
 			}
 		} else {
 			fmt.Fprintln(b, "Generated from running a command(s) in a docker image:")
-			fmt.Fprintln(b, "	Image:", ref)
+			fmt.Fprintln(b, "	Image:", img.Ref)
 			if s.Path != "" {
 				fmt.Fprintln(b, "	Extraced path:", s.Path)
 			}
@@ -398,7 +372,7 @@ func (s Source) Doc() (io.Reader, error) {
 	default:
 		// This should be unrecable.
 		// We could panic here, but ultimately this is just a doc string and parsing user generated content.
-		fmt.Fprintln(b, "Generated from an unknown source type:", s.Ref)
+		fmt.Fprintln(b, "Generated from an unknown source type")
 	}
 
 	return b, nil
