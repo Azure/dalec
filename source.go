@@ -158,7 +158,7 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 
 			var gOpts []llb.GitOption
-			if src.KeepGitDir {
+			if git.KeepGitDir {
 				gOpts = append(gOpts, llb.KeepGitDir())
 			}
 			gOpts = append(gOpts, withConstraints(opts))
@@ -188,12 +188,11 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
 			} else {
 				src2 := Source{
-					Build:      &SourceBuild{Ref: build.Ref},
-					Path:       src.Path,
-					Includes:   src.Includes,
-					Excludes:   src.Excludes,
-					KeepGitDir: src.KeepGitDir,
-					Cmd:        src.Cmd,
+					Build:    &SourceBuild{Ref: build.Ref},
+					Path:     src.Path,
+					Includes: src.Includes,
+					Excludes: src.Excludes,
+					Cmd:      src.Cmd,
 				}
 				st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
 				if err != nil {
