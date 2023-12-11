@@ -25,7 +25,7 @@ const (
 	dalecSubrequstForwardBuild = "dalec.forward.build"
 )
 
-func getDockerfile(ctx context.Context, client gwclient.Client, spec *dalec.BuildSpec, defPb *pb.Definition) ([]byte, error) {
+func getDockerfile(ctx context.Context, client gwclient.Client, spec *dalec.SourceBuild, defPb *pb.Definition) ([]byte, error) {
 	if spec.Inline != "" {
 		return []byte(spec.Inline), nil
 	}
@@ -60,9 +60,9 @@ func getDockerfile(ctx context.Context, client gwclient.Client, spec *dalec.Buil
 // ForwarderFromClient creates a [dalec.ForwarderFunc] from a gateway client.
 // This is used for forwarding builds to other frontends in [dalec.Source2LLBGetter]
 func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.ForwarderFunc {
-	return func(st llb.State, spec *dalec.BuildSpec) (llb.State, error) {
+	return func(st llb.State, spec *dalec.SourceBuild) (llb.State, error) {
 		if spec == nil {
-			spec = &dalec.BuildSpec{}
+			spec = &dalec.SourceBuild{}
 		}
 
 		if spec.File != "" && spec.Inline != "" {
