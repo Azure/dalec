@@ -266,9 +266,6 @@ type Source struct {
 	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
 	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
-
-	// KeepGitDir is used to keep the .git directory after fetching the source for git references.
-	KeepGitDir bool `yaml:"keep_git_dir,omitempty" json:"keep_git_dir,omitempty"`
 }
 
 func (Source) JSONSchemaExtend(schema *jsonschema.Schema) {
