@@ -214,7 +214,7 @@ func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) e
 }
 
 func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
-	if err := c.CmdSpec.processBuildArgs(lex, args, name); err != nil {
+	if err := c.SourceCommand.processBuildArgs(lex, args, name); err != nil {
 		return err
 	}
 

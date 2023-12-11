@@ -179,14 +179,84 @@ type ImageConfig struct {
 	Base string `yaml:"base,omitempty" json:"base,omitempty"`
 }
 
+type SourceDockerImage struct {
+	Ref string `yaml:"ref" json:"ref"`
+}
+
+type SourceGit struct {
+	Ref        string `yaml:"ref" json:"ref"`
+	KeepGitDir bool   `yaml:"keepGitDir" json:"keepGitDir"`
+}
+
+// No longer supports `.git` URLs as git repos. That has to be done with
+// `SourceGit`
+type SourceHTTPS struct {
+	Ref string `yaml:"ref" json:"ref"`
+}
+
+type SourceContext struct {
+	Ref string `yaml:"ref" json:"ref"`
+}
+
+// i.e. just rename `BuildSpec` to `SourceBuild`
+// SourceBuild is used to generate source from a build.
+type SourceBuild struct {
+	// Target specifies the build target to use.
+	// If unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default).
+	Target string `yaml:"target,omitempty" json:"target,omitempty"`
+	// Args are the build args to pass to the build.
+	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
+	// File is the path to the build file in the build context
+	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
+	// This is exclusive with [Inline]
+	File string `yaml:"file,omitempty" json:"file,omitempty"`
+
+	// Inline is an inline build spec to use.
+	// This can be used to specify a dockerfile instead of using one in the build context
+	// This is exclusive with [File]
+	Inline string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
+}
+
+type SourceAnotherSource struct {
+	Ref string `yaml:"ref" json:"ref"`
+}
+
+// SourceCommand is used to execute a command to generate a source from a docker image.
+type SourceCommand struct {
+	// Dir is the working directory to run the command in.
+	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
+
+	// Mounts is the list of sources to mount into the build steps.
+	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
+
+	// List of CacheDirs which will be used across all Steps
+	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
+
+	// Env is the list of environment variables to set for all commands in this step group.
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+
+	// Steps is the list of commands to run to generate the source.
+	// Steps are run sequentially and results of each step should be cached.
+	Steps []*BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
+}
+
 // Source defines a source to be used in the build.
 // A source can be a local directory, a git repositoryt, http(s) URL, etc.
 type Source struct {
-	// Ref is a unique identifier for the source.
-	// Example: "docker-image://busybox:latest", "https://github.com/moby/buildkit.git#master", "context://
+	// This is an embedded union representing all of the possible source types.
+	// Only one should be non-nil at any given time. It is considered an error
+	// condition if more than one is non-nil, or if all are nil.
 	//
-	// When a source is specified as part of a [CmdSpec], it may also be used to reference a top-level source.
-	Ref string `yaml:"ref" json:"ref" jsonschema:"required"`
+	// === Begin Source Variants ===
+	DockerImage *SourceDockerImage   `yaml:"image,omitempty" json:"image,omitempty"`
+	Git         *SourceGit           `yaml:"git,omitempty" json:"git,omitempty"`
+	HTTPS       *SourceHTTPS         `yaml:"https,omitempty" json:"https,omitempty"`
+	Context     *SourceContext       `yaml:"context,omitempty" json:"context,omitempty"`
+	Build       *SourceBuild         `yaml:"build,omitempty" json:"build,omitempty"`
+	Source      *SourceAnotherSource `yaml:"source,omitempty" json:"source,omitempty"`
+	Cmd         *SourceCommand       `yaml:"cmd,omitempty" json:"cmd,omitempty"`
+	// === End Source Variants ===
+
 	// Path is the path to the source after fetching it based on the identifier.
 	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 
@@ -198,17 +268,6 @@ type Source struct {
 
 	// KeepGitDir is used to keep the .git directory after fetching the source for git references.
 	KeepGitDir bool `yaml:"keep_git_dir,omitempty" json:"keep_git_dir,omitempty"`
-
-	// Cmd is used to generate the source from a command.
-	// This can be used when Ref is "docker-image://"
-	// If ref is "cmd://", this is required.
-	Cmd *CmdSpec `yaml:"cmd,omitempty" json:"cmd,omitempty"`
-
-	// Build is used to generate source from a build.
-	// This is used when [Ref]` is "build://"
-	// The context for the build is assumed too be specified in after `build://` in the ref, e.g. `build://https://github.com/moby/buildkit.git#master`
-	// When nothing is specified after `build://`, the context is assumed to be the current build context.
-	Build *BuildSpec `yaml:"build,omitempty" json:"build,omitempty"`
 }
 
 func (Source) JSONSchemaExtend(schema *jsonschema.Schema) {
@@ -225,25 +284,6 @@ func (Source) JSONSchemaExtend(schema *jsonschema.Schema) {
 		"context://",
 		"context://some/path/in/build/context",
 	}
-}
-
-// BuildSpec is used to generate source from a build.
-// This is used when [Source.Ref] is "build://" to forward a build (aka a nested build) through to buildkit.
-type BuildSpec struct {
-	// Target specifies the build target to use.
-	// If unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default).
-	Target string `yaml:"target,omitempty" json:"target,omitempty"`
-	// Args are the build args to pass to the build.
-	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
-	// File is the path to the build file in the build context
-	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
-	// This is exclusive with [Inline]
-	File string `yaml:"file,omitempty" json:"file,omitempty"`
-
-	// Inline is an inline build spec to use.
-	// This can be used to specify a dockerfile instead of using one in the build context
-	// This is exclusive with [File]
-	Inline string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
 }
 
 // PackageDependencies is a list of dependencies for a package.
@@ -286,25 +326,6 @@ type SourceMount struct {
 	Dest string `yaml:"dest" json:"dest" jsonschema:"required"`
 	// Spec specifies the source to mount
 	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
-}
-
-// CmdSpec is used to execute a command to generate a source from a docker image.
-type CmdSpec struct {
-	// Dir is the working directory to run the command in.
-	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
-
-	// Mounts is the list of sources to mount into the build steps.
-	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
-
-	// List of CacheDirs which will be used across all Steps
-	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
-
-	// Env is the list of environment variables to set for all commands in this step group.
-	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
-
-	// Steps is the list of commands to run to generate the source.
-	// Steps are run sequentially and results of each step should be cached.
-	Steps []*BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
 }
 
 // CacheDirConfig configures a persistent cache to be used across builds.
@@ -367,8 +388,8 @@ type Target struct {
 type TestSpec struct {
 	// Name is the name of the test
 	// This will be used to output the test results
-	Name    string `yaml:"name" json:"name" jsonschema:"required"`
-	CmdSpec `yaml:",inline"`
+	Name          string `yaml:"name" json:"name" jsonschema:"required"`
+	SourceCommand `yaml:",inline"`
 	// Steps is the list of commands to run to test the package.
 	Steps []TestStep `yaml:"steps" json:"steps" jsonschema:"required"`
 	// Files is the list of files to check after running the steps.

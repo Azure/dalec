@@ -23,7 +23,7 @@ const (
 
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 
-type ForwarderFunc func(llb.State, *BuildSpec) (llb.State, error)
+type ForwarderFunc func(llb.State, *SourceBuild) (llb.State, error)
 
 type SourceOpts struct {
 	Resolver   llb.ImageMetaResolver
@@ -36,7 +36,7 @@ func shArgs(cmd string) llb.RunOption {
 }
 
 // must not be called with a nil cmd pointer
-func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.ExecState, error) {
+func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *SourceCommand, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.ExecState, error) {
 	var zero llb.ExecState
 	if len(cmd.Steps) == 0 {
 		return zero, fmt.Errorf("no steps defined for image source")
