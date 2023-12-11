@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/identity"
@@ -87,11 +88,6 @@ func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
 
 func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter {
 	return func(sOpt SourceOpts, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
-		scheme, ref, err := SplitSourceRef(src.Ref)
-		if err != nil {
-			return llb.Scratch(), err
-		}
-
 		var (
 			includeExcludeHandled bool
 			pathHandled           bool
@@ -136,9 +132,11 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			)
 		}()
 
-		switch scheme {
-		case sourcetypes.DockerImageScheme:
-			st := llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), withConstraints(opts))
+		// sourceType, err := src.GetSourceKind()
+		switch {
+		case src.DockerImage != nil:
+			img := src.DockerImage
+			st := llb.Image(img.Ref, llb.WithMetaResolver(sOpt.Resolver), withConstraints(opts))
 
 			if src.Cmd == nil {
 				return st, nil
@@ -153,9 +151,10 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				return eSt.AddMount(src.Path, llb.Scratch()), nil
 			}
 			return eSt.Root(), nil
-		case sourcetypes.GitScheme:
+		case src.Git != nil:
+			git := src.Git
 			// TODO: Pass git secrets
-			ref, err := gitutil.ParseGitRef(ref)
+			ref, err := gitutil.ParseGitRef(git.Ref)
 			if err != nil {
 				return llb.Scratch(), fmt.Errorf("could not parse git ref: %w", err)
 			}
@@ -166,39 +165,32 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 			gOpts = append(gOpts, withConstraints(opts))
 			return llb.Git(ref.Remote, ref.Commit, gOpts...), nil
-		case sourcetypes.HTTPScheme, sourcetypes.HTTPSScheme:
-			ref, err := gitutil.ParseGitRef(src.Ref)
-			if err == nil {
-				// TODO: Pass git secrets
-				var gOpts []llb.GitOption
-				if src.KeepGitDir {
-					gOpts = append(gOpts, llb.KeepGitDir())
-				}
-				gOpts = append(gOpts, withConstraints(opts))
-				return llb.Git(ref.Remote, ref.Commit, gOpts...), nil
-			} else {
-				opts := []llb.HTTPOption{withConstraints(opts)}
-				opts = append(opts, llb.Filename(name))
-				return llb.HTTP(src.Ref, opts...), nil
-			}
-		case sourceTypeContext:
+		case src.HTTPS != nil:
+			https := src.HTTPS
+			opts := []llb.HTTPOption{withConstraints(opts)}
+			opts = append(opts, llb.Filename(name))
+			return llb.HTTP(https.Ref, opts...), nil
+		case src.Context != nil:
+			srcCtx := src.Context
 			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
 			if err != nil {
 				return llb.Scratch(), err
 			}
 
 			includeExcludeHandled = true
-			if src.Path == "" && ref != "" {
-				src.Path = ref
+			if src.Path == "" && srcCtx.Ref != "" {
+				src.Path = srcCtx.Ref
 			}
 			return *st, nil
-		case sourceTypeBuild:
+		case src.Build != nil:
+			var err error
+			build := src.Build
 			var st llb.State
-			if ref == "" {
+			if build.Ref == "" {
 				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
 			} else {
 				src2 := Source{
-					Ref:        ref,
+					Build:      &dalec.SourceBuild{Ref: build.Ref},
 					Path:       src.Path,
 					Includes:   src.Includes,
 					Excludes:   src.Excludes,
@@ -212,11 +204,12 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 
 			return sOpt.Forward(st, src.Build)
-		case sourceTypeSource:
-			src := s.Sources[ref]
+		case src.Source != nil:
+			srcSrc := src.Source
+			src := s.Sources[srcSrc.Ref]
 			return source2LLBGetter(s, src, name, forMount)(sOpt, opts...)
 		default:
-			return llb.Scratch(), fmt.Errorf("unsupported source type: %s", scheme)
+			return llb.Scratch(), fmt.Errorf("No source variant found")
 		}
 	}
 }
