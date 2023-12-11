@@ -201,6 +201,7 @@ type SourceContext struct {
 // i.e. just rename `BuildSpec` to `SourceBuild`
 // SourceBuild is used to generate source from a build.
 type SourceBuild struct {
+	Ref string `yaml:"ref" json:"ref"`
 	// Target specifies the build target to use.
 	// If unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default).
 	Target string `yaml:"target,omitempty" json:"target,omitempty"`
