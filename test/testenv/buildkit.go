@@ -1,8 +1,11 @@
 package testenv
 
 import (
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
+	"testing"
 
 	"github.com/moby/buildkit/client"
 )
@@ -60,4 +63,41 @@ func isSupported(info *client.Info) bool {
 	}
 
 	return minor >= minVersion.Minor
+}
+
+func withGHCache(t *testing.T, so *client.SolveOpt) {
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		return
+	}
+
+	token := os.Getenv("ACTIONS_RUNTIME_TOKEN")
+	if token == "" {
+		fmt.Fprintln(os.Stderr, "::warning::GITHUB_ACTIONS_RUNTIME_TOKEN is not set, skipping cache export")
+		return
+	}
+
+	url := os.Getenv("ACTIONS_CACHE_URL")
+	if url == "" {
+		fmt.Fprintln(os.Stderr, "::warning::ACTIONS_CACHE_URL is not set, skipping cache export")
+		return
+	}
+
+	scope := "test-integration-" + t.Name()
+	so.CacheExports = append(so.CacheExports, client.CacheOptionsEntry{
+		Type: "gha",
+		Attrs: map[string]string{
+			"scope": scope,
+			"mode":  "max",
+			"token": token,
+			"url":   url,
+		},
+	})
+	so.CacheImports = append(so.CacheImports, client.CacheOptionsEntry{
+		Type: "gha",
+		Attrs: map[string]string{
+			"scope": scope,
+			"token": token,
+			"url":   url,
+		},
+	})
 }
