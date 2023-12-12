@@ -184,24 +184,25 @@ type SourceDockerImage struct {
 }
 
 type SourceGit struct {
-	Ref        string `yaml:"ref" json:"ref"`
+	URL        string `yaml:"url" json:"url"`
+	Commit     string `yaml:"commit" json:"commit"`
 	KeepGitDir bool   `yaml:"keepGitDir" json:"keepGitDir"`
 }
 
 // No longer supports `.git` URLs as git repos. That has to be done with
 // `SourceGit`
 type SourceHTTPS struct {
-	Ref string `yaml:"ref" json:"ref"`
+	URL string `yaml:"url" json:"url"`
 }
 
 type SourceContext struct {
-	Ref string `yaml:"ref" json:"ref"`
+	Name string `yaml:"name" json:"name"`
 }
 
 // i.e. just rename `BuildSpec` to `SourceBuild`
 // SourceBuild is used to generate source from a build.
 type SourceBuild struct {
-	Ref string `yaml:"ref" json:"ref"`
+	Name string `yaml:"name" json:"name"`
 	// Target specifies the build target to use.
 	// If unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default).
 	Target string `yaml:"target,omitempty" json:"target,omitempty"`
@@ -216,10 +217,6 @@ type SourceBuild struct {
 	// This can be used to specify a dockerfile instead of using one in the build context
 	// This is exclusive with [File]
 	Inline string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
-}
-
-type SourceAnotherSource struct {
-	Ref string `yaml:"ref" json:"ref"`
 }
 
 // SourceCommand is used to execute a command to generate a source from a docker image.
@@ -249,13 +246,12 @@ type Source struct {
 	// condition if more than one is non-nil, or if all are nil.
 	//
 	// === Begin Source Variants ===
-	DockerImage *SourceDockerImage   `yaml:"image,omitempty" json:"image,omitempty"`
-	Git         *SourceGit           `yaml:"git,omitempty" json:"git,omitempty"`
-	HTTPS       *SourceHTTPS         `yaml:"https,omitempty" json:"https,omitempty"`
-	Context     *SourceContext       `yaml:"context,omitempty" json:"context,omitempty"`
-	Build       *SourceBuild         `yaml:"build,omitempty" json:"build,omitempty"`
-	Source      *SourceAnotherSource `yaml:"source,omitempty" json:"source,omitempty"`
-	Cmd         *SourceCommand       `yaml:"cmd,omitempty" json:"cmd,omitempty"`
+	DockerImage *SourceDockerImage `yaml:"image,omitempty" json:"image,omitempty"`
+	Git         *SourceGit         `yaml:"git,omitempty" json:"git,omitempty"`
+	HTTPS       *SourceHTTPS       `yaml:"https,omitempty" json:"https,omitempty"`
+	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
+	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
+	Cmd         *SourceCommand     `yaml:"cmd,omitempty" json:"cmd,omitempty"`
 	// === End Source Variants ===
 
 	// Path is the path to the source after fetching it based on the identifier.

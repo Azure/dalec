@@ -152,7 +152,7 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 		case src.Git != nil:
 			git := src.Git
 			// TODO: Pass git secrets
-			ref, err := gitutil.ParseGitRef(git.Ref)
+			ref, err := gitutil.ParseGitRef(git.URL)
 			if err != nil {
 				return llb.Scratch(), fmt.Errorf("could not parse git ref: %w", err)
 			}
@@ -167,7 +167,7 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			https := src.HTTPS
 			opts := []llb.HTTPOption{withConstraints(opts)}
 			opts = append(opts, llb.Filename(name))
-			return llb.HTTP(https.Ref, opts...), nil
+			return llb.HTTP(https.URL, opts...), nil
 		case src.Context != nil:
 			srcCtx := src.Context
 			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
@@ -176,19 +176,19 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 
 			includeExcludeHandled = true
-			if src.Path == "" && srcCtx.Ref != "" {
-				src.Path = srcCtx.Ref
+			if src.Path == "" && srcCtx.Name != "" {
+				src.Path = srcCtx.Name
 			}
 			return *st, nil
 		case src.Build != nil:
 			var err error
 			build := src.Build
 			var st llb.State
-			if build.Ref == "" {
+			if build.Name == "" {
 				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
 			} else {
 				src2 := Source{
-					Build:    &SourceBuild{Ref: build.Ref},
+					Build:    &SourceBuild{Name: build.Name},
 					Path:     src.Path,
 					Includes: src.Includes,
 					Excludes: src.Excludes,
@@ -201,10 +201,6 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 
 			return sOpt.Forward(st, src.Build)
-		case src.Source != nil:
-			srcSrc := src.Source
-			src := s.Sources[srcSrc.Ref]
-			return source2LLBGetter(s, src, name, forMount)(sOpt, opts...)
 		default:
 			return llb.Scratch(), fmt.Errorf("No source variant found")
 		}
@@ -263,15 +259,13 @@ func isGitRef(ref string) bool {
 func (s Source) Doc() (io.Reader, error) {
 	b := bytes.NewBuffer(nil)
 	switch {
-	case s.Source != nil:
-		fmt.Fprintln(b, "Generated from another source named:", s.Source.Ref)
 	case s.Context != nil:
 		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
 	case s.Build != nil:
 		build := s.Build
 		fmt.Fprintln(b, "Generated from a docker build:")
 		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
-		fmt.Fprintln(b, "	Docker Build Ref:", build.Ref)
+		fmt.Fprintln(b, "	Docker Build Ref:", build.Name)
 
 		if len(s.Build.Args) > 0 {
 			sorted := SortMapKeys(s.Build.Args)
@@ -300,10 +294,10 @@ func (s Source) Doc() (io.Reader, error) {
 		}
 	case s.HTTPS != nil:
 		fmt.Fprintln(b, "Generated from a http(s) source:")
-		fmt.Fprintln(b, "	URL:", s.HTTPS.Ref)
+		fmt.Fprintln(b, "	URL:", s.HTTPS.URL)
 	case s.Git != nil:
 		git := s.Git
-		ref, err := gitutil.ParseGitRef(git.Ref)
+		ref, err := gitutil.ParseGitRef(git.URL)
 		if err != nil {
 			return nil, err
 		}

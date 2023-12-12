@@ -30,15 +30,13 @@ func (s *Source) GetRef() (string, bool) {
 	case s.DockerImage != nil:
 		return s.DockerImage.Ref, true
 	case s.Git != nil:
-		return s.Git.Ref, true
+		return s.Git.URL, true
 	case s.HTTPS != nil:
-		return s.HTTPS.Ref, true
+		return s.HTTPS.URL, true
 	case s.Context != nil:
-		return s.Context.Ref, true
+		return s.Context.Name, true
 	case s.Build != nil:
-		return s.Build.Ref, true
-	case s.Source != nil:
-		return s.Source.Ref, true
+		return s.Build.Name, true
 	case s.Cmd != nil:
 		return "", false
 	default:
@@ -54,19 +52,16 @@ func (s *Source) SetRef(ref string) bool {
 		s.DockerImage.Ref = ref
 		return true
 	case s.Git != nil:
-		s.Git.Ref = ref
+		s.Git.URL = ref
 		return true
 	case s.HTTPS != nil:
-		s.HTTPS.Ref = ref
+		s.HTTPS.URL = ref
 		return true
 	case s.Context != nil:
-		s.Context.Ref = ref
+		s.Context.Name = ref
 		return true
 	case s.Build != nil:
-		s.Build.Ref = ref
-		return true
-	case s.Source != nil:
-		s.Source.Ref = ref
+		s.Build.Name = ref
 		return true
 	case s.Cmd != nil:
 		return false
