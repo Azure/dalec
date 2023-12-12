@@ -3,7 +3,6 @@ package test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -46,6 +45,8 @@ func TestHandlerTargetForwarding(t *testing.T) {
 					"phony": {},
 				},
 			})
+
+			checkTargetExists(t, ls, "debug/resolve")
 			if slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
 				return strings.Contains(tgt.Name, "phony")
 			}) {
@@ -64,23 +65,9 @@ func TestHandlerTargetForwarding(t *testing.T) {
 
 			// Make sure phony is in the list of targets since it should be registered in the forwarded frontend.
 			ls = listTargets(ctx, t, gwc, spec)
-			if !slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
-				return tgt.Name == "phony/check"
-			}) {
-				t.Fatal("did not find phony/check target")
-			}
-
-			if !slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
-				return tgt.Name == "phony/debug/resolve"
-			}) {
-				t.Fatal("did not find phony/check target")
-			}
-
-			if !slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
-				return tgt.Name == "debug/resolve"
-			}) {
-				t.Fatal("did not find phony/check target")
-			}
+			checkTargetExists(t, ls, "debug/resolve")
+			checkTargetExists(t, ls, "phony/check")
+			checkTargetExists(t, ls, "phony/debug/resolve")
 			return gwclient.NewResult(), nil
 		})
 	})
@@ -108,7 +95,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			dt := readFileResult(ctx, t, "hello", res)
+			dt := readFile(ctx, t, "hello", res)
 			expect := []byte("phony hello")
 			if !bytes.Equal(dt, expect) {
 				t.Fatalf("expected %q, got %q", expect, string(dt))
@@ -130,18 +117,9 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			if err != nil {
 				return nil, err
 			}
-			ref, err := res.SingleRef()
-			if err != nil {
-				t.Fatal(err)
-			}
 
 			// The builtin debug/resolve target adds the resolved spec to /spec.yml, so check that its there.
-			_, err = ref.StatFile(ctx, gwclient.StatRequest{
-				Path: "spec.yml",
-			})
-			if err != nil {
-				t.Fatalf("expected spec.yml to exist in debug/resolve target, got error: %v", err)
-			}
+			statFile(ctx, t, "spec.yml", res)
 
 			sr = gwclient.SolveRequest{
 				FrontendOpt: map[string]string{
@@ -149,27 +127,13 @@ func TestHandlerTargetForwarding(t *testing.T) {
 				},
 			}
 			specToSolveRequest(ctx, t, spec, &sr)
+
 			res, err = gwc.Solve(ctx, sr)
 			if err != nil {
 				return nil, err
 			}
-			ref, err = res.SingleRef()
-			if err != nil {
-				t.Fatal(err)
-			}
 
-			// The phony/debug/resolve target adds a dummy file to /resolve
-			dt, err = ref.ReadFile(ctx, gwclient.ReadRequest{
-				Filename: "resolve",
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			expect = []byte("phony resolve")
-			if !bytes.Equal(dt, expect) {
-				t.Fatalf("expected %q, got %q", string(expect), string(dt))
-			}
-
+			checkFile(ctx, t, "resolve", res, []byte("phony resolve"))
 			return gwclient.NewResult(), nil
 		})
 	})
@@ -200,48 +164,4 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			return gwclient.NewResult(), nil
 		})
 	})
-}
-
-func readFileResult(ctx context.Context, t *testing.T, name string, res *gwclient.Result) []byte {
-	t.Helper()
-
-	ref, err := res.SingleRef()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
-		Filename: name,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return dt
-}
-
-func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec) targets.List {
-	t.Helper()
-
-	sr := gwclient.SolveRequest{
-		FrontendOpt: map[string]string{"requestid": targets.RequestTargets},
-	}
-
-	specToSolveRequest(ctx, t, spec, &sr)
-
-	res, err := gwc.Solve(ctx, sr)
-	if err != nil {
-		t.Fatalf("could not solve list targets: %v", err)
-	}
-
-	dt, ok := res.Metadata["result.json"]
-	if !ok {
-		t.Fatal("missing result.json from list targets")
-	}
-
-	var ls targets.List
-	if err := json.Unmarshal(dt, &ls); err != nil {
-		t.Fatalf("could not unmsarshal list targets result: %v", err)
-	}
-	return ls
 }
