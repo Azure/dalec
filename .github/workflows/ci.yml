@@ -72,11 +72,14 @@ jobs:
         with:
           go-version: '1.21'
           cache: false
+
+      - name: Expose GitHub tokens for caching
+        uses: crazy-max/ghaction-github-runtime@v3
       # Tests currently require buildkit v0.12.0 or higher
       # The version of buildkit builtin to moby currently (v24) is too old
       # So we need to setup a custom builder.
-      - name: Setup builder
-        run: docker buildx create --use
+      - name: Set up builder
+        uses: docker/setup-buildx-action@v3
       - name: Run integaration tests
         run: go test -v ./test
       - name: dump logs
