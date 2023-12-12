@@ -29,9 +29,8 @@ type BuildxEnv struct {
 	mu     sync.Mutex
 	client *client.Client
 
-	ctr     *container.Container
-	docker  *docker.Client
-	regHost string
+	ctr    *container.Container
+	docker *docker.Client
 
 	supportedOnce sync.Once
 	supportedErr  error
@@ -212,7 +211,12 @@ func (b *BuildxEnv) Buildkit(ctx context.Context) (*client.Client, error) {
 	panic("unreachable: if you see this then this is a bug in the testenv bootstrap code")
 }
 
-func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildFunc) {
+type FrontendSpec struct {
+	ID    string
+	Build gwclient.BuildFunc
+}
+
+func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildFunc, frontends ...FrontendSpec) {
 	c, err := b.Buildkit(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +228,14 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildF
 	withProjectRoot(t, &so)
 
 	_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		return f(ctx, &clientForceDalecWithInput{gwc})
+		gwc = &clientForceDalecWithInput{gwc}
+
+		b.mu.Lock()
+		for _, f := range frontends {
+			gwc = wrapWithInput(gwc, f.ID, f.Build)
+		}
+		b.mu.Unlock()
+		return f(ctx, gwc)
 	}, ch)
 	if err != nil {
 		t.Fatal(err)
@@ -247,6 +258,36 @@ func (c *clientForceDalecWithInput) Solve(ctx context.Context, req gwclient.Solv
 		if err := withDalecInput(ctx, c.Client, &req); err != nil {
 			return nil, err
 		}
+	}
+	return c.Client.Solve(ctx, req)
+}
+
+// gwClientInputInject is a gwclient.Client that injects the result of a build func into the solve request as an input named by the id.
+// This is used to inject a custom frontend into the solve request.
+// This does not change what frontend is used, but it does add the custom frontend as an input to the solve request.
+// This is so we don't need to have an actual external image from a registry or docker image store.
+type gwClientInputInject struct {
+	gwclient.Client
+
+	id string
+	f  gwclient.BuildFunc
+}
+
+func wrapWithInput(c gwclient.Client, id string, f gwclient.BuildFunc) *gwClientInputInject {
+	return &gwClientInputInject{
+		Client: c,
+		id:     id,
+		f:      f,
+	}
+}
+
+func (c *gwClientInputInject) Solve(ctx context.Context, req gwclient.SolveRequest) (*gwclient.Result, error) {
+	res, err := c.f(ctx, c.Client)
+	if err != nil {
+		return nil, err
+	}
+	if err := injectInput(ctx, res, c.id, &req); err != nil {
+		return nil, err
 	}
 	return c.Client.Solve(ctx, req)
 }
