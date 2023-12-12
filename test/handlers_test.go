@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/fixtures"
+	"github.com/Azure/dalec/test/testenv"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/identity"
@@ -26,10 +27,18 @@ func TestHandlerTargetForwarding(t *testing.T) {
 	// It shouldn't be *too* expensive, but it's not necessary to do it for every test.
 	phonyRef := identity.NewID()
 
+	runTest := func(t *testing.T, f gwclient.BuildFunc) {
+		t.Helper()
+		ctx := startTestSpan(t)
+		testEnv.RunTest(ctx, t, f, testenv.FrontendSpec{
+			ID:    phonyRef,
+			Build: fixtures.PhonyFrontend,
+		})
+	}
+
 	t.Run("list targets", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-
 			// Make sure phony is not in the list of targets since it shouldn't be registered in the base frontend.
 			ls := listTargets(ctx, t, gwc, &dalec.Spec{
 				Targets: map[string]dalec.Target{
@@ -42,9 +51,6 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			}) {
 				t.Fatal("found phony target")
 			}
-
-			// Add the custom frontend to the build env so that dalec can resolve the target.
-			gwc = wrapWithInput(gwc, phonyRef, fixtures.PhonyFrontend)
 
 			// Now make sure the forwarded target works.
 			spec := &dalec.Spec{
@@ -82,8 +88,6 @@ func TestHandlerTargetForwarding(t *testing.T) {
 	t.Run("execute target", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			phonyRef := identity.NewID()
-			gwc = wrapWithInput(gwc, phonyRef, fixtures.PhonyFrontend)
 			spec := &dalec.Spec{
 				Targets: map[string]dalec.Target{
 					"phony": {
@@ -178,9 +182,6 @@ func TestHandlerTargetForwarding(t *testing.T) {
 					"target": "phony/does-not-exist",
 				},
 			}
-
-			// Add the custom frontend to the build env so that dalec can resolve the target.
-			gwc = wrapWithInput(gwc, phonyRef, fixtures.PhonyFrontend)
 
 			specToSolveRequest(ctx, t, &dalec.Spec{
 				Targets: map[string]dalec.Target{

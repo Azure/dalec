@@ -4,8 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Azure/dalec/test/testenv"
+	"github.com/Azure/dalec"
+	"github.com/goccy/go-yaml"
+	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/solver/pb"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -21,37 +25,23 @@ func startTestSpan(t *testing.T) context.Context {
 	return ctx
 }
 
-func runTest(t *testing.T, f gwclient.BuildFunc) {
-	ctx := startTestSpan(t)
-	testEnv.RunTest(ctx, t, f)
-}
+func specToSolveRequest(ctx context.Context, t *testing.T, spec *dalec.Spec, sr *gwclient.SolveRequest) {
+	t.Helper()
 
-// gwClientInputInject is a gwclient.Client that injects the result of a build func into the solve request as an input named by the id.
-// This is used to inject a custom frontend into the solve request.
-// This does not change what frontend is used, but it does add the custom frontend as an input to the solve request.
-// This is so we don't need to have an actual external image from a registry or docker image store.
-type gwClientInputInject struct {
-	gwclient.Client
-
-	id string
-	f  gwclient.BuildFunc
-}
-
-func wrapWithInput(c gwclient.Client, id string, f gwclient.BuildFunc) *gwClientInputInject {
-	return &gwClientInputInject{
-		Client: c,
-		id:     id,
-		f:      f,
-	}
-}
-
-func (c *gwClientInputInject) Solve(ctx context.Context, req gwclient.SolveRequest) (*gwclient.Result, error) {
-	res, err := c.f(ctx, c.Client)
+	dt, err := yaml.Marshal(spec)
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
-	if err := testenv.InjectInput(ctx, res, c.id, &req); err != nil {
-		return nil, err
+
+	def, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0o644, dt)).Marshal(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return c.Client.Solve(ctx, req)
+
+	if sr.FrontendInputs == nil {
+		sr.FrontendInputs = make(map[string]*pb.Definition)
+	}
+
+	sr.FrontendInputs[dockerui.DefaultLocalNameContext] = def.ToPB()
+	sr.FrontendInputs[dockerui.DefaultLocalNameDockerfile] = def.ToPB()
 }
