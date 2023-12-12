@@ -12,6 +12,7 @@ import (
 	"github.com/Azure/dalec/test/fixtures"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
+	"github.com/moby/buildkit/identity"
 )
 
 // TestHandlerTargetForwarding tests that the frontend forwards the build to the specified frontend image.
@@ -21,16 +22,13 @@ import (
 // Note: Without instrumenting the frontend with special things for testing, it is difficult to tell if
 // the target was actually forwarded, but we can check that the target actually works.
 func TestHandlerTargetForwarding(t *testing.T) {
-	t.Parallel()
+	// Only generate a ref once
+	// It shouldn't be *too* expensive, but it's not necessary to do it for every test.
+	phonyRef := identity.NewID()
 
-	ctx := startTestSpan(t)
-
-	phonyRef := makeFrontendRef(ctx, t, "phony")
-	opts := []testSolveOpt{withFrontend(phonyRef, fixtures.PhonyFrontend)}
-
-	testEnv(ctx, t, func(ctx context.Context, t *testing.T, gwc gwclient.Client) {
-		t.Run("forwarded target", func(t *testing.T) {
-			ctx := startTestSpan(t)
+	t.Run("list targets", func(t *testing.T) {
+		t.Parallel()
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 
 			// Make sure phony is not in the list of targets since it shouldn't be registered in the base frontend.
 			ls := listTargets(ctx, t, gwc, &dalec.Spec{
@@ -44,6 +42,9 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			}) {
 				t.Fatal("found phony target")
 			}
+
+			// Add the custom frontend to the build env so that dalec can resolve the target.
+			gwc = wrapWithInput(gwc, phonyRef, fixtures.PhonyFrontend)
 
 			// Now make sure the forwarded target works.
 			spec := &dalec.Spec{
@@ -63,6 +64,35 @@ func TestHandlerTargetForwarding(t *testing.T) {
 				t.Fatal("did not find phony/check target")
 			}
 
+			if !slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
+				return tgt.Name == "phony/debug/resolve"
+			}) {
+				t.Fatal("did not find phony/check target")
+			}
+
+			if !slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
+				return tgt.Name == "debug/resolve"
+			}) {
+				t.Fatal("did not find phony/check target")
+			}
+			return gwclient.NewResult(), nil
+		})
+	})
+
+	t.Run("execute target", func(t *testing.T) {
+		t.Parallel()
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+			phonyRef := identity.NewID()
+			gwc = wrapWithInput(gwc, phonyRef, fixtures.PhonyFrontend)
+			spec := &dalec.Spec{
+				Targets: map[string]dalec.Target{
+					"phony": {
+						Frontend: &dalec.Frontend{
+							Image: phonyRef,
+						},
+					},
+				}}
+
 			sr := gwclient.SolveRequest{
 				FrontendOpt: map[string]string{
 					"target": "phony/check",
@@ -79,14 +109,79 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			if !bytes.Equal(dt, expect) {
 				t.Fatalf("expected %q, got %q", expect, string(dt))
 			}
-		})
 
-		t.Run("target not found", func(t *testing.T) {
+			// In this case we want to make sure that any targets that are registered by the frontend are namespaced by our target name prefix.
+			// This is to ensure that the frontend is not overwriting any other targets.
+			// Technically I suppose the target in the user-supplied spec could technically interfere with the base frontend, but that's not really a concern.
+			// e.g. if a user-supplied target was called "debug" it could overwrite the "debug/resolve" target in the base frontend.
+
+			sr = gwclient.SolveRequest{
+				FrontendOpt: map[string]string{
+					"target": "debug/resolve",
+				},
+			}
+			specToSolveRequest(ctx, t, spec, &sr)
+
+			res, err = gwc.Solve(ctx, sr)
+			if err != nil {
+				return nil, err
+			}
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// The builtin debug/resolve target adds the resolved spec to /spec.yml, so check that its there.
+			_, err = ref.StatFile(ctx, gwclient.StatRequest{
+				Path: "spec.yml",
+			})
+			if err != nil {
+				t.Fatalf("expected spec.yml to exist in debug/resolve target, got error: %v", err)
+			}
+
+			sr = gwclient.SolveRequest{
+				FrontendOpt: map[string]string{
+					"target": "phony/debug/resolve",
+				},
+			}
+			specToSolveRequest(ctx, t, spec, &sr)
+			res, err = gwc.Solve(ctx, sr)
+			if err != nil {
+				return nil, err
+			}
+			ref, err = res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// The phony/debug/resolve target adds a dummy file to /resolve
+			dt, err = ref.ReadFile(ctx, gwclient.ReadRequest{
+				Filename: "resolve",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			expect = []byte("phony resolve")
+			if !bytes.Equal(dt, expect) {
+				t.Fatalf("expected %q, got %q", string(expect), string(dt))
+			}
+
+			return gwclient.NewResult(), nil
+		})
+	})
+
+	t.Run("target not found", func(t *testing.T) {
+		t.Parallel()
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 			sr := gwclient.SolveRequest{
 				FrontendOpt: map[string]string{
 					"target": "phony/does-not-exist",
 				},
 			}
+
+			// Add the custom frontend to the build env so that dalec can resolve the target.
+			gwc = wrapWithInput(gwc, phonyRef, fixtures.PhonyFrontend)
+
 			specToSolveRequest(ctx, t, &dalec.Spec{
 				Targets: map[string]dalec.Target{
 					"phony": {
@@ -101,10 +196,9 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), expect) {
 				t.Fatalf("expected error %q, got %v", expect, err)
 			}
+			return gwclient.NewResult(), nil
 		})
-
-	}, opts...)
-
+	})
 }
 
 func readFileResult(ctx context.Context, t *testing.T, name string, res *gwclient.Result) []byte {
