@@ -1,7 +1,10 @@
 package test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -9,6 +12,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -44,4 +48,87 @@ func specToSolveRequest(ctx context.Context, t *testing.T, spec *dalec.Spec, sr 
 
 	sr.FrontendInputs[dockerui.DefaultLocalNameContext] = def.ToPB()
 	sr.FrontendInputs[dockerui.DefaultLocalNameDockerfile] = def.ToPB()
+}
+
+func readFile(ctx context.Context, t *testing.T, name string, res *gwclient.Result) []byte {
+	t.Helper()
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+		Filename: name,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return dt
+}
+
+func statFile(ctx context.Context, t *testing.T, name string, res *gwclient.Result) {
+	t.Helper()
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ref.StatFile(ctx, gwclient.StatRequest{
+		Path: name,
+	})
+	if err != nil {
+		t.Fatalf("expected spec.yml to exist in debug/resolve target, got error: %v", err)
+	}
+}
+
+func checkFile(ctx context.Context, t *testing.T, name string, res *gwclient.Result, expect []byte) {
+	t.Helper()
+
+	dt := readFile(ctx, t, name, res)
+	if !bytes.Equal(dt, expect) {
+		t.Fatalf("expected %q, got %q", string(expect), string(dt))
+	}
+}
+
+func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec) targets.List {
+	t.Helper()
+
+	sr := gwclient.SolveRequest{
+		FrontendOpt: map[string]string{"requestid": targets.RequestTargets},
+	}
+
+	specToSolveRequest(ctx, t, spec, &sr)
+
+	res, err := gwc.Solve(ctx, sr)
+	if err != nil {
+		t.Fatalf("could not solve list targets: %v", err)
+	}
+
+	dt, ok := res.Metadata["result.json"]
+	if !ok {
+		t.Fatal("missing result.json from list targets")
+	}
+
+	var ls targets.List
+	if err := json.Unmarshal(dt, &ls); err != nil {
+		t.Fatalf("could not unmsarshal list targets result: %v", err)
+	}
+	return ls
+}
+
+func containsTarget(ls targets.List, name string) bool {
+	return slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
+		return tgt.Name == name
+	})
+}
+
+func checkTargetExists(t *testing.T, ls targets.List, name string) {
+	t.Helper()
+
+	if !containsTarget(ls, name) {
+		t.Fatalf("did not find target %q", name)
+	}
 }
