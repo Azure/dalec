@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/dalec/test/testenv"
 	"github.com/moby/buildkit/util/tracing/detect"
 	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
 	"go.opentelemetry.io/otel"
@@ -17,6 +18,7 @@ import (
 
 var (
 	baseCtx = context.Background()
+	testEnv *testenv.BuildxEnv
 )
 
 func TestMain(m *testing.M) {
@@ -45,25 +47,13 @@ func TestMain(m *testing.M) {
 	}
 	otel.SetTracerProvider(tp)
 
-	baseClient, err = defaultBuildkitClient(baseCtx)
-	if err != nil {
-		panic(err)
-	}
+	testEnv = testenv.New()
 
 	run := func() int {
 		ctx, _ := signal.NotifyContext(baseCtx, os.Interrupt)
 		baseCtx = ctx
 
-		supportsFrontendNamedContexts = doSupportsFrontendNamedContexts(ctx, baseClient)
-
 		defer func() {
-			if regRelease != nil {
-				err = regRelease(baseCtx)
-				if err != nil {
-					fmt.Fprintln(os.Stderr, "error releasing registry:", err)
-				}
-			}
-
 			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 			if err := detect.Shutdown(ctx); err != nil {
 				fmt.Fprintln(os.Stderr, "error shutting down tracer:", err)

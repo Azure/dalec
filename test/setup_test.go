@@ -2,16 +2,12 @@ package test
 
 import (
 	"context"
-	"path"
 	"testing"
 
-	"github.com/moby/buildkit/client"
+	"github.com/Azure/dalec/test/testenv"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/identity"
-	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
-	"golang.org/x/sync/errgroup"
 )
 
 func startTestSpan(t *testing.T) context.Context {
@@ -25,179 +21,37 @@ func startTestSpan(t *testing.T) context.Context {
 	return ctx
 }
 
-type testSolveConfig struct {
-	frontends map[string]gwclient.BuildFunc
+func runTest(t *testing.T, f gwclient.BuildFunc) {
+	ctx := startTestSpan(t)
+	testEnv.RunTest(ctx, t, f)
 }
 
-type testSolveOpt func(*testSolveConfig)
-
-type testSolveFunc func(_ context.Context, t *testing.T, _ gwclient.Client)
-
-// withFrontend adds a frontend to the solve request.
-func withFrontend(name string, f gwclient.BuildFunc) testSolveOpt {
-	return func(c *testSolveConfig) {
-		if c.frontends == nil {
-			c.frontends = make(map[string]gwclient.BuildFunc)
-		}
-		c.frontends[name] = f
-	}
-}
-
-func makeFrontendRef(ctx context.Context, t *testing.T, name string) string {
-	if supportsFrontendNamedContexts {
-		return name
-	}
-	return path.Join(registryHost(ctx, t), "dalec/test", name)
-}
-
-// testWithFrontendNamedContext runs the provided function with the locally built frontend image.
-// This is done by piping the output of the frontend build directly to the gateway frontend.
-// The neccessary modifications are made to the solve request from the test function to make this happen.
-//
-// (note: its not actually piping results, just passing around the reference which, when consumed, will be built JIT).
-func testWithFrontendNamedContext(ctx context.Context, t *testing.T, f testSolveFunc, opts ...testSolveOpt) {
-	id := identity.NewID()
-
-	eg, ctx := errgroup.WithContext(ctx)
-	ch := displaySolveStatus(ctx, eg)
-
-	var so client.SolveOpt
-	withProjectRoot(t, &so)
-
-	var cfg testSolveConfig
-	for _, o := range opts {
-		o(&cfg)
-	}
-
-	eg.Go(func() error {
-		_, err := baseClient.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			gwc = &gatewayClientNamedContextFrontend{
-				Client: gwc,
-				id:     id,
-				cfg:    &cfg,
-			}
-			f(ctx, t, gwc)
-			return gwclient.NewResult(), nil
-		}, ch)
-		return err
-	})
-
-	if err := eg.Wait(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// gatewayClientLocalFrontend is a wrapper around a gateway client which adds the locally built frontend to the solve request.
-type gatewayClientNamedContextFrontend struct {
+// gwClientInputInject is a gwclient.Client that injects the result of a build func into the solve request as an input named by the id.
+// This is used to inject a custom frontend into the solve request.
+// This does not change what frontend is used, but it does add the custom frontend as an input to the solve request.
+// This is so we don't need to have an actual external image from a registry or docker image store.
+type gwClientInputInject struct {
 	gwclient.Client
-	id  string
-	cfg *testSolveConfig
+
+	id string
+	f  gwclient.BuildFunc
 }
 
-func (c *gatewayClientNamedContextFrontend) Solve(ctx context.Context, req gwclient.SolveRequest) (*gwclient.Result, error) {
-	if err := withLocaFrontendInputs(ctx, c.Client, &req, c.id); err != nil {
+func wrapWithInput(c gwclient.Client, id string, f gwclient.BuildFunc) *gwClientInputInject {
+	return &gwClientInputInject{
+		Client: c,
+		id:     id,
+		f:      f,
+	}
+}
+
+func (c *gwClientInputInject) Solve(ctx context.Context, req gwclient.SolveRequest) (*gwclient.Result, error) {
+	res, err := c.f(ctx, c.Client)
+	if err != nil {
 		return nil, err
 	}
-	for name, f := range c.cfg.frontends {
-		if err := injectInput(ctx, c.Client, f, name, &req); err != nil {
-			return nil, err
-		}
+	if err := testenv.InjectInput(ctx, res, c.id, &req); err != nil {
+		return nil, err
 	}
 	return c.Client.Solve(ctx, req)
-}
-
-// testWithFrontendRegistry runs the provided function with the locally built
-// frontend image that gets pushed to a local registry.
-// Because this requires the fontend to be exported (either to docker or a registry),
-// the frontend build is executed ahead of time rather than just-in-time.
-func testWithFrontendRegistry(ctx context.Context, t *testing.T, f testSolveFunc, opts ...testSolveOpt) {
-	imgName, err := buildFrontendImage(ctx, baseClient, t)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var cfg testSolveConfig
-	for _, o := range opts {
-		o(&cfg)
-	}
-
-	var sp *spb.Policy
-	if len(cfg.frontends) > 0 {
-		sp = &spb.Policy{}
-
-		for name, f := range cfg.frontends {
-			name := name
-			f := f
-			// Note that the buildkit client closes out the solve status channel when it returns, so each build requires a new client.
-			eg, ctx := errgroup.WithContext(baseCtx)
-			ch := displaySolveStatus(ctx, eg)
-
-			eg.Go(func() error {
-				var so client.SolveOpt
-				setRegistryExport(name, &so)
-				withProjectRoot(t, &so)
-
-				_, err := baseClient.Build(ctx, so, "", f, ch)
-				return err
-			})
-
-			if err := eg.Wait(); err != nil {
-				t.Fatal(err)
-			}
-
-		}
-	}
-
-	var so client.SolveOpt
-	so.SourcePolicy = sp
-	withProjectRoot(t, &so)
-
-	eg, ctx := errgroup.WithContext(ctx)
-	ch := displaySolveStatus(ctx, eg)
-	eg.Go(func() error {
-		_, err = baseClient.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			gwc = &gatewayClientRegistryFrontend{gwc, imgName}
-			f(ctx, t, gwc)
-			return gwclient.NewResult(), nil
-		}, ch)
-		return err
-	})
-
-	err = eg.Wait()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-// gatewayClientRegistryFrontend is a wrapper around a gateway client which adds
-// the frontend image that was built and pushed to the local registry to the
-// solve request.
-type gatewayClientRegistryFrontend struct {
-	gwclient.Client
-	ref string
-}
-
-func (c *gatewayClientRegistryFrontend) Solve(ctx context.Context, req gwclient.SolveRequest) (*gwclient.Result, error) {
-	req.Frontend = "gateway.v0"
-	if req.FrontendOpt == nil {
-		req.FrontendOpt = make(map[string]string)
-	}
-	req.FrontendOpt["source"] = c.ref
-	return c.Client.Solve(ctx, req)
-}
-
-var (
-	supportsFrontendNamedContexts bool
-)
-
-// testEnv sets up test environment fo rhte provided function.
-// It routes the test function to the appropriate test environment based on the capabilities of the buildkit backend.
-//
-// Buildkit solve requests performed by the testSolveFunc will have the correct frontend image injected into the solve request.
-func testEnv(ctx context.Context, t *testing.T, f testSolveFunc, opts ...testSolveOpt) {
-	if supportsFrontendNamedContexts {
-		testWithFrontendNamedContext(ctx, t, f, opts...)
-		return
-	}
-	testWithFrontendRegistry(ctx, t, f, opts...)
 }
