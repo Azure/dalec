@@ -18,6 +18,10 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+const (
+	phonyRef = "dalec/integration/frontend/phony"
+)
+
 func startTestSpan(t *testing.T) context.Context {
 	ctx, span := otel.Tracer("").Start(baseCtx, t.Name())
 	t.Cleanup(func() {

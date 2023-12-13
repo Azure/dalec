@@ -16,7 +16,6 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
-	pkgerrors "github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -119,10 +118,10 @@ func withDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.Sol
 	id := identity.NewID()
 	res, err := buildBaseFrontend(ctx, gwc)
 	if err != nil {
-		return pkgerrors.Wrap(err, "error building local frontend")
+		return errors.Wrap(err, "error building local frontend")
 	}
 	if err := injectInput(ctx, res, id, opts); err != nil {
-		return pkgerrors.Wrap(err, "error adding local frontend as input")
+		return errors.Wrap(err, "error adding local frontend as input")
 	}
 
 	opts.FrontendOpt["source"] = id

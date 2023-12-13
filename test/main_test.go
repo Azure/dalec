@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/dalec/test/fixtures"
 	"github.com/Azure/dalec/test/testenv"
 	"github.com/moby/buildkit/util/tracing/detect"
 	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
@@ -60,6 +61,10 @@ func TestMain(m *testing.M) {
 			}
 			cancel()
 		}()
+
+		if err := testEnv.Load(ctx, phonyRef, fixtures.PhonyFrontend); err != nil {
+			panic(err)
+		}
 
 		return m.Run()
 	}
