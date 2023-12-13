@@ -12,12 +12,8 @@ import (
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
-// TestHandlerTargetForwarding tests that the frontend forwards the build to the specified frontend image.
-// In the case of this test we are forwarding to the same frontend image, but with a custom build target name.
-// This should result in there being target with a prefix "foo", e.g. `"foo/debug/resolve"` instead of any
-// of the built-in targets and forwards the build to the frontend image.
-// Note: Without instrumenting the frontend with special things for testing, it is difficult to tell if
-// the target was actually forwarded, but we can check that the target actually works.
+// TestHandlerTargetForwarding tests that targets are forwarded to the correct frontend.
+// We do this by registering a phony frontend and then forwarding a target to it and checking the outputs.
 func TestHandlerTargetForwarding(t *testing.T) {
 	runTest := func(t *testing.T, f gwclient.BuildFunc) {
 		t.Helper()
