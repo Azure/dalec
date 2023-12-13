@@ -23,7 +23,7 @@ var (
 	minVersion = buildkitVersion{0, 12}
 )
 
-// isSupported returns true if the buildkit instance allows you to pass LLB references as inputs to a solve request.
+// supportsFrontendAsInput returns true if the buildkit instance allows you to pass LLB references as inputs to a solve request.
 // This would be needed when testing custom frontends separate from the main one.
 //
 // More info:
@@ -36,7 +36,7 @@ var (
 // (like feeding the output of a build into another build).
 // Here we are checking the version of buildkit to determine what method we can
 // use.
-func isSupported(info *client.Info) bool {
+func supportsFrontendAsInput(info *client.Info) bool {
 	majorStr, minorPatchStr, ok := strings.Cut(strings.TrimPrefix(info.BuildkitVersion.Version, "v"), ".")
 	if !ok {
 		return false

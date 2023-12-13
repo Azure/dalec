@@ -8,11 +8,8 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/test/fixtures"
-	"github.com/Azure/dalec/test/testenv"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
-	"github.com/moby/buildkit/identity"
 )
 
 // TestHandlerTargetForwarding tests that the frontend forwards the build to the specified frontend image.
@@ -22,17 +19,10 @@ import (
 // Note: Without instrumenting the frontend with special things for testing, it is difficult to tell if
 // the target was actually forwarded, but we can check that the target actually works.
 func TestHandlerTargetForwarding(t *testing.T) {
-	// Only generate a ref once
-	// It shouldn't be *too* expensive, but it's not necessary to do it for every test.
-	phonyRef := identity.NewID()
-
 	runTest := func(t *testing.T, f gwclient.BuildFunc) {
 		t.Helper()
 		ctx := startTestSpan(t)
-		testEnv.RunTest(ctx, t, f, testenv.FrontendSpec{
-			ID:    phonyRef,
-			Build: fixtures.PhonyFrontend,
-		})
+		testEnv.RunTest(ctx, t, f)
 	}
 
 	t.Run("list targets", func(t *testing.T) {
