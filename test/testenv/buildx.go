@@ -34,6 +34,8 @@ type BuildxEnv struct {
 
 	supportedOnce sync.Once
 	supportedErr  error
+
+	refs map[string]gwclient.BuildFunc
 }
 
 func New() *BuildxEnv {
@@ -43,6 +45,15 @@ func New() *BuildxEnv {
 func (b *BuildxEnv) WithBuilder(builder string) *BuildxEnv {
 	b.builder = builder
 	return b
+}
+
+// Load loads the output of the speecified [gwclient.BuildFunc] into the buildkit instance.
+func (b *BuildxEnv) Load(ctx context.Context, id string, f gwclient.BuildFunc) error {
+	if b.refs == nil {
+		b.refs = make(map[string]gwclient.BuildFunc)
+	}
+	b.refs[id] = f
+	return nil
 }
 
 func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
@@ -62,7 +73,7 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 				return
 			}
 
-			if !isSupported(info) {
+			if !supportsFrontendAsInput(info) {
 				b.supportedErr = fmt.Errorf("buildkit version not supported: min version is v%s, got: %s", minVersion, info.BuildkitVersion.Version)
 			}
 		})
@@ -216,7 +227,7 @@ type FrontendSpec struct {
 	Build gwclient.BuildFunc
 }
 
-func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildFunc, frontends ...FrontendSpec) {
+func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildFunc) {
 	c, err := b.Buildkit(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -232,8 +243,8 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildF
 		gwc = &clientForceDalecWithInput{gwc}
 
 		b.mu.Lock()
-		for _, f := range frontends {
-			gwc = wrapWithInput(gwc, f.ID, f.Build)
+		for id, f := range b.refs {
+			gwc = wrapWithInput(gwc, id, f)
 		}
 		b.mu.Unlock()
 		return f(ctx, gwc)
