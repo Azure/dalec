@@ -37,11 +37,14 @@ func shArgs(cmd string) llb.RunOption {
 }
 
 // must not be called with a nil cmd pointer
-func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.ExecState, error) {
-	var zero llb.ExecState
+func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, sOpts SourceOpts, sourcePath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if len(cmd.Steps) == 0 {
-		return zero, fmt.Errorf("no steps defined for image source")
+		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
 	}
+	if sourcePath == "" {
+		return llb.Scratch(), fmt.Errorf("no source path defined for image source")
+	}
+
 	for k, v := range cmd.Env {
 		st = st.AddEnv(k, v)
 	}
@@ -54,7 +57,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 	for _, src := range cmd.Mounts {
 		srcSt, err := source2LLBGetter(s, src.Spec, name, true)(sOpts, opts...)
 		if err != nil {
-			return zero, err
+			return llb.Scratch(), err
 		}
 		var mountOpt []llb.MountOption
 		if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 {
@@ -63,7 +66,7 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
 	}
 
-	var cmdSt llb.ExecState
+	out := llb.Scratch()
 	for _, step := range cmd.Steps {
 		rOpts := []llb.RunOption{llb.Args([]string{
 			"/bin/sh", "-c", step.Command,
@@ -76,10 +79,11 @@ func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *CmdSpec, s
 		}
 
 		rOpts = append(rOpts, withConstraints(opts))
-		cmdSt = st.Run(rOpts...)
+		cmdSt := st.Run(rOpts...)
+		out = cmdSt.AddMount(sourcePath, out)
 	}
 
-	return cmdSt, nil
+	return out, nil
 }
 
 func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
@@ -145,15 +149,12 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				return st, nil
 			}
 
-			eSt, err := generateSourceFromImage(s, name, st, src.Cmd, sOpt, opts...)
+			st, err := generateSourceFromImage(s, name, st, src.Cmd, sOpt, src.Path, opts...)
 			if err != nil {
 				return llb.Scratch(), err
 			}
-			if src.Path != "" {
-				pathHandled = true
-				return eSt.AddMount(src.Path, llb.Scratch()), nil
-			}
-			return eSt.Root(), nil
+			pathHandled = true
+			return st, nil
 		case sourcetypes.GitScheme:
 			// TODO: Pass git secrets
 			ref, err := gitutil.ParseGitRef(ref)
