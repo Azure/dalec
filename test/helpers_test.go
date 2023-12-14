@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io/fs"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -14,6 +17,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/tonistiigi/fsutil/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -66,7 +70,10 @@ func readFile(ctx context.Context, t *testing.T, name string, res *gwclient.Resu
 		Filename: name,
 	})
 	if err != nil {
-		t.Fatal(err)
+		stat, _ := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+			Path: filepath.Dir(name),
+		})
+		t.Fatalf("error reading file %q: %v, dir contents: \n%s", name, err, dirStatAsStringer(stat))
 	}
 
 	return dt
@@ -135,4 +142,14 @@ func checkTargetExists(t *testing.T, ls targets.List, name string) {
 	if !containsTarget(ls, name) {
 		t.Fatalf("did not find target %q", name)
 	}
+}
+
+type dirStatAsStringer []*types.Stat
+
+func (d dirStatAsStringer) String() string {
+	var buf bytes.Buffer
+	for _, s := range d {
+		fmt.Fprintf(&buf, "%s %s\n", s.GetPath(), fs.FileMode(s.Mode))
+	}
+	return buf.String()
 }
