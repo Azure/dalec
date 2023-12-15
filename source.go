@@ -180,6 +180,9 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				src.Path = srcCtx.Name
 			}
 			return *st, nil
+		case src.Local != nil:
+			srcLocal := src.Local
+			return llb.Local(srcLocal.Path, localIncludeExcludeMerge(&src)), nil
 		case src.Build != nil:
 			var err error
 			build := src.Build
@@ -260,6 +263,8 @@ func (s Source) Doc() (io.Reader, error) {
 	b := bytes.NewBuffer(nil)
 	switch {
 	case s.Context != nil:
+		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
+	case s.Local != nil:
 		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
 	case s.Build != nil:
 		build := s.Build
