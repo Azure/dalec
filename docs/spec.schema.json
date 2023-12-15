@@ -63,35 +63,6 @@
 			"type": "object",
 			"description": "Artifacts describes all the artifacts to include in the package."
 		},
-		"BuildSpec": {
-			"properties": {
-				"target": {
-					"type": "string",
-					"description": "Target specifies the build target to use.\nIf unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default)."
-				},
-				"args": {
-					"additionalProperties": {
-						"type": "string"
-					},
-					"type": "object",
-					"description": "Args are the build args to pass to the build."
-				},
-				"file": {
-					"type": "string",
-					"description": "File is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.\nThis is exclusive with [Inline]"
-				},
-				"inline": {
-					"type": "string",
-					"description": "Inline is an inline build spec to use.\nThis can be used to specify a dockerfile instead of using one in the build context\nThis is exclusive with [File]",
-					"examples": [
-						"FROM busybox\nRUN echo hello world"
-					]
-				}
-			},
-			"additionalProperties": false,
-			"type": "object",
-			"description": "BuildSpec is used to generate source from a build."
-		},
 		"BuildStep": {
 			"properties": {
 				"command": {
@@ -211,7 +182,7 @@
 			"type": "object",
 			"description": "CheckOutput is used to specify the exepcted output of a check, such as stdout/stderr or a file."
 		},
-		"CmdSpec": {
+		"Command": {
 			"properties": {
 				"dir": {
 					"type": "string",
@@ -251,7 +222,7 @@
 			"required": [
 				"steps"
 			],
-			"description": "CmdSpec is used to execute a command to generate a source from a docker image."
+			"description": "Command is used to execute a command to generate a source from a docker image."
 		},
 		"FileCheckOutput": {
 			"properties": {
@@ -437,17 +408,24 @@
 		},
 		"Source": {
 			"properties": {
-				"ref": {
-					"type": "string",
-					"pattern": "^((context|docker-image|git|http|https|source)://.+)|((context|build)://)$",
-					"description": "Ref is a unique identifier for the source.\nExample: \"docker-image://busybox:latest\", \"https://github.com/moby/buildkit.git#master\", \"context://\n\nWhen a source is specified as part of a [CmdSpec], it may also be used to reference a top-level source.",
-					"examples": [
-						"docker-image://busybox:latest",
-						"https://github.com/moby/buildkit.git#master",
-						"build://",
-						"context://",
-						"context://some/path/in/build/context"
-					]
+				"image": {
+					"$ref": "#/$defs/SourceDockerImage",
+					"description": "This is an embedded union representing all of the possible source types.\nOnly one should be non-nil at any given time. It is considered an error\ncondition if more than one is non-nil, or if all are nil.\n\n=== Begin Source Variants ==="
+				},
+				"git": {
+					"$ref": "#/$defs/SourceGit"
+				},
+				"https": {
+					"$ref": "#/$defs/SourceHTTPS"
+				},
+				"context": {
+					"$ref": "#/$defs/SourceContext"
+				},
+				"build": {
+					"$ref": "#/$defs/SourceBuild"
+				},
+				"local": {
+					"$ref": "#/$defs/SourceLocal"
 				},
 				"path": {
 					"type": "string",
@@ -466,26 +444,115 @@
 					},
 					"type": "array",
 					"description": "Excludes is a list of paths underneath `Path` to exclude, everything else is included"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "Source defines a source to be used in the build."
+		},
+		"SourceBuild": {
+			"properties": {
+				"name": {
+					"type": "string"
 				},
-				"keep_git_dir": {
-					"type": "boolean",
-					"description": "KeepGitDir is used to keep the .git directory after fetching the source for git references."
+				"target": {
+					"type": "string",
+					"description": "Target specifies the build target to use.\nIf unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default)."
+				},
+				"args": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Args are the build args to pass to the build."
+				},
+				"file": {
+					"type": "string",
+					"description": "File is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.\nThis is exclusive with [Inline]"
+				},
+				"inline": {
+					"type": "string",
+					"description": "Inline is an inline build spec to use.\nThis can be used to specify a dockerfile instead of using one in the build context\nThis is exclusive with [File]",
+					"examples": [
+						"FROM busybox\nRUN echo hello world"
+					]
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name"
+			],
+			"description": "i.e."
+		},
+		"SourceContext": {
+			"properties": {
+				"name": {
+					"type": "string"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name"
+			]
+		},
+		"SourceDockerImage": {
+			"properties": {
+				"ref": {
+					"type": "string"
 				},
 				"cmd": {
-					"$ref": "#/$defs/CmdSpec",
-					"description": "Cmd is used to generate the source from a command.\nThis can be used when Ref is \"docker-image://\"\nIf ref is \"cmd://\", this is required."
-				},
-				"build": {
-					"$ref": "#/$defs/BuildSpec",
-					"description": "Build is used to generate source from a build.\nThis is used when [Ref]` is \"build://\"\nThe context for the build is assumed too be specified in after `build://` in the ref, e.g. `build://https://github.com/moby/buildkit.git#master`\nWhen nothing is specified after `build://`, the context is assumed to be the current build context."
+					"$ref": "#/$defs/Command"
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
 			"required": [
 				"ref"
+			]
+		},
+		"SourceGit": {
+			"properties": {
+				"url": {
+					"type": "string"
+				},
+				"commit": {
+					"type": "string"
+				},
+				"keepGitDir": {
+					"type": "boolean"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"url",
+				"commit",
+				"keepGitDir"
+			]
+		},
+		"SourceHTTPS": {
+			"properties": {
+				"url": {
+					"type": "string"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"url"
 			],
-			"description": "Source defines a source to be used in the build."
+			"description": "No longer supports `.git` URLs as git repos."
+		},
+		"SourceLocal": {
+			"properties": {
+				"path": {
+					"type": "string"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object"
 		},
 		"SourceMount": {
 			"properties": {

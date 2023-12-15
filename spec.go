@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/invopop/jsonschema"
 )
 
 // Spec is the specification for a package build.
@@ -267,22 +265,6 @@ type Source struct {
 	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
 	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
-}
-
-func (Source) JSONSchemaExtend(schema *jsonschema.Schema) {
-	s, ok := schema.Properties.Get("ref")
-	if !ok {
-		panic("ref property not found")
-	}
-	s.Pattern = `^((context|docker-image|git|http|https|source)://.+)|((context|build)://)$`
-
-	s.Examples = []interface{}{
-		"docker-image://busybox:latest",
-		"https://github.com/moby/buildkit.git#master",
-		"build://",
-		"context://",
-		"context://some/path/in/build/context",
-	}
 }
 
 // PackageDependencies is a list of dependencies for a package.
