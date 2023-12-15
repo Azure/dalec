@@ -13,13 +13,6 @@ import (
 	"github.com/moby/buildkit/util/gitutil"
 )
 
-const (
-	// Custom source type to generate output from a command.
-	sourceTypeContext = "context"
-	sourceTypeBuild   = "build"
-	sourceTypeSource  = "source"
-)
-
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 
 type ForwarderFunc func(llb.State, *SourceBuild) (llb.State, error)
@@ -248,11 +241,6 @@ func SourceIsDir(src Source) (bool, error) {
 	default:
 		return false, fmt.Errorf("unsupported source type")
 	}
-}
-
-func isGitRef(ref string) bool {
-	_, err := gitutil.ParseGitRef(ref)
-	return err == nil
 }
 
 // Doc returns the details of how the source was created.
