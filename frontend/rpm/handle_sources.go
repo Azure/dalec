@@ -88,12 +88,22 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 			return nil, err
 		}
 
-		ref, ok := src.GetRef()
-		if !ok {
-			continue
+		s := ""
+		switch {
+		case src.DockerImage != nil:
+			s = src.DockerImage.Ref
+		case src.Git != nil:
+			s = src.Git.URL
+		case src.HTTPS != nil:
+			s = src.HTTPS.URL
+		case src.Context != nil:
+			s = src.Context.Name
+		case src.Build != nil:
+			s = src.Build.Name
+		default:
 		}
 
-		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+ref, false)
+		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+s, false)
 		st, err := dalec.Source2LLBGetter(spec, src, k)(sOpt, pg)
 		if err != nil {
 			return nil, err
