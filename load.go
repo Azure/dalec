@@ -22,52 +22,38 @@ func knownArg(key string) bool {
 
 const DefaultPatchStrip int = 1
 
-// GetRef determines the Source variant and returns the value of the `Ref`
-// field, and the second return value will be `true`. If the variant doesn't
-// have a `Ref` field, the second return value will be `false`.
-func (s *Source) GetRef() (string, bool) {
-	switch {
-	case s.DockerImage != nil:
-		return s.DockerImage.Ref, true
-	case s.Git != nil:
-		return s.Git.URL, true
-	case s.HTTPS != nil:
-		return s.HTTPS.URL, true
-	case s.Context != nil:
-		return s.Context.Name, true
-	case s.Build != nil:
-		return s.Build.Name, true
-	case s.Cmd != nil:
-		return "", false
-	default:
-		return "", false
-	}
-}
+func (s *Source) processArgs(args map[string]string) error {
+	lex := shell.NewLex('\\')
 
-// SetRef determines the Source variant and sets the `Ref` field. If the Source
-// variant doesn't have a `Ref` field, SetRef does nothing and returns `false`.
-func (s *Source) SetRef(ref string) bool {
+	var sub *string
 	switch {
 	case s.DockerImage != nil:
-		s.DockerImage.Ref = ref
-		return true
+		sub = &s.DockerImage.Ref
 	case s.Git != nil:
-		s.Git.URL = ref
-		return true
+		sub = &s.Git.URL
 	case s.HTTPS != nil:
-		s.HTTPS.URL = ref
-		return true
+		sub = &s.HTTPS.URL
 	case s.Context != nil:
-		s.Context.Name = ref
-		return true
+		sub = &s.Context.Name
+		if *sub == "" {
+			*sub = "context"
+		}
 	case s.Build != nil:
-		s.Build.Name = ref
-		return true
-	case s.Cmd != nil:
-		return false
+		sub = &s.Build.Name
 	default:
-		return false
 	}
+
+	if sub == nil {
+		return nil
+	}
+
+	updated, err := lex.ProcessWordWithMap(*sub, args)
+	if err != nil {
+		return err
+	}
+
+	*sub = updated
+	return nil
 }
 
 // LoadSpec loads a spec from the given data.
@@ -94,15 +80,9 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 	}
 
 	for name, src := range spec.Sources {
-		ref, ok := src.GetRef()
-		if !ok {
-			continue
-		}
-		updated, err := lex.ProcessWordWithMap(ref, args)
-		if err != nil {
+		if err := src.processArgs(args); err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
-		_ = src.SetRef(updated)
 		if err := src.Cmd.processBuildArgs(lex, args, name); err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
 		}
@@ -180,16 +160,10 @@ func (c *SourceCommand) processBuildArgs(lex *shell.Lex, args map[string]string,
 	if c == nil {
 		return nil
 	}
-	for i, smnt := range c.Mounts {
-		ref, ok := smnt.Spec.GetRef()
-		if !ok {
-			continue
-		}
-		updated, err := lex.ProcessWordWithMap(ref, args)
-		if err != nil {
+	for _, s := range c.Mounts {
+		if err := s.Spec.processArgs(args); err != nil {
 			return fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
-		c.Mounts[i].Spec.SetRef(updated)
 	}
 	for k, v := range c.Env {
 		updated, err := lex.ProcessWordWithMap(v, args)
