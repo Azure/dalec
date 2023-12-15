@@ -238,6 +238,10 @@ type SourceCommand struct {
 	Steps []*BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
 }
 
+type SourceLocal struct {
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+}
+
 // Source defines a source to be used in the build.
 // A source can be a local directory, a git repositoryt, http(s) URL, etc.
 type Source struct {
@@ -251,6 +255,7 @@ type Source struct {
 	HTTPS       *SourceHTTPS       `yaml:"https,omitempty" json:"https,omitempty"`
 	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
 	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
+	Local       *SourceLocal       `yaml:"local,omitempty" json:"local,omitempty"`
 	Cmd         *SourceCommand     `yaml:"cmd,omitempty" json:"cmd,omitempty"`
 	// === End Source Variants ===
 

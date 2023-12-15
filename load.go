@@ -40,6 +40,8 @@ func (s *Source) processArgs(args map[string]string) error {
 		}
 	case s.Build != nil:
 		sub = &s.Build.Name
+	case s.Local != nil:
+		sub = &s.Local.Path
 	default:
 	}
 
