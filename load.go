@@ -134,8 +134,10 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 		if err := src.processArgs(args); err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
-		if err := src.Cmd.processBuildArgs(lex, args, name); err != nil {
-			return nil, fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
+		if src.DockerImage != nil {
+			if err := src.DockerImage.Cmd.processBuildArgs(lex, args, name); err != nil {
+				return nil, fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
+			}
 		}
 		spec.Sources[name] = src
 	}
@@ -207,7 +209,7 @@ func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i i
 	return nil
 }
 
-func (c *SourceCommand) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
+func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
 	if c == nil {
 		return nil
 	}
@@ -239,8 +241,8 @@ func (c *SourceCommand) processBuildArgs(lex *shell.Lex, args map[string]string,
 
 func (s Spec) Validate() error {
 	for name, src := range s.Sources {
-		if src.Cmd != nil {
-			for p, cfg := range src.Cmd.CacheDirs {
+		if src.DockerImage != nil && src.DockerImage.Cmd != nil {
+			for p, cfg := range src.DockerImage.Cmd.CacheDirs {
 				if _, err := sharingMode(cfg.Mode); err != nil {
 					return errors.Wrapf(err, "invalid sharing mode for source %q with cache mount at path %q", name, p)
 				}
@@ -295,7 +297,7 @@ func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) e
 }
 
 func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
-	if err := c.SourceCommand.processBuildArgs(lex, args, name); err != nil {
+	if err := c.Command.processBuildArgs(lex, args, name); err != nil {
 		return err
 	}
 
