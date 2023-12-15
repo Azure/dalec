@@ -58,6 +58,51 @@ func (s *Source) processArgs(args map[string]string) error {
 	return nil
 }
 
+func checkDuplicate[T any](c *int, p *T) error {
+	if c == nil {
+		return fmt.Errorf("validation function (check) called with nil pointer")
+	}
+
+	if p != nil {
+		(*c)++
+	}
+
+	if *c > 1 {
+		return fmt.Errorf("more than one source variant defined")
+	}
+
+	return nil
+}
+
+func (s *Source) validate() error {
+	count := 0
+
+	if err := checkDuplicate(&count, s.DockerImage); err != nil {
+		return err
+	}
+	if err := checkDuplicate(&count, s.Git); err != nil {
+		return err
+	}
+	if err := checkDuplicate(&count, s.HTTPS); err != nil {
+		return err
+	}
+	if err := checkDuplicate(&count, s.Context); err != nil {
+		return err
+	}
+	if err := checkDuplicate(&count, s.Build); err != nil {
+		return err
+	}
+	if err := checkDuplicate(&count, s.Local); err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return fmt.Errorf("source has no non-nil variant")
+	}
+
+	return nil
+}
+
 // LoadSpec loads a spec from the given data.
 // env is a map of environment variables to use for shell-style expansion in the spec.
 func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
@@ -82,6 +127,10 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 	}
 
 	for name, src := range spec.Sources {
+		if err := src.validate(); err != nil {
+			return nil, fmt.Errorf("error validating source ref %q: %w", name, err)
+		}
+
 		if err := src.processArgs(args); err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
