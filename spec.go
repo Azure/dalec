@@ -180,7 +180,8 @@ type ImageConfig struct {
 }
 
 type SourceDockerImage struct {
-	Ref string `yaml:"ref" json:"ref"`
+	Ref string   `yaml:"ref" json:"ref"`
+	Cmd *Command `yaml:"cmd,omitempty" json:"cmd,omitempty"`
 }
 
 type SourceGit struct {
@@ -219,8 +220,8 @@ type SourceBuild struct {
 	Inline string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
 }
 
-// SourceCommand is used to execute a command to generate a source from a docker image.
-type SourceCommand struct {
+// Command is used to execute a command to generate a source from a docker image.
+type Command struct {
 	// Dir is the working directory to run the command in.
 	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
 
@@ -256,7 +257,6 @@ type Source struct {
 	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
 	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
 	Local       *SourceLocal       `yaml:"local,omitempty" json:"local,omitempty"`
-	Cmd         *SourceCommand     `yaml:"cmd,omitempty" json:"cmd,omitempty"`
 	// === End Source Variants ===
 
 	// Path is the path to the source after fetching it based on the identifier.
@@ -387,8 +387,8 @@ type Target struct {
 type TestSpec struct {
 	// Name is the name of the test
 	// This will be used to output the test results
-	Name          string `yaml:"name" json:"name" jsonschema:"required"`
-	SourceCommand `yaml:",inline"`
+	Name    string `yaml:"name" json:"name" jsonschema:"required"`
+	Command `yaml:",inline"`
 	// Steps is the list of commands to run to test the package.
 	Steps []TestStep `yaml:"steps" json:"steps" jsonschema:"required"`
 	// Files is the list of files to check after running the steps.

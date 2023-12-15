@@ -35,7 +35,7 @@ func shArgs(cmd string) llb.RunOption {
 }
 
 // must not be called with a nil cmd pointer
-func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *SourceCommand, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.ExecState, error) {
+func generateSourceFromImage(s *Spec, name string, st llb.State, cmd *Command, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.ExecState, error) {
 	var zero llb.ExecState
 	if len(cmd.Steps) == 0 {
 		return zero, fmt.Errorf("no steps defined for image source")
@@ -136,11 +136,11 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			img := src.DockerImage
 			st := llb.Image(img.Ref, llb.WithMetaResolver(sOpt.Resolver), withConstraints(opts))
 
-			if src.Cmd == nil {
+			if img.Cmd == nil {
 				return st, nil
 			}
 
-			eSt, err := generateSourceFromImage(s, name, st, src.Cmd, sOpt, opts...)
+			eSt, err := generateSourceFromImage(s, name, st, img.Cmd, sOpt, opts...)
 			if err != nil {
 				return llb.Scratch(), err
 			}
@@ -195,7 +195,6 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 					Path:     src.Path,
 					Includes: src.Includes,
 					Excludes: src.Excludes,
-					Cmd:      src.Cmd,
 				}
 				st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
 				if err != nil {
@@ -313,7 +312,7 @@ func (s Source) Doc() (io.Reader, error) {
 		}
 	case s.DockerImage != nil:
 		img := s.DockerImage
-		if s.Cmd == nil {
+		if img.Cmd == nil {
 			fmt.Fprintln(b, "Generated from a docker image:")
 			fmt.Fprintln(b, "	Image:", img.Ref)
 			if s.Path != "" {
@@ -325,19 +324,19 @@ func (s Source) Doc() (io.Reader, error) {
 			if s.Path != "" {
 				fmt.Fprintln(b, "	Extraced path:", s.Path)
 			}
-			if len(s.Cmd.Env) > 0 {
+			if len(img.Cmd.Env) > 0 {
 				fmt.Fprintln(b, "	With the following environment variables set for all commands:")
 
-				sorted := SortMapKeys(s.Cmd.Env)
+				sorted := SortMapKeys(img.Cmd.Env)
 				for _, k := range sorted {
-					fmt.Fprintf(b, "		%s=%s\n", k, s.Cmd.Env[k])
+					fmt.Fprintf(b, "		%s=%s\n", k, img.Cmd.Env[k])
 				}
 			}
-			if s.Cmd.Dir != "" {
-				fmt.Fprintln(b, "	Working Directory:", s.Cmd.Dir)
+			if img.Cmd.Dir != "" {
+				fmt.Fprintln(b, "	Working Directory:", img.Cmd.Dir)
 			}
 			fmt.Fprintln(b, "	Command(s):")
-			for _, step := range s.Cmd.Steps {
+			for _, step := range img.Cmd.Steps {
 				fmt.Fprintf(b, "		%s\n", step.Command)
 				if len(step.Env) > 0 {
 					fmt.Fprintln(b, "			With the following environment variables set for this command:")
@@ -347,9 +346,9 @@ func (s Source) Doc() (io.Reader, error) {
 					}
 				}
 			}
-			if len(s.Cmd.Mounts) > 0 {
+			if len(img.Cmd.Mounts) > 0 {
 				fmt.Fprintln(b, "	With the following items mounted:")
-				for _, src := range s.Cmd.Mounts {
+				for _, src := range img.Cmd.Mounts {
 					sub, err := src.Spec.Doc()
 					if err != nil {
 						return nil, err
