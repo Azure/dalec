@@ -163,6 +163,11 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			return llb.HTTP(https.URL, opts...), nil
 		case src.Context != nil:
 			srcCtx := src.Context
+			ctxName := srcCtx.Name
+			if ctxName == "" {
+				ctxName = "."
+			}
+
 			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
 			if err != nil {
 				return llb.Scratch(), err
@@ -185,21 +190,21 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				if build.Context.Name == "" {
 					st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
 				} else {
-					src2 := Source{
-						Context:  &SourceContext{Name: build.Context.Name},
-						Path:     src.Path,
-						Includes: src.Includes,
-						Excludes: src.Excludes,
-					}
-					st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
+					st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
 					if err != nil {
 						return llb.Scratch(), err
 					}
+
+					includeExcludeHandled = true
+					if src.Path == "" && build.Context.Name != "" {
+						src.Path = build.Context.Name
+					}
+					return *st, nil
 				}
 			case build.Local != nil:
 				st = llb.Local(build.Local.Path, withConstraints(opts))
 			case build.Source != nil:
-				src2 := s.Sources[name]
+				src2 := s.Sources[build.Source.Name]
 				st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
 				if err != nil {
 					return llb.Scratch(), err
