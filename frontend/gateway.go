@@ -25,14 +25,14 @@ const (
 	dalecSubrequstForwardBuild = "dalec.forward.build"
 )
 
-func getDockerfile(ctx context.Context, client gwclient.Client, spec *dalec.SourceBuild, defPb *pb.Definition) ([]byte, error) {
-	if spec.Inline != "" {
-		return []byte(spec.Inline), nil
-	}
-
+func getDockerfile(ctx context.Context, client gwclient.Client, build *dalec.SourceBuild, defPb *pb.Definition) ([]byte, error) {
 	dockerfilePath := dockerui.DefaultDockerfileName
-	if spec.File != "" {
-		dockerfilePath = spec.File
+
+	switch {
+	case build.Inline != nil:
+		return []byte(*build.Inline), nil
+	case build.DockerFile != nil:
+		dockerfilePath = *build.DockerFile
 	}
 
 	// First we need to read the dockerfile to determine what frontend to forward to
@@ -65,7 +65,7 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.Forw
 			spec = &dalec.SourceBuild{}
 		}
 
-		if spec.File != "" && spec.Inline != "" {
+		if spec.DockerFile != nil && spec.Inline != nil {
 			return llb.Scratch(), fmt.Errorf("cannot specify both file and inline for build spec")
 		}
 
