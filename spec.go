@@ -201,21 +201,34 @@ type SourceContext struct {
 // i.e. just rename `BuildSpec` to `SourceBuild`
 // SourceBuild is used to generate source from a build.
 type SourceBuild struct {
-	Name string `yaml:"name" json:"name"`
-	// Target specifies the build target to use.
-	// If unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default).
-	Target string `yaml:"target,omitempty" json:"target,omitempty"`
-	// Args are the build args to pass to the build.
-	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
-	// File is the path to the build file in the build context
+	// An embedded union representing the different build contexts
+	// === Begin SourceBuild Base Variants === //
+	// A build context provided by the user via a cli invocation
+	Context *SourceContext `yaml:"context,omitempty" json:"context,omitempty"`
+	// A local directory
+	Local *SourceLocal `yaml:"local,omitempty" json:"local,omitempty"`
+	// A reference to another source
+	Source *SourceContext `yaml:"source,omitempty" json:"source,omitempty"`
+	// === End SourceBuild Base Variants === //
+
+	// An embedded union representing the different ways of running a build
+	// === Begin SourceBuild Action Variants ===
+	// DockerFile is the path to the build file in the build context
 	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
 	// This is exclusive with [Inline]
-	File string `yaml:"file,omitempty" json:"file,omitempty"`
-
+	DockerFile *string `yaml:"file,omitempty" json:"file,omitempty"`
 	// Inline is an inline build spec to use.
 	// This can be used to specify a dockerfile instead of using one in the build context
 	// This is exclusive with [File]
-	Inline string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
+	Inline *string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
+	// === End SourceBuild Action Variants ===
+
+	// Target specifies the build target to use.
+	// If unset, the default target is determined by the frontend implementation
+	// (e.g. the dockerfile frontend uses the last build stage as the default).
+	Target string `yaml:"target,omitempty" json:"target,omitempty"`
+	// Args are the build args to pass to the build.
+	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
 }
 
 // Command is used to execute a command to generate a source from a docker image.

@@ -180,22 +180,33 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			var err error
 			build := src.Build
 			var st llb.State
-			if build.Name == "" {
-				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
-			} else {
-				src2 := Source{
-					Build:    &SourceBuild{Name: build.Name},
-					Path:     src.Path,
-					Includes: src.Includes,
-					Excludes: src.Excludes,
+			switch {
+			case build.Context != nil:
+				if build.Context.Name == "" {
+					st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
+				} else {
+					src2 := Source{
+						Context:  &SourceContext{Name: build.Context.Name},
+						Path:     src.Path,
+						Includes: src.Includes,
+						Excludes: src.Excludes,
+					}
+					st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
+					if err != nil {
+						return llb.Scratch(), err
+					}
 				}
+			case build.Local != nil:
+				st = llb.Local(build.Local.Path, withConstraints(opts))
+			case build.Source != nil:
+				src2 := s.Sources[name]
 				st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
 				if err != nil {
 					return llb.Scratch(), err
 				}
 			}
 
-			return sOpt.Forward(st, src.Build)
+			return sOpt.Forward(st, build)
 		default:
 			return llb.Scratch(), fmt.Errorf("No source variant found")
 		}
@@ -257,7 +268,7 @@ func (s Source) Doc() (io.Reader, error) {
 		build := s.Build
 		fmt.Fprintln(b, "Generated from a docker build:")
 		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
-		fmt.Fprintln(b, "	Docker Build Ref:", build.Name)
+		fmt.Fprintln(b, "	Docker Build Ref:", build.Context)
 
 		if len(s.Build.Args) > 0 {
 			sorted := SortMapKeys(s.Build.Args)
@@ -267,20 +278,21 @@ func (s Source) Doc() (io.Reader, error) {
 			}
 		}
 
-		if s.Build.Inline != "" {
+		switch {
+		case s.Build.Inline != nil:
 			fmt.Fprintln(b, "	Dockerfile:")
 
-			scanner := bufio.NewScanner(strings.NewReader(s.Build.Inline))
+			scanner := bufio.NewScanner(strings.NewReader(*s.Build.Inline))
 			for scanner.Scan() {
 				fmt.Fprintf(b, "		%s\n", scanner.Text())
 			}
 			if scanner.Err() != nil {
 				return nil, scanner.Err()
 			}
-		} else {
+		case s.Build.DockerFile != nil:
 			p := "Dockerfile"
-			if s.Build.File != "" {
-				p = s.Build.File
+			if s.Build.DockerFile != nil {
+				p = *s.Build.DockerFile
 			}
 			fmt.Fprintln(b, "	Dockerfile path in context:", p)
 		}
