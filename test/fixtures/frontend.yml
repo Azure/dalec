@@ -10,21 +10,21 @@ vendor: Microsoft
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 sources:
-  src:
-    ref: context://
   gomodcache:
-    ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.21
     path: /build/gomodcache
-    cmd:
-      dir: /build/src
-      mounts:
-        - dest: /build/src
-          spec:
-            ref: source://src
-      steps:
-        - command: go mod download
-          env:
-            GOMODCACHE: /build/gomodcache
+    image:
+      ref: mcr.microsoft.com/oss/go/microsoft/golang:1.21
+      cmd:
+        dir: /build/src
+        mounts:
+          - dest: /build/src
+            spec:
+              context:
+                name: ""
+        steps:
+          - command: go mod download
+            env:
+              GOMODCACHE: /build/gomodcache
 
 dependencies:
   build:

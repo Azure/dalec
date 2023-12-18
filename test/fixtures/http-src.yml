@@ -12,9 +12,11 @@ license: Apache 2.0
 
 sources:
   readme:
-    ref: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md
+    https:
+      url: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md
   SOMEOTHERNAME.md:
-    ref: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md
+    https:
+      url: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md
 
 build:
   steps:

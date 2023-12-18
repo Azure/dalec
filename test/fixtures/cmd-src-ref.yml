@@ -14,17 +14,19 @@ packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 sources:
   test:
-    ref: docker-image://busybox:latest
     path: /bar
-    cmd:
-      mounts:
-        - dest: "/foo"
-          spec:
-            ref: context://
-      steps:
-        - env:
-            FILE_TO_IMPORT: ${file_to_import}
-          command: set -e; mkdir -p /bar; cp "/foo/${FILE_TO_IMPORT}" "/bar/${FILE_TO_IMPORT}"
+    image:
+      ref: busybox:latest
+      cmd:
+        mounts:
+          - dest: "/foo"
+            spec:
+              context:
+                name: ""
+        steps:
+          - env:
+              FILE_TO_IMPORT: ${file_to_import}
+            command: set -e; mkdir -p /bar; cp "/foo/${FILE_TO_IMPORT}" "/bar/${FILE_TO_IMPORT}"
 
 
 build:
