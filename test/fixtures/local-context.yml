@@ -12,25 +12,25 @@ license: Apache 2.0
 sources:
   src:
     context:
-      name: ""
+      name: "."
   src2:
     context:
       name: "go.mod"
   src3:
     context:
-      name: ""
+      name: "."
     includes:
       - go.mod
       - go.sum
   src4:
     context:
-      name: ""
+      name: "."
     excludes:
       - go.mod
       - go.sum
   src5:
     context:
-      name: ""
+      name: "."
     includes:
       - go.*
     excludes:
