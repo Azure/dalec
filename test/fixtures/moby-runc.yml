@@ -61,7 +61,8 @@ provides:
   - runc
 sources:
   src:
-    ref: https://github.com/opencontainers/runc.git#${RUNC_COMMIT}
+    https:
+      url: https://github.com/opencontainers/runc.git#${RUNC_COMMIT}
 
 build:
   env:
