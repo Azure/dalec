@@ -11,21 +11,26 @@ packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 sources:
   src:
-    ref: context://
+    context:
+      name: ""
   src2:
-    ref: context://go.mod
+    context:
+      name: "go.mod"
   src3:
-    ref: context://
+    context:
+      name: ""
     includes:
       - go.mod
       - go.sum
   src4:
-    ref: context://
+    context:
+      name: ""
     excludes:
       - go.mod
       - go.sum
   src5:
-    ref: context://
+    context:
+      name: ""
     includes:
       - go.*
     excludes:
