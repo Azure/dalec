@@ -17,6 +17,7 @@ import (
 // This is purposefully exported so it can be overridden at compile time if needed.
 // Currently this image needs /bin/sh and tar in $PATH
 var TarImageRef = "busybox:latest"
+var PatchImageRef = "busybox:latest"
 
 func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
@@ -53,6 +54,8 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 		return nil, nil, err
 	}
 
+	// need to check if sources
+
 	// Now we can merge sources into the desired path
 	st := dalec.MergeAtPath(llb.Scratch(), sources, "/SOURCES")
 
@@ -72,6 +75,25 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 	return ref, &image.Image{}, err
 }
 
+// takes a state containing a source and a patch state
+// merges them, and applies the patch
+func applyPatch(spec *dalec.Spec, sourceName string, patchName string, sourceState llb.State, patchState llb.State, opts ...llb.ConstraintsOpt) llb.State {
+	//merged := llb.Merge([]llb.State{sourceState, patchState}, opts...)
+	//sourceSpec := spec.Sources[sourceName]
+	//patchSpec := spec.Sources[patchName]
+
+	patchImg := llb.Image(PatchImageRef)
+	withSourceState := patchImg.File(llb.Copy(sourceState, "/", "/src", dalec.WithDirContentsOnly()))
+
+	worker := withSourceState.Run(
+		llb.AddMount("/patch", patchState),
+		shArgs(fmt.Sprintf("cd /src && patch -p1 < ../patch/%s", patchName)),
+		dalec.WithConstraints(opts...),
+	)
+
+	return llb.Scratch().File(llb.Copy(worker.Root(), "/src", "/", dalec.WithDirContentsOnly()))
+}
+
 func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, error) {
 	pgID := identity.NewID()
 
@@ -80,13 +102,10 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 	// cache hits for callers of this function.
 	sorted := dalec.SortMapKeys(spec.Sources)
 
+	sourceToState := make(map[string]llb.State)
 	out := make([]llb.State, 0, len(spec.Sources))
 	for _, k := range sorted {
 		src := spec.Sources[k]
-		isDir, err := dalec.SourceIsDir(src)
-		if err != nil {
-			return nil, err
-		}
 
 		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+src.Ref, false)
 		st, err := dalec.Source2LLBGetter(spec, src, k)(sOpt, pg)
@@ -94,10 +113,40 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 			return nil, err
 		}
 
+		// map each source to its corresponding state
+		sourceToState[k] = st
+	}
+
+	for _, k := range sorted {
+		src := spec.Sources[k]
+		st := sourceToState[k]
+		patches, patchesExist := spec.Patches[k]
+		if !patchesExist {
+			continue
+		}
+
+		pgID2 := identity.NewID()
+		// apply patches one by one
+		for _, patchName := range patches {
+			pg := llb.ProgressGroup(pgID2, "Patch spec source: "+k+" "+src.Ref+" "+"with "+patchName, false)
+			st = applyPatch(spec, k, patchName, st, sourceToState[patchName], pg)
+		}
+		sourceToState[k] = st
+	}
+
+	for _, k := range sorted {
+		src := spec.Sources[k]
+		isDir, err := dalec.SourceIsDir(src)
+		if err != nil {
+			return nil, err
+		}
+
+		pgID3 := identity.NewID()
+		pg := llb.ProgressGroup(pgID3, "Tar spec source if needed: "+k+" "+src.Ref, false)
 		if isDir {
-			out = append(out, tar(st, k+".tar.gz", pg))
+			out = append(out, tar(sourceToState[k], k+".tar.gz", pg))
 		} else {
-			out = append(out, st)
+			out = append(out, sourceToState[k])
 		}
 	}
 

@@ -9,6 +9,12 @@ vendor: Microsoft
 
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
+
+dependencies:
+  runtime:
+    coreutils:
+    bash:
+
 sources:
   readme:
     ref: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md

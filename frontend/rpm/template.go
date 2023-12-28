@@ -221,10 +221,10 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			fmt.Fprintf(b, "mkdir -p %%{_builddir}/%s\n", name)
 			fmt.Fprintf(b, "tar -C %%{_builddir}/%s -xzf %%{_sourcedir}/%s.tar.gz\n", name, name)
 
-			for _, p := range w.Spec.Patches[name] {
-				fmt.Fprintf(b, "cd %s\n", name)
-				fmt.Fprintf(b, "patch -p0 -s < %%{_sourcedir}/%s\n", p)
-			}
+			// for _, p := range w.Spec.Patches[name] {
+			// 	fmt.Fprintf(b, "cd %s\n", name)
+			// 	fmt.Fprintf(b, "patch -p0 -s < %%{_sourcedir}/%s\n", p)
+			// }
 			return nil
 		}(name, src)
 		if err != nil {

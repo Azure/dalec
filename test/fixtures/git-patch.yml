@@ -1,0 +1,58 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+name: dalec-test-fixture-patch-git-source
+description: A test fixture for checking http sources
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+
+dependencies:
+  runtime:
+
+sources:
+  src:
+    ref: https://github.com/moby/containerd.git
+  patch1:
+    ref: https://raw.githubusercontent.com/Azure/moby-packaging/7092638d14708b389abf0937086508ceb2571404/moby-containerd/patches/service-execstart.patch
+
+build:
+  steps:
+  # check that
+  #    1. file to patch exists in source
+  #    2. file is patched
+
+  # cd ./src
+  # patch -i ../patch1
+  # [ "$(grep "ExecStart=/usr/bin/containerd" containerd.service)" == "ExecStart=/usr/local/bin/containerd" ]
+  # [ "$(grep "ExecStart=/usr/local/bin/containerd" ./src/containerd.service)" == "ExecStart=/usr/local/bin/containerd" ]
+    - command: |
+        [ -f ./src/containerd.service ]
+        [ "$(grep "ExecStart=/usr/bin/containerd" ./src/containerd.service)" == "ExecStart=/usr/bin/containerd" ]
+
+patches:
+  src:
+    - patch1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
