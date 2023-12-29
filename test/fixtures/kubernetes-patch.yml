@@ -18,17 +18,27 @@ sources:
 
   patch_120129:
     ref: https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/120129.patch
-
   patch_120134:
     ref: https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/120134.patch
-
   patch_121882:
     ref: https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/121882.patch
+
 
 build:
   steps:
     - command: |
         [ -d src/pkg ]
+        grep "cmd := exec.Command(\"powershell\"" \
+          ./src/pkg/volume/util/subpath/subpath_windows.go
+        [ $? -eq 0 ]
+
+        grep 'cmdString := "Get-Disk -Number $env:source' \
+          ./src/staging/src/k8s.io/mount-utils/mount_windows.go
+        [ $? -eq 0 ]
+
+        grep 'err := os.Symlink(mklinkSource, target)' \
+          ./src/staging/src/k8s.io/mount-utils/mount_windows.go
+        [ $? -eq 0 ]
 
 patches:
   src:

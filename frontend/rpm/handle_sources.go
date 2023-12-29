@@ -75,23 +75,23 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 	return ref, &image.Image{}, err
 }
 
-// takes a state containing a source and a patch state
-// merges them, and applies the patch
-func applyPatch(spec *dalec.Spec, sourceName string, patchName string, sourceState llb.State, patchState llb.State, opts ...llb.ConstraintsOpt) llb.State {
-	//merged := llb.Merge([]llb.State{sourceState, patchState}, opts...)
-	//sourceSpec := spec.Sources[sourceName]
-	//patchSpec := spec.Sources[patchName]
-
+func patchSource(spec *dalec.Spec, patchNames []string, sourceState llb.State, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) llb.State {
 	patchImg := llb.Image(PatchImageRef)
-	withSourceState := patchImg.File(llb.Copy(sourceState, "/", "/src", dalec.WithDirContentsOnly()))
 
-	worker := withSourceState.Run(
-		llb.AddMount("/patch", patchState),
-		shArgs(fmt.Sprintf("cd /src && patch -p1 < ../patch/%s", patchName)),
-		dalec.WithConstraints(opts...),
-	)
+	// copy source state to /src
+	worker := patchImg.File(llb.Copy(sourceState, "/", "/src", dalec.WithDirContentsOnly()))
+	for _, patchName := range patchNames {
+		patchState := sourceToState[patchName]
+		worker = worker.Run(
+			llb.AddMount("/patch", patchState, llb.Readonly),
+			llb.AddEnv("PATCH_PATH", "/patch/"+patchName),
+			shArgs("cd /src && patch -p1 < "+filepath.Join("/patch", patchName)),
+			dalec.WithConstraints(opts...),
+		).Root()
+	}
 
-	return llb.Scratch().File(llb.Copy(worker.Root(), "/src", "/", dalec.WithDirContentsOnly()))
+	// copy /src back to / of new scratch fs
+	return llb.Scratch().File(llb.Copy(worker, "/src", "/", dalec.WithDirContentsOnly()))
 }
 
 func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, error) {
@@ -117,23 +117,20 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 		sourceToState[k] = st
 	}
 
-	for _, k := range sorted {
-		src := spec.Sources[k]
-		st := sourceToState[k]
-		patches, patchesExist := spec.Patches[k]
-		if !patchesExist {
-			continue
-		}
+	// At this point, we have LLB state for all sources, so we can apply those sources that are patches
+	pgIDPatch := identity.NewID()
+	for _, sourceName := range sorted {
+		src := spec.Sources[sourceName]
+		sourceState := sourceToState[sourceName]
 
-		pgID2 := identity.NewID()
-		// apply patches one by one
-		for _, patchName := range patches {
-			pg := llb.ProgressGroup(pgID2, "Patch spec source: "+k+" "+src.Ref+" "+"with "+patchName, false)
-			st = applyPatch(spec, k, patchName, st, sourceToState[patchName], pg)
+		patches, patchesExist := spec.Patches[sourceName]
+		if patchesExist {
+			pg := llb.ProgressGroup(pgIDPatch, "Patch spec source: "+sourceName+" "+src.Ref, false)
+			sourceToState[sourceName] = patchSource(spec, patches, sourceState, sourceToState, pg)
 		}
-		sourceToState[k] = st
 	}
 
+	pgIDTar := identity.NewID()
 	for _, k := range sorted {
 		src := spec.Sources[k]
 		isDir, err := dalec.SourceIsDir(src)
@@ -141,8 +138,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 			return nil, err
 		}
 
-		pgID3 := identity.NewID()
-		pg := llb.ProgressGroup(pgID3, "Tar spec source if needed: "+k+" "+src.Ref, false)
+		pg := llb.ProgressGroup(pgIDTar, "Tar spec source if needed: "+k+" "+src.Ref, false)
 		if isDir {
 			out = append(out, tar(sourceToState[k], k+".tar.gz", pg))
 		} else {
