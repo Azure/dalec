@@ -60,7 +60,7 @@ variable "RUNC_COMMIT" {
 }
 
 variable "RUNC_VERSION" {
-    default = "1./cmd"
+    default = "1.1.9"
 }
 
 variable "RUNC_REVISION" {
