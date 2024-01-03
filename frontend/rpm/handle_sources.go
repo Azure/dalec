@@ -137,7 +137,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 			return nil, err
 		}
 
-		pg := llb.ProgressGroup(pgIDTar, "Tar spec source if needed: "+k+" "+src.Ref, false)
+		pg := llb.ProgressGroup(pgIDTar, "Tar spec source"+k+" "+src.Ref, false)
 		if isDir {
 			out = append(out, tar(sourceToState[k], k+".tar.gz", pg))
 		} else {
