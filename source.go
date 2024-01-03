@@ -81,7 +81,6 @@ func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
 }
 
 func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter {
-	// apply patches here
 	return func(sOpt SourceOpts, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
 		scheme, ref, err := SplitSourceRef(src.Ref)
 		if err != nil {
@@ -148,7 +147,6 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				pathHandled = true
 				return eSt.AddMount(src.Path, llb.Scratch()), nil
 			}
-			// patch?
 			return eSt.Root(), nil
 		case sourcetypes.GitScheme:
 			// TODO: Pass git secrets
@@ -172,12 +170,10 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 					gOpts = append(gOpts, llb.KeepGitDir())
 				}
 				gOpts = append(gOpts, withConstraints(opts))
-				// patch
 				return llb.Git(ref.Remote, ref.Commit, gOpts...), nil
 			} else {
 				opts := []llb.HTTPOption{withConstraints(opts)}
 				opts = append(opts, llb.Filename(name))
-				// patch
 				return llb.HTTP(src.Ref, opts...), nil
 			}
 		case sourceTypeContext:
@@ -190,7 +186,6 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			if src.Path == "" && ref != "" {
 				src.Path = ref
 			}
-			// patch?
 			return *st, nil
 		case sourceTypeBuild:
 			var st llb.State

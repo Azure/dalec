@@ -84,7 +84,6 @@ func patchSource(spec *dalec.Spec, patchNames []string, sourceState llb.State, s
 		patchState := sourceToState[patchName]
 		worker = worker.Run(
 			llb.AddMount("/patch", patchState, llb.Readonly),
-			llb.AddEnv("PATCH_PATH", "/patch/"+patchName),
 			shArgs("cd /src && patch -p1 < "+filepath.Join("/patch", patchName)),
 			dalec.WithConstraints(opts...),
 		).Root()

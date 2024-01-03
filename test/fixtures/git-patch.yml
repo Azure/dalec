@@ -24,10 +24,6 @@ build:
   #    1. file to patch exists in source
   #    2. file is patched
 
-  # cd ./src
-  # patch -i ../patch1
-  # [ "$(grep "ExecStart=/usr/bin/containerd" containerd.service)" == "ExecStart=/usr/local/bin/containerd" ]
-  # [ "$(grep "ExecStart=/usr/local/bin/containerd" ./src/containerd.service)" == "ExecStart=/usr/local/bin/containerd" ]
     - command: |
         [ -f ./src/containerd.service ]
         [ "$(grep "ExecStart=/usr/bin/containerd" ./src/containerd.service)" == "ExecStart=/usr/bin/containerd" ]
