@@ -76,21 +76,20 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 }
 
 func patchSource(spec *dalec.Spec, patchNames []string, sourceState llb.State, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) llb.State {
-	patchImg := llb.Image(PatchImageRef)
-
-	// copy source state to /src
-	worker := patchImg.File(llb.Copy(sourceState, "/", "/src", dalec.WithDirContentsOnly()))
+	worker := llb.Image(PatchImageRef)
 	for _, patchName := range patchNames {
 		patchState := sourceToState[patchName]
-		worker = worker.Run(
+		// on each iteration, mount sourceState to /src to run `patch`, and
+		// set the state under /src to be the sourceState for the next iteration
+		sourceState = worker.Run(
 			llb.AddMount("/patch", patchState, llb.Readonly),
-			shArgs("cd /src && patch -p1 < "+filepath.Join("/patch", patchName)),
+			llb.Dir("src"),
+			shArgs("patch -p1 < "+filepath.Join("/patch", patchName)),
 			dalec.WithConstraints(opts...),
-		).Root()
+		).AddMount("/src", sourceState)
 	}
 
-	// copy /src back to / of new scratch fs
-	return llb.Scratch().File(llb.Copy(worker, "/src", "/", dalec.WithDirContentsOnly()))
+	return sourceState
 }
 
 func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, error) {
