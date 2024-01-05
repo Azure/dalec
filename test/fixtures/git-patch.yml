@@ -30,4 +30,4 @@ build:
 
 patches:
   src:
-    - patch1
+    - source: patch1

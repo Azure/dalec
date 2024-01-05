@@ -193,7 +193,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 
 	for _, v := range w.Spec.Patches {
 		for _, p := range v {
-			patches[p] = true
+			patches[p.Source] = true
 		}
 	}
 
@@ -221,8 +221,8 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			fmt.Fprintf(b, "mkdir -p %%{_builddir}/%s\n", name)
 			fmt.Fprintf(b, "tar -C %%{_builddir}/%s -xzf %%{_sourcedir}/%s.tar.gz\n", name, name)
 
-			for _, p := range w.Spec.Patches[name] {
-				fmt.Fprintf(b, "patch -d %q -p1 -s < %%{_sourcedir}/%s\n", name, p)
+			for _, patch := range w.Spec.Patches[name] {
+				fmt.Fprintf(b, "patch -d %q -p%d -s < %%{_sourcedir}/%s\n", name, *patch.Strip, patch.Source)
 			}
 			return nil
 		}(name, src)

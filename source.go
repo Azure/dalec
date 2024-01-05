@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
@@ -412,15 +411,15 @@ func (s Source) Doc() (io.Reader, error) {
 	return b, nil
 }
 
-func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []string, opts ...llb.ConstraintsOpt) llb.State {
-	for _, patchName := range patchNames {
-		patchState := sourceToState[patchName]
+func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
+	for _, p := range patchNames {
+		patchState := sourceToState[p.Source]
 		// on each iteration, mount source state to /src to run `patch`, and
 		// set the state under /src to be the source state for the next iteration
 		sourceState = worker.Run(
-			llb.AddMount("/patch", patchState, llb.Readonly),
+			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(p.Source)),
 			llb.Dir("src"),
-			shArgs("patch -p1 < "+filepath.Join("/patch", patchName)),
+			shArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
 			WithConstraints(opts...),
 		).AddMount("/src", sourceState)
 	}

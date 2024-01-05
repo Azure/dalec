@@ -55,7 +55,7 @@ type Spec struct {
 	// The value is the list of patches to apply to the source.
 	// The patch must be present in the `Sources` map.
 	// Each patch is applied in order and the result is used as the source for the build.
-	Patches map[string][]string `yaml:"patches,omitempty" json:"patches,omitempty"`
+	Patches map[string][]PatchSpec `yaml:"patches,omitempty" json:"patches,omitempty"`
 
 	// Build is the configuration for building the artifacts in the package.
 	Build ArtifactBuild `yaml:"build,omitempty" json:"build,omitempty"`
@@ -93,6 +93,16 @@ type Spec struct {
 	// Each item in this list is run with a separate rootfs and cannot interact with other tests.
 	// Each [TestSpec] is run with a separate rootfs, asyncronously from other [TestSpec].
 	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
+}
+
+// PatchSpec is used to apply a patch to a source with a given set of options.
+// This is used in [Spec.Patches]
+type PatchSpec struct {
+	// Source is the name of the source that contains the patch to apply.
+	Source string `yaml:"source" json:"source" jsonschema:"required"`
+	// Strip is the number of leading path components to strip from the patch.
+	// The default is 1 which is typical of a git diff.
+	Strip *int `yaml:"strip,omitempty" json:"strip,omitempty"`
 }
 
 // ChangelogEntry is an entry in the changelog.

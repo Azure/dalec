@@ -417,6 +417,24 @@
 			"type": "object",
 			"description": "PackageDependencies is a list of dependencies for a package."
 		},
+		"PatchSpec": {
+			"properties": {
+				"source": {
+					"type": "string",
+					"description": "Source is the name of the source that contains the patch to apply."
+				},
+				"strip": {
+					"type": "integer",
+					"description": "Strip is the number of leading path components to strip from the patch.\nThe default is 1 which is typical of a git diff."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"source"
+			],
+			"description": "PatchSpec is used to apply a patch to a source with a given set of options."
+		},
 		"Source": {
 			"properties": {
 				"ref": {
@@ -558,7 +576,7 @@
 				"patches": {
 					"additionalProperties": {
 						"items": {
-							"type": "string"
+							"$ref": "#/$defs/PatchSpec"
 						},
 						"type": "array"
 					},
