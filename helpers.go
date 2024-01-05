@@ -99,6 +99,15 @@ func SortMapKeys[T any](m map[string]T) []string {
 	return keys
 }
 
+func DuplicateMap[K comparable, V any](m map[K]V) map[K]V {
+	newM := make(map[K]V, len(m))
+	for k, v := range m {
+		newM[k] = v
+	}
+
+	return newM
+}
+
 // MergeAtPath merges the given states into the given destination path in the given input state.
 func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
 	if disableDiffMerge.Load() {
