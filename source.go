@@ -20,9 +20,6 @@ const (
 	sourceTypeContext = "context"
 	sourceTypeBuild   = "build"
 	sourceTypeSource  = "source"
-
-	// needed for LLB-level source patching
-	PatchImageRef = "busybox:latest"
 )
 
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
@@ -415,12 +412,11 @@ func (s Source) Doc() (io.Reader, error) {
 	return b, nil
 }
 
-func patchSource(patchNames []string, sourceState llb.State, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) llb.State {
-	worker := llb.Image(PatchImageRef)
+func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []string, opts ...llb.ConstraintsOpt) llb.State {
 	for _, patchName := range patchNames {
 		patchState := sourceToState[patchName]
-		// on each iteration, mount sourceState to /src to run `patch`, and
-		// set the state under /src to be the sourceState for the next iteration
+		// on each iteration, mount source state to /src to run `patch`, and
+		// set the state under /src to be the source state for the next iteration
 		sourceState = worker.Run(
 			llb.AddMount("/patch", patchState, llb.Readonly),
 			llb.Dir("src"),
@@ -432,11 +428,12 @@ func patchSource(patchNames []string, sourceState llb.State, sourceToState map[s
 	return sourceState
 }
 
-// PatchSources must only be called with a complete map from source name -> llb state for each source.
-// It returns a new map containing the patched LLB state for each source
-func PatchSources(spec *Spec, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
+// `sourceToState` must be a complete map from source name -> llb state for each source in the dalec spec.
+// `worker` must be an LLB state with a `patch` binary present.
+// PatchSources returns a new map containing the patched LLB state for each source in the source map.
+func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
 	// duplicate map to avoid possibly confusing behavior of mutating caller's map
-	states := DuplicateMap[string, llb.State](sourceToState)
+	states := DuplicateMap(sourceToState)
 	pgID := identity.NewID()
 	sorted := SortMapKeys(spec.Sources)
 
@@ -445,10 +442,11 @@ func PatchSources(spec *Spec, sourceToState map[string]llb.State, opts ...llb.Co
 		sourceState := states[sourceName]
 
 		patches, patchesExist := spec.Patches[sourceName]
-		if patchesExist {
-			pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" "+src.Ref, false)
-			states[sourceName] = patchSource(patches, sourceState, states, pg, withConstraints(opts))
+		if !patchesExist {
+			continue
 		}
+		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" "+src.Ref, false)
+		states[sourceName] = patchSource(worker, sourceState, states, patches, pg, withConstraints(opts))
 	}
 
 	return states
