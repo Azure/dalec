@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
+	"github.com/moby/buildkit/identity"
 	sourcetypes "github.com/moby/buildkit/source/types"
 	"github.com/moby/buildkit/util/gitutil"
 )
@@ -18,6 +20,9 @@ const (
 	sourceTypeContext = "context"
 	sourceTypeBuild   = "build"
 	sourceTypeSource  = "source"
+
+	// needed for LLB-level source patching
+	PatchImageRef = "busybox:latest"
 )
 
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
@@ -28,6 +33,10 @@ type SourceOpts struct {
 	Resolver   llb.ImageMetaResolver
 	Forward    ForwarderFunc
 	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
+}
+
+func shArgs(cmd string) llb.RunOption {
+	return llb.Args([]string{"sh", "-c", cmd})
 }
 
 // must not be called with a nil cmd pointer
@@ -404,4 +413,43 @@ func (s Source) Doc() (io.Reader, error) {
 	}
 
 	return b, nil
+}
+
+func patchSource(patchNames []string, sourceState llb.State, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) llb.State {
+	worker := llb.Image(PatchImageRef)
+	for _, patchName := range patchNames {
+		patchState := sourceToState[patchName]
+		// on each iteration, mount sourceState to /src to run `patch`, and
+		// set the state under /src to be the sourceState for the next iteration
+		sourceState = worker.Run(
+			llb.AddMount("/patch", patchState, llb.Readonly),
+			llb.Dir("src"),
+			shArgs("patch -p1 < "+filepath.Join("/patch", patchName)),
+			WithConstraints(opts...),
+		).AddMount("/src", sourceState)
+	}
+
+	return sourceState
+}
+
+// PatchSources must only be called with a complete map from source name -> llb state for each source.
+// It returns a new map containing the patched LLB state for each source
+func PatchSources(spec *Spec, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
+	// duplicate map to avoid possibly confusing behavior of mutating caller's map
+	states := DuplicateMap[string, llb.State](sourceToState)
+	pgID := identity.NewID()
+	sorted := SortMapKeys(spec.Sources)
+
+	for _, sourceName := range sorted {
+		src := spec.Sources[sourceName]
+		sourceState := states[sourceName]
+
+		patches, patchesExist := spec.Patches[sourceName]
+		if patchesExist {
+			pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" "+src.Ref, false)
+			states[sourceName] = patchSource(patches, sourceState, states, pg, withConstraints(opts))
+		}
+	}
+
+	return states
 }

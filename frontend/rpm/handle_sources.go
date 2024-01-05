@@ -75,23 +75,6 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 	return ref, &image.Image{}, err
 }
 
-func patchSource(spec *dalec.Spec, patchNames []string, sourceState llb.State, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) llb.State {
-	worker := llb.Image(PatchImageRef)
-	for _, patchName := range patchNames {
-		patchState := sourceToState[patchName]
-		// on each iteration, mount sourceState to /src to run `patch`, and
-		// set the state under /src to be the sourceState for the next iteration
-		sourceState = worker.Run(
-			llb.AddMount("/patch", patchState, llb.Readonly),
-			llb.Dir("src"),
-			shArgs("patch -p1 < "+filepath.Join("/patch", patchName)),
-			dalec.WithConstraints(opts...),
-		).AddMount("/src", sourceState)
-	}
-
-	return sourceState
-}
-
 func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, error) {
 	pgID := identity.NewID()
 
@@ -116,17 +99,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 	}
 
 	// At this point, we have LLB state for all sources, so we can apply those sources that are patches
-	pgIDPatch := identity.NewID()
-	for _, sourceName := range sorted {
-		src := spec.Sources[sourceName]
-		sourceState := sourceToState[sourceName]
-
-		patches, patchesExist := spec.Patches[sourceName]
-		if patchesExist {
-			pg := llb.ProgressGroup(pgIDPatch, "Patch spec source: "+sourceName+" "+src.Ref, false)
-			sourceToState[sourceName] = patchSource(spec, patches, sourceState, sourceToState, pg)
-		}
-	}
+	patchedSourceToState := dalec.PatchSources(spec, sourceToState)
 
 	pgIDTar := identity.NewID()
 	for _, k := range sorted {
@@ -138,9 +111,9 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 
 		pg := llb.ProgressGroup(pgIDTar, "Tar spec source"+k+" "+src.Ref, false)
 		if isDir {
-			out = append(out, tar(sourceToState[k], k+".tar.gz", pg))
+			out = append(out, tar(patchedSourceToState[k], k+".tar.gz", pg))
 		} else {
-			out = append(out, sourceToState[k])
+			out = append(out, patchedSourceToState[k])
 		}
 	}
 
