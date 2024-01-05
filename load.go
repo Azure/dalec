@@ -20,6 +20,8 @@ func knownArg(key string) bool {
 	}
 }
 
+const DefaultPatchStrip int = 1
+
 // LoadSpec loads a spec from the given data.
 // env is a map of environment variables to use for shell-style expansion in the spec.
 func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
@@ -95,6 +97,16 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 			if err := t.processBuildArgs(lex, args, path.Join(name, t.Name)); err != nil {
 				return nil, err
 			}
+		}
+	}
+
+	for k, patches := range spec.Patches {
+		for i, ps := range patches {
+			if ps.Strip != nil {
+				continue
+			}
+			strip := DefaultPatchStrip
+			spec.Patches[k][i].Strip = &strip
 		}
 	}
 

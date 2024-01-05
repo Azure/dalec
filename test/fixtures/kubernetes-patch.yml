@@ -42,6 +42,6 @@ build:
 
 patches:
   src:
-    - patch_120129
-    - patch_120134
-    - patch_121882
+    - source: patch_120129
+    - source: patch_120134
+    - source: patch_121882
