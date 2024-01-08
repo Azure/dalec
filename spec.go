@@ -198,21 +198,12 @@ type SourceContext struct {
 	Name string `yaml:"name" json:"name"`
 }
 
-// i.e. just rename `BuildSpec` to `SourceBuild`
-// SourceBuild is used to generate source from a build.
+// SourceBuild is used to generate source from a DockerFile build, either
+// inline or from a local file.
 type SourceBuild struct {
-	// An embedded union representing the different build contexts
-	// === Begin SourceBuild Base Variants === //
-	// A build context provided by the user via a cli invocation
-	Context *SourceContext `yaml:"context,omitempty" json:"context,omitempty"`
-	// A local directory
-	Local *SourceLocal `yaml:"local,omitempty" json:"local,omitempty"`
-	// A reference to another source
-	Source *SourceContext `yaml:"source,omitempty" json:"source,omitempty"`
-	// === End SourceBuild Base Variants === //
+	// The local path to use as the context for the Dockerfile build
+	Context string `yaml:"context,omitempty" json:"context,omitempty"`
 
-	// An embedded union representing the different ways of running a build
-	// === Begin SourceBuild Action Variants ===
 	// DockerFile is the path to the build file in the build context
 	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
 	// This is exclusive with [Inline]

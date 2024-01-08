@@ -11,14 +11,9 @@ packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 noarch: true
 sources:
-  foo:
-    context:
-      name: test/fixtures/nested
-    # path: test/fixtures/nested
   src:
     build:
-      source:
-        name: foo
+      context: test/fixtures/nested
       inline: |
         # syntax=docker/dockerfile:1.5
         FROM scratch
