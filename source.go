@@ -77,6 +77,58 @@ func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
 	return source2LLBGetter(s, src, name, false)
 }
 
+func needsFilter(o *filterOpts) bool {
+	if o.source.Path != "" && !o.forMount && !o.pathHandled {
+		return true
+	}
+	if o.includeExcludeHandled {
+		return false
+	}
+	if len(o.source.Includes) > 0 || len(o.source.Excludes) > 0 {
+		return true
+	}
+	return false
+}
+
+type filterOpts struct {
+	state                 llb.State
+	source                Source
+	opts                  []llb.ConstraintsOpt
+	forMount              bool
+	includeExcludeHandled bool
+	pathHandled           bool
+	err                   error
+}
+
+func handleFilter(o *filterOpts) (llb.State, error) {
+	if o.err != nil {
+		return o.state, o.err
+	}
+
+	if !needsFilter(o) {
+		return o.state, nil
+	}
+
+	srcPath := "/"
+	if !o.pathHandled {
+		srcPath = o.source.Path
+	}
+
+	filtered := llb.Scratch().File(
+		llb.Copy(
+			o.state,
+			srcPath,
+			"/",
+			WithIncludes(o.source.Includes),
+			WithExcludes(o.source.Excludes),
+			WithDirContentsOnly(),
+		),
+		withConstraints(o.opts),
+	)
+
+	return filtered, nil
+}
+
 func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter {
 	return func(sOpt SourceOpts, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
 		var (
@@ -85,42 +137,15 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 		)
 
 		defer func() {
-			if retErr != nil {
-				return
-			}
-			needsFilter := func() bool {
-				if src.Path != "" && !forMount && !pathHandled {
-					return true
-				}
-				if includeExcludeHandled {
-					return false
-				}
-				if len(src.Includes) > 0 || len(src.Excludes) > 0 {
-					return true
-				}
-				return false
-			}
-			if !needsFilter() {
-				return
-			}
-
-			srcPath := "/"
-			if !pathHandled {
-				srcPath = src.Path
-			}
-
-			orig := ret
-			ret = llb.Scratch().File(
-				llb.Copy(
-					orig,
-					srcPath,
-					"/",
-					WithIncludes(src.Includes),
-					WithExcludes(src.Excludes),
-					WithDirContentsOnly(),
-				),
-				withConstraints(opts),
-			)
+			ret, retErr = handleFilter(&filterOpts{
+				state:                 ret,
+				source:                src,
+				opts:                  opts,
+				forMount:              forMount,
+				includeExcludeHandled: includeExcludeHandled,
+				pathHandled:           pathHandled,
+				err:                   retErr,
+			})
 		}()
 
 		// sourceType, err := src.GetSourceKind()
@@ -163,10 +188,6 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			return llb.HTTP(https.URL, opts...), nil
 		case src.Context != nil:
 			srcCtx := src.Context
-			ctxName := srcCtx.Name
-			if ctxName == "" {
-				ctxName = "."
-			}
 
 			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
 			if err != nil {
@@ -182,33 +203,32 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			srcLocal := src.Local
 			return llb.Local(srcLocal.Path, localIncludeExcludeMerge(&src)), nil
 		case src.Build != nil:
-			var err error
 			build := src.Build
 			var st llb.State
-			switch {
-			case build.Context != nil:
-				if build.Context.Name == "" {
-					st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
-				} else {
-					st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
-					if err != nil {
-						return llb.Scratch(), err
-					}
 
-					includeExcludeHandled = true
-					if src.Path == "" && build.Context.Name != "" {
-						src.Path = build.Context.Name
-					}
-					return *st, nil
-				}
-			case build.Local != nil:
-				st = llb.Local(build.Local.Path, withConstraints(opts))
-			case build.Source != nil:
-				src2 := s.Sources[build.Source.Name]
-				st, err = source2LLBGetter(s, src2, name, forMount)(sOpt, opts...)
+			if build.Context == "" {
+				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
+			} else {
+				ctxState, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
 				if err != nil {
 					return llb.Scratch(), err
 				}
+				cst := *ctxState
+
+				if src.Path == "" && build.Context != "" {
+					src.Path = build.Context
+				}
+
+				// This is necessary to have the specified context to be at the
+				// root of the state's fs.
+				st, _ = handleFilter(&filterOpts{
+					state:                 cst,
+					source:                src,
+					opts:                  opts,
+					forMount:              forMount,
+					includeExcludeHandled: false,
+					pathHandled:           false,
+				})
 			}
 
 			return sOpt.Forward(st, build)
