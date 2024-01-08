@@ -223,7 +223,8 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 
 			for _, p := range w.Spec.Patches[name] {
 				fmt.Fprintf(b, "cd %s\n", name)
-				fmt.Fprintf(b, "patch -p0 -s < %%{_sourcedir}/%s\n", p)
+				fmt.Fprintf(b, "patch -p1 -s < %%{_sourcedir}/%s\n", p)
+				fmt.Fprintf(b, "cd ..\n")
 			}
 			return nil
 		}(name, src)
