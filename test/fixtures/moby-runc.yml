@@ -61,7 +61,7 @@ provides:
   - runc
 sources:
   src:
-    https:
+    git:
       url: https://github.com/opencontainers/runc.git#${RUNC_COMMIT}
 
 build:
