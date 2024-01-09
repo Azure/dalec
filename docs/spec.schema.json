@@ -410,7 +410,7 @@
 			"properties": {
 				"image": {
 					"$ref": "#/$defs/SourceDockerImage",
-					"description": "This is an embedded union representing all of the possible source types.\nOnly one should be non-nil at any given time. It is considered an error\ncondition if more than one is non-nil, or if all are nil.\n\n=== Begin Source Variants ==="
+					"description": "This is an embedded union representing all of the possible source types.\nExactly one must be non-nil, with all other cases being errors.\n\n=== Begin Source Variants ==="
 				},
 				"git": {
 					"$ref": "#/$defs/SourceGit"

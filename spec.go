@@ -249,8 +249,7 @@ type SourceLocal struct {
 // A source can be a local directory, a git repositoryt, http(s) URL, etc.
 type Source struct {
 	// This is an embedded union representing all of the possible source types.
-	// Only one should be non-nil at any given time. It is considered an error
-	// condition if more than one is non-nil, or if all are nil.
+	// Exactly one must be non-nil, with all other cases being errors.
 	//
 	// === Begin Source Variants ===
 	DockerImage *SourceDockerImage `yaml:"image,omitempty" json:"image,omitempty"`
