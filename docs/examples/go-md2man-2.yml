@@ -9,22 +9,25 @@ website: https://github.com/cpuguy83/go-md2man
 
 sources:
   src:
-    ref: https://github.com/cpuguy83/go-md2man.git#v2.0.3
+    git:
+      url: https://github.com/cpuguy83/go-md2man.git#v2.0.3
   gomods: # This is required when the build environment does not allow network access. This downloads all the go modules.
-    ref: docker-image://mcr.microsoft.com/oss/go/microsoft/golang:1.21
     path: /build/gomodcache # This is the path we will be extracing after running the command below.
-    cmd:
-      dir: /build/src
-      mounts:
-        # Mount the "src" source, specified above, so our command has access to it.
-        - dest: /build/src
-          spec:
-            ref: source://src
-      steps:
-        - command: go mod download
-          env:
-            # This variable controls where the go modules are downloaded to.
-            GOMODCACHE: /build/gomodcache
+    image:
+      ref: mcr.microsoft.com/oss/go/microsoft/golang:1.21
+      cmd:
+        dir: /build/src
+        mounts:
+          # Mount a source (inline, under `spec`), so our command has access to it.
+          - dest: /build/src
+            spec:
+              git:
+                url: https://github.com/cpuguy83/go-md2man.git#v2.0.3
+        steps:
+          - command: go mod download
+            env:
+              # This variable controls where the go modules are downloaded to.
+              GOMODCACHE: /build/gomodcache
 
 dependencies:
   build:
