@@ -452,23 +452,13 @@
 		},
 		"SourceBuild": {
 			"properties": {
-				"name": {
-					"type": "string"
-				},
-				"target": {
+				"context": {
 					"type": "string",
-					"description": "Target specifies the build target to use.\nIf unset, the default target is determined by the frontend implementation (e.g. the dockerfile frontend uses the last build stage as the default)."
+					"description": "The local path to use as the context for the Dockerfile build"
 				},
-				"args": {
-					"additionalProperties": {
-						"type": "string"
-					},
-					"type": "object",
-					"description": "Args are the build args to pass to the build."
-				},
-				"file": {
+				"dockerfile": {
 					"type": "string",
-					"description": "File is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.\nThis is exclusive with [Inline]"
+					"description": "DockerFile is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.\nThis is exclusive with [Inline]"
 				},
 				"inline": {
 					"type": "string",
@@ -476,14 +466,22 @@
 					"examples": [
 						"FROM busybox\nRUN echo hello world"
 					]
+				},
+				"target": {
+					"type": "string",
+					"description": "Target specifies the build target to use.\nIf unset, the default target is determined by the frontend implementation\n(e.g. the dockerfile frontend uses the last build stage as the default)."
+				},
+				"args": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Args are the build args to pass to the build."
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
-			"required": [
-				"name"
-			],
-			"description": "i.e."
+			"description": "SourceBuild is used to generate source from a DockerFile build, either inline or from a local file."
 		},
 		"SourceContext": {
 			"properties": {
