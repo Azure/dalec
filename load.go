@@ -39,14 +39,7 @@ func (s *Source) processArgs(args map[string]string) error {
 			*sub = "context"
 		}
 	case s.Build != nil:
-		switch {
-		case s.Build.Context != nil:
-			sub = &s.Build.Context.Name
-		case s.Build.Local != nil:
-			sub = &s.Build.Local.Path
-		case s.Build.Source != nil:
-			sub = &s.Build.Source.Name
-		}
+		sub = &s.Build.Context
 	case s.Local != nil:
 		sub = &s.Local.Path
 	default:
