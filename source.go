@@ -201,7 +201,13 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			return *st, nil
 		case src.Local != nil:
 			srcLocal := src.Local
-			return llb.Local(srcLocal.Path, localIncludeExcludeMerge(&src)), nil
+
+			includeExcludeHandled = true
+			if src.Path == "" && srcLocal.Path != "" {
+				src.Path = srcLocal.Path
+			}
+
+			return llb.Local(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src)), nil
 		case src.Build != nil:
 			build := src.Build
 			var st llb.State
