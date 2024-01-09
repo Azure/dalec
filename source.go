@@ -215,18 +215,19 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				}
 				cst := *ctxState
 
-				if src.Path == "" && build.Context != "" {
-					src.Path = build.Context
+				src2 := src
+				if src2.Path == "" && build.Context != "" {
+					src2.Path = build.Context
 				}
 
 				// This is necessary to have the specified context to be at the
 				// root of the state's fs.
 				st, _ = handleFilter(&filterOpts{
 					state:                 cst,
-					source:                src,
+					source:                src2,
 					opts:                  opts,
 					forMount:              forMount,
-					includeExcludeHandled: false,
+					includeExcludeHandled: true,
 					pathHandled:           false,
 				})
 			}
@@ -270,7 +271,8 @@ func SourceIsDir(src Source) (bool, error) {
 	case src.DockerImage != nil,
 		src.Git != nil,
 		src.Build != nil,
-		src.Context != nil:
+		src.Context != nil,
+		src.Local != nil:
 		return true, nil
 	case src.HTTPS != nil:
 		return false, nil
@@ -426,14 +428,13 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 	sorted := SortMapKeys(spec.Sources)
 
 	for _, sourceName := range sorted {
-		src := spec.Sources[sourceName]
 		sourceState := states[sourceName]
 
 		patches, patchesExist := spec.Patches[sourceName]
 		if !patchesExist {
 			continue
 		}
-		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" "+src.Ref, false)
+		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" ", false)
 		states[sourceName] = patchSource(worker, sourceState, states, patches, pg, withConstraints(opts))
 	}
 
