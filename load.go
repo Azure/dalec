@@ -31,7 +31,9 @@ func (s *Source) processArgs(args map[string]string) error {
 	switch {
 	case s.DockerImage != nil:
 		for _, mnt := range s.DockerImage.Cmd.Mounts {
-			mnt.Spec.processArgs(args)
+			if err := mnt.Spec.processArgs(args); err != nil {
+				return err
+			}
 		}
 		sub = &s.DockerImage.Ref
 	case s.Git != nil:
@@ -53,7 +55,9 @@ func (s *Source) processArgs(args map[string]string) error {
 
 		sub = nil
 	case s.Build != nil:
-		s.Build.Source.processArgs(args)
+		if err := s.Build.Source.processArgs(args); err != nil {
+			return err
+		}
 
 		updated, err := lex.ProcessWordWithMap(s.Build.DockerFile, args)
 		if err != nil {
@@ -110,6 +114,12 @@ func (s *Source) validate() error {
 	var errs error
 
 	if s.DockerImage != nil {
+		for _, mnt := range s.DockerImage.Cmd.Mounts {
+			if err := mnt.Spec.validate(); err != nil {
+				errs = goerrors.Join(errs, err)
+			}
+		}
+
 		count++
 	}
 	if s.Git != nil {
@@ -122,12 +132,16 @@ func (s *Source) validate() error {
 		count++
 	}
 	if s.Build != nil {
+		if s.Build.Source.Build != nil {
+			errs = goerrors.Join(errs, fmt.Errorf("build sources cannot be recursive"))
+		}
+
 		if s.Build.DockerFile != "" && s.Build.Inline != "" {
 			errs = goerrors.Join(errs, fmt.Errorf("build sources may use either `dockerfile` or `inline`, but not both"))
 		}
 
-		if s.Build.Source.Build != nil {
-			errs = goerrors.Join(errs, fmt.Errorf("build sources cannot be recursive"))
+		if err := s.Build.Source.validate(); err != nil {
+			errs = goerrors.Join(errs, err)
 		}
 
 		count++
