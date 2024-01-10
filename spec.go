@@ -202,8 +202,8 @@ type SourceContext struct {
 // SourceBuild is used to generate source from a DockerFile build, either
 // inline or from a local file.
 type SourceBuild struct {
-	// The local path to use as the context for the Dockerfile build
-	ContextPath string `yaml:"contextPath,omitempty" json:"contextPath,omitempty"`
+	// A source specification to use as the context for the Dockerfile build
+	Source Source `yaml:"source,omitempty" json:"source,omitempty"`
 
 	// DockerFile is the path to the build file in the build context
 	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.

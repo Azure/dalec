@@ -13,7 +13,9 @@ noarch: true
 sources:
   src:
     build:
-      contextPath: test/fixtures/nested
+      source:
+        context:
+          path: test/fixtures/nested
       inline: |
         # syntax=docker/dockerfile:1.5
         FROM scratch
