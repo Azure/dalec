@@ -3,7 +3,6 @@ package frontend
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -29,10 +28,10 @@ func getDockerfile(ctx context.Context, client gwclient.Client, build *dalec.Sou
 	dockerfilePath := dockerui.DefaultDockerfileName
 
 	switch {
-	case build.Inline != nil:
-		return []byte(*build.Inline), nil
-	case build.DockerFile != nil:
-		dockerfilePath = *build.DockerFile
+	case build.Inline != "":
+		return []byte(build.Inline), nil
+	case build.DockerFile != "":
+		dockerfilePath = build.DockerFile
 	}
 
 	// First we need to read the dockerfile to determine what frontend to forward to
@@ -63,10 +62,6 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.Forw
 	return func(st llb.State, spec *dalec.SourceBuild) (llb.State, error) {
 		if spec == nil {
 			spec = &dalec.SourceBuild{}
-		}
-
-		if spec.DockerFile != nil && spec.Inline != nil {
-			return llb.Scratch(), fmt.Errorf("cannot specify both file and inline for build spec")
 		}
 
 		def, err := st.Marshal(ctx)
