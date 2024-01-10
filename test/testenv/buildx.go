@@ -56,6 +56,8 @@ func (b *BuildxEnv) Load(ctx context.Context, id string, f gwclient.BuildFunc) e
 	return nil
 }
 
+// bootstrap is ultimately responsible for creating a buildkit client.
+// It looks like the buildx config on the client (typically in $HOME/.docker/buildx) to determine how to connect to the configured buildkit.
 func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 	if b.client != nil {
 		return nil
@@ -95,6 +97,8 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 
 	configBase := filepath.Join(filepath.Dir(p), "buildx")
 
+	// builder is empty, so we need to check what the currently configured buildx builder is.
+	// This is stored int he buildx config in (typically) $HOME/.docker/buildx (the `dockercfg` lib determines where this actually is).
 	if b.builder == "" {
 		dt, err := os.ReadFile(filepath.Join(configBase, "current"))
 		if err != nil {
@@ -150,6 +154,8 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 		return pkgerrors.Errorf("no buildx nodes configured")
 	}
 
+	// On a typical client this would be a single node, but there could be multiple registered with he same builder name.
+	// We'll just try them all until we find one that works.
 	var errs []error
 	for _, n := range cfg.Nodes {
 		tr, err := transport.FromConnectionString(n.Endpoint)

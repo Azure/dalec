@@ -101,6 +101,8 @@ func TestHandlerTargetForwarding(t *testing.T) {
 				return nil, err
 			}
 
+			// The phony/debug/resolve target creates a file with the contents "phony resolve".
+			// Check that its there to ensure we got the expected target.
 			checkFile(ctx, t, "resolve", res, []byte("phony resolve"))
 			return gwclient.NewResult(), nil
 		})
