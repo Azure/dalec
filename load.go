@@ -30,6 +30,9 @@ func (s *Source) processArgs(args map[string]string) error {
 	var sub *string
 	switch {
 	case s.DockerImage != nil:
+		for _, mnt := range s.DockerImage.Cmd.Mounts {
+			mnt.Spec.processArgs(args)
+		}
 		sub = &s.DockerImage.Ref
 	case s.Git != nil:
 		sub = &s.Git.URL
@@ -48,9 +51,23 @@ func (s *Source) processArgs(args map[string]string) error {
 		}
 		s.Context.Path = updated
 
-		return nil
+		sub = nil
 	case s.Build != nil:
-		sub = &s.Build.ContextPath
+		s.Build.Source.processArgs(args)
+
+		updated, err := lex.ProcessWordWithMap(s.Build.DockerFile, args)
+		if err != nil {
+			return err
+		}
+		s.Build.DockerFile = updated
+
+		updated, err = lex.ProcessWordWithMap(s.Build.Target, args)
+		if err != nil {
+			return err
+		}
+		s.Build.Target = updated
+
+		sub = nil
 	default:
 	}
 
@@ -70,6 +87,9 @@ func (s *Source) processArgs(args map[string]string) error {
 func fillDefaults(s *Source) {
 	switch {
 	case s.DockerImage != nil:
+		for _, mnt := range s.DockerImage.Cmd.Mounts {
+			fillDefaults(&mnt.Spec)
+		}
 	case s.Git != nil:
 	case s.HTTPS != nil:
 	case s.Context != nil:
@@ -80,9 +100,7 @@ func fillDefaults(s *Source) {
 			s.Context.Path = "."
 		}
 	case s.Build != nil:
-		if s.Build.ContextPath == "" {
-			s.Build.ContextPath = "."
-		}
+		fillDefaults(&s.Build.Source)
 	default:
 	}
 }
@@ -107,6 +125,11 @@ func (s *Source) validate() error {
 		if s.Build.DockerFile != "" && s.Build.Inline != "" {
 			errs = goerrors.Join(errs, fmt.Errorf("build sources may use either `dockerfile` or `inline`, but not both"))
 		}
+
+		if s.Build.Source.Build != nil {
+			errs = goerrors.Join(errs, fmt.Errorf("build sources cannot be recursive"))
+		}
+
 		count++
 	}
 
