@@ -292,20 +292,20 @@ func (s Source) Doc() (io.Reader, error) {
 		}
 
 		switch {
-		case s.Build.Inline != nil:
+		case s.Build.Inline != "":
 			fmt.Fprintln(b, "	Dockerfile:")
 
-			scanner := bufio.NewScanner(strings.NewReader(*s.Build.Inline))
+			scanner := bufio.NewScanner(strings.NewReader(s.Build.Inline))
 			for scanner.Scan() {
 				fmt.Fprintf(b, "		%s\n", scanner.Text())
 			}
 			if scanner.Err() != nil {
 				return nil, scanner.Err()
 			}
-		case s.Build.DockerFile != nil:
+		default:
 			p := "Dockerfile"
-			if s.Build.DockerFile != nil {
-				p = *s.Build.DockerFile
+			if s.Build.DockerFile != "" {
+				p = s.Build.DockerFile
 			}
 			fmt.Fprintln(b, "	Dockerfile path in context:", p)
 		}
