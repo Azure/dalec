@@ -231,7 +231,6 @@ tests:
             -
                 dest: /target/mount/path
                 spec:
-                    ref: build://
                     build:
                         inline: |
                             FROM busybox

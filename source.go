@@ -194,24 +194,16 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 
 			includeExcludeHandled = true
-			if src.Path == "" && srcCtx.Name != "" {
-				src.Path = srcCtx.Name
+			if src.Path == "" && srcCtx.Path != "" {
+				src.Path = srcCtx.Path
 			}
+
 			return *st, nil
-		case src.Local != nil:
-			srcLocal := src.Local
-
-			includeExcludeHandled = true
-			if src.Path == "" && srcLocal.Path != "" {
-				src.Path = srcLocal.Path
-			}
-
-			return llb.Local(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src)), nil
 		case src.Build != nil:
 			build := src.Build
 			var st llb.State
 
-			if build.Context == "" {
+			if build.ContextPath == "" {
 				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
 			} else {
 				ctxState, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
@@ -221,8 +213,8 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 				cst := *ctxState
 
 				src2 := src
-				if src2.Path == "" && build.Context != "" {
-					src2.Path = build.Context
+				if src2.Path == "" && build.ContextPath != "" {
+					src2.Path = build.ContextPath
 				}
 
 				// This is necessary to have the specified context to be at the
@@ -276,8 +268,7 @@ func SourceIsDir(src Source) (bool, error) {
 	case src.DockerImage != nil,
 		src.Git != nil,
 		src.Build != nil,
-		src.Context != nil,
-		src.Local != nil:
+		src.Context != nil:
 		return true, nil
 	case src.HTTPS != nil:
 		return false, nil
@@ -294,13 +285,11 @@ func (s Source) Doc() (io.Reader, error) {
 	switch {
 	case s.Context != nil:
 		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
-	case s.Local != nil:
-		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
 	case s.Build != nil:
 		build := s.Build
 		fmt.Fprintln(b, "Generated from a docker build:")
 		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
-		fmt.Fprintln(b, "	Docker Build Ref:", build.Context)
+		fmt.Fprintln(b, "	Docker Build Ref:", build.ContextPath)
 
 		if len(s.Build.Args) > 0 {
 			sorted := SortMapKeys(s.Build.Args)

@@ -99,9 +99,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 		case src.Context != nil:
 			s = src.Context.Name
 		case src.Build != nil:
-			s = src.Build.Context
-		case src.Local != nil:
-			s = src.Local.Path
+			s = src.Build.ContextPath
 		default:
 		}
 

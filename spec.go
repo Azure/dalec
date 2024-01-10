@@ -195,14 +195,15 @@ type SourceHTTPS struct {
 }
 
 type SourceContext struct {
-	Name string `yaml:"name" json:"name"`
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 }
 
 // SourceBuild is used to generate source from a DockerFile build, either
 // inline or from a local file.
 type SourceBuild struct {
 	// The local path to use as the context for the Dockerfile build
-	Context string `yaml:"context,omitempty" json:"context,omitempty"`
+	ContextPath string `yaml:"contextPath,omitempty" json:"contextPath,omitempty"`
 
 	// DockerFile is the path to the build file in the build context
 	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
@@ -241,10 +242,6 @@ type Command struct {
 	Steps []*BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
 }
 
-type SourceLocal struct {
-	Path string `yaml:"path,omitempty" json:"path,omitempty"`
-}
-
 // Source defines a source to be used in the build.
 // A source can be a local directory, a git repositoryt, http(s) URL, etc.
 type Source struct {
@@ -257,7 +254,6 @@ type Source struct {
 	HTTPS       *SourceHTTPS       `yaml:"https,omitempty" json:"https,omitempty"`
 	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
 	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
-	Local       *SourceLocal       `yaml:"local,omitempty" json:"local,omitempty"`
 	// === End Source Variants ===
 
 	// Path is the path to the source after fetching it based on the identifier.
