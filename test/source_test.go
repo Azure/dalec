@@ -53,13 +53,7 @@ func testCmdSource(t *testing.T) {
 	}
 
 	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		req := gwclient.SolveRequest{
-			FrontendOpt: map[string]string{
-				"target": "debug/sources",
-			},
-		}
-		specToSolveRequest(ctx, t, spec, &req)
-
+		req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
 		res, err := gwc.Solve(ctx, req)
 		if err != nil {
 			return nil, err

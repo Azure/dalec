@@ -70,13 +70,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 					},
 				}}
 
-			sr := gwclient.SolveRequest{
-				FrontendOpt: map[string]string{
-					"target": "phony/check",
-				},
-			}
-			specToSolveRequest(ctx, t, spec, &sr)
-
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("phony/check"))
 			res, err := gwc.Solve(ctx, sr)
 			if err != nil {
 				t.Fatal(err)
@@ -92,13 +86,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			// Technically I suppose the target in the user-supplied spec could technically interfere with the base frontend, but that's not really a concern.
 			// e.g. if a user-supplied target was called "debug" it could overwrite the "debug/resolve" target in the base frontend.
 
-			sr = gwclient.SolveRequest{
-				FrontendOpt: map[string]string{
-					"target": "debug/resolve",
-				},
-			}
-			specToSolveRequest(ctx, t, spec, &sr)
-
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("debug/resolve"))
 			res, err = gwc.Solve(ctx, sr)
 			if err != nil {
 				return nil, err
@@ -107,13 +95,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			// The builtin debug/resolve target adds the resolved spec to /spec.yml, so check that its there.
 			statFile(ctx, t, "spec.yml", res)
 
-			sr = gwclient.SolveRequest{
-				FrontendOpt: map[string]string{
-					"target": "phony/debug/resolve",
-				},
-			}
-			specToSolveRequest(ctx, t, spec, &sr)
-
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("phony/debug/resolve"))
 			res, err = gwc.Solve(ctx, sr)
 			if err != nil {
 				return nil, err
@@ -127,13 +109,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 	t.Run("target not found", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := gwclient.SolveRequest{
-				FrontendOpt: map[string]string{
-					"target": "phony/does-not-exist",
-				},
-			}
-
-			specToSolveRequest(ctx, t, &dalec.Spec{
+			spec := &dalec.Spec{
 				Targets: map[string]dalec.Target{
 					"phony": {
 						Frontend: &dalec.Frontend{
@@ -141,7 +117,9 @@ func TestHandlerTargetForwarding(t *testing.T) {
 						},
 					},
 				},
-			}, &sr)
+			}
+			sr := newSolveRequest(withBuildTarget("phony/does-not-exist"), withSpec(ctx, t, spec))
+
 			_, err := gwc.Solve(ctx, sr)
 			expect := "unknown target"
 			if err == nil || !strings.Contains(err.Error(), expect) {
