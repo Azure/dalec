@@ -58,49 +58,39 @@ func (s *Source) processArgs(args map[string]string) error {
 	return nil
 }
 
-func checkDuplicate[T any](c *int, p *T) error {
-	if c == nil {
-		return fmt.Errorf("validation function (check) called with nil pointer")
-	}
-
-	if p != nil {
-		(*c)++
-	}
-
-	if *c > 1 {
-		return fmt.Errorf("more than one source variant defined")
-	}
-
-	return nil
-}
-
 func (s *Source) validate() error {
 	count := 0
 
-	if err := checkDuplicate(&count, s.DockerImage); err != nil {
-		return err
+	if s.DockerImage != nil {
+		count++
 	}
-	if err := checkDuplicate(&count, s.Git); err != nil {
-		return err
+	if s.Git != nil {
+		count++
 	}
-	if err := checkDuplicate(&count, s.HTTPS); err != nil {
-		return err
+	if s.HTTPS != nil {
+		count++
 	}
-	if err := checkDuplicate(&count, s.Context); err != nil {
-		return err
+	if s.Context != nil {
+		count++
 	}
-	if err := checkDuplicate(&count, s.Build); err != nil {
-		return err
+	if s.Build != nil {
+		count++
 	}
-	if err := checkDuplicate(&count, s.Local); err != nil {
-		return err
-	}
-
-	if count == 0 {
-		return fmt.Errorf("source has no non-nil variant")
+	if s.Local != nil {
+		count++
 	}
 
-	return nil
+	var err error
+	switch count {
+	case 0:
+		err = fmt.Errorf("no non-nil source variant")
+	case 1:
+		err = nil
+	default:
+		err = fmt.Errorf("more than one source variant defined")
+	}
+
+	return err
 }
 
 // LoadSpec loads a spec from the given data.
