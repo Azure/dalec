@@ -249,14 +249,6 @@ func sharingMode(mode string) (llb.CacheMountSharingMode, error) {
 	}
 }
 
-func SplitSourceRef(ref string) (string, string, error) {
-	scheme, ref, ok := strings.Cut(ref, "://")
-	if !ok {
-		return "", "", fmt.Errorf("invalid source ref: %s", ref)
-	}
-	return scheme, ref, nil
-}
-
 func WithCreateDestPath() llb.CopyOption {
 	return copyOptionFunc(func(i *llb.CopyInfo) {
 		i.CreateDestPath = true
