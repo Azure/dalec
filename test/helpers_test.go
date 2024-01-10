@@ -37,6 +37,7 @@ func startTestSpan(t *testing.T) context.Context {
 	return ctx
 }
 
+// specToSolveRequest injects the spec as the build context into the solve request.
 func specToSolveRequest(ctx context.Context, t *testing.T, spec *dalec.Spec, sr *gwclient.SolveRequest) {
 	t.Helper()
 
@@ -107,12 +108,7 @@ func checkFile(ctx context.Context, t *testing.T, name string, res *gwclient.Res
 func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec) targets.List {
 	t.Helper()
 
-	sr := gwclient.SolveRequest{
-		FrontendOpt: map[string]string{"requestid": targets.RequestTargets},
-	}
-
-	specToSolveRequest(ctx, t, spec, &sr)
-
+	sr := newSolveRequest(withListTargetsOnly, withSpec(ctx, t, spec))
 	res, err := gwc.Solve(ctx, sr)
 	if err != nil {
 		t.Fatalf("could not solve list targets: %v", err)
@@ -152,4 +148,39 @@ func (d dirStatAsStringer) String() string {
 		fmt.Fprintf(&buf, "%s %s\n", s.GetPath(), fs.FileMode(s.Mode))
 	}
 	return buf.String()
+}
+
+// srOpt is used by [newSolveRequest] to apply changes to a [gwclient.SolveRequest].
+type srOpt func(*gwclient.SolveRequest)
+
+func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
+	sr := gwclient.SolveRequest{}
+	for _, opt := range opts {
+		opt(&sr)
+	}
+	return sr
+}
+
+func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		specToSolveRequest(ctx, t, spec, sr)
+	}
+}
+
+func withBuildTarget(target string) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
+		sr.FrontendOpt["target"] = target
+	}
+}
+
+// withListTargetsOnly sets up the request so that we do a subrequest to just list targets
+// None of the targets will be run with this set.
+func withListTargetsOnly(sr *gwclient.SolveRequest) {
+	if sr.FrontendOpt == nil {
+		sr.FrontendOpt = make(map[string]string)
+	}
+	sr.FrontendOpt["requestid"] = targets.RequestTargets
 }
