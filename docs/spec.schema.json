@@ -449,9 +449,9 @@
 		},
 		"SourceBuild": {
 			"properties": {
-				"contextPath": {
-					"type": "string",
-					"description": "The local path to use as the context for the Dockerfile build"
+				"source": {
+					"$ref": "#/$defs/Source",
+					"description": "A source specification to use as the context for the Dockerfile build"
 				},
 				"dockerfile": {
 					"type": "string",

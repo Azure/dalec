@@ -201,32 +201,11 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			return *st, nil
 		case src.Build != nil:
 			build := src.Build
-			var st llb.State
+			subSource := build.Source
 
-			if build.ContextPath == "" {
-				st = llb.Local(dockerui.DefaultLocalNameContext, withConstraints(opts))
-			} else {
-				ctxState, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
-				if err != nil {
-					return llb.Scratch(), err
-				}
-				cst := *ctxState
-
-				src2 := src
-				if src2.Path == "" && build.ContextPath != "" {
-					src2.Path = build.ContextPath
-				}
-
-				// This is necessary to have the specified context to be at the
-				// root of the state's fs.
-				st, _ = handleFilter(&filterOpts{
-					state:                 cst,
-					source:                src2,
-					opts:                  opts,
-					forMount:              forMount,
-					includeExcludeHandled: true,
-					pathHandled:           false,
-				})
+			st, err := source2LLBGetter(s, subSource, name, forMount)(sOpt, opts...)
+			if err != nil {
+				return llb.Scratch(), err
 			}
 
 			return sOpt.Forward(st, build)
@@ -278,10 +257,20 @@ func (s Source) Doc() (io.Reader, error) {
 	case s.Context != nil:
 		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
 	case s.Build != nil:
-		build := s.Build
 		fmt.Fprintln(b, "Generated from a docker build:")
 		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
-		fmt.Fprintln(b, "	Docker Build Ref:", build.ContextPath)
+		sub, err := s.Build.Source.Doc()
+		if err != nil {
+			return nil, err
+		}
+
+		scanner := bufio.NewScanner(sub)
+		for scanner.Scan() {
+			fmt.Fprintf(b, "			%s\n", scanner.Text())
+		}
+		if scanner.Err() != nil {
+			return nil, scanner.Err()
+		}
 
 		if len(s.Build.Args) > 0 {
 			sorted := SortMapKeys(s.Build.Args)
