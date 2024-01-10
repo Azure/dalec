@@ -424,9 +424,6 @@
 				"build": {
 					"$ref": "#/$defs/SourceBuild"
 				},
-				"local": {
-					"$ref": "#/$defs/SourceLocal"
-				},
 				"path": {
 					"type": "string",
 					"description": "Path is the path to the source after fetching it based on the identifier."
@@ -452,7 +449,7 @@
 		},
 		"SourceBuild": {
 			"properties": {
-				"context": {
+				"contextPath": {
 					"type": "string",
 					"description": "The local path to use as the context for the Dockerfile build"
 				},
@@ -487,13 +484,13 @@
 			"properties": {
 				"name": {
 					"type": "string"
+				},
+				"path": {
+					"type": "string"
 				}
 			},
 			"additionalProperties": false,
-			"type": "object",
-			"required": [
-				"name"
-			]
+			"type": "object"
 		},
 		"SourceDockerImage": {
 			"properties": {
@@ -542,15 +539,6 @@
 				"url"
 			],
 			"description": "No longer supports `.git` URLs as git repos."
-		},
-		"SourceLocal": {
-			"properties": {
-				"path": {
-					"type": "string"
-				}
-			},
-			"additionalProperties": false,
-			"type": "object"
 		},
 		"SourceMount": {
 			"properties": {
