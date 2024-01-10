@@ -101,6 +101,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 		case src.Build != nil:
 			s = src.Build.ContextPath
 		default:
+			return nil, fmt.Errorf("no non-nil source provided")
 		}
 
 		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+s, false)
