@@ -148,7 +148,6 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			})
 		}()
 
-		// sourceType, err := src.GetSourceKind()
 		switch {
 		case src.DockerImage != nil:
 			img := src.DockerImage
