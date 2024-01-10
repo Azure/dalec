@@ -1,6 +1,7 @@
 package dalec
 
 import (
+	goerrors "errors"
 	"fmt"
 	"path"
 
@@ -88,6 +89,7 @@ func fillDefaults(s *Source) {
 
 func (s *Source) validate() error {
 	count := 0
+	var errs error
 
 	if s.DockerImage != nil {
 		count++
@@ -102,20 +104,22 @@ func (s *Source) validate() error {
 		count++
 	}
 	if s.Build != nil {
+		if s.Build.DockerFile != "" && s.Build.Inline != "" {
+			errs = goerrors.Join(errs, fmt.Errorf("build sources may use either `dockerfile` or `inline`, but not both"))
+		}
 		count++
 	}
 
-	var err error
 	switch count {
 	case 0:
-		err = fmt.Errorf("no non-nil source variant")
+		errs = goerrors.Join(errs, fmt.Errorf("no non-nil source variant"))
 	case 1:
-		err = nil
+		// success condition
 	default:
-		err = fmt.Errorf("more than one source variant defined")
+		errs = goerrors.Join(errs, fmt.Errorf("more than one source variant defined"))
 	}
 
-	return err
+	return errs
 }
 
 // LoadSpec loads a spec from the given data.
