@@ -22,7 +22,7 @@ sources:
           - dest: "/foo"
             spec:
               context:
-                name: ""
+                path: .
         steps:
           - env:
               FILE_TO_IMPORT: ${file_to_import}

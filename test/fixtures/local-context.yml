@@ -1,4 +1,4 @@
-# syntax=ghcr.io/azure/dalec/frontend:latest
+# syntax=local/dalec/frontend:latest
 
 name: dalec-test-fixutre-local-context
 description: A test fixture for checking local context sources
@@ -12,25 +12,25 @@ license: Apache 2.0
 sources:
   src:
     context:
-      name: "."
+      path: .
   src2:
     context:
-      name: "go.mod"
+      path: "go.mod"
   src3:
     context:
-      name: "."
+      path: .
     includes:
       - go.mod
       - go.sum
   src4:
     context:
-      name: "."
+      path: .
     excludes:
       - go.mod
       - go.sum
   src5:
     context:
-      name: "."
+      path: .
     includes:
       - go.*
     excludes:

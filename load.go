@@ -6,6 +6,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/pkg/errors"
 )
 
@@ -34,14 +35,21 @@ func (s *Source) processArgs(args map[string]string) error {
 	case s.HTTPS != nil:
 		sub = &s.HTTPS.URL
 	case s.Context != nil:
-		sub = &s.Context.Name
-		if *sub == "" {
-			*sub = "context"
+		updated, err := lex.ProcessWordWithMap(s.Context.Name, args)
+		if err != nil {
+			return err
 		}
+		s.Context.Name = updated
+
+		updated, err = lex.ProcessWordWithMap(s.Context.Path, args)
+		if err != nil {
+			return err
+		}
+		s.Context.Path = updated
+
+		return nil
 	case s.Build != nil:
-		sub = &s.Build.Context
-	case s.Local != nil:
-		sub = &s.Local.Path
+		sub = &s.Build.ContextPath
 	default:
 	}
 
@@ -56,6 +64,26 @@ func (s *Source) processArgs(args map[string]string) error {
 
 	*sub = updated
 	return nil
+}
+
+func fillDefaults(s *Source) {
+	switch {
+	case s.DockerImage != nil:
+	case s.Git != nil:
+	case s.HTTPS != nil:
+	case s.Context != nil:
+		if s.Context.Name == "" {
+			s.Context.Name = dockerui.DefaultLocalNameContext
+		}
+		if s.Context.Path == "" {
+			s.Context.Path = "."
+		}
+	case s.Build != nil:
+		if s.Build.ContextPath == "" {
+			s.Build.ContextPath = "."
+		}
+	default:
+	}
 }
 
 func (s *Source) validate() error {
@@ -74,9 +102,6 @@ func (s *Source) validate() error {
 		count++
 	}
 	if s.Build != nil {
-		count++
-	}
-	if s.Local != nil {
 		count++
 	}
 
@@ -121,8 +146,10 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 			return nil, fmt.Errorf("error validating source ref %q: %w", name, err)
 		}
 
+		fillDefaults(&src)
+
 		if err := src.processArgs(args); err != nil {
-			return nil, fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
+			return nil, fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
 		}
 		if src.DockerImage != nil {
 			if err := src.DockerImage.Cmd.processBuildArgs(lex, args, name); err != nil {
