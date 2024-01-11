@@ -255,7 +255,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 		return b
 	}
 
-	fmt.Fprintln(b, `%%build`) //nolint:govet
+	fmt.Fprintln(b, `%build`) //nolint:govet
 
 	fmt.Fprintln(b, "set -e")
 
