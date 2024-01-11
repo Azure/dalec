@@ -237,7 +237,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 
 func writeStep(b *strings.Builder, step dalec.BuildStep) {
 	envKeys := dalec.SortMapKeys(step.Env)
-	// Wrap command in a subshell so any environment variables that are set
+	// Wrap commands in a subshell so any environment variables that are set
 	// will be available to every command in the BuildStep
 	fmt.Fprintln(b, "(") // begin subshell
 	for _, k := range envKeys {
