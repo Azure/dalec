@@ -235,6 +235,18 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	return b, nil
 }
 
+func writeStep(b *strings.Builder, step dalec.BuildStep) {
+	envKeys := dalec.SortMapKeys(step.Env)
+	// Wrap command in a subshell so any environment variables that are set
+	// will be available to every command in the BuildStep
+	fmt.Fprintln(b, "(") // begin subshell
+	for _, k := range envKeys {
+		fmt.Fprintf(b, "export %s=%s\n", k, step.Env[k])
+	}
+	fmt.Fprintf(b, "%s", step.Command)
+	fmt.Fprintln(b, ")") // end subshell
+}
+
 func (w *specWrapper) BuildSteps() fmt.Stringer {
 	b := &strings.Builder{}
 
@@ -243,7 +255,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 		return b
 	}
 
-	fmt.Fprintln(b, `%build`) //nolint:govet
+	fmt.Fprintln(b, `%%build`) //nolint:govet
 
 	fmt.Fprintln(b, "set -e")
 
@@ -254,11 +266,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	}
 
 	for _, step := range t.Steps {
-		envKeys := dalec.SortMapKeys(step.Env)
-		for _, k := range envKeys {
-			fmt.Fprintf(b, "%s=%s ", k, step.Env[k])
-		}
-		fmt.Fprintln(b, step.Command)
+		writeStep(b, step)
 	}
 
 	return b

@@ -1,0 +1,42 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+name: dalec-test-fixture-env-multi-command-step
+description: A test fixture for checking http sources
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+
+targets: # Distro specific build requirements
+  mariner2:
+    dependencies:
+
+build:
+  steps:
+    - command: |
+        echo "${FOO}_0" > foo0.txt
+        echo "${FOO}_1" > foo1.txt
+        echo "$BAR" > bar.txt
+      env: 
+        FOO: foo
+        BAR: bar
+artifacts:
+  binaries:
+    foo0.txt:
+    foo1.txt:
+    bar.txt:
+
+tests:
+  - name: package files
+    files:
+      /usr/bin/foo0.txt:
+        contains:
+          - "foo_0"
+      /usr/bin/foo1.txt:
+        contains:
+          - "foo_1"
+      /usr/bin/bar.txt:
+        contains:
+          - "bar"
