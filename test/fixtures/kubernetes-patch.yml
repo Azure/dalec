@@ -15,7 +15,8 @@ dependencies:
 sources:
   src:
     git:
-      url: https://github.com/kubernetes/kubernetes.git#v1.28.0
+      url: https://github.com/kubernetes/kubernetes.git
+      commit: "v1.28.0"
   patch_120129:
     https:
       url: https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/120129.patch
