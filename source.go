@@ -186,18 +186,12 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			opts = append(opts, llb.Filename(name))
 			return llb.HTTP(https.URL, opts...), nil
 		case src.Context != nil:
-			srcCtx := src.Context
-
 			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
 			if err != nil {
 				return llb.Scratch(), err
 			}
 
 			includeExcludeHandled = true
-			if src.Path == "" && srcCtx.Path != "" {
-				src.Path = srcCtx.Path
-			}
-
 			return *st, nil
 		case src.Build != nil:
 			build := src.Build

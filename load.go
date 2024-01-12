@@ -27,7 +27,15 @@ const DefaultPatchStrip int = 1
 func (s *Source) processArgs(args map[string]string) error {
 	lex := shell.NewLex('\\')
 
-	var sub *string
+	sub := func(s *string) error {
+		updated, err := lex.ProcessWordWithMap(*s, args)
+		if err != nil {
+			return err
+		}
+		*s = updated
+		return nil
+	}
+
 	switch {
 	case s.DockerImage != nil:
 		for _, mnt := range s.DockerImage.Cmd.Mounts {
@@ -35,56 +43,44 @@ func (s *Source) processArgs(args map[string]string) error {
 				return err
 			}
 		}
-		sub = &s.DockerImage.Ref
+		if err := sub(&s.DockerImage.Ref); err != nil {
+			return err
+		}
 	case s.Git != nil:
-		sub = &s.Git.URL
+		fields := []*string{
+			&s.Git.URL,
+			&s.Git.Commit,
+		}
+		for _, f := range fields {
+			if err := sub(f); err != nil {
+				return err
+			}
+		}
 	case s.HTTPS != nil:
-		sub = &s.HTTPS.URL
+		if err := sub(&s.HTTPS.URL); err != nil {
+			return err
+		}
 	case s.Context != nil:
-		updated, err := lex.ProcessWordWithMap(s.Context.Name, args)
-		if err != nil {
+		if err := sub(&s.Context.Name); err != nil {
 			return err
 		}
-		s.Context.Name = updated
-
-		updated, err = lex.ProcessWordWithMap(s.Context.Path, args)
-		if err != nil {
-			return err
-		}
-		s.Context.Path = updated
-
-		sub = nil
 	case s.Build != nil:
 		if err := s.Build.Source.processArgs(args); err != nil {
 			return err
 		}
 
-		updated, err := lex.ProcessWordWithMap(s.Build.DockerFile, args)
-		if err != nil {
-			return err
+		fields := []*string{
+			&s.Build.DockerFile,
+			&s.Build.Target,
 		}
-		s.Build.DockerFile = updated
-
-		updated, err = lex.ProcessWordWithMap(s.Build.Target, args)
-		if err != nil {
-			return err
+		for _, f := range fields {
+			if err := sub(f); err != nil {
+				return err
+			}
 		}
-		s.Build.Target = updated
-
-		sub = nil
 	default:
 	}
 
-	if sub == nil {
-		return nil
-	}
-
-	updated, err := lex.ProcessWordWithMap(*sub, args)
-	if err != nil {
-		return err
-	}
-
-	*sub = updated
 	return nil
 }
 
@@ -100,8 +96,8 @@ func fillDefaults(s *Source) {
 		if s.Context.Name == "" {
 			s.Context.Name = dockerui.DefaultLocalNameContext
 		}
-		if s.Context.Path == "" {
-			s.Context.Path = "."
+		if s.Path == "" {
+			s.Path = "."
 		}
 	case s.Build != nil:
 		fillDefaults(&s.Build.Source)
