@@ -78,7 +78,6 @@ func (s *Source) processArgs(args map[string]string) error {
 				return err
 			}
 		}
-	default:
 	}
 
 	return nil
@@ -101,7 +100,6 @@ func fillDefaults(s *Source) {
 		}
 	case s.Build != nil:
 		fillDefaults(&s.Build.Source)
-	default:
 	}
 }
 
