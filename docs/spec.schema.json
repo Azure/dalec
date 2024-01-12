@@ -483,14 +483,13 @@
 		"SourceContext": {
 			"properties": {
 				"name": {
-					"type": "string"
-				},
-				"path": {
-					"type": "string"
+					"type": "string",
+					"description": "Name is the name of the build context. By default, it is the magic name\n`context`, recognized by Docker as the default context."
 				}
 			},
 			"additionalProperties": false,
-			"type": "object"
+			"type": "object",
+			"description": "SourceContext is used to generate a source from a build context."
 		},
 		"SourceDockerImage": {
 			"properties": {
