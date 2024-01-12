@@ -194,9 +194,12 @@ type SourceHTTPS struct {
 	URL string `yaml:"url" json:"url"`
 }
 
+// SourceContext is used to generate a source from a build context. The path to
+// the build context is provided to the `Path` field of the owning `Source`.
 type SourceContext struct {
+	// Name is the name of the build context. By default, it is the magic name
+	// `context`, recognized by Docker as the default context.
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
-	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 }
 
 // SourceBuild is used to generate source from a DockerFile build, either
