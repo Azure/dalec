@@ -217,7 +217,7 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 	})
 
 	cleanupScript := llb.Scratch().File(llb.Mkfile("chroot-cleanup.sh", 0o755, []byte(cleanupScript)))
-	buildCmd := `trap '/tmp/chroot-cleanup.sh > /dev/null' EXIT; make -j` + strconv.Itoa(runtime.NumCPU()) + ` build-packages || (set -x; ls -lh ` + cachedRpmsDir + `; cat /build/build/logs/pkggen/rpmbuilding/*; ls -lh ${CACHED_RPMS_DIR}/cache; exit 1)`
+	buildCmd := `trap '/tmp/chroot-cleanup.sh > /dev/null' EXIT; make -j ` + strconv.Itoa(runtime.NumCPU()) + ` build-packages || (set -x; ls -lh ` + cachedRpmsDir + `; cat /build/build/logs/pkggen/rpmbuilding/*; ls -lh ${CACHED_RPMS_DIR}/cache; exit 1)`
 
 	worker := work.
 		Run(shArgs("rm -rf ${CHROOT_DIR}/dalec*")).
