@@ -208,9 +208,13 @@ rm -rf ` + rpmdbDir + `
 	worker := builderImg.
 		Run(
 			shArgs("/tmp/install.sh"),
-			marinerTdnfCache,
+			defaultMarinerTdnfCahe(),
 			llb.AddMount("/tmp/rpms", rpmDir, llb.SourcePath("/RPMS")),
 			llb.AddMount("/tmp/install.sh", installer, llb.SourcePath("install.sh")),
+			// Mount the tdnf cache into the workpath so that:
+			// 1. tdnf will use the cache
+			// 2. Repo data and packages are not left behind in the final image.
+			marinerTdnfCacheWithPrefix(workPath),
 		)
 
 	// This adds a mount to the worker so that all the commands are run with this mount added

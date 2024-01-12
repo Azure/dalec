@@ -25,7 +25,7 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spe
 
 	rpmDir := baseImg.Run(
 		shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(getRuntimeDeps(spec), " ")),
-		marinerTdnfCache,
+		defaultMarinerTdnfCahe(),
 	).
 		AddMount("/tmp/rpms", llb.Scratch())
 

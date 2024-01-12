@@ -24,14 +24,24 @@ const (
 	toolchainImgRef       = "ghcr.io/azure/dalec/mariner2/toolchain:latest"
 	toolchainNamedContext = "mariner2-toolchain"
 
-	tookitRpmsCacheDir = "/root/.cache/mariner2-toolkit-rpm-cache"
-	cachedRpmsName     = "mariner2-toolkit-cached-rpms"
-	marinerToolkitPath = "/usr/local/toolkit"
+	tookitRpmsCacheDir  = "/root/.cache/mariner2-toolkit-rpm-cache"
+	cachedRpmsName      = "mariner2-toolkit-cached-rpms"
+	marinerToolkitPath  = "/usr/local/toolkit"
+	marinerTdnfCacheDir = "/var/cache/tdnf"
 )
 
-var (
-	marinerTdnfCache = llb.AddMount("/var/cache/tdnf", llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountShared))
-)
+func defaultMarinerTdnfCahe() llb.RunOption {
+	return marinerTdnfCacheWithPrefix("")
+}
+
+// marinerTdnfCacheWithPrefix returns a run option that sets up a persistent cache for tdnf.
+// The tdnf cache is mounted at `[prefix]/var/cache/tdnf`.
+//
+// This makes it so that when tdnf needs to download packages, repodata, etc it will use the cache dir.
+// Repeated builds will benefit from this as the cache will be reused.
+func marinerTdnfCacheWithPrefix(prefix string) llb.RunOption {
+	return llb.AddMount(filepath.Join(prefix, marinerTdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountShared))
+}
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
 	baseImg, err := getBaseBuilderImg(ctx, client)
@@ -190,7 +200,7 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 		dlCmd := `set -x; while read -r pkg; do tdnf install -y --alldeps --downloadonly --releasever=2.0 --downloaddir ` + cachedRpmsDir + ` ${pkg}; done < /tmp/deps`
 		work.Run(
 			shArgs(dlCmd),
-			marinerTdnfCache,
+			defaultMarinerTdnfCahe(),
 			llb.AddMount("/tmp/deps", depsFile, llb.SourcePath("deps")),
 			mainCachedRpmsMount,
 		)
