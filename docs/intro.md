@@ -139,7 +139,8 @@ website: https://github.com/cpuguy83/go-md2man
 sources:
   src:
     git:
-      url: https://github.com/cpuguy83/go-md2man.git#v2.0.3
+      url: https://github.com/cpuguy83/go-md2man.git
+      commit: "v2.0.3"
 
 dependencies:
   build:
@@ -203,7 +204,8 @@ website: https://github.com/cpuguy83/go-md2man
 sources:
   src:
     git:
-      url: https://github.com/cpuguy83/go-md2man.git#v2.0.3
+      url: https://github.com/cpuguy83/go-md2man.git
+      commit: "v2.0.3"
   gomods: # This is required when the build environment does not allow network access. This downloads all the go modules.
     path: /build/gomodcache # This is the path we will be extracing after running the command below.
     image:
@@ -215,7 +217,8 @@ sources:
           - dest: /build/src
             spec:
               git:
-                url: https://github.com/cpuguy83/go-md2man.git#v2.0.3
+                url: https://github.com/cpuguy83/go-md2man.git
+                commit: "v2.0.3"
         steps:
           - command: go mod download
             env:
