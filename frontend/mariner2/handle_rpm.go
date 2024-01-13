@@ -16,7 +16,6 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/identity"
 )
 
 const (
@@ -179,7 +178,7 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 	// Use a persistent cache for the cached rpms so that the same dir gets
 	// bind-mounted everywhere its needed instead of each mount getting an
 	// overlay causing inconsistencies between mounts.
-	rpmsPeristCache := llb.AsPersistentCacheDir(identity.NewID(), llb.CacheMountShared)
+	rpmsPeristCache := llb.AsPersistentCacheDir(cachedRpmsName, llb.CacheMountShared)
 	mainCachedRpmsMount := llb.AddMount(cachedRpmsDir, llb.Scratch(), rpmsPeristCache)
 
 	// The mariner toolkit is trying to resolve *all* dependencies and not just build dependencies.
