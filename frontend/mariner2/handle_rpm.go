@@ -188,12 +188,12 @@ func specToRpmLLB(spec *dalec.Spec, getDigest getDigestFunc, baseImg llb.State, 
 		depsFile := llb.Scratch().File(llb.Mkfile("deps", 0o644, []byte(strings.Join(deps, "\n"))))
 		// Use while loop with each package on a line in case there are too many packages to fit in a single command.
 		dlCmd := `set -x; while read -r pkg; do tdnf install -y --alldeps --downloadonly --releasever=2.0 --downloaddir ` + cachedRpmsDir + ` ${pkg}; done < /tmp/deps`
-		work.Run(
+		work = work.Run(
 			shArgs(dlCmd),
 			marinerTdnfCache,
 			llb.AddMount("/tmp/deps", depsFile, llb.SourcePath("deps")),
 			mainCachedRpmsMount,
-		)
+		).Root()
 	}
 
 	withCachedRpmsMounts := runOptFunc(func(ei *llb.ExecInfo) {
