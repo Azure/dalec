@@ -95,8 +95,9 @@ func fillDefaults(s *Source) {
 		if s.Context.Name == "" {
 			s.Context.Name = dockerui.DefaultLocalNameContext
 		}
+
 		if s.Path == "" {
-			s.Path = "."
+			s.Path = s.Context.Name
 		}
 	case s.Build != nil:
 		fillDefaults(&s.Build.Source)
