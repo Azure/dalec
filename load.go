@@ -118,6 +118,10 @@ func (s *Source) validate() error {
 
 		count++
 	}
+	if errs != nil {
+		return errs
+	}
+
 	if s.Git != nil {
 		count++
 	}
@@ -147,7 +151,7 @@ func (s *Source) validate() error {
 	case 0:
 		errs = goerrors.Join(errs, fmt.Errorf("no non-nil source variant"))
 	case 1:
-		// success condition
+		return nil
 	default:
 		errs = goerrors.Join(errs, fmt.Errorf("more than one source variant defined"))
 	}
