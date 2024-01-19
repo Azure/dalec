@@ -24,13 +24,13 @@ func knownArg(key string) bool {
 
 const DefaultPatchStrip int = 1
 
-func (s *Source) processArgs(args map[string]string) error {
+func (s *Source) substituteBuildArgs(args map[string]string) error {
 	lex := shell.NewLex('\\')
 
 	switch {
 	case s.DockerImage != nil:
 		for _, mnt := range s.DockerImage.Cmd.Mounts {
-			if err := mnt.Spec.processArgs(args); err != nil {
+			if err := mnt.Spec.substituteBuildArgs(args); err != nil {
 				return err
 			}
 		}
@@ -64,7 +64,7 @@ func (s *Source) processArgs(args map[string]string) error {
 		}
 		s.Context.Name = updated
 	case s.Build != nil:
-		if err := s.Build.Source.processArgs(args); err != nil {
+		if err := s.Build.Source.substituteBuildArgs(args); err != nil {
 			return err
 		}
 
@@ -202,7 +202,7 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 
 		fillDefaults(&src)
 
-		if err := src.processArgs(args); err != nil {
+		if err := src.substituteBuildArgs(args); err != nil {
 			return nil, fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
 		}
 		if src.DockerImage != nil {
@@ -285,7 +285,7 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 		return nil
 	}
 	for _, s := range c.Mounts {
-		if err := s.Spec.processArgs(args); err != nil {
+		if err := s.Spec.substituteBuildArgs(args); err != nil {
 			return fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
 		}
 	}
