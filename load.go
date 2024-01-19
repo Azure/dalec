@@ -27,15 +27,6 @@ const DefaultPatchStrip int = 1
 func (s *Source) processArgs(args map[string]string) error {
 	lex := shell.NewLex('\\')
 
-	sub := func(s *string) error {
-		updated, err := lex.ProcessWordWithMap(*s, args)
-		if err != nil {
-			return err
-		}
-		*s = updated
-		return nil
-	}
-
 	switch {
 	case s.DockerImage != nil:
 		for _, mnt := range s.DockerImage.Cmd.Mounts {
@@ -43,41 +34,51 @@ func (s *Source) processArgs(args map[string]string) error {
 				return err
 			}
 		}
-		if err := sub(&s.DockerImage.Ref); err != nil {
+		updated, err := lex.ProcessWordWithMap(s.DockerImage.Ref, args)
+		if err != nil {
 			return err
 		}
+		s.DockerImage.Ref = updated
 	case s.Git != nil:
-		fields := []*string{
-			&s.Git.URL,
-			&s.Git.Commit,
+		updated, err := lex.ProcessWordWithMap(s.Git.URL, args)
+		if err != nil {
+			return err
 		}
-		for _, f := range fields {
-			if err := sub(f); err != nil {
-				return err
-			}
+		s.Git.URL = updated
+
+		updated, err = lex.ProcessWordWithMap(s.Git.Commit, args)
+		if err != nil {
+			return err
 		}
+		s.Git.Commit = updated
 	case s.HTTPS != nil:
-		if err := sub(&s.HTTPS.URL); err != nil {
+		updated, err := lex.ProcessWordWithMap(s.HTTPS.URL, args)
+		if err != nil {
 			return err
 		}
+		s.HTTPS.URL = updated
 	case s.Context != nil:
-		if err := sub(&s.Context.Name); err != nil {
+		updated, err := lex.ProcessWordWithMap(s.Context.Name, args)
+		if err != nil {
 			return err
 		}
+		s.Context.Name = updated
 	case s.Build != nil:
 		if err := s.Build.Source.processArgs(args); err != nil {
 			return err
 		}
 
-		fields := []*string{
-			&s.Build.DockerFile,
-			&s.Build.Target,
+		updated, err := lex.ProcessWordWithMap(s.Build.DockerFile, args)
+		if err != nil {
+			return err
 		}
-		for _, f := range fields {
-			if err := sub(f); err != nil {
-				return err
-			}
+		s.Build.DockerFile = updated
+
+		updated, err = lex.ProcessWordWithMap(s.Build.Target, args)
+		if err != nil {
+			return err
 		}
+		s.Build.Target = updated
 	}
 
 	return nil
