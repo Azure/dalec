@@ -132,15 +132,7 @@ func (s *Source) validate() error {
 		count++
 	}
 	if s.Build != nil {
-		if s.Build.Source.Build != nil {
-			errs = goerrors.Join(errs, fmt.Errorf("build sources cannot be recursive"))
-		}
-
-		if s.Build.DockerFile != "" && s.Build.Inline != "" {
-			errs = goerrors.Join(errs, fmt.Errorf("build sources may use either `dockerfile` or `inline`, but not both"))
-		}
-
-		if err := s.Build.Source.validate(); err != nil {
+		if err := s.Build.validate(); err != nil {
 			errs = goerrors.Join(errs, err)
 		}
 
@@ -154,6 +146,27 @@ func (s *Source) validate() error {
 		return nil
 	default:
 		errs = goerrors.Join(errs, fmt.Errorf("more than one source variant defined"))
+	}
+
+	return errs
+}
+
+func (s *SourceBuild) validate() error {
+	var errs error
+	if s.Source.Build != nil {
+		errs = goerrors.Join(errs, fmt.Errorf("build sources cannot be recursive"))
+	}
+
+	if s.DockerFile != "" && s.Inline != "" {
+		errs = goerrors.Join(errs, fmt.Errorf("build sources may use either `dockerfile` or `inline`, but not both"))
+	}
+
+	if s.DockerFile == "" && s.Inline == "" {
+		errs = goerrors.Join(errs, fmt.Errorf("build must use either `dockerfile` or `inline`"))
+	}
+
+	if err := s.Source.validate(); err != nil {
+		errs = goerrors.Join(errs, err)
 	}
 
 	return errs
