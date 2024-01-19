@@ -167,19 +167,20 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 			return eSt.Root(), nil
 		case src.Git != nil:
-			git := src.Git
+			url := src.Git.URL
+			commit := src.Git.Commit
 			// TODO: Pass git secrets
-			ref, err := gitutil.ParseGitRef(git.URL)
+			ref, err := gitutil.ParseGitRef(url)
 			if err != nil {
 				return llb.Scratch(), fmt.Errorf("could not parse git ref: %w", err)
 			}
 
 			var gOpts []llb.GitOption
-			if git.KeepGitDir {
+			if src.Git.KeepGitDir {
 				gOpts = append(gOpts, llb.KeepGitDir())
 			}
 			gOpts = append(gOpts, withConstraints(opts))
-			return llb.Git(ref.Remote, ref.Commit, gOpts...), nil
+			return llb.Git(ref.Remote, commit, gOpts...), nil
 		case src.HTTPS != nil:
 			https := src.HTTPS
 			opts := []llb.HTTPOption{withConstraints(opts)}
@@ -302,7 +303,8 @@ func (s Source) Doc() (io.Reader, error) {
 			return nil, err
 		}
 		fmt.Fprintln(b, "Generated from a git repository:")
-		fmt.Fprintln(b, "	Ref:", ref.Commit)
+		fmt.Fprintln(b, "	Remote:", ref.Remote)
+		fmt.Fprintln(b, "	Ref:", git.Commit)
 		if s.Path != "" {
 			fmt.Fprintln(b, "	Extraced path:", s.Path)
 		}
