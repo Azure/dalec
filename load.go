@@ -4,6 +4,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"path"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
@@ -108,21 +109,32 @@ func fillDefaults(s *Source) {
 	}
 }
 
-func (s *Source) validate() error {
+func (s *Source) validate(failContext ...string) (retErr error) {
 	count := 0
-	var errs error
+
+	defer func() {
+		if retErr != nil && failContext != nil {
+			retErr = errors.Wrap(retErr, strings.Join(failContext, " "))
+		}
+	}()
 
 	if s.DockerImage != nil {
-		for _, mnt := range s.DockerImage.Cmd.Mounts {
-			if err := mnt.Spec.validate(); err != nil {
-				errs = goerrors.Join(errs, err)
+		if s.DockerImage.Ref == "" {
+			retErr = goerrors.Join(retErr, fmt.Errorf("docker image source variant must have a ref"))
+		}
+
+		if s.DockerImage.Cmd != nil {
+			for _, mnt := range s.DockerImage.Cmd.Mounts {
+				if err := mnt.Spec.validate("docker image source with ref", "'"+s.DockerImage.Ref+"'"); err != nil {
+					retErr = goerrors.Join(retErr, err)
+				}
 			}
 		}
 
 		count++
 	}
-	if errs != nil {
-		return errs
+	if retErr != nil {
+		return retErr
 	}
 
 	if s.Git != nil {
@@ -135,8 +147,13 @@ func (s *Source) validate() error {
 		count++
 	}
 	if s.Build != nil {
-		if err := s.Build.validate(); err != nil {
-			errs = goerrors.Join(errs, err)
+		c := s.Build.DockerFile
+		if s.Build.Inline != "" {
+			c = s.Build.Inline
+		}
+
+		if err := s.Build.validate("build source with dockerfile", "`"+c+"`"); err != nil {
+			retErr = goerrors.Join(retErr, err)
 		}
 
 		count++
@@ -144,35 +161,40 @@ func (s *Source) validate() error {
 
 	switch count {
 	case 0:
-		errs = goerrors.Join(errs, fmt.Errorf("no non-nil source variant"))
+		retErr = goerrors.Join(retErr, fmt.Errorf("no non-nil source variant"))
 	case 1:
-		return nil
+		return retErr
 	default:
-		errs = goerrors.Join(errs, fmt.Errorf("more than one source variant defined"))
+		retErr = goerrors.Join(retErr, fmt.Errorf("more than one source variant defined"))
 	}
 
-	return errs
+	return retErr
 }
 
-func (s *SourceBuild) validate() error {
-	var errs error
+func (s *SourceBuild) validate(failContext ...string) (retErr error) {
+	defer func() {
+		if retErr != nil && failContext != nil {
+			retErr = errors.Wrap(retErr, strings.Join(failContext, " "))
+		}
+	}()
+
 	if s.Source.Build != nil {
-		errs = goerrors.Join(errs, fmt.Errorf("build sources cannot be recursive"))
+		return goerrors.Join(retErr, fmt.Errorf("build sources cannot be recursive"))
 	}
 
 	if s.DockerFile != "" && s.Inline != "" {
-		errs = goerrors.Join(errs, fmt.Errorf("build sources may use either `dockerfile` or `inline`, but not both"))
+		retErr = goerrors.Join(retErr, fmt.Errorf("build sources may use either `dockerfile` or `inline`, but not both"))
 	}
 
 	if s.DockerFile == "" && s.Inline == "" {
-		errs = goerrors.Join(errs, fmt.Errorf("build must use either `dockerfile` or `inline`"))
+		retErr = goerrors.Join(retErr, fmt.Errorf("build must use either `dockerfile` or `inline`"))
 	}
 
-	if err := s.Source.validate(); err != nil {
-		errs = goerrors.Join(errs, err)
+	if err := s.Source.validate("build subsource"); err != nil {
+		retErr = goerrors.Join(retErr, err)
 	}
 
-	return errs
+	return
 }
 
 // LoadSpec loads a spec from the given data.
