@@ -415,8 +415,8 @@
 				"git": {
 					"$ref": "#/$defs/SourceGit"
 				},
-				"https": {
-					"$ref": "#/$defs/SourceHTTPS"
+				"http": {
+					"$ref": "#/$defs/SourceHTTP"
 				},
 				"context": {
 					"$ref": "#/$defs/SourceContext"
@@ -526,7 +526,7 @@
 				"keepGitDir"
 			]
 		},
-		"SourceHTTPS": {
+		"SourceHTTP": {
 			"properties": {
 				"url": {
 					"type": "string"

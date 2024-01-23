@@ -17,7 +17,7 @@ sources:
     git:
       url: https://github.com/moby/containerd.git
   patch1:
-    https:
+    http:
       url: https://raw.githubusercontent.com/Azure/moby-packaging/7092638d14708b389abf0937086508ceb2571404/moby-containerd/patches/service-execstart.patch
 
 build:

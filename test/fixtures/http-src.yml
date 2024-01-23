@@ -12,10 +12,10 @@ license: Apache 2.0
 
 sources:
   readme:
-    https:
+    http:
       url: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md
   SOMEOTHERNAME.md:
-    https:
+    http:
       url: https://raw.githubusercontent.com/moby/buildkit/2677a22857c917168730fe69ad617a50e0d85202/README.md
 
 build:
