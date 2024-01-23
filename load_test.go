@@ -5,19 +5,6 @@ import (
 	"testing"
 )
 
-func newSrc() Source {
-	return Source{
-		DockerImage: nil,
-		Git:         nil,
-		HTTPS:       nil,
-		Context:     nil,
-		Build:       nil,
-		Path:        "",
-		Includes:    []string{},
-		Excludes:    []string{},
-	}
-}
-
 func TestSourceValidation(t *testing.T) {
 	cases := []struct {
 		title     string
