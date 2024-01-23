@@ -44,8 +44,8 @@ func TestSourceValidation(t *testing.T) {
 										Mounts: []SourceMount{
 											{
 												Spec: Source{
-													Git:   &SourceGit{},
-													HTTPS: &SourceHTTPS{},
+													Git:  &SourceGit{},
+													HTTP: &SourceHTTP{},
 												},
 											},
 										},

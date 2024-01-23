@@ -181,8 +181,8 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 			gOpts = append(gOpts, withConstraints(opts))
 			return llb.Git(ref.Remote, commit, gOpts...), nil
-		case src.HTTPS != nil:
-			https := src.HTTPS
+		case src.HTTP != nil:
+			https := src.HTTP
 			opts := []llb.HTTPOption{withConstraints(opts)}
 			opts = append(opts, llb.Filename(name))
 			return llb.HTTP(https.URL, opts...), nil
@@ -236,7 +236,7 @@ func SourceIsDir(src Source) (bool, error) {
 		src.Build != nil,
 		src.Context != nil:
 		return true, nil
-	case src.HTTPS != nil:
+	case src.HTTP != nil:
 		return false, nil
 	default:
 		return false, fmt.Errorf("unsupported source type")
@@ -293,9 +293,9 @@ func (s Source) Doc() (io.Reader, error) {
 			}
 			fmt.Fprintln(b, "	Dockerfile path in context:", p)
 		}
-	case s.HTTPS != nil:
+	case s.HTTP != nil:
 		fmt.Fprintln(b, "Generated from a http(s) source:")
-		fmt.Fprintln(b, "	URL:", s.HTTPS.URL)
+		fmt.Fprintln(b, "	URL:", s.HTTP.URL)
 	case s.Git != nil:
 		git := s.Git
 		ref, err := gitutil.ParseGitRef(git.URL)

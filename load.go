@@ -52,12 +52,12 @@ func (s *Source) substituteBuildArgs(args map[string]string) error {
 			return err
 		}
 		s.Git.Commit = updated
-	case s.HTTPS != nil:
-		updated, err := lex.ProcessWordWithMap(s.HTTPS.URL, args)
+	case s.HTTP != nil:
+		updated, err := lex.ProcessWordWithMap(s.HTTP.URL, args)
 		if err != nil {
 			return err
 		}
-		s.HTTPS.URL = updated
+		s.HTTP.URL = updated
 	case s.Context != nil:
 		updated, err := lex.ProcessWordWithMap(s.Context.Name, args)
 		if err != nil {
@@ -92,7 +92,7 @@ func fillDefaults(s *Source) {
 			fillDefaults(&mnt.Spec)
 		}
 	case s.Git != nil:
-	case s.HTTPS != nil:
+	case s.HTTP != nil:
 	case s.Context != nil:
 		origContextName := s.Context.Name
 		if s.Context.Name == "" {
@@ -140,7 +140,7 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 	if s.Git != nil {
 		count++
 	}
-	if s.HTTPS != nil {
+	if s.HTTP != nil {
 		count++
 	}
 	if s.Context != nil {
