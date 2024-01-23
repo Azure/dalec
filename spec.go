@@ -190,7 +190,7 @@ type SourceGit struct {
 
 // No longer supports `.git` URLs as git repos. That has to be done with
 // `SourceGit`
-type SourceHTTPS struct {
+type SourceHTTP struct {
 	URL string `yaml:"url" json:"url"`
 }
 
@@ -253,7 +253,7 @@ type Source struct {
 	// === Begin Source Variants ===
 	DockerImage *SourceDockerImage `yaml:"image,omitempty" json:"image,omitempty"`
 	Git         *SourceGit         `yaml:"git,omitempty" json:"git,omitempty"`
-	HTTPS       *SourceHTTPS       `yaml:"https,omitempty" json:"https,omitempty"`
+	HTTP        *SourceHTTP        `yaml:"http,omitempty" json:"http,omitempty"`
 	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
 	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
 	// === End Source Variants ===

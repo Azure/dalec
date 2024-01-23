@@ -94,8 +94,8 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 			s = src.DockerImage.Ref
 		case src.Git != nil:
 			s = src.Git.URL
-		case src.HTTPS != nil:
-			s = src.HTTPS.URL
+		case src.HTTP != nil:
+			s = src.HTTP.URL
 		case src.Context != nil:
 			s = src.Context.Name
 		case src.Build != nil:
