@@ -18,13 +18,13 @@ sources:
       url: https://github.com/kubernetes/kubernetes.git
       commit: "v1.28.0"
   patch_120129:
-    https:
+    http:
       url: https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/120129.patch
   patch_120134:
-    https:
+    http:
       url: https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/120134.patch
   patch_121882:
-    https:
+    http:
       url: https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/121882.patch
 
 
