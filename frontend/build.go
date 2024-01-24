@@ -6,11 +6,12 @@ import (
 	"fmt"
 
 	"github.com/Azure/dalec"
+	"github.com/containerd/containerd/platforms"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
-	oicspecs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error) {
@@ -19,7 +20,7 @@ func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error)
 		return nil, fmt.Errorf("could not read spec file: %w", err)
 	}
 
-	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data), client.BuildArgs)
+	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data))
 	if err != nil {
 		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
@@ -57,6 +58,30 @@ func makeRequestHandler(target string) dockerui.RequestHandler {
 	}
 
 	return h
+}
+
+var PassthroughGetters = map[string]func(ocispecs.Platform) string{
+	"TARGETOS": func(p ocispecs.Platform) string {
+		return p.OS
+	},
+	"TARGETARCH": func(p ocispecs.Platform) string {
+		return p.Architecture
+	},
+	"TARGETVARIANT": func(p ocispecs.Platform) string {
+		return p.Variant
+	},
+	"TARGETPLATFORM": func(p ocispecs.Platform) string {
+		return platforms.Format(p)
+	},
+}
+
+func fillPlatformArgs(args map[string]string, platform ocispecs.Platform) map[string]string {
+	args = dalec.DuplicateMap(args)
+	for v, getter := range PassthroughGetters {
+		args[v] = getter(platform)
+	}
+
+	return args
 }
 
 // Build is the main entrypoint for the dalec frontend.
@@ -100,7 +125,19 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, err
 	}
 
-	rb, err := bc.Build(ctx, func(ctx context.Context, platform *oicspecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
+	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
+		var targetPlatform ocispecs.Platform
+		if platform != nil {
+			targetPlatform = *platform
+		} else {
+			targetPlatform = platforms.DefaultSpec()
+		}
+
+		args := fillPlatformArgs(bc.BuildArgs, targetPlatform)
+		if err := spec.SubstituteArgs(args); err != nil {
+			return nil, nil, err
+		}
+
 		return f(ctx, client, spec)
 	})
 	if err != nil {

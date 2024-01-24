@@ -132,9 +132,9 @@ target "test-fixture" {
     name = "test-fixture-${f}"
     matrix = {
         f = DALEC_DISABLE_NESTED == "1" ? (
-            ["http-src", "frontend", "local-context", "cmd-src-ref", "test-framework", "git-patch", "kubernetes-patch", "env-multiple-commands"]
+            ["http-src", "frontend", "local-context", "cmd-src-ref", "test-framework", "git-patch", "kubernetes-patch", "env-multiple-commands", "platform-vars"]
          ) : (
-            ["http-src", "frontend", "local-context", "cmd-src-ref", "test-framework", "git-patch", "kubernetes-patch", "env-multiple-commands", "nested"]
+            ["http-src", "frontend", "local-context", "cmd-src-ref", "test-framework", "git-patch", "kubernetes-patch", "env-multiple-commands", "platform-vars", "nested"]
          )
         tgt = ["mariner2/container"]
     }
