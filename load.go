@@ -18,6 +18,8 @@ func knownArg(key string) bool {
 		return true
 	case "DALEC_DISABLE_DIFF_MERGE":
 		return true
+	case "TARGETOS", "TARGETARCH", "TARGETPLATFORM", "TARGETVARIANT":
+		return true
 	default:
 		return false
 	}
@@ -197,27 +199,101 @@ func (s *SourceBuild) validate(failContext ...string) (retErr error) {
 	return
 }
 
-// LoadSpec loads a spec from the given data.
-// env is a map of environment variables to use for shell-style expansion in the spec.
-func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
-	var spec Spec
-	if err := yaml.Unmarshal(dt, &spec); err != nil {
-		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
-	}
-
+func (s *Spec) SubstituteArgs(env map[string]string) error {
 	lex := shell.NewLex('\\')
 
 	args := make(map[string]string)
-	for k, v := range spec.Args {
+	for k, v := range s.Args {
 		args[k] = v
 	}
 	for k, v := range env {
 		if _, ok := args[k]; !ok {
 			if !knownArg(k) {
-				return nil, fmt.Errorf("unknown arg %q", k)
+				return fmt.Errorf("unknown arg %q", k)
 			}
 		}
 		args[k] = v
+	}
+
+	for name, src := range s.Sources {
+		if err := src.validate(); err != nil {
+			return fmt.Errorf("error validating source ref %q: %w", name, err)
+		}
+
+		fillDefaults(&src)
+
+		if err := src.substituteBuildArgs(args); err != nil {
+			return fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
+		}
+		if src.DockerImage != nil {
+			if err := src.DockerImage.Cmd.processBuildArgs(lex, args, name); err != nil {
+				return fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
+			}
+		}
+		s.Sources[name] = src
+	}
+
+	updated, err := lex.ProcessWordWithMap(s.Version, args)
+	if err != nil {
+		return fmt.Errorf("error performing shell expansion on version: %w", err)
+	}
+	s.Version = updated
+
+	updated, err = lex.ProcessWordWithMap(s.Revision, args)
+	if err != nil {
+		return fmt.Errorf("error performing shell expansion on revision: %w", err)
+	}
+	s.Revision = updated
+
+	for k, v := range s.Build.Env {
+		updated, err := lex.ProcessWordWithMap(v, args)
+		if err != nil {
+			return fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
+		}
+		s.Build.Env[k] = updated
+	}
+
+	for i, step := range s.Build.Steps {
+		bs := &step
+		if err := bs.processBuildArgs(lex, args, i); err != nil {
+			return fmt.Errorf("error performing shell expansion on build step %d: %w", i, err)
+		}
+		s.Build.Steps[i] = *bs
+	}
+
+	for _, t := range s.Tests {
+		if err := t.processBuildArgs(lex, args, t.Name); err != nil {
+			return err
+		}
+	}
+
+	for name, target := range s.Targets {
+		for _, t := range target.Tests {
+			if err := t.processBuildArgs(lex, args, path.Join(name, t.Name)); err != nil {
+				return err
+			}
+		}
+	}
+
+	for k, patches := range s.Patches {
+		for i, ps := range patches {
+			if ps.Strip != nil {
+				continue
+			}
+			strip := DefaultPatchStrip
+			s.Patches[k][i].Strip = &strip
+		}
+	}
+
+	return nil
+}
+
+// LoadSpec loads a spec from the given data.
+// env is a map of environment variables to use for shell-style expansion in the spec.
+func LoadSpec(dt []byte) (*Spec, error) {
+	var spec Spec
+	if err := yaml.Unmarshal(dt, &spec); err != nil {
+		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
 	}
 
 	for name, src := range spec.Sources {
@@ -226,69 +302,6 @@ func LoadSpec(dt []byte, env map[string]string) (*Spec, error) {
 		}
 
 		fillDefaults(&src)
-
-		if err := src.substituteBuildArgs(args); err != nil {
-			return nil, fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
-		}
-		if src.DockerImage != nil {
-			if err := src.DockerImage.Cmd.processBuildArgs(lex, args, name); err != nil {
-				return nil, fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
-			}
-		}
-		spec.Sources[name] = src
-	}
-
-	updated, err := lex.ProcessWordWithMap(spec.Version, args)
-	if err != nil {
-		return nil, fmt.Errorf("error performing shell expansion on version: %w", err)
-	}
-	spec.Version = updated
-
-	updated, err = lex.ProcessWordWithMap(spec.Revision, args)
-	if err != nil {
-		return nil, fmt.Errorf("error performing shell expansion on revision: %w", err)
-	}
-	spec.Revision = updated
-
-	for k, v := range spec.Build.Env {
-		updated, err := lex.ProcessWordWithMap(v, args)
-		if err != nil {
-			return nil, fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
-		}
-		spec.Build.Env[k] = updated
-
-	}
-
-	for i, step := range spec.Build.Steps {
-		s := &step
-		if err := s.processBuildArgs(lex, args, i); err != nil {
-			return nil, fmt.Errorf("error performing shell expansion on build step %d: %w", i, err)
-		}
-		spec.Build.Steps[i] = *s
-	}
-
-	for _, t := range spec.Tests {
-		if err := t.processBuildArgs(lex, args, t.Name); err != nil {
-			return nil, err
-		}
-	}
-
-	for name, target := range spec.Targets {
-		for _, t := range target.Tests {
-			if err := t.processBuildArgs(lex, args, path.Join(name, t.Name)); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	for k, patches := range spec.Patches {
-		for i, ps := range patches {
-			if ps.Strip != nil {
-				continue
-			}
-			strip := DefaultPatchStrip
-			spec.Patches[k][i].Strip = &strip
-		}
 	}
 
 	return &spec, spec.Validate()
