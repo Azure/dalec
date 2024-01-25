@@ -1,5 +1,5 @@
 # syntax=mcr.microsoft.com/oss/moby/dockerfile:1.6.0
-FROM mcr.microsoft.com/cbl-mariner/base/core:2.0 AS toolchain
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0@sha256:c50a804cc7918e1011ec2fee33d88fdfdd2a7007cda62684da90bed912ffb758 AS toolchain
 RUN \
     --mount=type=cache,target=/var/cache/tdnf,id=mariner2-tdnf-cache \
     tdnf install -y \
