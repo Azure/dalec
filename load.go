@@ -18,6 +18,13 @@ func knownArg(key string) bool {
 		return true
 	case "DALEC_DISABLE_DIFF_MERGE":
 		return true
+	}
+
+	return platformArg(key)
+}
+
+func platformArg(key string) bool {
+	switch key {
 	case "TARGETOS", "TARGETARCH", "TARGETPLATFORM", "TARGETVARIANT":
 		return true
 	default:
@@ -216,7 +223,12 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 			if !knownArg(k) {
 				return fmt.Errorf("unknown arg %q", k)
 			}
+
+			// if the build arg isn't present in args by opt-in, skip
+			// and don't automatically inject a value
+			continue
 		}
+
 		args[k] = v
 	}
 
