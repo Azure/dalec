@@ -3,7 +3,7 @@ group "default" {
 }
 
 group "test" {
-    targets = ["test-fixture", "runc-test", "test-deps-only", "test-multiplatform"]
+    targets = ["test-fixture", "runc-test", "test-deps-only"]
 }
 
 variable "FRONTEND_REF" {
@@ -150,28 +150,6 @@ target "test-fixture" {
     target = tgt
     cache-from = ["type=gha,scope=dalec/${f}/${tgt}/${f}"]
     cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/${f}/${tgt}/${f},mode=max"] : []
-}
-
-target "test-multiplatform" {
-    name = "test-multiplatform-${f}-${replace(plat, "/", "-")}"
-    matrix = {
-        plat = ["linux/amd64", "linux/arm32/v5", "windows/amd64"]
-        f = ["platform-vars"]
-        tgt = ["mariner2/container"]
-    }
-    contexts = {
-        "mariner2-toolchain" = get_mariner2_toolchain()
-    }
-    dockerfile = "test/fixtures/${f}-${replace(plat, "/", "-")}.yml"
-
-    args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
-        "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
-    }
-    platforms = ["${plat}"]
-    target = tgt
-    cache-from = ["type=gha,scope=dalec/${f}/${tgt}/${f}/${plat}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/${f}/${tgt}/${f}/${plat},mode=max"] : []
 }
 
 variable "BUILD_SPEC" {

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/containerd/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
@@ -159,6 +160,12 @@ func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
 		opt(&sr)
 	}
 	return sr
+}
+
+func withPlatform(ctx context.Context, t *testing.T, platform platforms.Platform) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		sr.FrontendOpt["platform"] = platforms.Format(platform)
+	}
 }
 
 func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {

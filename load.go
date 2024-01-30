@@ -25,7 +25,8 @@ func knownArg(key string) bool {
 
 func platformArg(key string) bool {
 	switch key {
-	case "TARGETOS", "TARGETARCH", "TARGETPLATFORM", "TARGETVARIANT":
+	case "TARGETOS", "TARGETARCH", "TARGETPLATFORM", "TARGETVARIANT",
+		"BUILDOS", "BUILDARCH", "BUILDPLATFORM", "BUILDVARIANT":
 		return true
 	default:
 		return false
