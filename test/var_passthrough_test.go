@@ -139,7 +139,7 @@ func Test_PassthroughVars(t *testing.T) {
 				specBytes := readFile(ctx, t, "spec.yml", res)
 
 				var resolvedSpec dalec.Spec
-				yaml.Unmarshal(specBytes, &resolvedSpec)
+				err = yaml.Unmarshal(specBytes, &resolvedSpec)
 				if err != nil {
 					return nil, err
 				}
