@@ -229,12 +229,6 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	}
 
 	for name, src := range s.Sources {
-		if err := src.validate(); err != nil {
-			return fmt.Errorf("error validating source ref %q: %w", name, err)
-		}
-
-		fillDefaults(&src)
-
 		if err := src.substituteBuildArgs(args); err != nil {
 			return fmt.Errorf("error performing shell expansion on source %q: %w", name, err)
 		}
@@ -288,16 +282,6 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 		}
 	}
 
-	for k, patches := range s.Patches {
-		for i, ps := range patches {
-			if ps.Strip != nil {
-				continue
-			}
-			strip := DefaultPatchStrip
-			s.Patches[k][i].Strip = &strip
-		}
-	}
-
 	return nil
 }
 
@@ -309,15 +293,12 @@ func LoadSpec(dt []byte) (*Spec, error) {
 		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
 	}
 
-	for name, src := range spec.Sources {
-		if err := src.validate(); err != nil {
-			return nil, fmt.Errorf("error validating source ref %q: %w", name, err)
-		}
-
-		fillDefaults(&src)
+	if err := spec.Validate(); err != nil {
+		return nil, err
 	}
+	withFilledDefaults := spec.FillDefaults()
 
-	return &spec, spec.Validate()
+	return &withFilledDefaults, nil
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {
@@ -361,8 +342,30 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 	return nil
 }
 
+func (s Spec) FillDefaults() Spec {
+	for _, src := range s.Sources {
+		fillDefaults(&src)
+	}
+
+	for k, patches := range s.Patches {
+		for i, ps := range patches {
+			if ps.Strip != nil {
+				continue
+			}
+			strip := DefaultPatchStrip
+			s.Patches[k][i].Strip = &strip
+		}
+	}
+
+	return s
+}
+
 func (s Spec) Validate() error {
 	for name, src := range s.Sources {
+		if err := src.validate(); err != nil {
+			return fmt.Errorf("error validating source ref %q: %w", name, err)
+		}
+
 		if src.DockerImage != nil && src.DockerImage.Cmd != nil {
 			for p, cfg := range src.DockerImage.Cmd.CacheDirs {
 				if _, err := sharingMode(cfg.Mode); err != nil {
