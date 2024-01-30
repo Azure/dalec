@@ -37,7 +37,7 @@ func getBuildPlatform(ctx context.Context, t *testing.T) *platforms.Platform {
 	return p
 }
 
-func Test_PassthroughVars(t *testing.T) {
+func TestPassthroughVars(t *testing.T) {
 	runTest := func(t *testing.T, f gwclient.BuildFunc) {
 		t.Helper()
 		ctx := startTestSpan(t)
