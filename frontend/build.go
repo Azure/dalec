@@ -60,25 +60,33 @@ func makeRequestHandler(target string) dockerui.RequestHandler {
 	return h
 }
 
-var PassthroughGetters = map[string]func(ocispecs.Platform) string{
-	"TARGETOS": func(p ocispecs.Platform) string {
-		return p.OS
-	},
-	"TARGETARCH": func(p ocispecs.Platform) string {
-		return p.Architecture
-	},
-	"TARGETVARIANT": func(p ocispecs.Platform) string {
-		return p.Variant
-	},
-	"TARGETPLATFORM": func(p ocispecs.Platform) string {
-		return platforms.Format(p)
-	},
+func getOS(platform ocispecs.Platform) string {
+	return platform.OS
 }
 
-func fillPlatformArgs(args map[string]string, platform ocispecs.Platform) map[string]string {
+func getArch(platform ocispecs.Platform) string {
+	return platform.Architecture
+}
+
+func getVariant(platform ocispecs.Platform) string {
+	return platform.Variant
+}
+
+func getPlatformFormat(platform ocispecs.Platform) string {
+	return platforms.Format(platform)
+}
+
+var passthroughGetters = map[string]func(ocispecs.Platform) string{
+	"OS":       getOS,
+	"ARCH":     getArch,
+	"VARIANT":  getVariant,
+	"PLATFORM": getPlatformFormat,
+}
+
+func fillPlatformArgs(prefix string, args map[string]string, platform ocispecs.Platform) map[string]string {
 	args = dalec.DuplicateMap(args)
-	for v, getter := range PassthroughGetters {
-		args[v] = getter(platform)
+	for attr, getter := range passthroughGetters {
+		args[prefix+attr] = getter(platform)
 	}
 
 	return args
@@ -126,14 +134,22 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	}
 
 	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
-		var targetPlatform ocispecs.Platform
+		var targetPlatform, buildPlatform ocispecs.Platform
 		if platform != nil {
 			targetPlatform = *platform
 		} else {
 			targetPlatform = platforms.DefaultSpec()
 		}
 
-		args := fillPlatformArgs(bc.BuildArgs, targetPlatform)
+		// the dockerui client, given the current implementation, should only ever have
+		// a single build platform
+		if len(bc.BuildPlatforms) != 1 {
+			return nil, nil, fmt.Errorf("expected exactly one build platform, got %d", len(bc.BuildPlatforms))
+		}
+		buildPlatform = bc.BuildPlatforms[0]
+
+		args := fillPlatformArgs("TARGET", bc.BuildArgs, targetPlatform)
+		args = fillPlatformArgs("BUILD", args, buildPlatform)
 		if err := spec.SubstituteArgs(args); err != nil {
 			return nil, nil, err
 		}
