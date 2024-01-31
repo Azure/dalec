@@ -83,13 +83,10 @@ var passthroughGetters = map[string]func(ocispecs.Platform) string{
 	"PLATFORM": getPlatformFormat,
 }
 
-func fillPlatformArgs(prefix string, args map[string]string, platform ocispecs.Platform) map[string]string {
-	args = dalec.DuplicateMap(args)
+func fillPlatformArgs(prefix string, args map[string]string, platform ocispecs.Platform) {
 	for attr, getter := range passthroughGetters {
 		args[prefix+attr] = getter(platform)
 	}
-
-	return args
 }
 
 // Build is the main entrypoint for the dalec frontend.
@@ -148,8 +145,9 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 		buildPlatform = bc.BuildPlatforms[0]
 
-		args := fillPlatformArgs("TARGET", bc.BuildArgs, targetPlatform)
-		args = fillPlatformArgs("BUILD", args, buildPlatform)
+		args := dalec.DuplicateMap(bc.BuildArgs)
+		fillPlatformArgs("TARGET", args, targetPlatform)
+		fillPlatformArgs("BUILD", args, buildPlatform)
 		if err := spec.SubstituteArgs(args); err != nil {
 			return nil, nil, err
 		}

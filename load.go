@@ -286,7 +286,6 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 }
 
 // LoadSpec loads a spec from the given data.
-// env is a map of environment variables to use for shell-style expansion in the spec.
 func LoadSpec(dt []byte) (*Spec, error) {
 	var spec Spec
 	if err := yaml.Unmarshal(dt, &spec); err != nil {
@@ -296,9 +295,9 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	if err := spec.Validate(); err != nil {
 		return nil, err
 	}
-	withFilledDefaults := spec.FillDefaults()
+	spec.FillDefaults()
 
-	return &withFilledDefaults, nil
+	return &spec, nil
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {
@@ -342,9 +341,10 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 	return nil
 }
 
-func (s Spec) FillDefaults() Spec {
-	for _, src := range s.Sources {
+func (s *Spec) FillDefaults() {
+	for name, src := range s.Sources {
 		fillDefaults(&src)
+		s.Sources[name] = src
 	}
 
 	for k, patches := range s.Patches {
@@ -356,8 +356,6 @@ func (s Spec) FillDefaults() Spec {
 			s.Patches[k][i].Strip = &strip
 		}
 	}
-
-	return s
 }
 
 func (s Spec) Validate() error {
