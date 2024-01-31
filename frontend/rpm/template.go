@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"slices"
+	"golang.org/x/exp/slices"
 	"sort"
 	"strings"
 	"text/template"

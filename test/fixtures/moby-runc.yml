@@ -17,6 +17,7 @@ vendor: Moby
 
 targets: # Distro specific build requirements
   jammy:
+    image:
     dependencies:
       build:
         libseccomp-dev:
@@ -34,9 +35,6 @@ targets: # Distro specific build requirements
             - ">= 2.3"
 
   mariner2:
-    image:
-      entrypoint: runc
-      cmd: --help
     dependencies:
       build:
         libseccomp-devel:
@@ -117,3 +115,7 @@ tests:
             - "libseccomp: "
         stderr:
           empty: true
+
+image:
+  entrypoint: runc
+  cmd: --help

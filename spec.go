@@ -534,3 +534,15 @@ func GetDeps(spec *Spec, target string) *PackageDependencies {
 	}
 	return spec.Dependencies
 }
+
+func GetOutputBaseImageRef(spec *Spec, target string) string {
+	if t, ok := spec.Targets[target]; ok {
+		if t.Image != nil {
+			return t.Image.Base
+		}
+	}
+	if spec.Image != nil {
+		return spec.Image.Base
+	}
+	return ""
+}

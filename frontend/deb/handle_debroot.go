@@ -96,8 +96,6 @@ func createBuildScript(spec *dalec.Spec) llb.State {
 	buf := bytes.NewBuffer(nil)
 
 	fmt.Fprintln(buf, "#!/usr/bin/env sh")
-	fmt.Fprintln(buf, "ls -lh")
-	fmt.Fprintln(buf, "echo $(pwd)")
 
 	for i, step := range spec.Build.Steps {
 		fmt.Fprintln(buf, "(")

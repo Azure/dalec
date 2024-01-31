@@ -3,7 +3,7 @@ package jammy
 import (
 	"context"
 	"path/filepath"
-	"slices"
+	"golang.org/x/exp/slices"
 	"strings"
 
 	"github.com/Azure/dalec"

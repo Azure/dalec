@@ -3,7 +3,7 @@ package test
 import (
 	"bytes"
 	"context"
-	"slices"
+	"golang.org/x/exp/slices"
 	"strings"
 	"testing"
 

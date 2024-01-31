@@ -8,7 +8,6 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/pkg/errors"
 )
 
 const jammyRef = "ubuntu:jammy"
@@ -24,25 +23,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	if spec.Image != nil && spec.Image.Base != "" {
-		return nil, nil, errors.Errorf("custom base images are not supported")
-	}
-
-	worker := workerImg(sOpt).
-		Run(
-			shArgs("apt-get update && apt-get install -y apt-utils mmdebstrap"),
-			varCacheAptMount,
-			varLibAptMount,
-		).Root()
-
-	work := worker.
-		Run(
-			shArgs("apt-get update && mmdebstrap --variant=custom --mode=chrootless --include="+spec.Name+" jammy /tmp/rootfs /etc/apt/sources.list && rm -rf /tmp/rootfs/var/lib/apt && rm -rf /tmp/rootfs/var/cache/apt"),
-			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
-			addAptRepoForDeb(worker, deb, spec),
-		)
-
-	st := work.AddMount("/tmp/rootfs", llb.Scratch())
+	st := buildImageRootfs(spec, sOpt, deb)
 
 	def, err := st.Marshal(ctx)
 	if err != nil {
@@ -56,7 +37,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	platform, err := worker.GetPlatform(ctx)
+	platform, err := workerImg(sOpt).GetPlatform(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -76,6 +57,47 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	}
 
 	return ref, img, err
+}
+
+func buildImageRootfs(spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State) llb.State {
+	base := dalec.GetOutputBaseImageRef(spec, targetKey)
+
+	worker := workerImg(sOpt).
+		Run(
+			shArgs("apt-get update && apt-get install -y apt-utils mmdebstrap"),
+		).
+		Root()
+
+	repoMount := addAptRepoForDeb(worker, deb, spec)
+
+	if base == "" {
+		return boostrapRootfs(worker, repoMount, spec)
+	}
+
+	baseImg := llb.Image(base, llb.WithMetaResolver(sOpt.Resolver))
+	return buildRootfsFromBase(baseImg, repoMount, spec)
+}
+
+// buildRootfsFromBase creates a rootfs from a base image and installs the built package and all its runtime dependencies
+// This requires apt-get and /bin/sh to be installed in the base image
+func buildRootfsFromBase(base llb.State, repoMount llb.RunOption, spec *dalec.Spec) llb.State {
+	return base.Run(
+		shArgs("apt-get update && apt-get install -y "+spec.Name),
+		varCacheAptMount,
+		varLibAptMount,
+		repoMount,
+	).Root()
+}
+
+// bootstrapRootfs creates a rootfs from scratch using the built package and all its runtime dependencies
+func boostrapRootfs(worker llb.State, repoMount llb.RunOption, spec *dalec.Spec) llb.State {
+	return worker.
+		Run(
+			shArgs("apt-get update && mmdebstrap --variant=custom --mode=chrootless --include="+spec.Name+" jammy /tmp/rootfs /etc/apt/sources.list && rm -rf /tmp/rootfs/var/lib/apt && rm -rf /tmp/rootfs/var/cache/apt"),
+			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
+			repoMount,
+		).
+		AddMount("/tmp/rootfs", llb.Scratch())
 }
 
 func addAptRepoForDeb(base llb.State, deb llb.State, spec *dalec.Spec) llb.RunOption {

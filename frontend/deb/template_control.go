@@ -3,7 +3,7 @@ package deb
 import (
 	"fmt"
 	"io"
-	"slices"
+	"golang.org/x/exp/slices"
 	"strings"
 	"text/template"
 
