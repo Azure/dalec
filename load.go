@@ -30,16 +30,19 @@ func (s *Source) substituteBuildArgs(args map[string]string) error {
 
 	switch {
 	case s.DockerImage != nil:
-		for _, mnt := range s.DockerImage.Cmd.Mounts {
-			if err := mnt.Spec.substituteBuildArgs(args); err != nil {
-				return err
-			}
-		}
 		updated, err := lex.ProcessWordWithMap(s.DockerImage.Ref, args)
 		if err != nil {
 			return err
 		}
 		s.DockerImage.Ref = updated
+
+		if s.DockerImage.Cmd != nil {
+			for _, mnt := range s.DockerImage.Cmd.Mounts {
+				if err := mnt.Spec.substituteBuildArgs(args); err != nil {
+					return err
+				}
+			}
+		}
 	case s.Git != nil:
 		updated, err := lex.ProcessWordWithMap(s.Git.URL, args)
 		if err != nil {
@@ -88,8 +91,10 @@ func (s *Source) substituteBuildArgs(args map[string]string) error {
 func fillDefaults(s *Source) {
 	switch {
 	case s.DockerImage != nil:
-		for _, mnt := range s.DockerImage.Cmd.Mounts {
-			fillDefaults(&mnt.Spec)
+		if s.DockerImage.Cmd != nil {
+			for _, mnt := range s.DockerImage.Cmd.Mounts {
+				fillDefaults(&mnt.Spec)
+			}
 		}
 	case s.Git != nil:
 	case s.HTTP != nil:
