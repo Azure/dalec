@@ -29,7 +29,7 @@ sources:
 
 dependencies:
   build:
-    golang: []
+    golang:
 
 build:
   env:

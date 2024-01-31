@@ -89,7 +89,7 @@ func addAptRepoForDeb(base llb.State, deb llb.State, spec *dalec.Spec) llb.RunOp
 
 		sources := base.
 			Run(
-				shArgs("set -e; echo 'deb [trusted=yes] file:/tmp/_dalec_apt_repo_deb/ /' > /tmp/sources/list; cat /etc/apt/sources.list >> /tmp/sources/list"),
+				shArgs("set -e; echo 'deb [trusted=yes] copy:/tmp/_dalec_apt_repo_deb/ /' > /tmp/sources/list; cat /etc/apt/sources.list >> /tmp/sources/list"),
 			).
 			AddMount("/tmp/sources", llb.Scratch())
 
