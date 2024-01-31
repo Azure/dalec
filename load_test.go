@@ -284,10 +284,16 @@ func TestSourceFillDefaults(t *testing.T) {
 			if err := src.validate(); err != nil {
 				t.Fatal(err)
 			}
+			spec := &Spec{
+				Sources: map[string]Source{
+					"test": src,
+				},
+			}
 
-			fillDefaults(&src)
+			spec.FillDefaults()
+			filledSrc := spec.Sources["test"]
 
-			if !reflect.DeepEqual(src, expected) {
+			if !reflect.DeepEqual(filledSrc, expected) {
 				s, err := json.MarshalIndent(&src, "", "\t")
 				if err != nil {
 					t.Fatal(err)

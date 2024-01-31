@@ -162,7 +162,7 @@ func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
 	return sr
 }
 
-func withPlatform(ctx context.Context, t *testing.T, platform platforms.Platform) srOpt {
+func withPlatform(platform platforms.Platform) srOpt {
 	return func(sr *gwclient.SolveRequest) {
 		sr.FrontendOpt["platform"] = platforms.Format(platform)
 	}
