@@ -214,15 +214,15 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			}
 
 			if !isDir {
-				fmt.Fprintf(b, "cp -a %%{_sourcedir}/%s .\n", name)
+				fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", name)
 				return nil
 			}
 
-			fmt.Fprintf(b, "mkdir -p %%{_builddir}/%s\n", name)
-			fmt.Fprintf(b, "tar -C %%{_builddir}/%s -xzf %%{_sourcedir}/%s.tar.gz\n", name, name)
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", name)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", name, name)
 
 			for _, patch := range w.Spec.Patches[name] {
-				fmt.Fprintf(b, "patch -d %q -p%d -s < %%{_sourcedir}/%s\n", name, *patch.Strip, patch.Source)
+				fmt.Fprintf(b, "patch -d %q -p%d -s < \"%%{_sourcedir}/%s\"\n", name, *patch.Strip, patch.Source)
 			}
 			return nil
 		}(name, src)
