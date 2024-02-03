@@ -12,6 +12,22 @@ import (
 	"github.com/pkg/errors"
 )
 
+// InvalidSourceError is an error type returned when a source is invalid.
+type InvalidSourceError struct {
+	Name string
+	Err  error
+}
+
+func (s *InvalidSourceError) Error() string {
+	return fmt.Sprintf("invalid source %s: %v", s.Name, s.Err)
+}
+
+func (s *InvalidSourceError) Unwrap() error {
+	return s.Err
+}
+
+var sourceNamePathSeparatorError = errors.New("source name must not container path separator")
+
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 
 type ForwarderFunc func(llb.State, *SourceBuild) (llb.State, error)

@@ -3,6 +3,7 @@ package dalec
 import (
 	goerrors "errors"
 	"fmt"
+	"os"
 	"path"
 	"strings"
 
@@ -363,14 +364,17 @@ func (s *Spec) FillDefaults() {
 
 func (s Spec) Validate() error {
 	for name, src := range s.Sources {
+		if strings.ContainsRune(name, os.PathSeparator) {
+			return &InvalidSourceError{Name: name, Err: sourceNamePathSeparatorError}
+		}
 		if err := src.validate(); err != nil {
-			return fmt.Errorf("error validating source ref %q: %w", name, err)
+			return &InvalidSourceError{Name: name, Err: fmt.Errorf("error validating source ref %q: %w", name, err)}
 		}
 
 		if src.DockerImage != nil && src.DockerImage.Cmd != nil {
 			for p, cfg := range src.DockerImage.Cmd.CacheDirs {
 				if _, err := sharingMode(cfg.Mode); err != nil {
-					return errors.Wrapf(err, "invalid sharing mode for source %q with cache mount at path %q", name, p)
+					return &InvalidSourceError{Name: name, Err: errors.Wrapf(err, "invalid sharing mode for source %q with cache mount at path %q", name, p)}
 				}
 			}
 		}
