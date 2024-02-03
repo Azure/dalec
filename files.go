@@ -92,7 +92,7 @@ func (s *SourceInlineDir) validate() error {
 
 	for k, f := range s.Files {
 		if strings.ContainsRune(k, os.PathSeparator) {
-			errs = append(errs, errors.Errorf("file name %q must not contain path separator", k))
+			errs = append(errs, errors.Wrapf(sourceNamePathSeparatorError, "file %q", k))
 		}
 		if err := f.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "file %q", k))

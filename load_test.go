@@ -2,6 +2,7 @@ package dalec
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -381,5 +382,35 @@ sources:
 				}
 			}
 		})
+	}
+}
+
+func TestSourceNameWithPathSeparator(t *testing.T) {
+	spec := &Spec{
+		Sources: map[string]Source{
+			"forbidden/name": {
+				Inline: &SourceInline{
+					File: &SourceInlineFile{},
+				},
+			},
+		},
+	}
+
+	err := spec.Validate()
+	if err == nil {
+		t.Fatal("expected error, but received none")
+	}
+
+	var expected *InvalidSourceError
+	if !errors.As(err, &expected) {
+		t.Fatalf("expected %T, got %T", expected, err)
+	}
+
+	if expected.Name != "forbidden/name" {
+		t.Error("expected error to contain source name")
+	}
+
+	if !errors.Is(err, sourceNamePathSeparatorError) {
+		t.Errorf("expected error to be sourceNamePathSeparatorError, got: %v", err)
 	}
 }
