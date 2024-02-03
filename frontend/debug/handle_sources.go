@@ -19,14 +19,15 @@ func HandleSources(ctx context.Context, gwc client.Client, spec *dalec.Spec) (cl
 
 	sources := make([]llb.State, 0, len(spec.Sources))
 	for name, src := range spec.Sources {
+		name := name
+		src := src
 		f := dalec.Source2LLBGetter(spec, src, name)
 		st, err := f(sOpt)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		to := llb.Scratch().File(llb.Mkdir("/"+name, 0o755, llb.WithParents(true)))
-		sources = append(sources, to.File(llb.Copy(st, "/", "/"+name, dalec.WithDirContentsOnly())))
+		sources = append(sources, st)
 	}
 
 	def, err := dalec.MergeAtPath(llb.Scratch(), sources, "/").Marshal(ctx)
