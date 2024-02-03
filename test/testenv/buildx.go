@@ -18,6 +18,7 @@ import (
 	"github.com/cpuguy83/go-docker/container"
 	"github.com/cpuguy83/go-docker/transport"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/solver/pb"
 	pkgerrors "github.com/pkg/errors"
 
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -233,6 +234,21 @@ type FrontendSpec struct {
 	Build gwclient.BuildFunc
 }
 
+// withResolveLocal tells buildkit to prefer local images when resolving image references.
+// This prevents uneccessary API requests to registries.
+func withResolveLocal(so *client.SolveOpt) {
+	if so.FrontendAttrs == nil {
+		so.FrontendAttrs = make(map[string]string)
+	}
+
+	if _, ok := so.FrontendAttrs[pb.AttrImageResolveMode]; ok {
+		// Don't set it if it's already set.
+		return
+	}
+
+	so.FrontendAttrs[pb.AttrImageResolveMode] = pb.AttrImageResolveModePreferLocal
+}
+
 func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildFunc) {
 	c, err := b.Buildkit(ctx)
 	if err != nil {
@@ -244,6 +260,7 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildF
 	var so client.SolveOpt
 	withProjectRoot(t, &so)
 	withGHCache(t, &so)
+	withResolveLocal(&so)
 
 	_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		gwc = &clientForceDalecWithInput{gwc}
