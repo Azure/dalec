@@ -27,8 +27,8 @@ const (
 	phonyRef = "dalec/integration/frontend/phony"
 )
 
-func startTestSpan(t *testing.T) context.Context {
-	ctx, span := otel.Tracer("").Start(baseCtx, t.Name())
+func startTestSpan(ctx context.Context, t *testing.T) context.Context {
+	ctx, span := otel.Tracer("").Start(ctx, t.Name())
 	t.Cleanup(func() {
 		if t.Failed() {
 			span.SetStatus(codes.Error, "test failed")
@@ -145,8 +145,9 @@ type dirStatAsStringer []*types.Stat
 
 func (d dirStatAsStringer) String() string {
 	var buf bytes.Buffer
+	buf.WriteString("\n")
 	for _, s := range d {
-		fmt.Fprintf(&buf, "%s %s\n", s.GetPath(), fs.FileMode(s.Mode))
+		fmt.Fprintf(&buf, "%s %s %d %d\n", s.GetPath(), fs.FileMode(s.Mode), s.Uid, s.Gid)
 	}
 	return buf.String()
 }
