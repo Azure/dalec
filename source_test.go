@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -393,6 +394,206 @@ func TestSourceContext(t *testing.T) {
 		checkContext(t, ops[0].GetSource(), &src)
 		testWithFilters(t, src)
 	})
+}
+
+func TestSourceInlineFile(t *testing.T) {
+	ctx := context.Background()
+
+	for name, f := range testFiles() {
+		f := f
+		t.Run(name, func(t *testing.T) {
+			src := Source{Inline: &SourceInline{File: f}}
+			ops := getSourceOp(ctx, t, src)
+			if len(ops) != 1 {
+				t.Fatalf("expected 1 op, got %d:\n%s", len(ops), ops)
+			}
+			checkMkfile(t, ops[0].GetFile(), src.Inline.File, "/test")
+		})
+	}
+}
+
+func testFiles() map[string]*SourceInlineFile {
+	empty := func() *SourceInlineFile {
+		return &SourceInlineFile{}
+	}
+
+	modify := func(mods ...func(*SourceInlineFile)) *SourceInlineFile {
+		src := empty()
+		for _, mod := range mods {
+			mod(src)
+		}
+		return src
+	}
+
+	withUID := func(uid int) func(*SourceInlineFile) {
+		return func(s *SourceInlineFile) {
+			s.UID = uid
+		}
+	}
+
+	withGID := func(gid int) func(*SourceInlineFile) {
+		return func(s *SourceInlineFile) {
+			s.GID = gid
+		}
+	}
+
+	withContents := func(contents string) func(*SourceInlineFile) {
+		return func(s *SourceInlineFile) {
+			s.Contents = contents
+		}
+	}
+
+	return map[string]*SourceInlineFile{
+		"empty file":                  modify(),
+		"empty file with uid":         modify(withUID(1000)),
+		"empty file with gid":         modify(withGID(1000)),
+		"empty file with uid and gid": modify(withUID(1000), withGID(1000)),
+		"with contents":               modify(withContents("hello world 1")),
+		"with uid and contents":       modify(withUID(1000), withContents("hello world 2")),
+		"with gid and contents":       modify(withGID(1000), withContents("hello world 3")),
+		"with uid, gid, and contents": modify(withUID(1000), withGID(1000), withContents("hello world 4")),
+	}
+}
+
+func TestSourceInlineDir(t *testing.T) {
+	ctx := context.Background()
+
+	empty := func() *SourceInlineDir {
+		return &SourceInlineDir{}
+	}
+
+	modify := func(mods ...func(*SourceInlineDir)) *SourceInlineDir {
+		src := empty()
+		for _, mod := range mods {
+			mod(src)
+		}
+		return src
+	}
+
+	withDirUID := func(uid int) func(*SourceInlineDir) {
+		return func(s *SourceInlineDir) {
+			s.UID = uid
+		}
+	}
+
+	withDirGID := func(gid int) func(*SourceInlineDir) {
+		return func(s *SourceInlineDir) {
+			s.GID = gid
+		}
+	}
+
+	testDirs := map[string]*SourceInlineDir{
+		"default":          modify(),
+		"with uid":         modify(withDirUID(1000)),
+		"with gid":         modify(withDirGID(1000)),
+		"with uid and gid": modify(withDirUID(1000), withDirGID(1001)),
+	}
+
+	for name, dir := range testDirs {
+		dir := dir
+		t.Run(name, func(t *testing.T) {
+			src := Source{Inline: &SourceInline{Dir: dir}}
+			ops := getSourceOp(ctx, t, src)
+			checkMkdir(t, ops[0].GetFile(), src.Inline.Dir, "/test")
+
+			t.Run("with files", func(t *testing.T) {
+				src.Inline.Dir.Files = testFiles()
+				ops := getSourceOp(ctx, t, src)
+				checkMkdir(t, ops[0].GetFile(), src.Inline.Dir, "/test")
+
+				if len(ops) != len(src.Inline.Dir.Files)+1 {
+					t.Fatalf("expected %d ops, got %d\n%s", len(src.Inline.Dir.Files)+1, len(ops), ops)
+				}
+
+				sorted := SortMapKeys(src.Inline.Dir.Files)
+				for i, name := range sorted {
+					ops := getSourceOp(ctx, t, src)
+					f := src.Inline.Dir.Files[name]
+					checkMkfile(t, ops[i+1].GetFile(), f, filepath.Join("/test", name))
+				}
+			})
+		})
+	}
+}
+
+func checkMkdir(t *testing.T, op *pb.FileOp, src *SourceInlineDir, name string) {
+	if op == nil {
+		t.Fatal("expected dir op")
+	}
+
+	if len(op.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(op.Actions))
+	}
+
+	mkdir := op.Actions[0].GetMkdir()
+	if mkdir == nil {
+		t.Fatalf("expected mkdir action: %v", op.Actions[0])
+	}
+
+	if mkdir.MakeParents {
+		t.Error("expected make parents to be false")
+	}
+
+	if mkdir.GetOwner().User.GetByID() != uint32(src.UID) {
+		t.Errorf("expected uid %d, got %d", src.UID, mkdir.GetOwner().User.GetByID())
+	}
+
+	if mkdir.GetOwner().Group.GetByID() != uint32(src.GID) {
+		t.Errorf("expected gid %d, got %d", src.GID, mkdir.GetOwner().Group.GetByID())
+	}
+
+	xPerms := src.Permissions
+	if xPerms == 0 {
+		xPerms = defaultDirPerms
+	}
+	if os.FileMode(mkdir.Mode) != xPerms {
+		t.Errorf("expected mode %O, got %O", xPerms, os.FileMode(mkdir.Mode))
+	}
+	if mkdir.Path != name {
+		t.Errorf("expected path %q, got %q", name, mkdir.Path)
+	}
+}
+
+func checkMkfile(t *testing.T, op *pb.FileOp, src *SourceInlineFile, name string) {
+	if op == nil {
+		t.Fatal("expected file op")
+	}
+
+	if len(op.Actions) != 1 {
+		t.Fatalf("expected 1 action, got %d", len(op.Actions))
+	}
+
+	mkfile := op.Actions[0].GetMkfile()
+	if mkfile == nil {
+		t.Fatalf("expected mkfile action: %v", op.Actions[0])
+	}
+
+	uid := mkfile.Owner.User.GetByID()
+	if uid != uint32(src.UID) {
+		t.Errorf("expected uid %d, got %d", src.UID, uid)
+	}
+
+	gid := mkfile.Owner.Group.GetByID()
+	if gid != uint32(src.GID) {
+		t.Errorf("expected gid %d, got %d", src.GID, gid)
+	}
+
+	mode := os.FileMode(mkfile.Mode).Perm()
+	xMode := src.Permissions
+	if xMode == 0 {
+		xMode = defaultFilePerms
+	}
+	if mode != xMode {
+		t.Errorf("expected mode %O, got %O", xMode, mode)
+	}
+
+	if string(mkfile.Data) != src.Contents {
+		t.Errorf("expected data %q, got %q", src.Contents, mkfile.Data)
+	}
+
+	if mkfile.Path != name {
+		t.Errorf("expected path %q, got %q", name, mkfile.Path)
+	}
 }
 
 func stubListener(t *testing.T) net.Addr {

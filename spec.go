@@ -225,6 +225,51 @@ type SourceBuild struct {
 	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
 }
 
+// SourceInlineContent is used to specify the content of an inline source.
+type SourceInlineFile struct {
+	// Content is the contents.
+	Contents string `yaml:"content,omitempty" json:"content,omitempty"`
+	// Permissions is the octal file permissions to set on the file.
+	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	// UID is the user ID to set on the directory and all files and directories within it.
+	// UID must be greater than or equal to 0
+	UID int `yaml:"uid,omitempty" json:"uid,omitempty"`
+	// GID is the group ID to set on the directory and all files and directories within it.
+	// UID must be greater than or equal to 0
+	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
+}
+
+// SourceInlineDir is used by by [SourceInline] to represent a filesystem directory.
+type SourceInlineDir struct {
+	// Files is the list of files to include in the directory.
+	// The map key is the name of the file.
+	//
+	// Files with path separators in the key will be rejected.
+	Files map[string]*SourceInlineFile `yaml:"files,omitempty" json:"files,omitempty"`
+	// Permissions is the octal permissions to set on the directory.
+	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+
+	// UID is the user ID to set on the directory and all files and directories within it.
+	// UID must be greater than or equal to 0
+	UID int `yaml:"uid,omitempty" json:"uid,omitempty"`
+	// GID is the group ID to set on the directory and all files and directories within it.
+	// UID must be greater than or equal to 0
+	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
+}
+
+// SourceInline is used to generate a source from inline content.
+type SourceInline struct {
+	// File is the inline file to generate.
+	// File is treated as a literal single file.
+	// [SourceIsDir] will return false when this is set.
+	// This is mutally exclusive with [Dir]
+	File *SourceInlineFile `yaml:"file,omitempty" json:"file,omitempty"`
+	// Dir creates a directory with the given files and directories.
+	// [SourceIsDir] will return true when this is set.
+	// This is mutally exclusive with [File]
+	Dir *SourceInlineDir `yaml:"dir,omitempty" json:"dir,omitempty"`
+}
+
 // Command is used to execute a command to generate a source from a docker image.
 type Command struct {
 	// Dir is the working directory to run the command in.
@@ -256,6 +301,7 @@ type Source struct {
 	HTTP        *SourceHTTP        `yaml:"http,omitempty" json:"http,omitempty"`
 	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
 	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
+	Inline      *SourceInline      `yaml:"inline,omitempty" json:"inline,omitempty"`
 	// === End Source Variants ===
 
 	// Path is the path to the source after fetching it based on the identifier.

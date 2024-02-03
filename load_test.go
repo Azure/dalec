@@ -3,6 +3,7 @@ package dalec
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -129,6 +130,83 @@ func TestSourceValidation(t *testing.T) {
 				},
 			},
 		},
+		{
+			title:     "has inline file and files set",
+			expectErr: true,
+			src: Source{
+				Inline: &SourceInline{
+					File: &SourceInlineFile{},
+					Dir:  &SourceInlineDir{},
+				},
+			},
+		},
+		{
+			title:     "has path separator in inline nested file name",
+			expectErr: true,
+			src: Source{
+				Inline: &SourceInline{
+					Dir: &SourceInlineDir{
+						Files: map[string]*SourceInlineFile{
+							"file/with/slash": {},
+						},
+					},
+				},
+			},
+		},
+		{
+			title:     "inline dir has negative UID",
+			expectErr: true,
+			src: Source{
+				Inline: &SourceInline{
+					Dir: &SourceInlineDir{
+						UID: -1,
+					},
+				},
+			},
+		},
+		{
+			title:     "inline dir has negative GID",
+			expectErr: true,
+			src: Source{
+				Inline: &SourceInline{
+					Dir: &SourceInlineDir{
+						GID: -1,
+					},
+				},
+			},
+		},
+		{
+			title:     "inline file has negative UID",
+			expectErr: true,
+			src: Source{
+				Inline: &SourceInline{
+					File: &SourceInlineFile{
+						UID: -1,
+					},
+				},
+			},
+		},
+		{
+			title:     "inline file has negative GID",
+			expectErr: true,
+			src: Source{
+				Inline: &SourceInline{
+					File: &SourceInlineFile{
+						GID: -1,
+					},
+				},
+			},
+		},
+		{
+			title:     "inline file has path set",
+			expectErr: true,
+			src: Source{
+				Path: "subpath",
+				Inline: &SourceInline{
+					File: &SourceInlineFile{},
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -250,6 +328,58 @@ func TestSourceFillDefaults(t *testing.T) {
 				t.Fatalf("\nactual: %s\n-------------\nexpected: %s", string(s), string(e))
 			}
 
+		})
+	}
+}
+
+func TestSourceInlineUnmarshalling(t *testing.T) {
+	yaml := `
+sources:
+	TestFileOctelPreGo113:
+		inline:
+			file:
+				contents: Hello world!
+				permissions: 0644
+	TestFileOctelGo113:
+		inline:
+			file:
+				contents: Hello world!
+				permissions: 0o644
+	TestDirOctelPreGo113:
+		inline:
+			dir:
+				permissions: 0755
+	TestDirOctelGo113:
+		inline:
+			dir:
+				permissions: 0o755
+`
+
+	spec, err := LoadSpec([]byte(yaml))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	contents := "Hello world!"
+	for k, v := range spec.Sources {
+		t.Run(k, func(t *testing.T) {
+			if v.Inline.File != nil {
+				if v.Inline.File.Contents != contents {
+					t.Fatalf("expected %s, got %s", contents, v.Inline.File.Contents)
+				}
+
+				expected := os.FileMode(0o644)
+				if v.Inline.File.Permissions != expected {
+					t.Fatalf("expected %O, got %O", expected, v.Inline.File.Permissions)
+				}
+			}
+
+			if v.Inline.Dir != nil {
+				expected := os.FileMode(0o755)
+				if v.Inline.Dir.Permissions != expected {
+					t.Fatalf("expected %O, got %O", expected, v.Inline.Dir.Permissions)
+				}
+			}
 		})
 	}
 }

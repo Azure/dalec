@@ -114,6 +114,7 @@ func fillDefaults(s *Source) {
 		}
 	case s.Build != nil:
 		fillDefaults(&s.Build.Source)
+	case s.Inline != nil:
 	}
 }
 
@@ -141,9 +142,6 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 
 		count++
 	}
-	if retErr != nil {
-		return retErr
-	}
 
 	if s.Git != nil {
 		count++
@@ -164,6 +162,13 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 			retErr = goerrors.Join(retErr, err)
 		}
 
+		count++
+	}
+
+	if s.Inline != nil {
+		if err := s.Inline.validate(s.Path); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
 		count++
 	}
 
