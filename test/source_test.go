@@ -59,8 +59,8 @@ func testCmdSource(t *testing.T) {
 			return nil, err
 		}
 
-		checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar\n"))
-		checkFile(ctx, t, filepath.Join(sourceName, "hello"), res, []byte("hello\n"))
+		checkFile(ctx, t, "foo", res, []byte("foo bar\n"))
+		checkFile(ctx, t, "hello", res, []byte("hello\n"))
 
 		return gwclient.NewResult(), nil
 	})
