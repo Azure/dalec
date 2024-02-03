@@ -97,6 +97,8 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.Const
 			s = src.Context.Name
 		case src.Build != nil:
 			s = fmt.Sprintf("%v", src.Build.Source)
+		case src.Inline != nil:
+			s = "inline"
 		default:
 			return nil, fmt.Errorf("no non-nil source provided")
 		}

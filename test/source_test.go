@@ -2,18 +2,13 @@ package test
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/Azure/dalec"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
-func TestSources(t *testing.T) {
-	t.Run("cmd source", testCmdSource)
-}
-
-func testCmdSource(t *testing.T) {
+func TestSourceCmd(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)

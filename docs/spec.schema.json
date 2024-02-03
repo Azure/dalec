@@ -424,6 +424,9 @@
 				"build": {
 					"$ref": "#/$defs/SourceBuild"
 				},
+				"inline": {
+					"$ref": "#/$defs/SourceInline"
+				},
 				"path": {
 					"type": "string",
 					"description": "Path is the path to the source after fetching it based on the identifier."
@@ -538,6 +541,70 @@
 				"url"
 			],
 			"description": "No longer supports `.git` URLs as git repos."
+		},
+		"SourceInline": {
+			"properties": {
+				"file": {
+					"$ref": "#/$defs/SourceInlineFile",
+					"description": "File is the inline file to generate.\nFile is treated as a literal single file.\n[SourceIsDir] will return false when this is set.\nThis is mutally exclusive with [Dir]"
+				},
+				"dir": {
+					"$ref": "#/$defs/SourceInlineDir",
+					"description": "Dir creates a directory with the given files and directories.\n[SourceIsDir] will return true when this is set.\nThis is mutally exclusive with [File]"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "SourceInline is used to generate a source from inline content."
+		},
+		"SourceInlineDir": {
+			"properties": {
+				"files": {
+					"additionalProperties": {
+						"$ref": "#/$defs/SourceInlineFile"
+					},
+					"type": "object",
+					"description": "Files is the list of files to include in the directory.\nThe map key is the name of the file.\n\nFiles with path separators in the key will be rejected."
+				},
+				"permissions": {
+					"type": "integer",
+					"description": "Permissions is the octal permissions to set on the directory."
+				},
+				"uid": {
+					"type": "integer",
+					"description": "UID is the user ID to set on the directory and all files and directories within it.\nUID must be greater than or equal to 0"
+				},
+				"gid": {
+					"type": "integer",
+					"description": "GID is the group ID to set on the directory and all files and directories within it.\nUID must be greater than or equal to 0"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "SourceInlineDir is used by by [SourceInline] to represent a filesystem directory."
+		},
+		"SourceInlineFile": {
+			"properties": {
+				"content": {
+					"type": "string",
+					"description": "Content is the contents."
+				},
+				"permissions": {
+					"type": "integer",
+					"description": "Permissions is the octal file permissions to set on the file."
+				},
+				"uid": {
+					"type": "integer",
+					"description": "UID is the user ID to set on the directory and all files and directories within it.\nUID must be greater than or equal to 0"
+				},
+				"gid": {
+					"type": "integer",
+					"description": "GID is the group ID to set on the directory and all files and directories within it.\nUID must be greater than or equal to 0"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "SourceInlineContent is used to specify the content of an inline source."
 		},
 		"SourceMount": {
 			"properties": {

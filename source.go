@@ -214,6 +214,11 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			}
 
 			return sOpt.Forward(st, build)
+		case src.Inline != nil:
+			if src.Inline.File != nil {
+				return llb.Scratch().With(src.Inline.File.PopulateAt(name)), nil
+			}
+			return llb.Scratch().With(src.Inline.Dir.PopulateAt(name)), nil
 		default:
 			return llb.Scratch(), errNoSourceVariant
 		}
@@ -248,6 +253,8 @@ func SourceIsDir(src Source) (bool, error) {
 		return true, nil
 	case src.HTTP != nil:
 		return false, nil
+	case src.Inline != nil:
+		return src.Inline.Dir != nil, nil
 	default:
 		return false, fmt.Errorf("unsupported source type")
 	}
@@ -256,7 +263,7 @@ func SourceIsDir(src Source) (bool, error) {
 // Doc returns the details of how the source was created.
 // This should be included, where applicable, in build in build specs (such as RPM spec files)
 // so that others can reproduce the build.
-func (s Source) Doc() (io.Reader, error) {
+func (s Source) Doc(name string) (io.Reader, error) {
 	b := bytes.NewBuffer(nil)
 	switch {
 	case s.Context != nil:
@@ -264,7 +271,7 @@ func (s Source) Doc() (io.Reader, error) {
 	case s.Build != nil:
 		fmt.Fprintln(b, "Generated from a docker build:")
 		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
-		sub, err := s.Build.Source.Doc()
+		sub, err := s.Build.Source.Doc(name)
 		if err != nil {
 			return nil, err
 		}
@@ -357,7 +364,7 @@ func (s Source) Doc() (io.Reader, error) {
 			if len(img.Cmd.Mounts) > 0 {
 				fmt.Fprintln(b, "	With the following items mounted:")
 				for _, src := range img.Cmd.Mounts {
-					sub, err := src.Spec.Doc()
+					sub, err := src.Spec.Doc(name)
 					if err != nil {
 						return nil, err
 					}
@@ -374,6 +381,9 @@ func (s Source) Doc() (io.Reader, error) {
 			}
 			return b, nil
 		}
+	case s.Inline != nil:
+		fmt.Fprintln(b, "Generated from an inline source:")
+		s.Inline.Doc(b, name)
 	default:
 		// This should be unrecable.
 		// We could panic here, but ultimately this is just a doc string and parsing user generated content.

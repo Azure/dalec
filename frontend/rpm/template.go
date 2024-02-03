@@ -157,7 +157,7 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 			ref += ".tar.gz"
 		}
 
-		doc, err := src.Doc()
+		doc, err := src.Doc(name)
 		if err != nil {
 			return nil, fmt.Errorf("error getting doc for source %s: %w", name, err)
 		}
