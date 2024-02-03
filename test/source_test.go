@@ -16,7 +16,7 @@ func TestSources(t *testing.T) {
 func testCmdSource(t *testing.T) {
 	t.Parallel()
 
-	ctx := startTestSpan(t)
+	ctx := startTestSpan(baseCtx, t)
 
 	sourceName := "checkcmd"
 	spec := &dalec.Spec{
