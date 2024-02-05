@@ -30,6 +30,7 @@ targets: # Distro specific build requirements
     dependencies:
       build:
         golang:
+        jq:
 
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
@@ -38,35 +39,33 @@ sources:
     git:
       url: https://github.com/containerd/containerd.git
       commit: "${CONTAINERD_COMMIT}"
-  hcs_shim:
-    path: /build/hcs_shim
-    build:
-      source:
-        git:
-          url: https://github.com/containerd/containerd.git
-          commit: "${CONTAINERD_COMMIT}"
-      inline: |
-        # syntax=docker/dockerfile:1.5
-        FROM alpine:latest
-        RUN apk add git
-        COPY go.mod /tmp/go.mod
-        WORKDIR /build
-        RUN <<EOF
-          set -e
-          HCSS_VERS="$(awk '/Microsoft\/hcsshim/ { print $2 }' < /tmp/go.mod)"
-          git clone \
-            --depth=1 \
-            --branch="$HCSS_VERS" \
-             https://github.com/Microsoft/hcsshim.git \
-             hcs_shim
-        EOF
+  # hcs_shim:
+  #   path: /build/_out
+  #   image:
+  #     ref: mcr.microsoft.com/oss/go/microsoft/golang:1.21
+  #     cmd:
+  #       dir: /build/containerd
+  #       steps:
+  #         - command: |
+  #             set -e
+  #             apt update && apt install tree jq -y
+  #             godir="$(go mod download -json github.com/Microsoft/hcsshim | jq -r '.Dir')"
+  #             mv "$godir"/* /build/_out
+  #           env:
+  #             GOMODCACHE: /build/gomodcache
+  #       mounts:
+  #         - dest: /build/containerd
+  #           spec:
+  #             git:
+  #               url: https://github.com/containerd/containerd.git
+  #               commit: "${CONTAINERD_COMMIT}"
 
 build:
   env:
     CGO_ENABLED: 1
+    GOOS: windows
     GOGC: "off"
     GOPROXY: "off"
-    GO111MODULE: "off"
     GOFLAGS: -trimpath
     GOROOT: /usr/lib/golang
     VERSION: ${VERSION}
@@ -81,12 +80,18 @@ build:
         mv bin/* ../_output
     - command: |
         set -e
-        cd hcs_shim
-        mkdir -p _output
+        cd containerd
+        shim_mod_dir="$(
+          go mod download -json github.com/Microsoft/hcsshim | jq -r '.Dir'
+        )"
+        mv "$shim_mod_dir" ../hcsshim
+        cd ../hcsshim
         GO111MODULE=on go build \
           -mod=vendor \
           -o ../_output/containerd-shim-runhcs-v1.exe
+
 artifacts:
   binaries:
     _output/containerd.exe:
+    _output/containerd-shim-runhcs-v1.exe:
     # etc...
