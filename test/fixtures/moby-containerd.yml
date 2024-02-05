@@ -4,9 +4,9 @@
 # This should be fixed before this spec is used to build a real package.
 
 args:
-  CONTAINERD_COMMIT:
+  CONTAINERD_COMMIT: 7c3aca7a610df76212171d200ca3811ff6096eb8
   REVISION: 1
-  VERSION:
+  VERSION: "1.7.13"
   HCS_SHIM_REPO: https://github.com/Microsoft/hcsshim.git
 
 name: moby-containerd
@@ -26,10 +26,10 @@ revision: ${REVISION}
 vendor: Moby
 
 targets: # Distro specific build requirements
-  windows:
+  jammy:
     dependencies:
       build:
-        golang:
+        golang-1.20:
         jq:
 
 packager: Microsoft <support@microsoft.com>
@@ -39,6 +39,30 @@ sources:
     git:
       url: https://github.com/containerd/containerd.git
       commit: "${CONTAINERD_COMMIT}"
+  hcsshim:
+    path: /build/_out
+    image:
+      ref: mcr.microsoft.com/oss/go/microsoft/golang:1.20
+      cmd:
+        dir: /build/containerd
+        steps:
+          - command: |
+              apt update && apt install -y jq
+              shim_mod_dir="$(
+                go mod download -json github.com/Microsoft/hcsshim | jq -r '.Dir'
+              )"
+              chmod +w -R "$shim_mod_dir"
+              mv "$shim_mod_dir"/*  /build/_out
+              cd /build/_out
+              go mod vendor
+        mounts:
+          - dest: /build/containerd/go.mod
+            spec:
+              path: /go.mod
+              git:
+                url: https://github.com/containerd/containerd.git
+                commit: "${CONTAINERD_COMMIT}"
+
 
 build:
   env:
@@ -47,31 +71,29 @@ build:
     GOGC: "off"
     GOPROXY: "off"
     GOFLAGS: -trimpath
-    GOROOT: /usr/lib/golang
     VERSION: ${VERSION}
     COMMIT: ${CONTAINERD_COMMIT}
+    GOROOT: /usr/lib/go-1.20
+    CC: x86_64-w64-mingw32-gcc
   steps:
     - command: |
         set -e
+        export PATH="${GOROOT}/bin:${PATH}"
         cd containerd
-        make VERSION="$VERSION" REVISION="$COMMIT" binaries
-        rm bin/containerd-stress.exe
+        make VERSION="$VERSION" REVISION="$COMMIT" DESTDIR=./bin binaries
+        rm -f bin/containerd-stress.exe
         mkdir -p ../_output
         mv bin/* ../_output
     - command: |
         set -e
-        cd containerd
-        shim_mod_dir="$(
-          go mod download -json github.com/Microsoft/hcsshim | jq -r '.Dir'
-        )"
-        mv "$shim_mod_dir" ../hcsshim
-        cd ../hcsshim
+        export PATH="${GOROOT}/bin:${PATH}"
+        cd hcsshim
         GO111MODULE=on go build \
           -mod=vendor \
           -o ../_output/containerd-shim-runhcs-v1.exe
 
 artifacts:
   binaries:
-    _output/containerd.exe:
     _output/containerd-shim-runhcs-v1.exe:
-    # etc...
+    _output/containerd.exe:
+    _output/ctr.exe:
