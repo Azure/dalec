@@ -13,6 +13,7 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/debug"
 	"github.com/Azure/dalec/frontend/mariner2"
+	"github.com/Azure/dalec/frontend/windows"
 )
 
 const (
@@ -25,8 +26,9 @@ func main() {
 
 	ctx := appcontext.Context()
 
-	mariner2.RegisterHandlers()
 	debug.RegisterHandlers()
+	mariner2.RegisterHandlers()
+	windows.RegisterHandlers()
 
 	if err := grpcclient.RunFromEnvironment(ctx, frontend.Build); err != nil {
 		bklog.L.WithError(err).Fatal("error running frontend")
