@@ -1,0 +1,92 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+# TODO: The spec is not currently setting the revision in the containerd version
+# This should be fixed before this spec is used to build a real package.
+
+args:
+  CONTAINERD_COMMIT:
+  REVISION: 1
+  VERSION:
+  HCS_SHIM_REPO: https://github.com/Microsoft/hcsshim.git
+
+name: moby-containerd
+description: |
+  Industry-standard container runtime
+   containerd is an industry-standard container runtime with an emphasis on
+   simplicity, robustness and portability. It is available as a daemon for Linux
+   and Windows, which can manage the complete container lifecycle of its host
+   system: image transfer and storage, container execution and supervision,
+   low-level storage and network attachments, etc.
+   .
+   containerd is designed to be embedded into a larger system, rather than being
+   used directly by developers or end-users.
+website: https://containerd.io/
+version: ${VERSION}
+revision: ${REVISION}
+vendor: Moby
+
+targets: # Distro specific build requirements
+  windows:
+    dependencies:
+      build:
+        golang:
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+sources:
+  containerd:
+    git:
+      url: https://github.com/containerd/containerd.git
+      commit: "${CONTAINERD_COMMIT}"
+  hcs_shim:
+    path: /build/hcs_shim
+    build:
+      source:
+        git:
+          url: https://github.com/containerd/containerd.git
+          commit: "${CONTAINERD_COMMIT}"
+      inline: |
+        # syntax=docker/dockerfile:1.5
+        FROM alpine:latest
+        RUN apk add git
+        COPY go.mod /tmp/go.mod
+        WORKDIR /build
+        RUN <<EOF
+          set -e
+          HCSS_VERS="$(awk '/Microsoft\/hcsshim/ { print $2 }' < /tmp/go.mod)"
+          git clone \
+            --depth=1 \
+            --branch="$HCSS_VERS" \
+             https://github.com/Microsoft/hcsshim.git \
+             hcs_shim
+        EOF
+
+build:
+  env:
+    CGO_ENABLED: 1
+    GOGC: "off"
+    GOPROXY: "off"
+    GO111MODULE: "off"
+    GOFLAGS: -trimpath
+    GOROOT: /usr/lib/golang
+    VERSION: ${VERSION}
+    COMMIT: ${CONTAINERD_COMMIT}
+  steps:
+    - command: |
+        set -e
+        cd containerd
+        make VERSION="$VERSION" REVISION="$COMMIT" binaries
+        rm bin/containerd-stress.exe
+        mkdir -p ../_output
+        mv bin/* ../_output
+    - command: |
+        set -e
+        cd hcs_shim
+        mkdir -p _output
+        GO111MODULE=on go build \
+          -mod=vendor \
+          -o ../_output/containerd-shim-runhcs-v1.exe
+artifacts:
+  binaries:
+    _output/containerd.exe:
+    # etc...
