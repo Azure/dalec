@@ -39,26 +39,6 @@ sources:
     git:
       url: https://github.com/containerd/containerd.git
       commit: "${CONTAINERD_COMMIT}"
-  # hcs_shim:
-  #   path: /build/_out
-  #   image:
-  #     ref: mcr.microsoft.com/oss/go/microsoft/golang:1.21
-  #     cmd:
-  #       dir: /build/containerd
-  #       steps:
-  #         - command: |
-  #             set -e
-  #             apt update && apt install tree jq -y
-  #             godir="$(go mod download -json github.com/Microsoft/hcsshim | jq -r '.Dir')"
-  #             mv "$godir"/* /build/_out
-  #           env:
-  #             GOMODCACHE: /build/gomodcache
-  #       mounts:
-  #         - dest: /build/containerd
-  #           spec:
-  #             git:
-  #               url: https://github.com/containerd/containerd.git
-  #               commit: "${CONTAINERD_COMMIT}"
 
 build:
   env:
