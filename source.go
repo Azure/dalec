@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
+	"github.com/pkg/errors"
 )
 
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
@@ -78,8 +78,14 @@ func Source2LLBGetter(s *Spec, src Source, name string) LLBGetter {
 	return source2LLBGetter(s, src, name, false)
 }
 
+// isRootPath is used to encapsulate various different possibilities for what amounts to the root path.
+// It helps prevent making an extra copy of the source when it is not necessary.
+func isRootPath(p string) bool {
+	return p == "" || p == "/" || p == "."
+}
+
 func needsFilter(o *filterOpts) bool {
-	if o.source.Path != "" && !o.forMount && !o.pathHandled {
+	if !isRootPath(o.source.Path) && !o.forMount && !o.pathHandled {
 		return true
 	}
 	if o.includeExcludeHandled {
@@ -129,6 +135,8 @@ func handleFilter(o *filterOpts) (llb.State, error) {
 
 	return filtered, nil
 }
+
+var errNoSourceVariant = fmt.Errorf("no source variant found")
 
 func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter {
 	return func(sOpt SourceOpts, opts ...llb.ConstraintsOpt) (ret llb.State, retErr error) {
@@ -184,25 +192,31 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			opts = append(opts, llb.Filename(name))
 			return llb.HTTP(https.URL, opts...), nil
 		case src.Context != nil:
-			st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(&src))
+			st, err := sOpt.GetContext(src.Context.Name, localIncludeExcludeMerge(&src))
 			if err != nil {
 				return llb.Scratch(), err
+			}
+
+			if st == nil {
+				return llb.Scratch(), errors.Errorf("context %q not found", name)
 			}
 
 			includeExcludeHandled = true
 			return *st, nil
 		case src.Build != nil:
 			build := src.Build
-			subSource := build.Source
 
-			st, err := source2LLBGetter(s, subSource, name, forMount)(sOpt, opts...)
+			st, err := source2LLBGetter(s, build.Source, name, forMount)(sOpt, opts...)
 			if err != nil {
-				return llb.Scratch(), err
+				if !errors.Is(err, errNoSourceVariant) || build.Inline == "" {
+					return llb.Scratch(), err
+				}
+				st = llb.Scratch()
 			}
 
 			return sOpt.Forward(st, build)
 		default:
-			return llb.Scratch(), fmt.Errorf("No source variant found")
+			return llb.Scratch(), errNoSourceVariant
 		}
 	}
 }

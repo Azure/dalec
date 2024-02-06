@@ -173,36 +173,6 @@ func TestSourceFillDefaults(t *testing.T) {
 			},
 		},
 		{
-			title: "source.Path defaults to `.` when source type is context",
-			before: Source{
-				Context: &SourceContext{
-					Name: "context",
-				},
-				Path: "",
-			},
-			after: Source{
-				Context: &SourceContext{
-					Name: "context",
-				},
-				Path: ".",
-			},
-		},
-		{
-			title: "sets Source.Path when Source.Context.Name is nonempty",
-			before: Source{
-				Context: &SourceContext{
-					Name: "/build/test/context",
-				},
-				Path: "/the/wrong/path/you/should/never/set/this/if/you/set/context.name",
-			},
-			after: Source{
-				Context: &SourceContext{
-					Name: "/build/test/context",
-				},
-				Path: "/build/test/context",
-			},
-		},
-		{
 			title: "sets nested defaults when source type is docker image",
 			before: Source{
 				DockerImage: &SourceDockerImage{
@@ -240,33 +210,6 @@ func TestSourceFillDefaults(t *testing.T) {
 								},
 							},
 						},
-					},
-				},
-				Path: ".",
-			},
-		},
-		{
-			title: "sets nested defaults when source type is build",
-			before: Source{
-				Build: &SourceBuild{
-					Inline: "FROM busybox:latest",
-					Source: Source{
-						Context: &SourceContext{
-							Name: "/build/test/context",
-						},
-						Path: "/the/wrong/path/you/should/never/set/this/if/you/set/context.name",
-					},
-				},
-				Path: ".",
-			},
-			after: Source{
-				Build: &SourceBuild{
-					Inline: "FROM busybox:latest",
-					Source: Source{
-						Context: &SourceContext{
-							Name: "/build/test/context",
-						},
-						Path: "/build/test/context",
 					},
 				},
 				Path: ".",

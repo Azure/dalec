@@ -25,6 +25,10 @@ var (
 func TestMain(m *testing.M) {
 	flag.Parse()
 
+	if testing.Short() {
+		return
+	}
+
 	if v := os.Getenv("OTEL_SERVICE_NAME"); v == "" {
 		os.Setenv("OTEL_SERVICE_NAME", "dalec-test")
 	}

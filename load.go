@@ -109,16 +109,9 @@ func fillDefaults(s *Source) {
 	case s.Git != nil:
 	case s.HTTP != nil:
 	case s.Context != nil:
-		origContextName := s.Context.Name
 		if s.Context.Name == "" {
 			s.Context.Name = dockerui.DefaultLocalNameContext
 		}
-
-		ctxPath := origContextName
-		if ctxPath == "" || ctxPath == dockerui.DefaultLocalNameContext {
-			ctxPath = "."
-		}
-		s.Path = ctxPath
 	case s.Build != nil:
 		fillDefaults(&s.Build.Source)
 	}
