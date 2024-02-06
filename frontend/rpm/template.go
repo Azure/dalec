@@ -239,7 +239,7 @@ func writeStep(b *strings.Builder, step dalec.BuildStep) {
 	// will be available to every command in the BuildStep
 	fmt.Fprintln(b, "(") // begin subshell
 	for _, k := range envKeys {
-		fmt.Fprintf(b, "export %s=%s\n", k, step.Env[k])
+		fmt.Fprintf(b, "export %s=\"%s\"\n", k, step.Env[k])
 	}
 	fmt.Fprintf(b, "%s", step.Command)
 	fmt.Fprintln(b, ")") // end subshell
@@ -260,7 +260,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
 		v := t.Env[k]
-		fmt.Fprintf(b, "export %s=%s\n", k, v)
+		fmt.Fprintf(b, "export %s=\"%s\"\n", k, v)
 	}
 
 	for _, step := range t.Steps {
