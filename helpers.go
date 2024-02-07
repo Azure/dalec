@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/identity"
 )
 
 var disableDiffMerge atomic.Bool
@@ -199,4 +200,19 @@ type runOptFunc func(*llb.ExecInfo)
 
 func (f runOptFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
+}
+
+// ProgressGroup creates a progress group with the given name.
+// If a progress group is already set in the constraints the id is reused.
+// If no progress group is set a new id is generated.
+func ProgressGroup(name string) llb.ConstraintsOpt {
+	return constraintsOptFunc(func(c *llb.Constraints) {
+		if c.Metadata.ProgressGroup != nil {
+			id := c.Metadata.ProgressGroup.Id
+			llb.ProgressGroup(id, name, true).SetConstraintsOption(c)
+			return
+		}
+
+		llb.ProgressGroup(identity.NewID(), name, false).SetConstraintsOption(c)
+	})
 }

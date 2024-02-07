@@ -13,28 +13,26 @@ import (
 )
 
 func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	baseImg, err := getBaseBuilderImg(ctx, client)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	pg := dalec.ProgressGroup("Build mariner2 deps-only container: " + spec.Name)
+	baseImg := getWorkerImage(sOpt, pg)
 	rpmDir := baseImg.Run(
 		shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(getRuntimeDeps(spec), " ")),
-		defaultMarinerTdnfCahe(),
+		defaultTndfCacheMount(),
+		pg,
 	).
 		AddMount("/tmp/rpms", llb.Scratch())
 
-	st, err := specToContainerLLB(spec, targetKey, baseImg, rpmDir, sOpt)
+	st, err := specToContainerLLB(spec, targetKey, baseImg, rpmDir, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	def, err := st.Marshal(ctx)
+	def, err := st.Marshal(ctx, pg)
 	if err != nil {
 		return nil, nil, err
 	}

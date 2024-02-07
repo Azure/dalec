@@ -155,24 +155,11 @@ jobs:
             echo DALEC_DISABLE_NESTED="1" >> $GITHUB_ENV
             echo FRONTEND_BAKE_TARGET="frontend-ci" >> $GITHUB_ENV
           fi
-
-          # Check if the mariner2 toolchain was modified and needs to be rebuilt
-          # The bake file will take care of rebuilding it if needed
-          set -e
-          diff="$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} HEAD)"
-
-          set +e
-          grep frontend/mariner2/Dockerfile <<<"${diff}" && \
-            echo REBUILD_MARINER2_TOOLCHAIN=1 >> $GITHUB_ENV
-
-          echo "MARINER2_TOOLCHAIN_CACHE_REF=$(tr '[:upper:]' '[:lower:]' <<< "ghcr.io/${{ github.repository }}/mariner2/toolchain:cache")" >> $GITHUB_ENV
       - name: Build frontend image
         run: docker buildx bake ${FRONTEND_BAKE_TARGET}
       - name: test
         run: |
-          docker buildx bake \
-            --set mariner2-toolchain.cache-from=type=registry,ref=${MARINER2_TOOLCHAIN_CACHE_REF} \
-            test
+          docker buildx bake test
       - name: dump logs
         if: failure()
         run: |

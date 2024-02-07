@@ -22,27 +22,25 @@ const (
 )
 
 func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	baseImg, err := getBaseBuilderImg(ctx, client)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rpmDir, err := specToRpmLLB(spec, getDigestFromClientFn(ctx, client), baseImg, sOpt)
+	pg := dalec.ProgressGroup("Build mariner2 container: " + spec.Name)
+	baseImg := getWorkerImage(sOpt, pg)
+
+	rpmDir, err := specToRpmLLB(spec, sOpt, pg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error creating rpm: %w", err)
 	}
 
-	st, err := specToContainerLLB(spec, targetKey, baseImg, rpmDir, sOpt)
+	st, err := specToContainerLLB(spec, targetKey, baseImg, rpmDir, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	def, err := st.Marshal(ctx)
+	def, err := st.Marshal(ctx, pg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 	}
@@ -147,8 +145,8 @@ func getBaseOutputImage(spec *dalec.Spec, target string) string {
 	return baseRef
 }
 
-func specToContainerLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDir llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-
+func specToContainerLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDir llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
 	mfstDir := filepath.Join(workPath, "var/lib/rpmmanifest")
@@ -202,19 +200,20 @@ rpm --dbpath=` + rpmdbDir + ` -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{INSTAL
 rm -rf ` + rpmdbDir + `
 `
 
-	installer := llb.Scratch().File(llb.Mkfile("install.sh", 0o755, []byte(installCmd)))
+	installer := llb.Scratch().File(llb.Mkfile("install.sh", 0o755, []byte(installCmd)), opts...)
 
-	baseImg := llb.Image(getBaseOutputImage(spec, target), llb.WithMetaResolver(sOpt.Resolver))
+	baseImg := llb.Image(getBaseOutputImage(spec, target), llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	worker := builderImg.
 		Run(
 			shArgs("/tmp/install.sh"),
-			defaultMarinerTdnfCahe(),
+			defaultTndfCacheMount(),
 			llb.AddMount("/tmp/rpms", rpmDir, llb.SourcePath("/RPMS")),
 			llb.AddMount("/tmp/install.sh", installer, llb.SourcePath("install.sh")),
 			// Mount the tdnf cache into the workpath so that:
 			// 1. tdnf will use the cache
 			// 2. Repo data and packages are not left behind in the final image.
-			marinerTdnfCacheWithPrefix(workPath),
+			tdnfCacheMountWithPrefix(workPath),
+			dalec.WithConstraints(opts...),
 		)
 
 	// This adds a mount to the worker so that all the commands are run with this mount added

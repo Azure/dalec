@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
@@ -406,7 +405,6 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
 	// duplicate map to avoid possibly confusing behavior of mutating caller's map
 	states := DuplicateMap(sourceToState)
-	pgID := identity.NewID()
 	sorted := SortMapKeys(spec.Sources)
 
 	for _, sourceName := range sorted {
@@ -416,8 +414,8 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 		if !patchesExist {
 			continue
 		}
-		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" ", false)
-		states[sourceName] = patchSource(worker, sourceState, states, patches, pg, withConstraints(opts))
+		opts = append(opts, ProgressGroup("Patch spec source:"+sourceName))
+		states[sourceName] = patchSource(worker, sourceState, states, patches, withConstraints(opts))
 	}
 
 	return states

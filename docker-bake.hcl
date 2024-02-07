@@ -32,12 +32,6 @@ target "frontend" {
     tags = [FRONTEND_REF]
 }
 
-target "mariner2-toolchain" {
-    dockerfile = "./frontend/mariner2/Dockerfile"
-    target = "toolchain"
-    tags = ["ghcr.io/azure/dalec/mariner2/toolchain:latest"]
-    cache-from = ["type=registry,ref=ghcr.io/azure/dalec/mariner2/toolchain:cache"]
-}
 
 # Run linters
 # Note: CI is using the github actions golangci-lint action which automatically sets up caching for us rather than using this bake target
@@ -67,19 +61,6 @@ variable "RUNC_REVISION" {
     default = "1"
 }
 
-variable "REBUILD_MARINER2_TOOLCHAIN" {
-    default = "0"
-}
-
-function "get_mariner2_toolchain" {
-    params = []
-    result = REBUILD_MARINER2_TOOLCHAIN == "1" ? (
-        "target:mariner2-toolchain"
-    ) : (
-        "docker-image://ghcr.io/azure/dalec/mariner2/toolchain:latest"
-    )
-}
-
 target "runc" {
     name = "runc-${distro}-${replace(tgt, "/", "-")}"
     dockerfile = "test/fixtures/moby-runc.yml"
@@ -92,10 +73,7 @@ target "runc" {
     }
     matrix = {
         distro = ["mariner2"]
-        tgt = ["rpm", "container", "toolkitroot", "rpm/spec"]
-    }
-    contexts = {
-        "mariner2-toolchain" = get_mariner2_toolchain()
+        tgt = ["rpm", "container", "rpm/spec"]
     }
     target = "${distro}/${tgt}"
     // only tag the container target
@@ -138,9 +116,6 @@ target "test-fixture" {
          )
         tgt = ["mariner2/container"]
     }
-    contexts = {
-        "mariner2-toolchain" = get_mariner2_toolchain()
-    }
     dockerfile = "test/fixtures/${f}.yml"
 
     args = {
@@ -160,10 +135,7 @@ target "build" {
     name = "build-${distro}-${tgt}"
     matrix = {
         distro = ["mariner2"]
-        tgt = ["rpm", "container", "toolkitroot"]
-    }
-    contexts = {
-        "mariner2-toolchain" = get_mariner2_toolchain()
+        tgt = ["rpm", "container"]
     }
     dockerfile = BUILD_SPEC
     args = {
