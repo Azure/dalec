@@ -12,11 +12,6 @@ const (
 
 func RegisterHandlers() {
 	frontend.RegisterHandler(targetKey, targets.Target{
-		Name:        "toolkitroot",
-		Description: "Outputs configs suitable for passing to the mariner2 build toolkit.",
-	}, handleToolkitRoot)
-
-	frontend.RegisterHandler(targetKey, targets.Target{
 		Name:        "rpm",
 		Description: "Builds an rpm and src.rpm for mariner2.",
 	}, handleRPM)

@@ -65,47 +65,8 @@ mariner2/rpm                 Builds an rpm and src.rpm for mariner2.
 mariner2/rpm/buildroot       Outputs an rpm buildroot suitable for passing to rpmbuild.
 mariner2/rpm/sources         Outputs all the sources specified in the spec file.
 mariner2/rpm/spec            Outputs the generated RPM spec file
-mariner2/toolkitroot         Outputs configs suitable for passing to the mariner2 build toolkit.
 ```
 
-### Azure Linux (CBL-Mariner) Note
-
-In order to comply with the Azure Linux team's requirements for building
-packages, dalec uses the
-[toolkit](https://github.com/microsoft/CBL-Mariner/tree/2.0/toolkit) provided by
-the Azure Linux team to build packages rather than a raw rpmbuild.
-The toolkit image is approximately 3GB in size and is automatically downloaded from
-ghcr.io/azure/dalec/mariner2/toolchain:latest when needed.
-If you need to supply a custom toolkit image you can use `--build-context
-mariner2-toolkit=docker-image://<image-name>` to specify a custom toolkit image.
-The docker cli also supports other formats than just `docker-image` for the
-build context, see the [docker
-documentation](https://docs.docker.com/engine/reference/commandline/buildx_build/#build-context)
-for more information.
-Alternatively you can use the experimental support for buildkit source policies:
-
-```console
-$ cat policy.json
-{
-    "rules": [
-        {
-            "action": "CONVERT",
-            "selector": {
-                "identifier": "docker-image://ghcr.io/azure/dalec/mariner2/toolchain:*"
-            }
-            "updates": {
-                "identifier": "<ref>"
-            }
-        }
-    ]
-}
-$ EXPERIMENTAL_BUILDKIT_SOURCE_POLICY=policy.json docker build -f test/fixtures/moby-runc.yml --target mariner2/rpm --output=_output .
-```
-
-In this example `<ref>` is the reference to the toolkit image you want to use which would follow the same format as described in the `build-context` example above.
-
-
-Please note, the default toolkit image is optimized for dalec's use case and assumes that the worker_chroot.tar.gz is pre-built.
 
 ## Support for other OSes and Linux distributions
 

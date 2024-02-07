@@ -10,7 +10,6 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/identity"
 )
 
 // TarImageRef is the image used to create tarballs of sources
@@ -23,7 +22,7 @@ func shArgs(cmd string) llb.RunOption {
 }
 
 func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
-	tarImg := llb.Image(TarImageRef)
+	tarImg := llb.Image(TarImageRef, dalec.WithConstraints(opts...))
 
 	// Put the output tar in a consistent location regardless of `dest`
 	// This way if `dest` changes we don't have to rebuild the tarball, which can be expensive.
@@ -72,9 +71,7 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 	return ref, &image.Image{}, err
 }
 
-func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, error) {
-	pgID := identity.NewID()
-
+func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
 	// Sort the map keys so that the order is consistent This shouldn't be
 	// needed when MergeOp is supported, but when it is not this will improve
 	// cache hits for callers of this function.
@@ -104,14 +101,14 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) ([]llb.State, err
 			return nil, fmt.Errorf("no non-nil source provided")
 		}
 
-		pg := llb.ProgressGroup(pgID, "Add spec source: "+k+" "+s, false)
-		st, err := dalec.Source2LLBGetter(spec, src, k)(sOpt, pg)
+		pg := dalec.ProgressGroup("Add spec source: " + k + " " + s)
+		st, err := dalec.Source2LLBGetter(spec, src, k)(sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, err
 		}
 
 		if isDir {
-			out = append(out, tar(st, k+".tar.gz", pg))
+			out = append(out, tar(st, k+".tar.gz", append(opts, pg)...))
 		} else {
 			out = append(out, st)
 		}
