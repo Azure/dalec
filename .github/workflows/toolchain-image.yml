@@ -11,22 +11,32 @@ on:
         description: 'Tag to publish'
         required: true
         default: 'latest'
-      
+
 permissions:
   contents: read
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: ["self-hosted", "1ES.Pool=${{ matrix.pool }}"]
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pool: temp-azcu-gh-runner-pool
+            arch: amd64
+          # - pool: temp-azcu-gh-runner-pool-arm64
+          #   arch: arm64
+          - pool: temp-azcu-gh-runner-pool2-arm64
+            arch: arm64
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
         with:
           egress-policy: audit
-
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         name: Checkout
       - uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc # v2.2.0
@@ -44,11 +54,15 @@ jobs:
           # For the toolchain we'll provide a separate cache image with a known tag
           # This makes it easier when making changes to the toolchain image to have a easily targetable cache ref.
           cache="type=registry,ref=${CACHE_REF}"
-          docker buildx bake --push \
-            --set mariner2-toolchain.tags=${TAG_REF} \
+          docker buildx bake --load \
+            --set mariner2-toolchain.tags="${TAG_REF}-${{ matrix.arch }}" \
             --set mariner2-toolchain.cache-to=${cache} \
             --set mariner2-toolchain.cache-from=${cache} \
+            --set mariner2-toolchain.platform=linux/${{ matrix.arch }} \
             mariner2-toolchain
+          docker push "${TAG_REF}-${{ matrix.arch }}"
+          docker manifest create "${TAG_REF}" -a "${TAG_REF}-${{ matrix.arch }}"
+          docker manifest push "${TAG_REF}"
         env:
           TAG_REF: ghcr.io/${{ github.repository }}/mariner2/toolchain:${{ github.event.inputs.tag }}
           CACHE_REF: ghcr.io/${{ github.repository }}/mariner2/toolchain:cache
