@@ -40,7 +40,7 @@ func defaultMarinerTdnfCahe() llb.RunOption {
 // This makes it so that when tdnf needs to download packages, repodata, etc it will use the cache dir.
 // Repeated builds will benefit from this as the cache will be reused.
 func marinerTdnfCacheWithPrefix(prefix string) llb.RunOption {
-	return llb.AddMount(filepath.Join(prefix, marinerTdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountShared))
+	return llb.AddMount(filepath.Join(prefix, marinerTdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir("mariner2-tdnf-cache", llb.CacheMountLocked))
 }
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {

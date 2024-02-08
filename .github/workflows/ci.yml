@@ -71,10 +71,10 @@ jobs:
     # TODO: support diff/merge
     # Right now this is handled by the e2e suite, but we can migrate that here.
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
-        with:
-          egress-policy: audit
+      # - name: Harden Runner
+      #   uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
+      #   with:
+      #     egress-policy: audit
 
       - name: checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -125,6 +125,8 @@ jobs:
       DALEC_DISABLE_DIFF_MERGE: ${{ matrix.disable_diff_merge }}
       FRONTEND_REF: localhost:5000/dalec/frontend
     steps:
+      - name: Collect Workflow Telemetry
+        uses: catchpoint/workflow-telemetry-action@v1
       - name: Harden Runner
         uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
         with:
@@ -147,7 +149,9 @@ jobs:
           # If diff/merge are enabled we need to use a buildx builder to make sure the feature is supported.
           # Otherwise we can just use the default docker builder.
           if [ "${DALEC_DISABLE_DIFF_MERGE}" = "0" ]; then
-            docker buildx create --use --driver-opt network=host
+            echo "[worker.oci]" > buildkit.toml
+            echo "max-parallelism = 2" >> buildkit.toml
+            docker buildx create --use --driver-opt network=host --config=$(pwd)/buildkit.toml
             echo FRONTEND_BAKE_TARGET="frontend-ci-full" >> $GITHUB_ENV
             echo USE_BUILDX=1 >> $GITHUB_ENV
           else
@@ -168,6 +172,13 @@ jobs:
           echo "MARINER2_TOOLCHAIN_CACHE_REF=$(tr '[:upper:]' '[:lower:]' <<< "ghcr.io/${{ github.repository }}/mariner2/toolchain:cache")" >> $GITHUB_ENV
       - name: Build frontend image
         run: docker buildx bake ${FRONTEND_BAKE_TARGET}
+      - name: Builder info
+        run: |
+          docker buildx inspect
+          docker info
+          df -h
+          sudo cat /proc/cpuinfo
+          sudo cat /proc/meminfo
       - name: test
         run: |
           docker buildx bake \
