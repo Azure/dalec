@@ -58,7 +58,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		pg := llb.ProgressGroup(identity.NewID(), "Test: "+path.Join(target, test.Name), false)
 
 		for _, sm := range test.Mounts {
-			st, err := dalec.Source2LLBGetter(spec, sm.Spec, sm.Dest)(sOpt, pg)
+			st, err := dalec.Source2LLBGetter(spec, sm.Spec, sm.Dest, sOpt, pg)
 			if err != nil {
 				return err
 			}

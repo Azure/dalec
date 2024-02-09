@@ -100,6 +100,28 @@ func SortMapKeys[T any](m map[string]T) []string {
 	return keys
 }
 
+type Result[T any] struct {
+	data T
+	err  error
+}
+
+func FromT[T any](t T) Result[T] {
+	return Result[T]{
+		data: t,
+		err:  nil,
+	}
+}
+
+func FromE[T any](e error) Result[T] {
+	return Result[T]{
+		err: e,
+	}
+}
+
+func (r Result[T]) IsErr() bool {
+	return r.err != nil
+}
+
 func DuplicateMap[K comparable, V any](m map[K]V) map[K]V {
 	newM := make(map[K]V, len(m))
 	for k, v := range m {
@@ -140,10 +162,9 @@ func (f localOptionFunc) SetLocalOption(li *llb.LocalInfo) {
 	f(li)
 }
 
-func localIncludeExcludeMerge(src *Source) localOptionFunc {
+func localIncludeExcludeMerge(includes []string, excludes []string) localOptionFunc {
 	return func(li *llb.LocalInfo) {
-		if len(src.Excludes) > 0 {
-			excludes := src.Excludes
+		if len(excludes) > 0 {
 			if li.ExcludePatterns != "" {
 				var ls []string
 				if err := json.Unmarshal([]byte(li.ExcludePatterns), &ls); err != nil {
@@ -154,8 +175,7 @@ func localIncludeExcludeMerge(src *Source) localOptionFunc {
 			llb.ExcludePatterns(excludes).SetLocalOption(li)
 		}
 
-		if len(src.Includes) > 0 {
-			includes := src.Includes
+		if len(includes) > 0 {
 			if li.IncludePatterns != "" {
 				var ls []string
 				if err := json.Unmarshal([]byte(li.IncludePatterns), &ls); err != nil {

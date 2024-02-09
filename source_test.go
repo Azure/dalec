@@ -428,13 +428,6 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 
 	fillDefaults(&src)
 
-	spec := &Spec{
-		Sources: map[string]Source{
-			"test": src,
-		},
-	}
-	getSource := Source2LLBGetter(spec, src, "test")
-
 	var sOpt SourceOpts
 	if src.Build != nil {
 		if src.Build.Inline == "" {
@@ -461,7 +454,7 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 		}
 	}
 
-	st, err := getSource(sOpt)
+	st, _, err := GetSource(src, "test", DefaultSourceFilter, sOpt)
 	if err != nil {
 		t.Fatal(err)
 	}
