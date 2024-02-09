@@ -53,7 +53,7 @@ func (w *specWrapper) Changelog() (fmt.Stringer, error) {
 		return b, nil
 	}
 
-	fmt.Fprintln(b, "%changelog") //nolint:govet
+	fmt.Fprintf(b, "%%changelog\n")
 	for _, log := range w.Spec.Changelog {
 		fmt.Fprintln(b, "* "+log.Date.Format("Mon Jan 2 2006")+" "+log.Author)
 
@@ -253,7 +253,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 		return b
 	}
 
-	fmt.Fprintln(b, `%build`) //nolint:govet
+	fmt.Fprintf(b, "%%build\n")
 
 	fmt.Fprintln(b, "set -e")
 
@@ -314,7 +314,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 func (w *specWrapper) Files() fmt.Stringer {
 	b := &strings.Builder{}
 
-	fmt.Fprintln(b, "%files") //nolint:govet
+	fmt.Fprintf(b, "%%files\n")
 	if w.Spec.Artifacts.IsEmpty() {
 		return b
 	}
