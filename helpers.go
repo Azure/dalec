@@ -100,28 +100,6 @@ func SortMapKeys[T any](m map[string]T) []string {
 	return keys
 }
 
-type Result[T any] struct {
-	data T
-	err  error
-}
-
-func FromT[T any](t T) Result[T] {
-	return Result[T]{
-		data: t,
-		err:  nil,
-	}
-}
-
-func FromE[T any](e error) Result[T] {
-	return Result[T]{
-		err: e,
-	}
-}
-
-func (r Result[T]) IsErr() bool {
-	return r.err != nil
-}
-
 func DuplicateMap[K comparable, V any](m map[K]V) map[K]V {
 	newM := make(map[K]V, len(m))
 	for k, v := range m {
