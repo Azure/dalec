@@ -11,8 +11,8 @@ import (
 
 func TestSources(t *testing.T) {
 	t.Run("cmd source", testCmdSource)
-	t.Run("source mount, extract path handled by source", testSourceMountPathHandledBySource)
-	t.Run("source mount, extract path handled by mount", testSourceMountPathHandledByFilter)
+	t.Run("source mount extract path handled by source", testSourceMountPathHandledBySource)
+	t.Run("source mount extract path handled by mount", testSourceMountPathHandledByFilter)
 }
 
 func testCmdSource(t *testing.T) {
