@@ -35,7 +35,8 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-22.04
+    runs-on:
+      labels: ["self-hosted", "1ES.Pool=temp-azcu-gh-runner-pool"]
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
@@ -67,7 +68,8 @@ jobs:
 
 
   integration:
-    runs-on: ubuntu-22.04
+    runs-on:
+      labels: ["self-hosted", "1ES.Pool=temp-azcu-gh-runner-pool"]
     # TODO: support diff/merge
     # Right now this is handled by the e2e suite, but we can migrate that here.
     steps:
@@ -98,7 +100,8 @@ jobs:
 
 
   unit:
-    runs-on: ubuntu-22.04
+    runs-on:
+      labels: ["self-hosted", "1ES.Pool=temp-azcu-gh-runner-pool"]
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@63c24ba6bd7ba022e95695ff85de572c04a18142 # v2.7.0
@@ -115,7 +118,8 @@ jobs:
         run: go test -v .
 
   e2e:
-    runs-on: ubuntu-22.04
+    runs-on:
+      labels: ["self-hosted", "1ES.Pool=temp-azcu-gh-runner-pool"]
     strategy:
       fail-fast: false
       matrix:
