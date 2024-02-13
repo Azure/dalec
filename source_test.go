@@ -447,12 +447,6 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 			})
 			return *st, err
 		}
-		// if src.Build.Source.Context != nil {
-		// 	sOpt.GetContext = func(name string, opts ...llb.LocalOption) (*llb.State, error) {
-		// 		st := llb.Local(name, opts...)
-		// 		return &st, nil
-		// 	}
-		// }
 	}
 
 	if src.Context != nil {
