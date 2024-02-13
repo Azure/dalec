@@ -1,6 +1,6 @@
 # syntax=ghcr.io/azure/dalec/frontend:latest
 
-name: dalec-test-fixutre-local-context
+name: dalec-test-fixture-local-context
 description: A test fixture for checking local context sources
 website: https://www.github.com/Azure/dalec
 version: 0.0.1
@@ -11,26 +11,22 @@ packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 sources:
   src:
-    context:
-      path: .
+    context: {}
   src2:
-    context:
-      path: "go.mod"
+    context: {}
+    path: "go.mod"
   src3:
-    context:
-      path: .
+    context: {}
     includes:
       - go.mod
       - go.sum
   src4:
-    context:
-      path: .
+    context: {}
     excludes:
       - go.mod
       - go.sum
   src5:
-    context:
-      path: .
+    context: {}
     includes:
       - go.*
     excludes:

@@ -10,8 +10,7 @@ packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 
 dependencies:
-  runtime:
-
+  runtime: {}
 sources:
   src:
     git:
