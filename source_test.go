@@ -370,6 +370,10 @@ func TestSourceContext(t *testing.T) {
 				ops := getSourceOp(ctx, t, src)
 				checkContext(t, ops[0].GetSource(), &src)
 				// for context soruce, we expect to have a copy operation as the last op when subdir is used
+
+				// set includes, excludes to nil before checking against filter, as includes and excludes are
+				// handled before filter operation for context sources
+				src.Includes, src.Excludes = nil, nil
 				checkFilter(t, ops[1].GetFile(), &src)
 			})
 		})
@@ -443,6 +447,12 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 			})
 			return *st, err
 		}
+		// if src.Build.Source.Context != nil {
+		// 	sOpt.GetContext = func(name string, opts ...llb.LocalOption) (*llb.State, error) {
+		// 		st := llb.Local(name, opts...)
+		// 		return &st, nil
+		// 	}
+		// }
 	}
 
 	if src.Context != nil {
@@ -598,6 +608,30 @@ func checkContext(t *testing.T, op *pb.SourceOp, src *Source) {
 	xID := "local://" + name
 	if op.Identifier != xID {
 		t.Errorf("expected identifier %q, got %q", xID, op.Identifier)
+	}
+
+	if src.Includes != nil {
+		includesJson, err := json.Marshal(src.Includes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		localIncludes := op.Attrs["local.includepattern"]
+
+		if string(includesJson) != localIncludes {
+			t.Errorf("expected includes %q on local op, got %q", includesJson, localIncludes)
+		}
+	}
+
+	if src.Excludes != nil {
+		excludesJson, err := json.Marshal(src.Excludes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		localExcludes := op.Attrs["local.excludepatterns"]
+
+		if string(excludesJson) != localExcludes {
+			t.Errorf("expected includes %q on local op, got %q", excludesJson, localExcludes)
+		}
 	}
 }
 

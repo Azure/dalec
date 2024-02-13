@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"log"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -45,7 +44,6 @@ func TestPassthroughVars(t *testing.T) {
 	}
 
 	var buildPlatform = getBuildPlatform(startTestSpan(t), t)
-	log.Println(platforms.Format(*buildPlatform))
 
 	tests := []struct {
 		name               string

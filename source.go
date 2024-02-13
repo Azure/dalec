@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/util/gitutil"
+	"github.com/pkg/errors"
 )
 
 type FilterFunc = func(string, []string, []string, ...llb.ConstraintsOpt) llb.StateOption
@@ -18,10 +18,6 @@ type FilterFunc = func(string, []string, []string, ...llb.ConstraintsOpt) llb.St
 var errNoSourceVariant = fmt.Errorf("no source variant found")
 
 func GetSource(src Source, name string, filter FilterFunc, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, bool, error) {
-	if err := src.validate(); err != nil {
-		return llb.Scratch(), false, err
-	}
-
 	// load the source
 	switch {
 	case src.HTTP != nil:
@@ -73,9 +69,13 @@ func GetSource(src Source, name string, filter FilterFunc, sOpt SourceOpts, opts
 }
 
 func (src *SourceContext) AsState(parent *Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := sOpt.GetContext(dockerui.DefaultLocalNameContext, localIncludeExcludeMerge(parent.Includes, parent.Excludes), withConstraints(opts))
+	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(parent.Includes, parent.Excludes), withConstraints(opts))
 	if err != nil {
 		return llb.Scratch(), err
+	}
+
+	if st == nil {
+		return llb.Scratch(), errors.Errorf("context %q not found", src.Name)
 	}
 
 	return *st, nil
@@ -129,7 +129,10 @@ func TargetMountSourceFilter(_ string, includes, excludes []string, opts ...llb.
 func (src *SourceBuild) AsState(name string, _ *Source, filter FilterFunc, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	st, _, err := GetSource(src.Source, name, filter, sOpt, opts...)
 	if err != nil {
-		return llb.Scratch(), err
+		if !errors.Is(err, errNoSourceVariant) || src.Inline == "" {
+			return llb.Scratch(), err
+		}
+		st = llb.Scratch()
 	}
 
 	st, err = sOpt.Forward(st, src)
@@ -199,7 +202,7 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 
 	out := llb.Scratch()
 	for i, step := range cmd.Steps {
-		rOpts := []llb.RunOption{shArgs(step.Command)}
+		rOpts := []llb.RunOption{llb.Args([]string{"/bin/sh", "-c", step.Command})}
 
 		rOpts = append(rOpts, baseRunOpts...)
 
@@ -228,11 +231,15 @@ func Source2LLBGetter(_ *Spec, src Source, name string, sOpt SourceOpts, opts ..
 	return st, err
 }
 
+func isRoot(extract string) bool {
+	return extract == "" || extract == "/" || extract == "."
+}
+
 func filterState(extract string, includes, excludes []string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(st llb.State) llb.State {
 		// if we have no includes, no excludes, and no non-root source path,
 		// then this is a no-op
-		if len(includes) == 0 && len(excludes) == 0 && extract == "/" {
+		if len(includes) == 0 && len(excludes) == 0 && isRoot(extract) {
 			return st
 		}
 
