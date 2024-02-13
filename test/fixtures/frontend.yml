@@ -11,8 +11,7 @@ packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 sources:
   src:
-    context:
-      path: .
+    context: {}
   gomodcache:
     path: /build/gomodcache
     image:
@@ -22,8 +21,7 @@ sources:
         mounts:
           - dest: /build/src
             spec:
-              context:
-                path: .
+              context: {}
         steps:
           - command: go mod download
             env:

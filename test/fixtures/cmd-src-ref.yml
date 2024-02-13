@@ -21,8 +21,7 @@ sources:
         mounts:
           - dest: "/foo"
             spec:
-              context:
-                path: .
+              context: {}
         steps:
           - env:
               FILE_TO_IMPORT: ${file_to_import}
