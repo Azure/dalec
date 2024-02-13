@@ -292,7 +292,7 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 // LoadSpec loads a spec from the given data.
 func LoadSpec(dt []byte) (*Spec, error) {
 	var spec Spec
-	if err := yaml.Unmarshal(dt, &spec); err != nil {
+	if err := yaml.UnmarshalWithOptions(dt, &spec, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
 	}
 
