@@ -15,6 +15,7 @@ on:
         - docker-bake.hcl
         - .github/workflows/ci.yml
         - frontend/mariner2/Dockerfile
+        - "test/fixtures/*"
         - go.mod
         - go.sum
   push:
