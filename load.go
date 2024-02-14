@@ -3,6 +3,7 @@ package dalec
 import (
 	goerrors "errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func knownArg(key string) bool {
@@ -323,6 +325,145 @@ func stripXFields(dt []byte) ([]byte, error) {
 	}
 
 	return yaml.Marshal(obj)
+}
+
+// LoadSpec loads a spec from the given data.
+func LoadSpec2(f io.Reader) (*Graph, error) {
+	y := yaml.NewDecoder(f)
+	specs := []Spec{}
+	for {
+		var spec Spec
+		err := y.Decode(&spec)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		specs = append(specs, spec)
+	}
+
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("no specs provided")
+	}
+
+	graph, err := buildGraph(specs)
+	if err != nil {
+		return nil, err
+	}
+	_ = graph
+
+	xspecs := topSort(graph)
+	_ = xspecs
+
+	for _, spec := range specs {
+		if err := spec.Validate(); err != nil {
+			return nil, err
+		}
+		spec.FillDefaults()
+	}
+
+	if err := graph.Build(); err != nil {
+		return nil, err
+	}
+
+	return graph, nil
+}
+
+type Graph struct {
+	m map[nameTarget]Spec
+	// deps  sets.Set[dependency]
+	// nodes map[string]*GraphNode
+	start string // index into nodes
+	g     ggraph
+}
+
+type dependency struct {
+	name    string
+	depends string
+}
+
+type GraphNode struct {
+	depends []string // index into Graph.nodes
+}
+
+func (g *Graph) Build() error {
+	return nil
+}
+
+type nameTarget struct {
+	name   string
+	target string
+}
+
+// func buildGraph(specs []Spec) (*Graph, error) {
+// 	g := Graph{}
+// 	g.nodes = make(map[string]*GraphNode)
+
+// 	m := make(map[nameTarget]Spec)
+// 	n := make(map[string]Spec)
+// 	for _, spec := range specs {
+// 		name := spec.Name
+// 		for tgt := range spec.Targets {
+// 			m[nameTarget{
+// 				name:   name,
+// 				target: tgt,
+// 			}] = spec
+// 			n[name] = spec
+// 		}
+// 	}
+
+// 	g.m = m
+
+// 	for nt, spec := range m {
+// 		name := nt.name
+// 		tgt := nt.target
+// 		for _, dep := range spec.Dependencies.Runtime[name] {
+// 			if _, ok := m[nameTarget{dep, tgt}]; ok {
+// 				// this is one of ours, set up dependency
+// 			}
+// 		}
+// 	}
+
+//		return &g, nil
+//	}
+
+type ggraph struct {
+	vertices []string
+	edges    sets.Set[dependency]
+}
+
+func buildGraph(specs []Spec) (*Graph, error) {
+	g := Graph{}
+
+	gg := ggraph{edges: sets.New()}
+	m := make(map[string]Spec)
+	for _, spec := range specs {
+		name := spec.Name
+		m[name] = spec
+		gg.vertices = append(gg.vertices, name)
+	}
+
+	for name, spec := range m {
+		for dep, constraints := range spec.Dependencies.Runtime {
+			_ = constraints // TODO(pmengelbert)
+			gg.edges.Add(dependency{
+				name:    name,
+				depends: dep,
+			})
+		}
+	}
+
+	// g.m = m
+
+	return &g, nil
+}
+
+func topSort(gg *ggraph) []*Spec {
+	index := 0
+	// s := []int
+	return nil
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {

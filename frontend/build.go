@@ -20,7 +20,22 @@ func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error)
 		return nil, fmt.Errorf("could not read spec file: %w", err)
 	}
 
-	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data))
+	f := bytes.NewBuffer(bytes.TrimSpace(src.Data))
+	spec, err := dalec.LoadSpec(f)
+	if err != nil {
+		return nil, fmt.Errorf("error loading spec: %w", err)
+	}
+	return spec, nil
+}
+
+func loadSpec2(ctx context.Context, client *dockerui.Client) (*dalec.Graph, error) {
+	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
+	if err != nil {
+		return nil, fmt.Errorf("could not read spec file: %w", err)
+	}
+
+	f := bytes.NewBuffer(bytes.TrimSpace(src.Data))
+	spec, err := dalec.LoadSpec2(f)
 	if err != nil {
 		return nil, fmt.Errorf("error loading spec: %w", err)
 	}

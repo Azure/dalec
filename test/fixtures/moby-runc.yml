@@ -7,6 +7,7 @@ args:
   RUNC_COMMIT:
   REVISION: 1
   VERSION:
+  SOURCE_DATE_EPOCH:
 
 name: moby-runc
 description: A CLI tool for spawning and running containers according to the OCI specification.
