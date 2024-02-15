@@ -38,16 +38,16 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, dep := range depOrder[:len(depOrder)-1] {
-			rpmDir, err := specToRpmLLB(dep, sOpt, pg)
+		for _, dep := range depOrder {
+			rd, err := specToRpmLLB(dep, sOpt, pg)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating rpm: %w", err)
 			}
-			rpmDirs[dep.Name] = rpmDir
+			rpmDirs[dep.Name] = rd
 		}
 	}
 
-	st, err := specToContainersLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
+	st, err := specsToContainersLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -157,7 +157,7 @@ func getBaseOutputImage(spec *dalec.Spec, target string) string {
 	return baseRef
 }
 
-func specToContainersLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDirs map[string]llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specsToContainersLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDirs map[string]llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
@@ -178,6 +178,7 @@ func specToContainersLLB(spec *dalec.Spec, target string, builderImg llb.State, 
 
 	installCmd := `
 #!/usr/bin/env sh
+set -x
 
 check_non_empty() {
 	ls ${1} > /dev/null 2>&1
@@ -195,6 +196,10 @@ fi
 if check_non_empty "${arch_dir}/*.rpm"; then
 	rpms="${rpms} ${arch_dir}/*.rpm"
 fi
+
+mkdir -p /tmp/install/rpms
+find "$(dirname "$rpms")" -type f -name "*.rpm" -exec mv {} /tmp/install/rpms \;
+rpms="/tmp/install/rpms/*.rpm"
 
 if [ -n "${rpms}" ]; then
 	tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "` + workPath + `" --setopt=reposdir=/etc/yum.repos.d ${rpms} || exit
@@ -225,10 +230,10 @@ rm -rf ` + rpmdbDir + `
 		tdnfCacheMountWithPrefix(workPath),
 		dalec.WithConstraints(opts...),
 	}
-	for _, dirState := range rpmDirs {
+	for name, dirState := range rpmDirs {
 		runArgs = append(
 			runArgs,
-			llb.AddMount("/tmp/rpms", dirState, llb.SourcePath("/RPMS")),
+			llb.AddMount(filepath.Join("/tmp/rpms", name), dirState, llb.SourcePath("/RPMS")),
 		)
 	}
 	worker := builderImg.Run(runArgs...)

@@ -115,7 +115,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	_, target, ok := strings.Cut(bc.Target, "/")
+	subTarget, target, ok := strings.Cut(bc.Target, "/")
 	if !ok {
 		return nil, fmt.Errorf("no path separator found: %q", target)
 	}
@@ -131,7 +131,11 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 	}
 
-	spec := graph.Last()
+	ordered, err := graph.Ordered().TargetSlice(subTarget)
+	if err != nil {
+		return nil, err
+	}
+	spec := ordered[len(ordered)-1]
 
 	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(bc.Target))
 	if err != nil || handled {
@@ -172,9 +176,14 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		args := dalec.DuplicateMap(bc.BuildArgs)
 		fillPlatformArgs("TARGET", args, targetPlatform)
 		fillPlatformArgs("BUILD", args, buildPlatform)
-		if err := spec.SubstituteArgs(args); err != nil {
-			return nil, nil, err
+		for _, spec := range graph.Ordered() {
+			dupe := dalec.DuplicateMap(args)
+			if err := spec.SubstituteArgs(dupe); err != nil {
+				return nil, nil, err
+			}
 		}
+		// if err := spec.SubstituteArgs(args); err != nil {
+		// }
 
 		return f(ctx, client, spec)
 	})
