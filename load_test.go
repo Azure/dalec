@@ -1,6 +1,7 @@
 package dalec
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,9 @@ import (
 	"reflect"
 	"testing"
 )
+
+//go:embed test/fixtures/unmarshall/source-inline.yml
+var sourceInlineTemplate []byte
 
 func TestSourceValidation(t *testing.T) {
 	cases := []struct {
@@ -334,29 +338,10 @@ func TestSourceFillDefaults(t *testing.T) {
 }
 
 func TestSourceInlineUnmarshalling(t *testing.T) {
-	yaml := `
-sources:
-	TestFileOctelPreGo113:
-		inline:
-			file:
-				contents: Hello world!
-				permissions: 0644
-	TestFileOctelGo113:
-		inline:
-			file:
-				contents: Hello world!
-				permissions: 0o644
-	TestDirOctelPreGo113:
-		inline:
-			dir:
-				permissions: 0755
-	TestDirOctelGo113:
-		inline:
-			dir:
-				permissions: 0o755
-`
-
-	spec, err := LoadSpec([]byte(yaml))
+	// NOTE: not using text template yaml for this test
+	// tabs seem to be illegal in yaml indentation
+	// yaml unmarshalling with strict mode doesn't produce a great error message.
+	spec, err := LoadSpec(sourceInlineTemplate)
 	if err != nil {
 		t.Fatal(err)
 	}
