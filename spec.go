@@ -225,10 +225,10 @@ type SourceBuild struct {
 	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
 }
 
-// SourceInlineContent is used to specify the content of an inline source.
+// SourceInlineFile is used to specify the content of an inline source.
 type SourceInlineFile struct {
-	// Content is the contents.
-	Contents string `yaml:"content,omitempty" json:"content,omitempty"`
+	// Contents is the content.
+	Contents string `yaml:"contents,omitempty" json:"contents,omitempty"`
 	// Permissions is the octal file permissions to set on the file.
 	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
 	// UID is the user ID to set on the directory and all files and directories within it.
