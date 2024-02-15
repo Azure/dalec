@@ -209,7 +209,7 @@ func ProgressGroup(name string) llb.ConstraintsOpt {
 	return constraintsOptFunc(func(c *llb.Constraints) {
 		if c.Metadata.ProgressGroup != nil {
 			id := c.Metadata.ProgressGroup.Id
-			llb.ProgressGroup(id, name, true).SetConstraintsOption(c)
+			llb.ProgressGroup(id, name, false).SetConstraintsOption(c)
 			return
 		}
 
