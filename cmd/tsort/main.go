@@ -20,17 +20,17 @@ func main() {
 	}
 	buf := bytes.NewBuffer(b)
 
-	specs, err := dalec.LoadSpec2(buf)
+	allSpecs, err := dalec.LoadSpecs(buf)
 	if err != nil {
 		panic(err)
 	}
 
-	allBuild, err := dalec.GetBuildTargets(specs, tgt)
+	sorted, err := dalec.TopSort(allSpecs, tgt)
 	if err != nil {
 		panic(err)
 	}
 
-	for _, spec := range allBuild {
+	for _, spec := range sorted {
 		fmt.Println(spec.Name)
 	}
 }

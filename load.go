@@ -342,9 +342,9 @@ func GetBuildTargets(specs []*Spec, target string) ([]*Spec, error) {
 }
 
 // LoadSpec loads a spec from the given data.
-func LoadSpec2(f io.Reader) ([]*Spec, error) {
+func LoadSpecs(f io.Reader) ([]*Spec, error) {
 	y := yaml.NewDecoder(f)
-	specs := []Spec{}
+	specs := []*Spec{}
 	for {
 		var spec Spec
 		err := y.Decode(&spec)
@@ -355,13 +355,17 @@ func LoadSpec2(f io.Reader) ([]*Spec, error) {
 			return nil, err
 		}
 
-		specs = append(specs, spec)
+		specs = append(specs, &spec)
 	}
 
 	if len(specs) == 0 {
 		return nil, fmt.Errorf("no specs provided")
 	}
 
+	return specs, nil
+}
+
+func TopSort(specs []*Spec, target string) ([]*Spec, error) {
 	graph, err := buildGraph(specs)
 	if err != nil {
 		return nil, err
@@ -372,160 +376,220 @@ func LoadSpec2(f io.Reader) ([]*Spec, error) {
 		return nil, err
 	}
 
-	return topSorted, nil
+	return getTargetAndDeps(topSorted, target)
+}
+
+func getTargetAndDeps(topSorted []*Spec, target string) ([]*Spec, error) {
+	j := -1
+	for i, s := range topSorted {
+		if s.Name == target {
+			j = i
+		}
+	}
+	if j < 0 {
+		return nil, fmt.Errorf("target %q not found, or is unreachale", target)
+	}
+	return topSorted[:j+1], nil
 }
 
 type dependency struct {
-	name    string
-	depends string
+	v *vertex
+	w *vertex
+}
+type cycle []*vertex
+type cycles []cycle
+
+type strDependency struct {
+	n string
+	d string
 }
 
 type graph struct {
-	m        map[string]Spec
-	vertices []string
+	specs    map[string]*Spec
+	indices  map[string]int
+	vertices []*vertex
 	edges    sets.Set[dependency]
 }
 
-func buildGraph(specs []Spec) (*graph, error) {
-	g := graph{edges: sets.New[dependency]()}
-	m := make(map[string]Spec)
-	for _, spec := range specs {
+type vertex struct {
+	name    string
+	index   *int
+	lowlink int
+	onStack bool
+}
+
+func buildGraph(specs []*Spec) (*graph, error) {
+	g := graph{
+		edges:    sets.New[dependency](),
+		vertices: make([]*vertex, len(specs)),
+		specs:    make(map[string]*Spec),
+		indices:  make(map[string]int),
+	}
+	for i, spec := range specs {
 		name := spec.Name
-		m[name] = spec
-		g.vertices = append(g.vertices, name)
+		g.specs[name] = spec
+		v := &vertex{name: name}
+		g.indices[name] = i
+		g.vertices[i] = v
 	}
 
-	for name, spec := range m {
+	for name, spec := range g.specs {
 		if spec.Dependencies == nil {
 			continue
 		}
-		for dep, constraints := range spec.Dependencies.Runtime {
-			_ = constraints // TODO(pmengelbert)
-			if name == dep {
+		vi := g.indices[name]
+		v := g.vertices[vi]
+		type depMap map[string][]string
+		runtimeAndBuildDeps := []depMap{spec.Dependencies.Build, spec.Dependencies.Runtime}
+		for _, deps := range runtimeAndBuildDeps {
+			if deps == nil {
 				continue
 			}
-			g.edges.Insert(dependency{
-				name:    name,
-				depends: dep,
-			})
+			for dep, constraints := range deps {
+				_ = constraints // TODO(pmengelbert)
+				if name == dep {
+					continue // ignore if cycle is length 1
+				}
+				wi, ok := g.indices[dep]
+				if !ok {
+					// this is not one of ours
+					continue
+				}
+				w := g.vertices[wi]
+				g.edges.Insert(dependency{
+					v: v,
+					w: w,
+				})
+			}
 		}
 	}
-
-	g.m = m
 
 	return &g, nil
 }
 
 func topSort(gg *graph) ([]*Spec, error) {
-	m := gg.m
+	// m := gg.m
 	index := 0
-	s := make([]string, 0, len(gg.vertices)+len(gg.edges))
-	indices := make(map[string]int)
-	lowlinks := make(map[string]int)
-	onStack := sets.New[string]()
-	push := func(i string) {
+	s := make([]*vertex, 0, len(gg.vertices)+len(gg.edges))
+	push := func(i *vertex) {
 		s = append(s, i)
 	}
-	pop := func() string {
+
+	// returns vertex and whether or not stack was empty
+	pop := func() *vertex {
 		l := len(s)
 		if l == 0 {
-			return ""
+			return nil
 		}
 		ret := s[l-1]
 		s = s[:l-1]
 		return ret
 	}
 	fmin := func(v, w int) int {
-		if v < w {
+		if v <= w {
 			return v
 		}
 		return w
 	}
-	_ = pop
-	output := [][]string{}
 
-	var strongConnect func(v string)
-	strongConnect = func(v string) {
-		indices[v] = index
-		lowlinks[v] = index
+	output := cycles{}
+	var strongConnect func(v *vertex)
+	strongConnect = func(v *vertex) {
+		v.index = new(int)
+		*v.index = index
+		v.lowlink = index
 		index++
 		push(v)
-		onStack.Insert(v)
+		v.onStack = true
 
-		for d := range gg.edges {
-			v := d.name
-			w := d.depends
-			if _, ok := indices[w]; !ok {
-				strongConnect(w)
-				m := lowlinks[v]
-				if m > lowlinks[w] {
-					m = lowlinks[w]
-				}
-				lowlinks[v] = fmin(lowlinks[v], lowlinks[w])
+		for edge := range gg.edges {
+			if v.name != edge.v.name {
 				continue
 			}
-			if onStack.Has(w) {
-				lowlinks[v] = fmin(lowlinks[v], indices[w])
+			w := edge.w
+			if w.index == nil {
+				strongConnect(w)
+				v.lowlink = fmin(v.lowlink, v.lowlink)
+				continue
+			}
+			if w.onStack {
+				v.lowlink = fmin(v.lowlink, *w.index)
 			}
 		}
 
-		if lowlinks[v] == indices[v] {
-			c := []string{}
-			var w string
+		if v.lowlink == *v.index {
+			c := []*vertex{}
+			var (
+				w *vertex
+			)
 			for {
 				w = pop()
-				onStack.Delete(w)
+				w.onStack = false
 				c = append(c, w)
 				if w == v {
 					break
 				}
 			}
-			onStack.Delete(w)
+			w.onStack = false
 			output = append(output, c)
 		}
 	}
 
 	for _, v := range gg.vertices {
-		if _, ok := indices[v]; ok {
+		if v.index != nil {
 			continue
 		}
 		strongConnect(v)
 	}
 
-	specs := []*Spec{}
-	if len(output) == 1 && len(output[0]) == 1 {
-		o := m[output[0][0]]
-		specs = append(specs, &o)
-		return specs, nil
-	}
-
-	for _, a := range output {
-		// set := sets.New[string]()
-		// for _, b := range a {
-		// 	if set.Has(b) {
-		// 		return nil, fmt.Errorf("dalec dependency cycle: %#v", a)
-		// 	}
-		// 	set.Insert(b)
-
-		// 	spec, ok := m[b]
-		// 	if !ok {
-		// 		return nil, fmt.Errorf("spec not found")
-		// 	}
-		// 	specs = append(specs, &spec)
-		// }
-		if len(a) > 1 {
-			return nil, fmt.Errorf("dalec dependency cycle: %#v", a)
+	specs := make([]*Spec, 0, len(gg.vertices))
+	for _, components := range output {
+		if len(components) > 1 {
+			return nil, fmt.Errorf("dalec dependency cycle: %s", components.disp())
 		}
-
-		spec, ok := m[a[0]]
-		if !ok {
-			return nil, fmt.Errorf("really bad error!")
+		for _, component := range components {
+			n := component.name
+			spec := gg.specs[n]
+			specs = append(specs, spec)
 		}
-
-		specs = append(specs, &spec)
 	}
 
 	return specs, nil
+}
+
+func (c cycle) disp() string {
+	if len(c) == 0 {
+		return ""
+	}
+	s := c.String()
+	s = s[:len(s)-2]
+	return fmt.Sprintf("%s, %s }", s, c[0].name)
+}
+
+func (c cycle) String() string {
+	sb := strings.Builder{}
+	sb.WriteString("{ ")
+	for i, elem := range c {
+		sb.WriteString(elem.name)
+		if i+1 == len(c) {
+			break
+		}
+		sb.WriteString(", ")
+	}
+	sb.WriteString(" }")
+	return sb.String()
+}
+
+func (cs cycles) String() string {
+	sb := strings.Builder{}
+	for i, component := range cs {
+		sb.WriteString(component.String())
+		if i+1 == len(cs) {
+			break
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {
