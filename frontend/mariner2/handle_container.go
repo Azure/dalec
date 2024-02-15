@@ -31,12 +31,23 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	pg := dalec.ProgressGroup("Build mariner2 container: " + spec.Name)
 	baseImg := getWorkerImage(sOpt, pg)
 
-	rpmDir, err := specToRpmLLB(spec, sOpt, pg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error creating rpm: %w", err)
+	g := dalec.TheGraph
+	rpmDirs := make(map[string]llb.State)
+	if g.Len() > 1 {
+		depOrder, err := g.Ordered().TargetSlice(spec.Name)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, dep := range depOrder[:len(depOrder)-1] {
+			rpmDir, err := specToRpmLLB(dep, sOpt, pg)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error creating rpm: %w", err)
+			}
+			rpmDirs[dep.Name] = rpmDir
+		}
 	}
 
-	st, err := specToContainerLLB(spec, targetKey, baseImg, rpmDir, sOpt, pg)
+	st, err := specToContainersLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,6 +155,89 @@ func getBaseOutputImage(spec *dalec.Spec, target string) string {
 		baseRef = spec.Targets[target].Image.Base
 	}
 	return baseRef
+}
+
+func specToContainersLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDirs map[string]llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
+	const workPath = "/tmp/rootfs"
+
+	mfstDir := filepath.Join(workPath, "var/lib/rpmmanifest")
+	mfst1 := filepath.Join(mfstDir, "container-manifest-1")
+	mfst2 := filepath.Join(mfstDir, "container-manifest-2")
+	rpmdbDir := filepath.Join(workPath, "var/lib/rpm")
+
+	chrootedPaths := []string{
+		filepath.Join(workPath, "/usr/local/bin"),
+		filepath.Join(workPath, "/usr/local/sbin"),
+		filepath.Join(workPath, "/usr/bin"),
+		filepath.Join(workPath, "/usr/sbin"),
+		filepath.Join(workPath, "/bin"),
+		filepath.Join(workPath, "/sbin"),
+	}
+	chrootedPathEnv := strings.Join(chrootedPaths, ":")
+
+	installCmd := `
+#!/usr/bin/env sh
+
+check_non_empty() {
+	ls ${1} > /dev/null 2>&1
+}
+
+arch_dir="/tmp/rpms/$(uname -m)"
+noarch_dir="/tmp/rpms/noarch"
+
+rpms=""
+
+if check_non_empty "${noarch_dir}/*.rpm"; then
+	rpms="${noarch_dir}/*.rpm"
+fi
+
+if check_non_empty "${arch_dir}/*.rpm"; then
+	rpms="${rpms} ${arch_dir}/*.rpm"
+fi
+
+if [ -n "${rpms}" ]; then
+	tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "` + workPath + `" --setopt=reposdir=/etc/yum.repos.d ${rpms} || exit
+fi
+
+# If the rpm command is in the rootfs then we don't need to do anything
+# If not then this is a distroless image and we need to generate manifests of the installed rpms and cleanup the rpmdb.
+
+PATH="` + chrootedPathEnv + `" command -v rpm && exit 0
+
+set -e
+mkdir -p ` + mfstDir + `
+rpm --dbpath=` + rpmdbDir + ` -qa > ` + mfst1 + `
+rpm --dbpath=` + rpmdbDir + ` -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{INSTALLTIME}\t%{BUILDTIME}\t%{VENDOR}\t(none)\t%{SIZE}\t%{ARCH}\t%{EPOCHNUM}\t%{SOURCERPM}\n" > ` + mfst2 + `
+rm -rf ` + rpmdbDir + `
+`
+
+	installer := llb.Scratch().File(llb.Mkfile("install.sh", 0o755, []byte(installCmd)), opts...)
+
+	baseImg := llb.Image(getBaseOutputImage(spec, target), llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
+	runArgs := []llb.RunOption{
+		shArgs("/tmp/install.sh"),
+		defaultTndfCacheMount(),
+		llb.AddMount("/tmp/install.sh", installer, llb.SourcePath("install.sh")),
+		// Mount the tdnf cache into the workpath so that:
+		// 1. tdnf will use the cache
+		// 2. Repo data and packages are not left behind in the final image.
+		tdnfCacheMountWithPrefix(workPath),
+		dalec.WithConstraints(opts...),
+	}
+	for _, dirState := range rpmDirs {
+		runArgs = append(
+			runArgs,
+			llb.AddMount("/tmp/rpms", dirState, llb.SourcePath("/RPMS")),
+		)
+	}
+	worker := builderImg.Run(runArgs...)
+
+	// This adds a mount to the worker so that all the commands are run with this mount added
+	// The return value is the state representing the contents of the mounted directory after the commands are run
+	rootfs := worker.AddMount(workPath, baseImg)
+
+	return rootfs, nil
 }
 
 func specToContainerLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDir llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {

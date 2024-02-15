@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 
@@ -18,19 +17,28 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	buf := bytes.NewBuffer(b)
 
-	allSpecs, err := dalec.LoadSpecs(buf)
+	allSpecs, err := dalec.LoadSpecs(b)
 	if err != nil {
 		panic(err)
 	}
 
-	sorted, err := dalec.TopSort(allSpecs, tgt)
+	graph, err := dalec.BuildGraph(allSpecs)
 	if err != nil {
 		panic(err)
 	}
 
-	for _, spec := range sorted {
+	o := graph.Ordered()
+	if err != nil {
+		panic(err)
+	}
+
+	t, err := o.TargetSlice(tgt)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, spec := range t {
 		fmt.Println(spec.Name)
 	}
 }

@@ -1,12 +1,14 @@
 package dalec
 
 import (
+	"bytes"
 	goerrors "errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
@@ -342,7 +344,8 @@ func GetBuildTargets(specs []*Spec, target string) ([]*Spec, error) {
 }
 
 // LoadSpec loads a spec from the given data.
-func LoadSpecs(f io.Reader) ([]*Spec, error) {
+func LoadSpecs(b []byte) ([]*Spec, error) {
+	f := bytes.NewBuffer(b)
 	y := yaml.NewDecoder(f)
 	specs := []*Spec{}
 	for {
@@ -365,36 +368,29 @@ func LoadSpecs(f io.Reader) ([]*Spec, error) {
 	return specs, nil
 }
 
-func TopSort(specs []*Spec, target string) ([]*Spec, error) {
-	graph, err := buildGraph(specs)
-	if err != nil {
-		return nil, err
-	}
+// func TopSort(specs []*Spec, target string) (*Graph, error) {
+// 	graph, err := BuildGraph(specs)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	topSorted, err := topSort(graph)
-	if err != nil {
-		return nil, err
-	}
+// 	topSorted, err := topSort(graph)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	ordered := []string{}
+// 	for _, spec := range topSorted {
+// 		ordered = append(ordered, spec.Name)
+// 	}
+// 	graph.ordered = ordered
 
-	return getTargetAndDeps(topSorted, target)
-}
-
-func getTargetAndDeps(topSorted []*Spec, target string) ([]*Spec, error) {
-	j := -1
-	for i, s := range topSorted {
-		if s.Name == target {
-			j = i
-		}
-	}
-	if j < 0 {
-		return nil, fmt.Errorf("target %q not found, or is unreachale", target)
-	}
-	return topSorted[:j+1], nil
-}
+// 	return graph, nil
+// }
 
 type dependency struct {
-	v *vertex
-	w *vertex
+	v    *vertex
+	w    *vertex
+	kind string
 }
 type cycle []*vertex
 type cycles []cycle
@@ -404,11 +400,31 @@ type strDependency struct {
 	d string
 }
 
-type graph struct {
-	specs    map[string]*Spec
+type Graph struct {
+	Specs    map[string]*Spec
+	ordered  OrderedDeps
 	indices  map[string]int
 	vertices []*vertex
 	edges    sets.Set[dependency]
+}
+
+type OrderedDeps []*Spec
+
+func (o OrderedDeps) TargetSlice(target string) ([]*Spec, error) {
+	for i, dep := range o {
+		if dep.Name == target {
+			return o[:i+1], nil
+		}
+	}
+	return nil, fmt.Errorf("target not found: %q", target)
+}
+
+func (g *Graph) Ordered() OrderedDeps {
+	return g.ordered
+}
+
+func (g *Graph) Len() int {
+	return len(g.ordered)
 }
 
 type vertex struct {
@@ -418,59 +434,79 @@ type vertex struct {
 	onStack bool
 }
 
-func buildGraph(specs []*Spec) (*graph, error) {
-	g := graph{
-		edges:    sets.New[dependency](),
-		vertices: make([]*vertex, len(specs)),
-		specs:    make(map[string]*Spec),
-		indices:  make(map[string]int),
+var (
+	m        sync.Mutex
+	TheGraph *Graph
+)
+
+func (g *Graph) Last() *Spec {
+	return g.ordered[len(g.ordered)-1]
+}
+
+func BuildGraph(specs []*Spec) (*Graph, error) {
+	if TheGraph == nil {
+		m.Lock()
+		TheGraph = new(Graph)
+		*TheGraph = Graph{
+			edges:    sets.New[dependency](),
+			vertices: make([]*vertex, len(specs)),
+			Specs:    make(map[string]*Spec),
+			indices:  make(map[string]int),
+		}
+		m.Unlock()
 	}
 	for i, spec := range specs {
 		name := spec.Name
-		g.specs[name] = spec
+		TheGraph.Specs[name] = spec
 		v := &vertex{name: name}
-		g.indices[name] = i
-		g.vertices[i] = v
+		TheGraph.indices[name] = i
+		TheGraph.vertices[i] = v
 	}
 
-	for name, spec := range g.specs {
+	for name, spec := range TheGraph.Specs {
 		if spec.Dependencies == nil {
 			continue
 		}
-		vi := g.indices[name]
-		v := g.vertices[vi]
-		type depMap map[string][]string
-		runtimeAndBuildDeps := []depMap{spec.Dependencies.Build, spec.Dependencies.Runtime}
+		vi := TheGraph.indices[name]
+		v := TheGraph.vertices[vi]
+		type depMap struct {
+			kind string
+			m    map[string][]string
+		}
+		runtimeAndBuildDeps := []depMap{{m: spec.Dependencies.Build, kind: "build"}, {m: spec.Dependencies.Runtime, kind: "runtime"}}
 		for _, deps := range runtimeAndBuildDeps {
-			if deps == nil {
+			if deps.m == nil {
 				continue
 			}
-			for dep, constraints := range deps {
+			for dep, constraints := range deps.m {
 				_ = constraints // TODO(pmengelbert)
 				if name == dep {
 					continue // ignore if cycle is length 1
 				}
-				wi, ok := g.indices[dep]
+				wi, ok := TheGraph.indices[dep]
 				if !ok {
 					// this is not one of ours
 					continue
 				}
-				w := g.vertices[wi]
-				g.edges.Insert(dependency{
-					v: v,
-					w: w,
+				w := TheGraph.vertices[wi]
+				TheGraph.edges.Insert(dependency{
+					v:    v,
+					w:    w,
+					kind: deps.kind,
 				})
 			}
 		}
 	}
 
-	return &g, nil
+	if err := TheGraph.topSort(); err != nil {
+		return nil, err
+	}
+	return TheGraph, nil
 }
 
-func topSort(gg *graph) ([]*Spec, error) {
-	// m := gg.m
+func (g *Graph) topSort() error {
 	index := 0
-	s := make([]*vertex, 0, len(gg.vertices)+len(gg.edges))
+	s := make([]*vertex, 0, len(g.vertices)+len(g.edges))
 	push := func(i *vertex) {
 		s = append(s, i)
 	}
@@ -502,7 +538,7 @@ func topSort(gg *graph) ([]*Spec, error) {
 		push(v)
 		v.onStack = true
 
-		for edge := range gg.edges {
+		for edge := range g.edges {
 			if v.name != edge.v.name {
 				continue
 			}
@@ -535,26 +571,25 @@ func topSort(gg *graph) ([]*Spec, error) {
 		}
 	}
 
-	for _, v := range gg.vertices {
+	for _, v := range g.vertices {
 		if v.index != nil {
 			continue
 		}
 		strongConnect(v)
 	}
 
-	specs := make([]*Spec, 0, len(gg.vertices))
+	specs := make([]*Spec, 0, len(g.vertices))
 	for _, components := range output {
 		if len(components) > 1 {
-			return nil, fmt.Errorf("dalec dependency cycle: %s", components.disp())
+			return fmt.Errorf("dalec dependency cycle: %s", components.disp())
 		}
 		for _, component := range components {
-			n := component.name
-			spec := gg.specs[n]
-			specs = append(specs, spec)
+			specs = append(specs, g.Specs[component.name])
 		}
 	}
 
-	return specs, nil
+	g.ordered = specs
+	return nil
 }
 
 func (c cycle) disp() string {

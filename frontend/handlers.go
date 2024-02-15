@@ -239,3 +239,116 @@ func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient
 	}
 	return nil
 }
+
+// func registerSpecHandlers2(ctx context.Context, graph *dalec.Graph, client gwclient.Client) error {
+// 	var def *pb.Definition
+// 	marshlSpec := func() (*pb.Definition, error) {
+// 		if def != nil {
+// 			return def, nil
+// 		}
+
+// 		dt, err := yaml.Marshal(graph)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		llbDef, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0600, dt)).Marshal(ctx)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		def = llbDef.ToPB()
+// 		return def, nil
+// 	}
+
+// 	opts := client.BuildOpts().Opts
+// 	// Prevent infinite recursion in from forwarded builds
+// 	// This means we only support 1 level of forwarding.
+// 	// We could add a second opt to check for further nesting, but it is probaly not worth it.
+// 	switch opts[requestIDKey] {
+// 	case bktargets.SubrequestsTargetsDefinition.Name:
+// 		if _, ok := opts[dalecTargetOptKey]; ok {
+// 			return nil
+// 		}
+// 	case dalecSubrequstForwardBuild:
+// 		return nil
+// 	}
+
+// 	register := func(group string) error {
+// 		spec := graph
+//         // graph.Ordered().TargetSlice()
+// 		grp, _, _ := strings.Cut(group, "/")
+// 		t, ok := spec.Targets[grp]
+// 		if !ok {
+// 			bklog.G(ctx).WithField("group", group).Debug("No target found in forwarded build")
+// 			return nil
+// 		}
+
+// 		if t.Frontend == nil || t.Frontend.Image == "" {
+// 			return nil
+// 		}
+
+// 		def, err := marshlSpec()
+// 		if err != nil {
+// 			return err
+// 		}
+
+// 		req := gwclient.SolveRequest{
+// 			Frontend: "gateway.v0",
+// 			FrontendInputs: map[string]*pb.Definition{
+// 				"dockerfile": def,
+// 			},
+// 			FrontendOpt: map[string]string{
+// 				"source":          t.Frontend.Image,
+// 				"cmdline":         t.Frontend.CmdLine,
+// 				dalecTargetOptKey: group,
+// 				requestIDKey:      bktargets.SubrequestsTargetsDefinition.Name,
+// 			},
+// 		}
+
+// 		if err := copyForForward(ctx, client, &req); err != nil {
+// 			return err
+// 		}
+
+// 		caps := req.FrontendOpt["frontend.caps"]
+// 		req.FrontendOpt["frontend.caps"] = strings.Join(append(strings.Split(caps, ","), "moby.buildkit.frontend.subrequests"), ",")
+
+// 		bklog.G(ctx).WithField("group", group).WithField("target", t.Frontend.Image).Debug("Requesting target list")
+// 		res, err := client.Solve(ctx, req)
+// 		if err != nil {
+// 			return errors.Wrapf(err, "error getting targets from frontend %q", t.Frontend.Image)
+// 		}
+
+// 		dt := res.Metadata["result.json"]
+// 		var tl bktargets.List
+// 		if err := json.Unmarshal(dt, &tl); err != nil {
+// 			return errors.Wrapf(err, "error unmarshalling targets from frontend %q", t.Frontend.Image)
+// 		}
+
+// 		for _, bkt := range tl.Targets {
+// 			// capture loop variables
+// 			grp := strings.TrimSuffix(group, "/"+bkt.Name)
+// 			bklog.G(ctx).WithField("group", grp).WithField("target", bkt.Name).Debug("Registering forwarded target")
+// 			RegisterHandler(grp, bkt, makeTargetForwarder(t, bkt))
+// 		}
+
+// 		if len(tl.Targets) == 0 {
+// 			bklog.G(ctx).WithField("group", group).Debug("No targets found in forwarded build")
+// 		}
+
+// 		return nil
+// 	}
+
+// 	// If we already have a target in the opts, only register that one.
+// 	// ... unless this is a target list request, in which case we register all targets.
+// 	if opts[requestIDKey] != bktargets.SubrequestsTargetsDefinition.Name {
+// 		if t := opts["target"]; t != "" {
+// 			return register(t)
+// 		}
+// 	}
+
+// 	for group := range graph.Targets {
+// 		if err := register(group); err != nil {
+// 			return err
+// 		}
+// 	}
+// 	return nil
+// }
