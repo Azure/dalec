@@ -234,7 +234,7 @@ func source2LLBGetter(s *Spec, src Source, name string, forMount bool) LLBGetter
 			if src.Inline.File != nil {
 				return llb.Scratch().With(src.Inline.File.PopulateAt(name)), nil
 			}
-			return llb.Scratch().With(src.Inline.Dir.PopulateAt(name)), nil
+			return llb.Scratch().With(src.Inline.Dir.PopulateAt("/")), nil
 		default:
 			return llb.Scratch(), errNoSourceVariant
 		}

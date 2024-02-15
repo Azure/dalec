@@ -509,7 +509,7 @@ func TestSourceInlineDir(t *testing.T) {
 				for i, name := range sorted {
 					ops := getSourceOp(ctx, t, src)
 					f := src.Inline.Dir.Files[name]
-					checkMkfile(t, ops[i+1].GetFile(), f, filepath.Join("/test", name))
+					checkMkfile(t, ops[i+1].GetFile(), f, name)
 				}
 			})
 		})
@@ -549,8 +549,8 @@ func checkMkdir(t *testing.T, op *pb.FileOp, src *SourceInlineDir, name string) 
 	if os.FileMode(mkdir.Mode) != xPerms {
 		t.Errorf("expected mode %O, got %O", xPerms, os.FileMode(mkdir.Mode))
 	}
-	if mkdir.Path != name {
-		t.Errorf("expected path %q, got %q", name, mkdir.Path)
+	if mkdir.Path != "/" {
+		t.Errorf("expected path %q, got %q", "/", mkdir.Path)
 	}
 }
 
@@ -591,8 +591,9 @@ func checkMkfile(t *testing.T, op *pb.FileOp, src *SourceInlineFile, name string
 		t.Errorf("expected data %q, got %q", src.Contents, mkfile.Data)
 	}
 
-	if mkfile.Path != name {
-		t.Errorf("expected path %q, got %q", name, mkfile.Path)
+	xPath := filepath.Join("/", name)
+	if mkfile.Path != xPath {
+		t.Errorf("expected path %q, got %q", xPath, mkfile.Path)
 	}
 }
 
