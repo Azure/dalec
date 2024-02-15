@@ -20,6 +20,7 @@ require (
 	go.opentelemetry.io/otel v1.14.0
 	golang.org/x/sys v0.15.0
 	google.golang.org/grpc v1.57.2
+	k8s.io/apimachinery v0.26.2
 )
 
 require (
@@ -50,7 +51,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
 	github.com/in-toto/in-toto-golang v0.5.0 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
-	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect

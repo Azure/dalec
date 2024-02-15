@@ -327,8 +327,22 @@ func stripXFields(dt []byte) ([]byte, error) {
 	return yaml.Marshal(obj)
 }
 
+func GetBuildTargets(specs []*Spec, target string) ([]*Spec, error) {
+	j := -1
+	for i, s := range specs {
+		if s.Name == target {
+			j = i
+		}
+	}
+	if j < 0 {
+		return nil, fmt.Errorf("target %q not found, or is unreachale", target)
+	}
+
+	return specs[:j+1], nil
+}
+
 // LoadSpec loads a spec from the given data.
-func LoadSpec2(f io.Reader) (*Graph, error) {
+func LoadSpec2(f io.Reader) ([]*Spec, error) {
 	y := yaml.NewDecoder(f)
 	specs := []Spec{}
 	for {
@@ -352,31 +366,13 @@ func LoadSpec2(f io.Reader) (*Graph, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = graph
 
-	xspecs := topSort(graph)
-	_ = xspecs
-
-	for _, spec := range specs {
-		if err := spec.Validate(); err != nil {
-			return nil, err
-		}
-		spec.FillDefaults()
-	}
-
-	if err := graph.Build(); err != nil {
+	topSorted, err := topSort(graph)
+	if err != nil {
 		return nil, err
 	}
 
-	return graph, nil
-}
-
-type Graph struct {
-	m map[nameTarget]Spec
-	// deps  sets.Set[dependency]
-	// nodes map[string]*GraphNode
-	start string // index into nodes
-	g     ggraph
+	return topSorted, nil
 }
 
 type dependency struct {
@@ -384,86 +380,152 @@ type dependency struct {
 	depends string
 }
 
-type GraphNode struct {
-	depends []string // index into Graph.nodes
-}
-
-func (g *Graph) Build() error {
-	return nil
-}
-
-type nameTarget struct {
-	name   string
-	target string
-}
-
-// func buildGraph(specs []Spec) (*Graph, error) {
-// 	g := Graph{}
-// 	g.nodes = make(map[string]*GraphNode)
-
-// 	m := make(map[nameTarget]Spec)
-// 	n := make(map[string]Spec)
-// 	for _, spec := range specs {
-// 		name := spec.Name
-// 		for tgt := range spec.Targets {
-// 			m[nameTarget{
-// 				name:   name,
-// 				target: tgt,
-// 			}] = spec
-// 			n[name] = spec
-// 		}
-// 	}
-
-// 	g.m = m
-
-// 	for nt, spec := range m {
-// 		name := nt.name
-// 		tgt := nt.target
-// 		for _, dep := range spec.Dependencies.Runtime[name] {
-// 			if _, ok := m[nameTarget{dep, tgt}]; ok {
-// 				// this is one of ours, set up dependency
-// 			}
-// 		}
-// 	}
-
-//		return &g, nil
-//	}
-
-type ggraph struct {
+type graph struct {
+	m        map[string]Spec
 	vertices []string
 	edges    sets.Set[dependency]
 }
 
-func buildGraph(specs []Spec) (*Graph, error) {
-	g := Graph{}
-
-	gg := ggraph{edges: sets.New()}
+func buildGraph(specs []Spec) (*graph, error) {
+	g := graph{edges: sets.New[dependency]()}
 	m := make(map[string]Spec)
 	for _, spec := range specs {
 		name := spec.Name
 		m[name] = spec
-		gg.vertices = append(gg.vertices, name)
+		g.vertices = append(g.vertices, name)
 	}
 
 	for name, spec := range m {
+		if spec.Dependencies == nil {
+			continue
+		}
 		for dep, constraints := range spec.Dependencies.Runtime {
 			_ = constraints // TODO(pmengelbert)
-			gg.edges.Add(dependency{
+			if name == dep {
+				continue
+			}
+			g.edges.Insert(dependency{
 				name:    name,
 				depends: dep,
 			})
 		}
 	}
 
-	// g.m = m
+	g.m = m
 
 	return &g, nil
 }
 
-func topSort(gg *ggraph) []*Spec {
+func topSort(gg *graph) ([]*Spec, error) {
+	m := gg.m
 	index := 0
-	// s := []int
-	return nil
+	s := make([]string, 0, len(gg.vertices)+len(gg.edges))
+	indices := make(map[string]int)
+	lowlinks := make(map[string]int)
+	onStack := sets.New[string]()
+	push := func(i string) {
+		s = append(s, i)
+	}
+	pop := func() string {
+		l := len(s)
+		if l == 0 {
+			return ""
+		}
+		ret := s[l-1]
+		s = s[:l-1]
+		return ret
+	}
+	fmin := func(v, w int) int {
+		if v < w {
+			return v
+		}
+		return w
+	}
+	_ = pop
+	output := [][]string{}
+
+	var strongConnect func(v string)
+	strongConnect = func(v string) {
+		indices[v] = index
+		lowlinks[v] = index
+		index++
+		push(v)
+		onStack.Insert(v)
+
+		for d := range gg.edges {
+			v := d.name
+			w := d.depends
+			if _, ok := indices[w]; !ok {
+				strongConnect(w)
+				m := lowlinks[v]
+				if m > lowlinks[w] {
+					m = lowlinks[w]
+				}
+				lowlinks[v] = fmin(lowlinks[v], lowlinks[w])
+				continue
+			}
+			if onStack.Has(w) {
+				lowlinks[v] = fmin(lowlinks[v], indices[w])
+			}
+		}
+
+		if lowlinks[v] == indices[v] {
+			c := []string{}
+			var w string
+			for {
+				w = pop()
+				onStack.Delete(w)
+				c = append(c, w)
+				if w == v {
+					break
+				}
+			}
+			onStack.Delete(w)
+			output = append(output, c)
+		}
+	}
+
+	for _, v := range gg.vertices {
+		if _, ok := indices[v]; ok {
+			continue
+		}
+		strongConnect(v)
+	}
+
+	specs := []*Spec{}
+	if len(output) == 1 && len(output[0]) == 1 {
+		o := m[output[0][0]]
+		specs = append(specs, &o)
+		return specs, nil
+	}
+
+	for _, a := range output {
+		// set := sets.New[string]()
+		// for _, b := range a {
+		// 	if set.Has(b) {
+		// 		return nil, fmt.Errorf("dalec dependency cycle: %#v", a)
+		// 	}
+		// 	set.Insert(b)
+
+		// 	spec, ok := m[b]
+		// 	if !ok {
+		// 		return nil, fmt.Errorf("spec not found")
+		// 	}
+		// 	specs = append(specs, &spec)
+		// }
+		if len(a) > 1 {
+			return nil, fmt.Errorf("dalec dependency cycle: %#v", a)
+		}
+
+		spec, ok := m[a[0]]
+		if !ok {
+			return nil, fmt.Errorf("really bad error!")
+		}
+
+		specs = append(specs, &spec)
+	}
+
+	return specs, nil
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {

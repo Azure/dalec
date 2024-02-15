@@ -28,20 +28,6 @@ func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error)
 	return spec, nil
 }
 
-func loadSpec2(ctx context.Context, client *dockerui.Client) (*dalec.Graph, error) {
-	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
-	if err != nil {
-		return nil, fmt.Errorf("could not read spec file: %w", err)
-	}
-
-	f := bytes.NewBuffer(bytes.TrimSpace(src.Data))
-	spec, err := dalec.LoadSpec2(f)
-	if err != nil {
-		return nil, fmt.Errorf("error loading spec: %w", err)
-	}
-	return spec, nil
-}
-
 func listBuildTargets(group string) []*targetWrapper {
 	if group != "" {
 		return registeredHandlers.GetGroup(group)
