@@ -427,8 +427,28 @@ func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) e
 }
 
 func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
-	if err := c.Command.processBuildArgs(lex, args, name); err != nil {
-		return err
+	for _, s := range c.Mounts {
+		if err := s.Spec.substituteBuildArgs(args); err != nil {
+			return fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
+		}
+	}
+	for k, v := range c.Env {
+		updated, err := lex.ProcessWordWithMap(v, args)
+		if err != nil {
+			return fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
+		}
+		c.Env[k] = updated
+	}
+
+	for i, step := range c.Steps {
+		for k, v := range step.Env {
+			updated, err := lex.ProcessWordWithMap(v, args)
+			if err != nil {
+				return fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
+			}
+			step.Env[k] = updated
+			c.Steps[i] = step
+		}
 	}
 
 	for i, step := range c.Steps {

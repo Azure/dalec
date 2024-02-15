@@ -416,17 +416,34 @@ type Target struct {
 type TestSpec struct {
 	// Name is the name of the test
 	// This will be used to output the test results
-	Name    string `yaml:"name" json:"name" jsonschema:"required"`
-	Command `yaml:",inline"`
+	Name string `yaml:"name" json:"name" jsonschema:"required"`
+
+	// Dir is the working directory to run the command in.
+	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
+
+	// Mounts is the list of sources to mount into the build steps.
+	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
+
+	// List of CacheDirs which will be used across all Steps
+	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
+
+	// Env is the list of environment variables to set for all commands in this step group.
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+
 	// Steps is the list of commands to run to test the package.
 	Steps []TestStep `yaml:"steps" json:"steps" jsonschema:"required"`
+
 	// Files is the list of files to check after running the steps.
 	Files map[string]FileCheckOutput `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 // TestStep is a wrapper for [BuildStep] to include checks on stdio streams
 type TestStep struct {
-	BuildStep `yaml:",inline"`
+	// Command is the command to run to build the artifact(s).
+	// This will always be wrapped as /bin/sh -c "<command>", or whatever the equivalent is for the target distro.
+	Command string `yaml:"command" json:"command" jsonschema:"required"`
+	// Env is the list of environment variables to set for the command.
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 	// Stdout is the expected output on stdout
 	Stdout CheckOutput `yaml:"stdout,omitempty" json:"stdout,omitempty"`
 	// Stderr is the expected output on stderr
