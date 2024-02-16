@@ -16,30 +16,29 @@ import (
 )
 
 func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error) {
-	g, err := loadSpecs(ctx, client)
-	if err != nil {
+	if err := initGraph(ctx, client); err != nil {
 		return nil, err
 	}
 
-	if len(g.Ordered()) == 0 {
+	if dalec.BuildGraph.Len() == 0 {
 		return nil, fmt.Errorf("no spec was provided")
 	}
 
-	return g.Last(), nil
+	return dalec.BuildGraph.Last(), nil
 }
 
-func loadSpecs(ctx context.Context, client *dockerui.Client) (*dalec.Graph, error) {
+func initGraph(ctx context.Context, client *dockerui.Client) error {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
-		return nil, fmt.Errorf("could not read spec file: %w", err)
+		return fmt.Errorf("could not read spec file: %w", err)
 	}
 
 	specs, err := dalec.LoadSpecs(bytes.TrimSpace(src.Data))
 	if err != nil {
-		return nil, fmt.Errorf("error loading spec: %w", err)
+		return fmt.Errorf("error loading spec: %w", err)
 	}
 
-	return dalec.BuildGraph(specs)
+	return dalec.InitGraph(specs)
 }
 
 func listBuildTargets(group string) []*targetWrapper {
@@ -120,18 +119,17 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("no path separator found: %q", target)
 	}
 
-	graph, err := loadSpecs(ctx, bc)
-	if err != nil {
+	if err := initGraph(ctx, bc); err != nil {
 		return nil, err
 	}
 
-	for _, spec := range graph.Specs {
+	for _, spec := range dalec.BuildGraph.Specs {
 		if err := registerSpecHandlers(ctx, spec, client); err != nil {
 			return nil, err
 		}
 	}
 
-	ordered, err := graph.Ordered().TargetSlice(subTarget)
+	ordered := dalec.BuildGraph.OrderedSlice(subTarget)
 	if err != nil {
 		return nil, err
 	}
@@ -176,14 +174,12 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		args := dalec.DuplicateMap(bc.BuildArgs)
 		fillPlatformArgs("TARGET", args, targetPlatform)
 		fillPlatformArgs("BUILD", args, buildPlatform)
-		for _, spec := range graph.Ordered() {
+		for _, spec := range dalec.BuildGraph.OrderedSlice(target) {
 			dupe := dalec.DuplicateMap(args)
 			if err := spec.SubstituteArgs(dupe); err != nil {
 				return nil, nil, err
 			}
 		}
-		// if err := spec.SubstituteArgs(args); err != nil {
-		// }
 
 		return f(ctx, client, spec)
 	})
@@ -194,96 +190,3 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	return rb.Finalize()
 
 }
-
-// func specToState(ctx context.Context, client gwclient.Client, bc *dockerui.Client, spec *dalec.Spec) (llb.State, error) {
-// 	res, err := buildOne(ctx, client, bc, spec)
-// 	if err != nil {
-// 		return llb.Scratch(), err
-// 	}
-// 	ref, err := res.SingleRef()
-// 	if err != nil {
-// 		return llb.Scratch(), err
-// 	}
-// 	st, err := ref.ToState()
-// 	if err != nil {
-// 		return llb.Scratch(), err
-// 	}
-// 	return st, nil
-// }
-
-// func buildSeveral(ctx context.Context, client gwclient.Client, bc *dockerui.Client, specs []*dalec.Spec) (*gwclient.Result, error) {
-// 	for _, spec := range specs {
-// 		res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(bc.Target))
-// 		if err != nil || handled {
-// 			return res, err
-// 		}
-
-// 		if !handled {
-// 			// Handle additional subrequests supported by dalec
-// 			requestID := client.BuildOpts().Opts[requestIDKey]
-// 			switch requestID {
-// 			case dalecSubrequstForwardBuild:
-// 			case "":
-// 			default:
-// 				return nil, fmt.Errorf("unknown request id %q", requestID)
-// 			}
-// 		}
-
-// 		f, err := lookupHandler(bc.Target)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
-// 			var targetPlatform, buildPlatform ocispecs.Platform
-// 			if platform != nil {
-// 				targetPlatform = *platform
-// 			} else {
-// 				targetPlatform = platforms.DefaultSpec()
-// 			}
-
-// 			// the dockerui client, given the current implementation, should only ever have
-// 			// a single build platform
-// 			if len(bc.BuildPlatforms) != 1 {
-// 				return nil, nil, fmt.Errorf("expected exactly one build platform, got %d", len(bc.BuildPlatforms))
-// 			}
-// 			buildPlatform = bc.BuildPlatforms[0]
-
-// 			args := dalec.DuplicateMap(bc.BuildArgs)
-// 			fillPlatformArgs("TARGET", args, targetPlatform)
-// 			fillPlatformArgs("BUILD", args, buildPlatform)
-// 			if err := spec.SubstituteArgs(args); err != nil {
-// 				return nil, nil, err
-// 			}
-
-// 			return f(ctx, client, spec)
-// 		})
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		return rb.Finalize()
-
-// 	}
-// 	return gwclient.NewResult(), nil
-// }
-
-// func buildSeveral(ctx context.Context, client gwclient.Client, bc *dockerui.Client, graph *dalec.Graph) (*gwclient.Result, error) {
-// 	orderedList := graph.Ordered()
-// 	switch len(orderedList) {
-// 	case 1:
-// 		buildOne(ctx, client, bc, graph)
-// 	case 0:
-// 		return nil, fmt.Errorf("no dalec build specs")
-// 	}
-
-// 	// for _, targets := range orderedList {
-
-// 	// }
-
-// 	// for _, dep := range orderedList {
-// 	//     spec := graph.Specs[dep]
-// 	// }
-
-// 	panic("unimplemented")
-// }

@@ -23,22 +23,17 @@ func main() {
 		panic(err)
 	}
 
-	graph, err := dalec.BuildGraph(allSpecs)
+	graph, err := dalec.InitGraph(allSpecs)
 	if err != nil {
 		panic(err)
 	}
 
-	o := graph.Ordered()
+	o := graph.OrderedSlice(tgt)
 	if err != nil {
 		panic(err)
 	}
 
-	t, err := o.TargetSlice(tgt)
-	if err != nil {
-		panic(err)
-	}
-
-	for _, spec := range t {
+	for _, spec := range o {
 		fmt.Println(spec.Name)
 	}
 }

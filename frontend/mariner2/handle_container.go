@@ -31,14 +31,13 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	pg := dalec.ProgressGroup("Build mariner2 container: " + spec.Name)
 	baseImg := getWorkerImage(sOpt, pg)
 
-	g := dalec.TheGraph
 	rpmDirs := make(map[string]llb.State)
-	if g.Len() > 1 {
-		depOrder, err := g.Ordered().TargetSlice(spec.Name)
+	if dalec.BuildGraph.Len(spec.Name) > 1 {
+		inDepOrder := dalec.BuildGraph.OrderedSlice(spec.Name)
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, dep := range depOrder {
+		for _, dep := range inDepOrder {
 			rd, err := specToRpmLLB(dep, sOpt, pg)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating rpm: %w", err)
@@ -230,10 +229,10 @@ rm -rf ` + rpmdbDir + `
 		tdnfCacheMountWithPrefix(workPath),
 		dalec.WithConstraints(opts...),
 	}
-	for name, dirState := range rpmDirs {
+	for name, rpmDir := range rpmDirs {
 		runArgs = append(
 			runArgs,
-			llb.AddMount(filepath.Join("/tmp/rpms", name), dirState, llb.SourcePath("/RPMS")),
+			llb.AddMount(filepath.Join("/tmp/rpms", name), rpmDir, llb.SourcePath("/RPMS")),
 		)
 	}
 	worker := builderImg.Run(runArgs...)

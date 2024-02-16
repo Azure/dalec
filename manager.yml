@@ -98,7 +98,7 @@ dependencies:
 build:
   steps:
     - command: |
-        ln -s /usr/bin/eraser-manager /build/manager
+        ln -s /usr/bin/manager /build/manager
 
 artifacts:
   binaries:
