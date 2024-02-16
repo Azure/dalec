@@ -13,31 +13,58 @@ type dependency struct {
 	w    *vertex
 	kind string
 }
+
+type Dep struct {
+	X         string
+	DependsOn string
+}
+
 type cycle []*vertex
 type cycles []cycle
 
 type Graph struct {
-	Specs    map[string]*Spec
+	target   string
+	specs    map[string]*Spec
+	depType  map[Dep]string
 	ordered  orderedDeps
 	indices  map[string]int
 	vertices []*vertex
 	edges    sets.Set[dependency]
-	m        sync.Mutex
+}
+
+func (g *Graph) Target() *Spec {
+	return g.specs[g.target]
+}
+
+// func (g *Graph) getDep(dependsOn string) Dep {
+// 	g.depType[Dep{g.target, dependsOn}]
+// }
+
+func (g *Graph) Get(name string) (*Spec, error) {
+	s, ok := g.specs[name]
+	if !ok {
+		return nil, fmt.Errorf("dalec spec not found: %q", name)
+	}
+	return s, nil
 }
 
 type orderedDeps []*Spec
 
-func (o orderedDeps) targetSlice(target string) []*Spec {
+func (o orderedDeps) targetSlice(target ...string) []*Spec {
+	if len(target) == 0 {
+		return []*Spec(o)
+	}
+
 	for i, dep := range o {
-		if dep.Name == target {
+		if dep.Name == target[0] {
 			return o[:i+1]
 		}
 	}
 	return nil
 }
 
-func (g *Graph) OrderedSlice(target string) []*Spec {
-	return g.ordered.targetSlice(target)
+func (g *Graph) OrderedSlice(target ...string) []*Spec {
+	return g.ordered.targetSlice(target...)
 }
 
 func (g *Graph) Len(target ...string) int {
@@ -55,7 +82,7 @@ type vertex struct {
 }
 
 var (
-	m          sync.Mutex
+	graphLock  sync.Mutex
 	BuildGraph *Graph
 )
 
@@ -63,30 +90,43 @@ func (g *Graph) Last() *Spec {
 	return g.ordered[len(g.ordered)-1]
 }
 
-func InitGraph(specs []*Spec) error {
+func (g *Graph) Lock() {
+	graphLock.Lock()
+	return
+}
+func (g *Graph) Unlock() {
+	graphLock.Unlock()
+	return
+}
+
+func InitGraph(specs []*Spec, subTarget string) error {
 	if BuildGraph != nil {
 		return nil
 	}
 
-	BuildGraph = new(Graph)
-	*BuildGraph = Graph{
-		edges:    sets.New[dependency](),
-		vertices: make([]*vertex, len(specs)),
-		Specs:    make(map[string]*Spec),
-		indices:  make(map[string]int),
+	if BuildGraph == nil {
+		BuildGraph = new(Graph)
+		BuildGraph.Lock()
+		defer BuildGraph.Unlock()
+		*BuildGraph = Graph{
+			target:   subTarget,
+			edges:    sets.New[dependency](),
+			vertices: make([]*vertex, len(specs)),
+			specs:    make(map[string]*Spec),
+			depType:  make(map[Dep]string),
+			indices:  make(map[string]int),
+		}
 	}
-	BuildGraph.m.Lock()
-	defer BuildGraph.m.Unlock()
 
 	for i, spec := range specs {
 		name := spec.Name
-		BuildGraph.Specs[name] = spec
+		BuildGraph.specs[name] = spec
 		v := &vertex{name: name}
 		BuildGraph.indices[name] = i
 		BuildGraph.vertices[i] = v
 	}
 
-	for name, spec := range BuildGraph.Specs {
+	for name, spec := range BuildGraph.specs {
 		if spec.Dependencies == nil {
 			continue
 		}
@@ -96,7 +136,10 @@ func InitGraph(specs []*Spec) error {
 			kind string
 			m    map[string][]string
 		}
-		runtimeAndBuildDeps := []depMap{{m: spec.Dependencies.Build, kind: "build"}, {m: spec.Dependencies.Runtime, kind: "runtime"}}
+		runtimeAndBuildDeps := []depMap{
+			{m: spec.Dependencies.Build, kind: "build"},
+			{m: spec.Dependencies.Runtime, kind: "runtime"},
+		}
 		for _, deps := range runtimeAndBuildDeps {
 			if deps.m == nil {
 				continue
@@ -108,7 +151,7 @@ func InitGraph(specs []*Spec) error {
 				}
 				wi, ok := BuildGraph.indices[dep]
 				if !ok {
-					// this is not one of ours
+					// this is a package dependency
 					continue
 				}
 				w := BuildGraph.vertices[wi]
@@ -124,6 +167,7 @@ func InitGraph(specs []*Spec) error {
 	return BuildGraph.topSort()
 }
 
+// https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
 func (g *Graph) topSort() error {
 	index := 0
 	s := make([]*vertex, 0, len(g.vertices)+len(g.edges))
@@ -204,7 +248,7 @@ func (g *Graph) topSort() error {
 			return fmt.Errorf("dalec dependency cycle: %s", components.disp())
 		}
 		for _, component := range components {
-			specs = append(specs, g.Specs[component.name])
+			specs = append(specs, g.specs[component.name])
 		}
 	}
 

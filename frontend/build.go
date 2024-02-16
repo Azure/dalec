@@ -16,18 +16,20 @@ import (
 )
 
 func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error) {
-	if err := initGraph(ctx, client); err != nil {
-		return nil, err
+	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
+	if err != nil {
+		return nil, fmt.Errorf("could not read spec file: %w", err)
 	}
 
-	if dalec.BuildGraph.Len() == 0 {
-		return nil, fmt.Errorf("no spec was provided")
+	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data))
+	if err != nil {
+		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
 
-	return dalec.BuildGraph.Last(), nil
+	return spec, nil
 }
 
-func initGraph(ctx context.Context, client *dockerui.Client) error {
+func initGraph(ctx context.Context, client *dockerui.Client, subTarget string) error {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
 		return fmt.Errorf("could not read spec file: %w", err)
@@ -114,16 +116,16 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	subTarget, target, ok := strings.Cut(bc.Target, "/")
+	subTarget, dalecTarget, ok := strings.Cut(bc.Target, "/")
 	if !ok {
-		return nil, fmt.Errorf("no path separator found: %q", target)
+		return nil, fmt.Errorf("malformed target: %q", bc.Target)
 	}
 
-	if err := initGraph(ctx, bc); err != nil {
+	if err := initGraph(ctx, bc, subTarget); err != nil {
 		return nil, err
 	}
 
-	for _, spec := range dalec.BuildGraph.Specs {
+	for _, spec := range dalec.BuildGraph.OrderedSlice(dalecTarget) {
 		if err := registerSpecHandlers(ctx, spec, client); err != nil {
 			return nil, err
 		}
@@ -151,7 +153,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 	}
 
-	f, err := lookupHandler(target)
+	f, err := lookupHandler(dalecTarget)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +176,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		args := dalec.DuplicateMap(bc.BuildArgs)
 		fillPlatformArgs("TARGET", args, targetPlatform)
 		fillPlatformArgs("BUILD", args, buildPlatform)
-		for _, spec := range dalec.BuildGraph.OrderedSlice(target) {
+		for _, spec := range dalec.BuildGraph.OrderedSlice(subTarget) {
 			dupe := dalec.DuplicateMap(args)
 			if err := spec.SubstituteArgs(dupe); err != nil {
 				return nil, nil, err
