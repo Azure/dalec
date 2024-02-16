@@ -1,6 +1,7 @@
 package mariner2
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -220,7 +221,53 @@ rm -rf ` + rpmdbDir + `
 	// The return value is the state representing the contents of the mounted directory after the commands are run
 	rootfs := worker.AddMount(workPath, baseImg)
 
+	if post := getImagePostInstall(spec, target); post != nil && len(post.Symlinks) > 0 {
+		rootfs = worker.
+			Run(dalec.WithConstraints(opts...), addImagePost(post, workPath)).
+			AddMount(workPath, rootfs)
+	}
+
 	return rootfs, nil
+}
+
+func getImagePostInstall(spec *dalec.Spec, targetKey string) *dalec.PostInstall {
+	tgt, ok := spec.Targets[targetKey]
+	if ok && tgt.Image != nil && tgt.Image.Post != nil {
+		return tgt.Image.Post
+	}
+
+	if spec.Image == nil {
+		return nil
+	}
+	return spec.Image.Post
+}
+
+func addImagePost(post *dalec.PostInstall, rootfsPath string) llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		if post == nil {
+			return
+		}
+
+		if len(post.Symlinks) == 0 {
+			return
+		}
+
+		buf := bytes.NewBuffer(nil)
+		buf.WriteString("set -ex\n")
+		fmt.Fprintf(buf, "cd %q\n", rootfsPath)
+
+		for src, tgt := range post.Symlinks {
+			fmt.Fprintf(buf, "ln -s %q %q\n", src, filepath.Join(rootfsPath, tgt.Path))
+		}
+		shArgs(buf.String()).SetRunOption(ei)
+		dalec.ProgressGroup("Add post-install symlinks").SetRunOption(ei)
+	})
+}
+
+type runOptionFunc func(*llb.ExecInfo)
+
+func (f runOptionFunc) SetRunOption(ei *llb.ExecInfo) {
+	f(ei)
 }
 
 func copyImageConfig(dst *image.Image, src *dalec.ImageConfig) error {

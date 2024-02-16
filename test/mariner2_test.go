@@ -87,6 +87,12 @@ index 0000000..5260cb1
 				},
 			},
 
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: map[string][]string{
+					"bash": {},
+				},
+			},
+
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
 					// These are "build" steps where we aren't really building things just verifying
@@ -115,6 +121,14 @@ echo "${FOO}_0" > foo0.txt
 echo "${FOO}_1" > foo1.txt
 echo "$BAR" > bar.txt
 `,
+					},
+				},
+			},
+
+			Image: &dalec.ImageConfig{
+				Post: &dalec.PostInstall{
+					Symlinks: map[string]dalec.SymlinkTarget{
+						"/usr/bin/src1": {Path: "/src1"},
 					},
 				},
 			},
@@ -161,6 +175,17 @@ echo "$BAR" > bar.txt
 						"/usr/bin/foo0.txt": {CheckOutput: dalec.CheckOutput{StartsWith: "foo_0\n"}},
 						"/usr/bin/foo1.txt": {CheckOutput: dalec.CheckOutput{StartsWith: "foo_1\n"}},
 						"/usr/bin/bar.txt":  {CheckOutput: dalec.CheckOutput{StartsWith: "bar\n"}},
+					},
+				},
+				{
+					Name: "Post-install symlinks should be created",
+					Files: map[string]dalec.FileCheckOutput{
+						"/src1": {},
+					},
+					Steps: []dalec.TestStep{
+						{Command: "/bin/bash -c 'test -L /src1'"},
+						{Command: "/bin/bash -c 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
+						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 					},
 				},
 			},

@@ -338,6 +338,10 @@
 				"base": {
 					"type": "string",
 					"description": "Base is the base image to use for the output image.\nThis only affects the output image, not the intermediate build image."
+				},
+				"post": {
+					"$ref": "#/$defs/PostInstall",
+					"description": "Post is the post install configuration for the image.\nThis allows making additional modifications to the container rootfs after the package(s) are installed.\n\nUse this to perform actions that would otherwise require additional tooling inside the container that is not relavent to\nthe resulting container and makes a post-install script as part of the package unnecessary."
 				}
 			},
 			"additionalProperties": false,
@@ -405,6 +409,20 @@
 				"source"
 			],
 			"description": "PatchSpec is used to apply a patch to a source with a given set of options."
+		},
+		"PostInstall": {
+			"properties": {
+				"symlinks": {
+					"additionalProperties": {
+						"$ref": "#/$defs/SymlinkTarget"
+					},
+					"type": "object",
+					"description": "Symlinks is the list of symlinks to create in the container rootfs after the package(s) are installed.\nThe key is the path the symlink should point to."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "PostInstall is the post install configuration for the image."
 		},
 		"Source": {
 			"properties": {
@@ -772,6 +790,20 @@
 				"packager"
 			],
 			"description": "Spec is the specification for a package build."
+		},
+		"SymlinkTarget": {
+			"properties": {
+				"path": {
+					"type": "string",
+					"description": "Path is the path where the symlink should be placed"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"path"
+			],
+			"description": "SymlinkTarget specifies the properties of a symlink"
 		},
 		"Target": {
 			"properties": {

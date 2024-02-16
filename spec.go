@@ -175,6 +175,26 @@ type ImageConfig struct {
 	// Base is the base image to use for the output image.
 	// This only affects the output image, not the intermediate build image.
 	Base string `yaml:"base,omitempty" json:"base,omitempty"`
+
+	// Post is the post install configuration for the image.
+	// This allows making additional modifications to the container rootfs after the package(s) are installed.
+	//
+	// Use this to perform actions that would otherwise require additional tooling inside the container that is not relavent to
+	// the resulting container and makes a post-install script as part of the package unnecessary.
+	Post *PostInstall `yaml:"post,omitempty" json:"post,omitempty"`
+}
+
+// PostInstall is the post install configuration for the image.
+type PostInstall struct {
+	// Symlinks is the list of symlinks to create in the container rootfs after the package(s) are installed.
+	// The key is the path the symlink should point to.
+	Symlinks map[string]SymlinkTarget `yaml:"symlinks,omitempty" json:"symlinks,omitempty"`
+}
+
+// SymlinkTarget specifies the properties of a symlink
+type SymlinkTarget struct {
+	// Path is the path where the symlink should be placed
+	Path string `yaml:"path" json:"path" jsonschema:"required"`
 }
 
 type SourceDockerImage struct {
@@ -525,6 +545,9 @@ type FileCheckOutput struct {
 	IsDir bool `yaml:"is_dir,omitempty" json:"is_dir,omitempty"`
 	// NotExist is used to check that the file does not exist.
 	NotExist bool `yaml:"not_exist,omitempty" json:"not_exist,omitempty"`
+
+	// TODO: Support checking symlinks
+	// This is not currently possible with buildkit as it does not expose information about the symlink
 }
 
 // Check is used to check the output file.
