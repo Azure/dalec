@@ -25,7 +25,6 @@ type cycles []cycle
 type Graph struct {
 	target   string
 	specs    map[string]*Spec
-	depType  map[Dep]string
 	ordered  orderedDeps
 	indices  map[string]int
 	vertices []*vertex
@@ -35,10 +34,6 @@ type Graph struct {
 func (g *Graph) Target() *Spec {
 	return g.specs[g.target]
 }
-
-// func (g *Graph) getDep(dependsOn string) Dep {
-// 	g.depType[Dep{g.target, dependsOn}]
-// }
 
 func (g *Graph) Get(name string) (*Spec, error) {
 	s, ok := g.specs[name]
@@ -113,7 +108,6 @@ func InitGraph(specs []*Spec, subTarget string) error {
 			edges:    sets.New[dependency](),
 			vertices: make([]*vertex, len(specs)),
 			specs:    make(map[string]*Spec),
-			depType:  make(map[Dep]string),
 			indices:  make(map[string]int),
 		}
 	}
@@ -151,7 +145,7 @@ func InitGraph(specs []*Spec, subTarget string) error {
 				}
 				wi, ok := BuildGraph.indices[dep]
 				if !ok {
-					// this is a package dependency
+					// this is dependency in the package repo
 					continue
 				}
 				w := BuildGraph.vertices[wi]
