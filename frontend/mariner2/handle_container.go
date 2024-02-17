@@ -33,16 +33,11 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 
 	rpmDirs := make(map[string]llb.State)
 	if dalec.BuildGraph.Len(spec.Name) > 1 {
-		inDepOrder := dalec.BuildGraph.OrderedSlice(spec.Name)
+		var err error
+
+		rpmDirs, err = resolveDalecDeps(spec, sOpt, pg)
 		if err != nil {
 			return nil, nil, err
-		}
-		for _, dep := range inDepOrder {
-			rd, err := specToRpmLLB(dep, sOpt, pg)
-			if err != nil {
-				return nil, nil, fmt.Errorf("error creating rpm: %w", err)
-			}
-			rpmDirs[dep.Name] = rd
 		}
 	}
 
@@ -78,6 +73,50 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	}
 
 	return ref, img, err
+}
+
+func resolveDalecDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
+	rpmDirs := make(map[string]llb.State)
+	inDepOrder := dalec.BuildGraph.OrderedSlice(spec.Name)
+
+	depPkgs := make(map[string]llb.State)
+	for _, dep := range inDepOrder {
+		var err error
+		depPkgs, err = updateDepRPMs(dep, rpmDirs, depPkgs)
+		if err != nil {
+			return nil, err
+		}
+
+		rd, err := specToRpmLLBWithDeps(dep, sOpt, depPkgs, pg)
+		if err != nil {
+			return nil, fmt.Errorf("error creating rpm: %w", err)
+		}
+
+		depPkgs[dep.Name] = rd
+		rpmDirs[dep.Name] = rd
+	}
+	return rpmDirs, nil
+}
+
+func updateDepRPMs(dep *dalec.Spec, rpmDirs map[string]llb.State, depPkgs map[string]llb.State) (map[string]llb.State, error) {
+	newDepPkgs := depPkgs
+	depBuildDeps := getBuildDeps(dep)
+	if depBuildDeps == nil {
+		return nil, nil
+	}
+
+	if depBuildDeps != nil {
+		for _, name := range depBuildDeps {
+			st, ok := rpmDirs[name]
+			if !ok {
+				return nil, fmt.Errorf("dependency state %q not found", name)
+			}
+
+			newDepPkgs[name] = st
+		}
+	}
+
+	return newDepPkgs, nil
 }
 
 func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, client gwclient.Client) (*image.Image, error) {
@@ -229,7 +268,15 @@ rm -rf ` + rpmdbDir + `
 		tdnfCacheMountWithPrefix(workPath),
 		dalec.WithConstraints(opts...),
 	}
-	for name, rpmDir := range rpmDirs {
+
+	runDeps := getRuntimeDeps(spec)
+	for _, name := range runDeps {
+		if _, err := dalec.BuildGraph.Get(name); err != nil {
+			// this is not a dalec runtime dep, it's from the package manager
+			continue
+		}
+
+		rpmDir := rpmDirs[name]
 		runArgs = append(
 			runArgs,
 			llb.AddMount(filepath.Join("/tmp/rpms", name), rpmDir, llb.SourcePath("/RPMS")),

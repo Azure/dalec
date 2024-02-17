@@ -6,22 +6,9 @@ import (
 	"sync"
 
 	"github.com/pmengelbert/stack"
+	"golang.org/x/exp/constraints"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
-
-type dependency struct {
-	v    *vertex
-	w    *vertex
-	kind string
-}
-
-type Dep struct {
-	X         string
-	DependsOn string
-}
-
-type cycle []*vertex
-type cycles []cycle
 
 type Graph struct {
 	target   string
@@ -32,18 +19,14 @@ type Graph struct {
 	edges    sets.Set[dependency]
 }
 
-func (g *Graph) Target() *Spec {
-	return g.specs[g.target]
+type dependency struct {
+	v    *vertex
+	w    *vertex
+	kind string
 }
 
-func (g *Graph) Get(name string) (*Spec, error) {
-	s, ok := g.specs[name]
-	if !ok {
-		return nil, fmt.Errorf("dalec spec not found: %q", name)
-	}
-	return s, nil
-}
-
+type cycle []*vertex
+type cycleList []cycle
 type orderedDeps []*Spec
 
 func (o orderedDeps) targetSlice(target ...string) []*Spec {
@@ -57,6 +40,18 @@ func (o orderedDeps) targetSlice(target ...string) []*Spec {
 		}
 	}
 	return nil
+}
+
+func (g *Graph) Target() *Spec {
+	return g.specs[g.target]
+}
+
+func (g *Graph) Get(name string) (*Spec, error) {
+	s, ok := g.specs[name]
+	if !ok {
+		return nil, fmt.Errorf("dalec spec not found: %q", name)
+	}
+	return s, nil
 }
 
 func (g *Graph) OrderedSlice(target ...string) []*Spec {
@@ -167,21 +162,15 @@ func (g *Graph) topSort() error {
 	index := 0
 
 	s := stack.New[*vertex]()
-	// s := make([]*vertex, 0, len(g.vertices)+len(g.edges))
-	mmin := func(v, w int) int {
-		if v <= w {
-			return v
-		}
-		return w
-	}
+	output := cycleList{}
 
-	output := cycles{}
 	var strongConnect func(v *vertex) error
 	strongConnect = func(v *vertex) error {
 		v.index = new(int)
 		*v.index = index
 		v.lowlink = index
 		index++
+
 		s.Push(v)
 		v.onStack = true
 
@@ -196,12 +185,12 @@ func (g *Graph) topSort() error {
 					return err
 				}
 
-				v.lowlink = mmin(v.lowlink, v.lowlink)
+				v.lowlink = minimum(v.lowlink, v.lowlink)
 				continue
 			}
 
 			if w.onStack {
-				v.lowlink = mmin(v.lowlink, *w.index)
+				v.lowlink = minimum(v.lowlink, *w.index)
 			}
 		}
 
@@ -238,7 +227,7 @@ func (g *Graph) topSort() error {
 		}
 
 		if err := strongConnect(v); err != nil {
-			return err
+			return fmt.Errorf("error resolving dalec build dependency graph: %w", err)
 		}
 	}
 
@@ -280,14 +269,22 @@ func (c cycle) String() string {
 	return sb.String()
 }
 
-func (cs cycles) String() string {
+func (cs cycleList) String() string {
 	sb := strings.Builder{}
 	for i, component := range cs {
 		sb.WriteString(component.String())
 		if i+1 == len(cs) {
 			break
 		}
-		sb.WriteString("\n")
+		sb.WriteRune('\n')
 	}
 	return sb.String()
+}
+
+func minimum[T constraints.Ordered](x, y T) T {
+	if x < y {
+		return x
+	}
+
+	return y
 }
