@@ -23,12 +23,11 @@ func main() {
 		panic(err)
 	}
 
-	graph, err := dalec.InitGraph(allSpecs)
-	if err != nil {
+	if err := dalec.InitGraph(allSpecs, tgt); err != nil {
 		panic(err)
 	}
 
-	o := graph.OrderedSlice(tgt)
+	o := dalec.BuildGraph.OrderedSlice(tgt)
 	if err != nil {
 		panic(err)
 	}

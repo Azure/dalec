@@ -40,7 +40,7 @@ func initGraph(ctx context.Context, client *dockerui.Client, subTarget string) e
 		return fmt.Errorf("error loading spec: %w", err)
 	}
 
-	return dalec.InitGraph(specs)
+	return dalec.InitGraph(specs, subTarget)
 }
 
 func listBuildTargets(group string) []*targetWrapper {

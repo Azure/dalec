@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pmengelbert/stack"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -164,22 +165,10 @@ func InitGraph(specs []*Spec, subTarget string) error {
 // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
 func (g *Graph) topSort() error {
 	index := 0
-	s := make([]*vertex, 0, len(g.vertices)+len(g.edges))
-	push := func(i *vertex) {
-		s = append(s, i)
-	}
 
-	// returns vertex and whether or not stack was empty
-	pop := func() *vertex {
-		l := len(s)
-		if l == 0 {
-			return nil
-		}
-		ret := s[l-1]
-		s = s[:l-1]
-		return ret
-	}
-	fmin := func(v, w int) int {
+	s := stack.New[*vertex]()
+	// s := make([]*vertex, 0, len(g.vertices)+len(g.edges))
+	mmin := func(v, w int) int {
 		if v <= w {
 			return v
 		}
@@ -187,53 +176,70 @@ func (g *Graph) topSort() error {
 	}
 
 	output := cycles{}
-	var strongConnect func(v *vertex)
-	strongConnect = func(v *vertex) {
+	var strongConnect func(v *vertex) error
+	strongConnect = func(v *vertex) error {
 		v.index = new(int)
 		*v.index = index
 		v.lowlink = index
 		index++
-		push(v)
+		s.Push(v)
 		v.onStack = true
 
 		for edge := range g.edges {
 			if v.name != edge.v.name {
 				continue
 			}
+
 			w := edge.w
 			if w.index == nil {
-				strongConnect(w)
-				v.lowlink = fmin(v.lowlink, v.lowlink)
+				if err := strongConnect(w); err != nil {
+					return err
+				}
+
+				v.lowlink = mmin(v.lowlink, v.lowlink)
 				continue
 			}
+
 			if w.onStack {
-				v.lowlink = fmin(v.lowlink, *w.index)
+				v.lowlink = mmin(v.lowlink, *w.index)
 			}
 		}
 
 		if v.lowlink == *v.index {
-			c := []*vertex{}
-			var (
-				w *vertex
-			)
-			for {
-				w = pop()
+			component := []*vertex{}
+
+			var w *vertex
+			isSome := func(o stack.Option[*vertex]) bool {
+				if o.IsSome() {
+					w = o.Unwrap()
+					return true
+				}
+				return false
+			}
+
+			for opt := s.Pop(); isSome(opt); opt = s.Pop() {
 				w.onStack = false
-				c = append(c, w)
+				component = append(component, w)
 				if w == v {
 					break
 				}
 			}
+
 			w.onStack = false
-			output = append(output, c)
+			output = append(output, component)
 		}
+
+		return nil
 	}
 
 	for _, v := range g.vertices {
 		if v.index != nil {
 			continue
 		}
-		strongConnect(v)
+
+		if err := strongConnect(v); err != nil {
+			return err
+		}
 	}
 
 	specs := make([]*Spec, 0, len(g.vertices))
@@ -241,6 +247,7 @@ func (g *Graph) topSort() error {
 		if len(components) > 1 {
 			return fmt.Errorf("dalec dependency cycle: %s", components.disp())
 		}
+
 		for _, component := range components {
 			specs = append(specs, g.specs[component.name])
 		}
