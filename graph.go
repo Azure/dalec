@@ -189,12 +189,12 @@ func (g *Graph) topSort() error {
 			if w.index == nil {
 				strongConnect(w)
 
-				v.lowlink = minimum(v.lowlink, v.lowlink)
+				v.lowlink = min(v.lowlink, v.lowlink)
 				continue
 			}
 
 			if w.onStack {
-				v.lowlink = minimum(v.lowlink, *w.index)
+				v.lowlink = min(v.lowlink, *w.index)
 			}
 		}
 
@@ -281,7 +281,7 @@ func (cs cycleList) String() string {
 	return sb.String()
 }
 
-func minimum[T constraints.Ordered](x, y T) T {
+func min[T constraints.Ordered](x, y T) T {
 	if x < y {
 		return x
 	}
