@@ -42,12 +42,19 @@ func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := specToRpmLLB(spec, sOpt, pg)
+
+	baseImg := getWorkerImage(sOpt, pg)
+	rpmDirs, err := buildRPMDirs(spec, baseImg, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	def, err := st.Marshal(ctx, pg)
+	rpm, ok := rpmDirs[spec.Name]
+	if !ok {
+		return nil, nil, fmt.Errorf("graph error: llb for final rpm %q not found", spec.Name)
+	}
+
+	def, err := rpm.Marshal(ctx, pg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 	}
