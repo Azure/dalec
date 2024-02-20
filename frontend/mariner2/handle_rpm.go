@@ -96,13 +96,16 @@ func getBuildDeps(spec *dalec.Spec) []string {
 	return out
 }
 
-func partitionBuildDeps(spec *dalec.Spec) (dalecDeps []string, repoDeps []string) {
+// Partitions build deps into dalec spec-local build deps (first return value)
+// and build deps that are expected to be found in the package repo (second
+// return value).
+func partitionBuildDeps(spec *dalec.Spec) ([]string, []string) {
 	if spec.Dependencies == nil {
 		return []string{}, []string{}
 	}
 
-	dalecDeps = make([]string, 0, len(spec.Dependencies.Build))
-	repoDeps = make([]string, 0, len(spec.Dependencies.Build))
+	dalecDeps := make([]string, 0, len(spec.Dependencies.Build))
+	repoDeps := make([]string, 0, len(spec.Dependencies.Build))
 
 	buildDeps := getBuildDeps(spec)
 	for _, dep := range buildDeps {

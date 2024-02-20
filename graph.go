@@ -83,11 +83,9 @@ func (g *Graph) Last() *Spec {
 
 func (g *Graph) Lock() {
 	graphLock.Lock()
-	return
 }
 func (g *Graph) Unlock() {
 	graphLock.Unlock()
-	return
 }
 
 func InitGraph(specs []*Spec, subTarget string) error {
