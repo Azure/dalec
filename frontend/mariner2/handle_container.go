@@ -31,19 +31,24 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	pg := dalec.ProgressGroup("Build mariner2 container: " + spec.Name)
 	baseImg := getWorkerImage(sOpt, pg)
 
-	rpmDirs := make(map[string]llb.State)
+	mutRPMDirs := make(map[string]llb.State)
 	if dalec.BuildGraph.Len(spec.Name) > 1 { // has dependencies
-		// if err := resolveDalecDeps(spec, sOpt, pg, mutRPMDirs); err != nil {
-		// return nil, nil, err
-		// }
-
-		dalecBuildDeps, _ := partitionBuildDeps(spec)
-		for _, dep := range dalecBuildDeps {
-
+		if dalec.BuildGraph.Len(spec.Name) > 1 { // has dependencies from the spec file
+			orderedDeps := dalec.BuildGraph.OrderedSlice(spec.Name)
+			// due to the graph's dependency sorting, we can rely on the build
+			// dependencies being present by the time we process the spec in
+			// question
+			for _, depSpec := range orderedDeps {
+				if err := updateRPMDirs(depSpec, mutRPMDirs, baseImg, spec, sOpt, pg); err != nil {
+					return nil, nil, err
+				}
+			}
 		}
 	}
+	rpmDirs := mutRPMDirs
 
-	st, err := specsToContainersLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
+	st, err := specsToContainerLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
+	// st, err := specsToContainersLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -77,43 +82,34 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	return ref, img, err
 }
 
-func resolveDalecDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt, mutRPMDirs map[string]llb.State) error {
-	inDepOrder := dalec.BuildGraph.OrderedSlice(spec.Name)
+func updateRPMDirs(depSpec *dalec.Spec, rpmDirs map[string]llb.State, baseImg llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) error {
+	bDeps, _ := partitionBuildDeps(depSpec)
 
-	depPkgs := make(map[string]llb.State)
-	for _, dep := range inDepOrder {
-		var err error
-		depPkgs, err = updateDepRPMs(dep, mutRPMDirs, depPkgs)
-		if err != nil {
-			return err
-		}
+	rpms := llb.Scratch()
+	for _, bd := range bDeps {
+		rpmfileState, ok := rpmDirs[bd]
 
-		rd, err := specToRpmLLBWithDeps(dep, sOpt, depPkgs, pg)
-		if err != nil {
-			return fmt.Errorf("error creating rpm: %w", err)
-		}
-
-		depPkgs[dep.Name] = rd
-		mutRPMDirs[dep.Name] = rd
-	}
-
-	return nil
-}
-
-func updateDepRPMs(dep *dalec.Spec, rpmDirs map[string]llb.State, depPkgs map[string]llb.State) (map[string]llb.State, error) {
-	newDepPkgs := depPkgs
-	dalecBuildDeps, _ := partitionBuildDeps(spec)
-
-	for _, name := range dalecBuildDeps {
-		st, ok := rpmDirs[name]
+		// by definition, the first spec in the graph will have no
+		// dependencies, so the below should never happen
+		// execute build
 		if !ok {
-			return nil, fmt.Errorf("dependency state %q not found", name)
+			return fmt.Errorf("dependency ordering error: rpm state %q not found", bd)
 		}
 
-		newDepPkgs[name] = st
+		const outdir = "/tmp/buildrpms"
+		rpms = baseImg.Run(
+			shArgs(`find /tmp/mountedrpm -type f -name "*.rpm" -exec cp {} `+outdir+` \;`),
+			llb.AddMount("/tmp/mountedrpm", rpmfileState),
+		).AddMount(outdir, rpms)
 	}
 
-	return newDepPkgs, nil
+	rpmState, err := specToRpmLLBWithBuildDeps(depSpec, sOpt, rpms, pg)
+	if err != nil {
+		return fmt.Errorf("error building dependency %q", depSpec.Name)
+	}
+
+	rpmDirs[depSpec.Name] = rpmState
+	return nil
 }
 
 func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, client gwclient.Client) (*image.Image, error) {
@@ -192,9 +188,11 @@ func getBaseOutputImage(spec *dalec.Spec, target string) string {
 	return baseRef
 }
 
-func specsToContainersLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDirs map[string]llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specsToContainerLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDirs map[string]llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
+
+	// return llb.Scratch(), fmt.Errorf("ERROR: %#v", maps.Keys(rpmDirs))
 
 	mfstDir := filepath.Join(workPath, "var/lib/rpmmanifest")
 	mfst1 := filepath.Join(mfstDir, "container-manifest-1")
@@ -213,32 +211,10 @@ func specsToContainersLLB(spec *dalec.Spec, target string, builderImg llb.State,
 
 	installCmd := `
 #!/usr/bin/env sh
-set -x
+set -ex
 
-check_non_empty() {
-	ls ${1} > /dev/null 2>&1
-}
-
-arch_dir="/tmp/rpms/$(uname -m)"
-noarch_dir="/tmp/rpms/noarch"
-
-rpms=""
-
-if check_non_empty "${noarch_dir}/*.rpm"; then
-	rpms="${noarch_dir}/*.rpm"
-fi
-
-if check_non_empty "${arch_dir}/*.rpm"; then
-	rpms="${rpms} ${arch_dir}/*.rpm"
-fi
-
-mkdir -p /tmp/install/rpms
-find "$(dirname "$rpms")" -type f -name "*.rpm" -exec mv {} /tmp/install/rpms \;
-rpms="/tmp/install/rpms/*.rpm"
-
-if [ -n "${rpms}" ]; then
-	tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "` + workPath + `" --setopt=reposdir=/etc/yum.repos.d ${rpms} || exit
-fi
+find /tmp/rpms -type f -name "*.rpm" -print0 |
+	xargs -0 tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "` + workPath + `" --setopt=reposdir=/etc/yum.repos.d ${rpms} || exit
 
 # If the rpm command is in the rootfs then we don't need to do anything
 # If not then this is a distroless image and we need to generate manifests of the installed rpms and cleanup the rpmdb.
@@ -266,14 +242,11 @@ rm -rf ` + rpmdbDir + `
 		dalec.WithConstraints(opts...),
 	}
 
-	runDeps := getRuntimeDeps(spec)
-	for _, name := range runDeps {
-		if _, err := dalec.BuildGraph.Get(name); errors.Is(err, dalec.NotFound) {
-			// this is not a dalec runtime dep, it's from the package manager
+	runDeps := getRuntimeDepSet(spec)
+	for name, rpmDir := range rpmDirs {
+		if !runDeps.Has(name) && name != spec.Name {
 			continue
 		}
-
-		rpmDir := rpmDirs[name]
 		runArgs = append(
 			runArgs,
 			llb.AddMount(filepath.Join("/tmp/rpms", name), rpmDir, llb.SourcePath("/RPMS")),

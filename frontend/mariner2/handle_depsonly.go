@@ -10,6 +10,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -77,4 +78,13 @@ func getRuntimeDeps(spec *dalec.Spec) []string {
 
 	sort.Strings(out)
 	return out
+}
+
+func getRuntimeDepSet(spec *dalec.Spec) sets.Set[string] {
+	deps := getRuntimeDeps(spec)
+	s := sets.New[string]()
+	for _, dep := range deps {
+		s.Insert(dep)
+	}
+	return s
 }
