@@ -37,7 +37,6 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	}
 
 	st, err := specsToContainerLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
-	// st, err := specsToContainersLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -228,7 +227,7 @@ set -ex
 
 mkdir -p /tmp/rpms
 find /tmp/rpms -type f -name "*.rpm" -not -name "*.src.rpm" -print0 |
-	xargs -0 tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "` + workPath + `" --setopt=reposdir=/etc/yum.repos.d ${rpms} || exit
+	xargs -0 tdnf -v install --releasever=2.0 -y --nogpgcheck --installroot "` + workPath + `" --setopt=reposdir=/etc/yum.repos.d || exit
 
 # If the rpm command is in the rootfs then we don't need to do anything
 # If not then this is a distroless image and we need to generate manifests of the installed rpms and cleanup the rpmdb.
