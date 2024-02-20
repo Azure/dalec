@@ -15,7 +15,7 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-func initGraph(ctx context.Context, client *dockerui.Client, subTarget string) error {
+func initGraph(ctx context.Context, client *dockerui.Client, subTarget, dalecTarget string) error {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
 		return fmt.Errorf("could not read spec file: %w", err)
@@ -26,7 +26,7 @@ func initGraph(ctx context.Context, client *dockerui.Client, subTarget string) e
 		return fmt.Errorf("error loading spec: %w", err)
 	}
 
-	return dalec.InitGraph(specs, subTarget)
+	return dalec.InitGraph(specs, subTarget, dalecTarget)
 }
 
 func listBuildTargets(group string) []*targetWrapper {
@@ -102,21 +102,25 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	subTarget, dalecTarget, ok := strings.Cut(bc.Target, "/")
-	if !ok && bc.Target != "" {
-		return nil, fmt.Errorf("malformed target: %q", bc.Target)
-	}
-
-	if err := initGraph(ctx, bc, subTarget); err != nil {
+	subTarget, dalecTarget, err := getTargets(bc.Target, bc)
+	if err != nil {
 		return nil, err
 	}
 
-	if dalec.BuildGraph.OrderedLen("") == 1 {
-		subTarget = dalec.BuildGraph.OrderedSlice("")[0].Name
-		dalecTarget = strings.TrimPrefix(bc.Target, subTarget+"/")
+	if err := initGraph(ctx, bc, subTarget, dalecTarget); err != nil {
+		return nil, err
 	}
 
-	for _, spec := range dalec.BuildGraph.OrderedSlice(dalecTarget) {
+	if subTarget == "" && dalec.BuildGraph.OrderedLen("") > 1 {
+		return nil, fmt.Errorf("no subtarget specified in multi-spec file")
+	}
+
+	// return nil, fmt.Errorf("daled")
+	if dalec.BuildGraph.OrderedLen("") == 1 {
+		subTarget = dalec.BuildGraph.OrderedSlice("")[0].Name
+	}
+
+	for _, spec := range dalec.BuildGraph.OrderedSlice(subTarget) {
 		if err := registerSpecHandlers(ctx, spec, client); err != nil {
 			return nil, err
 		}
@@ -182,4 +186,23 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 
 	return rb.Finalize()
 
+}
+
+func getTargets(tgt string, bc *dockerui.Client) (string, string, error) {
+	if tgt == "" {
+		dalecTarget := registeredHandlers.Default().Name
+		return "", dalecTarget, nil
+	}
+
+	if existing := registeredHandlers.Get(tgt); existing != nil {
+		dalecTarget := tgt
+		return "", dalecTarget, nil
+	}
+
+	subTarget, dalecTarget, ok := strings.Cut(bc.Target, "/")
+	if !ok {
+		return "", "", fmt.Errorf("malformed target: %q", bc.Target)
+	}
+
+	return subTarget, dalecTarget, nil
 }

@@ -2,6 +2,7 @@ package dalec
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -88,7 +89,7 @@ func (g *Graph) Unlock() {
 	graphLock.Unlock()
 }
 
-func InitGraph(specs []*Spec, subTarget string) error {
+func InitGraph(specs []*Spec, subTarget, dalecTarget string) error {
 	if BuildGraph != nil {
 		return nil
 	}
@@ -119,16 +120,23 @@ func InitGraph(specs []*Spec, subTarget string) error {
 		BuildGraph.vertices[i] = v
 	}
 
+	group, _, ok := strings.Cut(dalecTarget, "/")
+	if !ok {
+		return fmt.Errorf("unable to extract group from target %q", dalecTarget)
+	}
+
 	for name, spec := range BuildGraph.specs {
+		buildDeps := getBuildDeps(spec, group)
+		runtimeDeps := getRuntimeDeps(spec, group)
 		if spec.Dependencies == nil {
 			continue
 		}
 		vi := BuildGraph.indices[name]
 		v := BuildGraph.vertices[vi]
-		type depMap map[string][]string
+		type depMap []string
 		runtimeAndBuildDeps := []depMap{
-			spec.Dependencies.Build,
-			spec.Dependencies.Runtime,
+			buildDeps,
+			runtimeDeps,
 		}
 
 		for _, deps := range runtimeAndBuildDeps {
@@ -136,8 +144,7 @@ func InitGraph(specs []*Spec, subTarget string) error {
 				continue
 			}
 
-			for dep, constraints := range deps {
-				_ = constraints // TODO(pmengelbert)
+			for _, dep := range deps {
 				if name == dep {
 					continue // ignore if cycle is length 1
 				}
@@ -285,4 +292,48 @@ func min[T constraints.Ordered](x, y T) T {
 	}
 
 	return y
+}
+
+func getBuildDeps(spec *Spec, target string) []string {
+	var deps *PackageDependencies
+	if t, ok := spec.Targets[target]; ok {
+		deps = t.Dependencies
+	}
+
+	if deps == nil {
+		deps = spec.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	var out []string
+	for p := range deps.Build {
+		out = append(out, p)
+	}
+
+	sort.Strings(out)
+	return out
+}
+
+func getRuntimeDeps(spec *Spec, target string) []string {
+	var deps *PackageDependencies
+	if t, ok := spec.Targets[target]; ok {
+		deps = t.Dependencies
+	}
+
+	if deps == nil {
+		deps = spec.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	var out []string
+	for p := range deps.Runtime {
+		out = append(out, p)
+	}
+
+	sort.Strings(out)
+	return out
 }

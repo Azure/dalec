@@ -100,14 +100,10 @@ func getBuildDeps(spec *dalec.Spec) []string {
 // and build deps that are expected to be found in the package repo (second
 // return value).
 func partitionBuildDeps(spec *dalec.Spec) ([]string, []string) {
-	if spec.Dependencies == nil {
-		return []string{}, []string{}
-	}
-
-	dalecDeps := make([]string, 0, len(spec.Dependencies.Build))
-	repoDeps := make([]string, 0, len(spec.Dependencies.Build))
-
 	buildDeps := getBuildDeps(spec)
+	dalecDeps := make([]string, 0, len(buildDeps))
+	repoDeps := make([]string, 0, len(buildDeps))
+
 	for _, dep := range buildDeps {
 		if _, ok := dalec.BuildGraph.Get(dep); ok {
 			dalecDeps = append(dalecDeps, dep)
