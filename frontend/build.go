@@ -125,8 +125,8 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, err
 	}
 
-	if dalec.BuildGraph.Len() == 1 {
-		subTarget = dalec.BuildGraph.OrderedSlice()[0].Name
+	if dalec.BuildGraph.OrderedLen("") == 1 {
+		subTarget = dalec.BuildGraph.OrderedSlice("")[0].Name
 		dalecTarget = strings.TrimPrefix(bc.Target, subTarget+"/")
 	}
 

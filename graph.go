@@ -14,7 +14,7 @@ import (
 type Graph struct {
 	target   string
 	specs    map[string]*Spec
-	ordered  orderedDeps
+	ordered  []*Spec
 	indices  map[string]int
 	vertices []*vertex
 	edges    sets.Set[dependency]
@@ -27,20 +27,6 @@ type dependency struct {
 
 type cycle []*vertex
 type cycleList []cycle
-type orderedDeps []*Spec
-
-func (o orderedDeps) targetSlice(target ...string) []*Spec {
-	if len(target) == 0 {
-		return []*Spec(o)
-	}
-
-	for i, dep := range o {
-		if dep.Name == target[0] {
-			return o[:i+1]
-		}
-	}
-	return nil
-}
 
 func (g *Graph) Target() *Spec {
 	return g.specs[g.target]
@@ -51,15 +37,31 @@ func (g *Graph) Get(name string) (*Spec, bool) {
 	return s, ok
 }
 
-func (g *Graph) OrderedSlice(target ...string) []*Spec {
-	return g.ordered.targetSlice(target...)
+// OrderedSlice returns an array of Specs in dependency order, up to and
+// including `target`. If `target` is the empty string, return the entire list.
+// If the target is not found, return an empty array.
+func (g *Graph) OrderedSlice(target string) []*Spec {
+	if target == "" {
+		return []*Spec(g.ordered)
+	}
+
+	for i, dep := range g.ordered {
+		if dep.Name == target {
+			return g.ordered[:i+1]
+		}
+	}
+
+	return []*Spec{}
 }
 
-func (g *Graph) Len(target ...string) int {
-	if len(target) == 0 {
+// Returns the length of the ordred list of dependencies, up to and including
+// `target`. If `target` is the empty string, return the entire length.
+func (g *Graph) OrderedLen(target string) int {
+	if target == "" {
 		return len(g.ordered)
 	}
-	return len(g.ordered.targetSlice(target[0]))
+
+	return len(g.OrderedSlice(target))
 }
 
 type vertex struct {

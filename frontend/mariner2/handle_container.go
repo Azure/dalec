@@ -73,7 +73,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 func buildRPMDirs(spec *dalec.Spec, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
 	mutRPMDirs := make(map[string]llb.State)
 
-	switch dalec.BuildGraph.Len(spec.Name) {
+	switch dalec.BuildGraph.OrderedLen(spec.Name) {
 	case 0:
 		return nil, fmt.Errorf("no specs found in build graph")
 	// case 1:
