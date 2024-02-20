@@ -13,6 +13,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 const (
@@ -87,6 +88,27 @@ func getBuildDeps(spec *dalec.Spec) []string {
 
 	sort.Strings(out)
 	return out
+}
+
+func partitionBuildDeps(spec *dalec.Spec) (dalecDeps []string, repoDeps []string) {
+    if spec.Dependencies == nil {
+        return []string{}, []string{}
+    }
+
+    dalecDeps = make([]string, 0, len(spec.Dependencies))
+    repoDeps = make([]string, 0, len(spec.Dependencies))
+
+    buildDeps := getBuildDeps(spec)
+    for _, dep := range buildDeps {
+        if _, ok := dalec.BuildGraph.Get(dep); ok {
+            dalecDeps = append(dalecDeps, dep)
+            continue
+        }
+
+        repoDeps = append(repoDeps, dep)
+    }
+
+    return dalecDeps, repoDeps
 }
 
 func getWorkerImage(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pkg/errors"
 	"github.com/pmengelbert/stack"
 	"golang.org/x/exp/constraints"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -46,12 +47,9 @@ func (g *Graph) Target() *Spec {
 	return g.specs[g.target]
 }
 
-func (g *Graph) Get(name string) (*Spec, error) {
+func (g *Graph) Get(name string) (*Spec, bool) {
 	s, ok := g.specs[name]
-	if !ok {
-		return nil, fmt.Errorf("dalec spec not found: %q", name)
-	}
-	return s, nil
+	return s, ok
 }
 
 func (g *Graph) OrderedSlice(target ...string) []*Spec {
@@ -75,6 +73,7 @@ type vertex struct {
 var (
 	graphLock  sync.Mutex
 	BuildGraph *Graph
+	NotFound   = errors.New("dependency not found")
 )
 
 func (g *Graph) Last() *Spec {

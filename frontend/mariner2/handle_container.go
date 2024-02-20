@@ -32,12 +32,14 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	baseImg := getWorkerImage(sOpt, pg)
 
 	rpmDirs := make(map[string]llb.State)
-	if dalec.BuildGraph.Len(spec.Name) > 1 {
-		var err error
+	if dalec.BuildGraph.Len(spec.Name) > 1 { // has dependencies
+		// if err := resolveDalecDeps(spec, sOpt, pg, mutRPMDirs); err != nil {
+		// return nil, nil, err
+		// }
 
-		rpmDirs, err = resolveDalecDeps(spec, sOpt, pg)
-		if err != nil {
-			return nil, nil, err
+		dalecBuildDeps, _ := partitionBuildDeps(spec)
+		for _, dep := range dalecBuildDeps {
+
 		}
 	}
 
@@ -75,45 +77,40 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	return ref, img, err
 }
 
-func resolveDalecDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
-	rpmDirs := make(map[string]llb.State)
+func resolveDalecDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt, mutRPMDirs map[string]llb.State) error {
 	inDepOrder := dalec.BuildGraph.OrderedSlice(spec.Name)
 
 	depPkgs := make(map[string]llb.State)
 	for _, dep := range inDepOrder {
 		var err error
-		depPkgs, err = updateDepRPMs(dep, rpmDirs, depPkgs)
+		depPkgs, err = updateDepRPMs(dep, mutRPMDirs, depPkgs)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		rd, err := specToRpmLLBWithDeps(dep, sOpt, depPkgs, pg)
 		if err != nil {
-			return nil, fmt.Errorf("error creating rpm: %w", err)
+			return fmt.Errorf("error creating rpm: %w", err)
 		}
 
 		depPkgs[dep.Name] = rd
-		rpmDirs[dep.Name] = rd
+		mutRPMDirs[dep.Name] = rd
 	}
-	return rpmDirs, nil
+
+	return nil
 }
 
 func updateDepRPMs(dep *dalec.Spec, rpmDirs map[string]llb.State, depPkgs map[string]llb.State) (map[string]llb.State, error) {
 	newDepPkgs := depPkgs
-	depBuildDeps := getBuildDeps(dep)
-	if depBuildDeps == nil {
-		return nil, nil
-	}
+	dalecBuildDeps, _ := partitionBuildDeps(spec)
 
-	if depBuildDeps != nil {
-		for _, name := range depBuildDeps {
-			st, ok := rpmDirs[name]
-			if !ok {
-				return nil, fmt.Errorf("dependency state %q not found", name)
-			}
-
-			newDepPkgs[name] = st
+	for _, name := range dalecBuildDeps {
+		st, ok := rpmDirs[name]
+		if !ok {
+			return nil, fmt.Errorf("dependency state %q not found", name)
 		}
+
+		newDepPkgs[name] = st
 	}
 
 	return newDepPkgs, nil
@@ -271,7 +268,7 @@ rm -rf ` + rpmdbDir + `
 
 	runDeps := getRuntimeDeps(spec)
 	for _, name := range runDeps {
-		if _, err := dalec.BuildGraph.Get(name); err != nil {
+		if _, err := dalec.BuildGraph.Get(name); errors.Is(err, dalec.NotFound) {
 			// this is not a dalec runtime dep, it's from the package manager
 			continue
 		}
