@@ -190,44 +190,6 @@ func installSpecLocalBuildDeps(spec *dalec.Spec, depRPMs llb.State, opts ...llb.
 	}
 }
 
-// func installDalecBuildDeps(spec *dalec.Spec, deps map[string]llb.State, opts ...llb.ConstraintsOpt) llb.StateOption {
-// 	return func(in llb.State) llb.State {
-// 		opts = append(opts, dalec.ProgressGroup("Install dalec build deps"))
-//         var es llb.ExecState
-//         // ro := []llb.RunOption{
-//         //     shArgs("tdnf install --releasever=2.0 -y "+dstPath),
-//         //     defaultTndfCacheMount(),
-//         //     dalec.WithConstraints(opts...),
-//         // }
-// 		for name, st := range deps {
-// 			dstPath := filepath.Join("/tmp/dalec_rpms", name)
-//             ro = append(ro, llb.AddMount())
-
-// 			es = in.Run(
-//                 llb.Copy(llb.)
-// 				llb.AddMount(dstPath, st, llb.SourcePath("/RPMS")),
-// 			)
-// 		}
-
-// 		return in.
-// 			Run(
-// 				shArgs(fmt.Sprintf("tdnf install --releasever=2.0 -y %s", strings.Join(deps, " "))),
-// 			).
-// 			Root()
-// 	}
-// }
-
-// func specToRpmLLBWithDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, deps map[string]llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
-// 	br, err := rpm.SpecToBuildrootLLB(spec, targetKey, sOpt, opts...)
-// 	if err != nil {
-// 		return llb.Scratch(), err
-// 	}
-// 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
-
-// 	base := getWorkerImage(sOpt, opts...).With(installDalecBuildDeps(spec, deps, opts...))
-// 	return rpm.Build(br, base, specPath, opts...), nil
-// }
-
 func specToRpmLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	br, err := rpm.SpecToBuildrootLLB(spec, targetKey, sOpt, opts...)
 	if err != nil {
