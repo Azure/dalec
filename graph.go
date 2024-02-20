@@ -171,8 +171,8 @@ func (g *Graph) topSort() error {
 	s := stack.New[*vertex]()
 	output := cycleList{}
 
-	var strongConnect func(v *vertex) error
-	strongConnect = func(v *vertex) error {
+	var strongConnect func(v *vertex)
+	strongConnect = func(v *vertex) {
 		v.index = new(int)
 		*v.index = index
 		v.lowlink = index
@@ -188,9 +188,7 @@ func (g *Graph) topSort() error {
 
 			w := edge.w
 			if w.index == nil {
-				if err := strongConnect(w); err != nil {
-					return err
-				}
+				strongConnect(w)
 
 				v.lowlink = minimum(v.lowlink, v.lowlink)
 				continue
@@ -224,8 +222,6 @@ func (g *Graph) topSort() error {
 			w.onStack = false
 			output = append(output, component)
 		}
-
-		return nil
 	}
 
 	for _, v := range g.vertices {
@@ -233,9 +229,7 @@ func (g *Graph) topSort() error {
 			continue
 		}
 
-		if err := strongConnect(v); err != nil {
-			return fmt.Errorf("error resolving dalec build dependency graph: %w", err)
-		}
+		strongConnect(v)
 	}
 
 	specs := make([]*Spec, 0, len(g.vertices))
