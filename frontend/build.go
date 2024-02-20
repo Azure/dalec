@@ -112,10 +112,9 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	}
 
 	if subTarget == "" && dalec.BuildGraph.OrderedLen("") > 1 {
-		return nil, fmt.Errorf("no subtarget specified in multi-spec file")
+		return nil, fmt.Errorf("no subtarget specified for multi-spec file")
 	}
 
-	// return nil, fmt.Errorf("daled")
 	if dalec.BuildGraph.OrderedLen("") == 1 {
 		subTarget = dalec.BuildGraph.OrderedSlice("")[0].Name
 	}
@@ -130,6 +129,11 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	if err != nil {
 		return nil, err
 	}
+
+	if len(ordered) == 0 {
+		return nil, fmt.Errorf("dependency graph failed to resolve")
+	}
+
 	spec := ordered[len(ordered)-1]
 
 	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(bc.Target))
