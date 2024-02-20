@@ -117,27 +117,6 @@ func partitionBuildDeps(spec *dalec.Spec) (dalecDeps []string, repoDeps []string
 	return dalecDeps, repoDeps
 }
 
-func partitionRuntimeDeps(spec *dalec.Spec) (dalecDeps []string, repoDeps []string) {
-	if spec.Dependencies == nil {
-		return []string{}, []string{}
-	}
-
-	dalecDeps = make([]string, 0, len(spec.Dependencies.Runtime))
-	repoDeps = make([]string, 0, len(spec.Dependencies.Runtime))
-
-	buildDeps := getRuntimeDeps(spec)
-	for _, dep := range buildDeps {
-		if _, ok := dalec.BuildGraph.Get(dep); ok {
-			dalecDeps = append(dalecDeps, dep)
-			continue
-		}
-
-		repoDeps = append(repoDeps, dep)
-	}
-
-	return dalecDeps, repoDeps
-}
-
 func getWorkerImage(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
 	opts = append(opts, dalec.ProgressGroup("Prepare worker image"))
 	return llb.Image(marinerRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
@@ -188,22 +167,6 @@ func installSpecLocalBuildDeps(spec *dalec.Spec, depRPMs llb.State, opts ...llb.
 			).
 			Root()
 	}
-}
-
-func specToRpmLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	br, err := rpm.SpecToBuildrootLLB(spec, targetKey, sOpt, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
-
-	base := getWorkerImage(sOpt, opts...).With(installBuildDeps(spec, opts...))
-	return rpm.Build(br, base, specPath, opts...), nil
-}
-
-type buildDeps struct {
-	names []string
-	rpms  llb.State
 }
 
 func specToRpmLLBWithBuildDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, depRPMs llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
