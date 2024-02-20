@@ -86,7 +86,7 @@ func (g *graph) Unlock() {
 	graphLock.Unlock()
 }
 
-func InitGraph(specs []*Spec, subTarget, dalecTarget string) error {
+func InitGraph(specs []*Spec, subtarget, dalecTarget string) error {
 	if BuildGraph != nil {
 		return nil
 	}
@@ -96,7 +96,7 @@ func InitGraph(specs []*Spec, subTarget, dalecTarget string) error {
 		BuildGraph.Lock()
 		defer BuildGraph.Unlock()
 		*BuildGraph = graph{
-			target:   subTarget,
+			target:   subtarget,
 			edges:    sets.New[dependency](),
 			vertices: make([]*vertex, len(specs)),
 			specs:    make(map[string]*Spec),
@@ -105,16 +105,16 @@ func InitGraph(specs []*Spec, subTarget, dalecTarget string) error {
 		}
 	}
 
-	if len(specs) == 1 {
-		BuildGraph.target = specs[0].Name
-	}
-
 	for i, spec := range specs {
 		name := spec.Name
 		BuildGraph.specs[name] = spec
 		v := &vertex{name: name}
 		BuildGraph.indices[name] = i
 		BuildGraph.vertices[i] = v
+	}
+
+	if _, ok := BuildGraph.specs[BuildGraph.target]; !ok {
+		return fmt.Errorf("subtarget %q not found", BuildGraph.target)
 	}
 
 	group, _, ok := strings.Cut(dalecTarget, "/")

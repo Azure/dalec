@@ -29,6 +29,15 @@ func initGraph(ctx context.Context, client *dockerui.Client, subTarget, dalecTar
 	return dalec.InitGraph(specs, subTarget, dalecTarget)
 }
 
+func loadSpecs(ctx context.Context, client *dockerui.Client) ([]*dalec.Spec, error) {
+	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
+	if err != nil {
+		return nil, fmt.Errorf("could not read spec file: %w", err)
+	}
+
+	return dalec.LoadSpecs(bytes.TrimSpace(src.Data))
+}
+
 func listBuildTargets(group string) []*targetWrapper {
 	if group != "" {
 		return registeredHandlers.GetGroup(group)
@@ -102,36 +111,40 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	subTarget, dalecTarget, err := getTargets(bc.Target, bc)
+	subtarget, dalecTarget, err := getTargetNames(bc.Target)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := initGraph(ctx, bc, subTarget, dalecTarget); err != nil {
-		return nil, err
+	specs, err := loadSpecs(ctx, bc)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load specs: %w", err)
 	}
 
-	if subTarget == "" && dalec.BuildGraph.OrderedLen("") > 1 {
-		return nil, fmt.Errorf("no subtarget specified for multi-spec file")
+	if subtarget == "" {
+		tgt, err := getDefaultSubtarget(specs, subtarget)
+		if err != nil {
+			return nil, err
+		}
+
+		subtarget = tgt
 	}
 
-	if dalec.BuildGraph.OrderedLen("") == 1 {
-		subTarget = dalec.BuildGraph.OrderedSlice("")[0].Name
+	if err := dalec.InitGraph(specs, subtarget, dalecTarget); err != nil {
+		return nil, fmt.Errorf("failed to build dependency graph: %w", err)
 	}
 
-	for _, spec := range dalec.BuildGraph.OrderedSlice(subTarget) {
+	// By this point, we know the subtarget and only need the deps up through
+	// the subtarget, in dependency order.
+	ordered := dalec.BuildGraph.OrderedSlice(subtarget)
+	if len(ordered) == 0 {
+		return nil, fmt.Errorf("dependency graph failed to resolve")
+	}
+
+	for _, spec := range ordered {
 		if err := registerSpecHandlers(ctx, spec, client); err != nil {
 			return nil, err
 		}
-	}
-
-	ordered := dalec.BuildGraph.OrderedSlice(subTarget)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(ordered) == 0 {
-		return nil, fmt.Errorf("dependency graph failed to resolve")
 	}
 
 	spec := ordered[len(ordered)-1]
@@ -175,7 +188,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		args := dalec.DuplicateMap(bc.BuildArgs)
 		fillPlatformArgs("TARGET", args, targetPlatform)
 		fillPlatformArgs("BUILD", args, buildPlatform)
-		for _, spec := range dalec.BuildGraph.OrderedSlice(subTarget) {
+		for _, spec := range dalec.BuildGraph.OrderedSlice(subtarget) {
 			dupe := dalec.DuplicateMap(args)
 			if err := spec.SubstituteArgs(dupe); err != nil {
 				return nil, nil, err
@@ -192,20 +205,36 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 
 }
 
-func getTargets(tgt string, bc *dockerui.Client) (string, string, error) {
+func getDefaultSubtarget(specs []*dalec.Spec, subTarget string) (string, error) {
+	if len(specs) == 0 {
+		return "", fmt.Errorf("no spec files provided")
+	}
+
+	if subTarget == "" {
+		subTarget = specs[len(specs)-1].Name
+	}
+	return subTarget, nil
+}
+
+func getTargetNames(tgt string) (string, string, error) {
+	// The user provided no target, use the default and the subtarget will be
+	// determined later
 	if tgt == "" {
 		dalecTarget := registeredHandlers.Default().Name
 		return "", dalecTarget, nil
 	}
 
+	// The user provided a known target with no subtarget. We will determine
+	// the subtarget later
 	if existing := registeredHandlers.Get(tgt); existing != nil {
 		dalecTarget := tgt
 		return "", dalecTarget, nil
 	}
 
-	subTarget, dalecTarget, ok := strings.Cut(bc.Target, "/")
+	// The user provided a subtarget and target in the form subtarget/target
+	subTarget, dalecTarget, ok := strings.Cut(tgt, "/")
 	if !ok {
-		return "", "", fmt.Errorf("malformed target: %q", bc.Target)
+		return "", "", fmt.Errorf("malformed target: %q", tgt)
 	}
 
 	return subTarget, dalecTarget, nil
