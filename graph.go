@@ -104,6 +104,7 @@ func InitGraph(specs []*Spec, subTarget string) error {
 			vertices: make([]*vertex, len(specs)),
 			specs:    make(map[string]*Spec),
 			indices:  make(map[string]int),
+			ordered:  nil,
 		}
 	}
 
@@ -162,8 +163,11 @@ func InitGraph(specs []*Spec, subTarget string) error {
 
 // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
 func (g *Graph) topSort() error {
-	index := 0
+	if g.ordered != nil {
+		return nil
+	}
 
+	index := 0
 	s := stack.New[*vertex]()
 	output := cycleList{}
 
