@@ -127,20 +127,18 @@ func InitGraph(specs []*Spec, subTarget string) error {
 		}
 		vi := BuildGraph.indices[name]
 		v := BuildGraph.vertices[vi]
-		type depMap struct {
-			kind string
-			m    map[string][]string
-		}
+		type depMap map[string][]string
 		runtimeAndBuildDeps := []depMap{
-			{m: spec.Dependencies.Build, kind: "build"},
-			{m: spec.Dependencies.Runtime, kind: "runtime"},
+			spec.Dependencies.Build,
+			spec.Dependencies.Runtime,
 		}
+
 		for _, deps := range runtimeAndBuildDeps {
-			if deps.m == nil {
+			if deps == nil {
 				continue
 			}
 
-			for dep, constraints := range deps.m {
+			for dep, constraints := range deps {
 				_ = constraints // TODO(pmengelbert)
 				if name == dep {
 					continue // ignore if cycle is length 1
