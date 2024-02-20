@@ -107,6 +107,10 @@ func InitGraph(specs []*Spec, subTarget string) error {
 		}
 	}
 
+	if len(specs) == 1 {
+		BuildGraph.target = specs[0].Name
+	}
+
 	for i, spec := range specs {
 		name := spec.Name
 		BuildGraph.specs[name] = spec

@@ -117,12 +117,17 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	}
 
 	subTarget, dalecTarget, ok := strings.Cut(bc.Target, "/")
-	if !ok {
+	if !ok && bc.Target != "" {
 		return nil, fmt.Errorf("malformed target: %q", bc.Target)
 	}
 
 	if err := initGraph(ctx, bc, subTarget); err != nil {
 		return nil, err
+	}
+
+	if dalec.BuildGraph.Len() == 1 {
+		subTarget = dalec.BuildGraph.OrderedSlice()[0].Name
+		dalecTarget = strings.TrimPrefix(bc.Target, subTarget+"/")
 	}
 
 	for _, spec := range dalec.BuildGraph.OrderedSlice(dalecTarget) {

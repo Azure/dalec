@@ -77,9 +77,9 @@ func buildRPMDirs(spec *dalec.Spec, baseImg llb.State, sOpt dalec.SourceOpts, pg
 	switch dalec.BuildGraph.Len(spec.Name) {
 	case 0:
 		return nil, fmt.Errorf("no specs found in build graph")
-	case 1:
-		rpmDirs := mutRPMDirs
-		return rpmDirs, nil
+	// case 1:
+	// 	rpmDirs := mutRPMDirs
+	// 	return rpmDirs, nil
 	default:
 	}
 
