@@ -21,9 +21,8 @@ type Graph struct {
 }
 
 type dependency struct {
-	v    *vertex
-	w    *vertex
-	kind string
+	v1 *vertex
+	v2 *vertex
 }
 
 type cycle []*vertex
@@ -138,6 +137,7 @@ func InitGraph(specs []*Spec, subTarget string) error {
 			if deps.m == nil {
 				continue
 			}
+
 			for dep, constraints := range deps.m {
 				_ = constraints // TODO(pmengelbert)
 				if name == dep {
@@ -150,9 +150,8 @@ func InitGraph(specs []*Spec, subTarget string) error {
 				}
 				w := BuildGraph.vertices[wi]
 				BuildGraph.edges.Insert(dependency{
-					v:    v,
-					w:    w,
-					kind: deps.kind,
+					v1: v,
+					v2: w,
 				})
 			}
 		}
@@ -182,11 +181,11 @@ func (g *Graph) topSort() error {
 		v.onStack = true
 
 		for edge := range g.edges {
-			if v.name != edge.v.name {
+			if v.name != edge.v1.name {
 				continue
 			}
 
-			w := edge.w
+			w := edge.v2
 			if w.index == nil {
 				strongConnect(w)
 
