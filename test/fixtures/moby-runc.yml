@@ -4,9 +4,9 @@
 # This should be fixed before this spec is used to build a real package.
 
 args:
-  RUNC_COMMIT:
+  RUNC_COMMIT: v1.1.9
   REVISION: 1
-  VERSION:
+  VERSION: 1.1.9
   SOURCE_DATE_EPOCH:
 
 name: moby-runc

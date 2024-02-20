@@ -162,18 +162,37 @@ func InitGraph(specs []*Spec, subTarget, dalecTarget string) error {
 		}
 	}
 
-	return BuildGraph.topSort()
+	output := BuildGraph.topSort()
+
+	if err := BuildGraph.verify(output); err != nil {
+		return err
+	}
+
+	BuildGraph.setOrdered(output)
+
+	return nil
+}
+
+func (g *Graph) setOrdered(output [][]*vertex) {
+	specs := make([]*Spec, 0, len(g.vertices))
+	for _, components := range output {
+		for _, component := range components {
+			specs = append(specs, g.specs[component.name])
+		}
+	}
+
+	g.ordered = specs
 }
 
 // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
-func (g *Graph) topSort() error {
+func (g *Graph) topSort() [][]*vertex {
 	if g.ordered != nil {
 		return nil
 	}
 
 	index := 0
 	s := stack.New[*vertex]()
-	output := cycleList{}
+	output := [][]*vertex{}
 
 	var strongConnect func(v *vertex)
 	strongConnect = func(v *vertex) {
@@ -236,31 +255,29 @@ func (g *Graph) topSort() error {
 		strongConnect(v)
 	}
 
-	specs := make([]*Spec, 0, len(g.vertices))
+	return output
+}
+
+func (g *Graph) verify(output [][]*vertex) error {
 	for _, components := range output {
 		if len(components) > 1 {
-			return fmt.Errorf("dalec dependency cycle: %s", components.disp())
-		}
-
-		for _, component := range components {
-			specs = append(specs, g.specs[component.name])
+			return fmt.Errorf("dalec dependency cycle: %s", disp(components))
 		}
 	}
 
-	g.ordered = specs
 	return nil
 }
 
-func (c cycle) disp() string {
+func disp(c []*vertex) string {
 	if len(c) == 0 {
 		return ""
 	}
-	s := c.String()
+	s := cycleString(c)
 	s = s[:len(s)-2]
 	return fmt.Sprintf("%s, %s }", s, c[0].name)
 }
 
-func (c cycle) String() string {
+func cycleString(c []*vertex) string {
 	sb := strings.Builder{}
 	sb.WriteString("{ ")
 	for i, elem := range c {
@@ -274,17 +291,17 @@ func (c cycle) String() string {
 	return sb.String()
 }
 
-func (cs cycleList) String() string {
-	sb := strings.Builder{}
-	for i, component := range cs {
-		sb.WriteString(component.String())
-		if i+1 == len(cs) {
-			break
-		}
-		sb.WriteRune('\n')
-	}
-	return sb.String()
-}
+// func (cs cycleList) String() string {
+// 	sb := strings.Builder{}
+// 	for i, component := range cs {
+// 		sb.WriteString(component.String())
+// 		if i+1 == len(cs) {
+// 			break
+// 		}
+// 		sb.WriteRune('\n')
+// 	}
+// 	return sb.String()
+// }
 
 func min[T constraints.Ordered](x, y T) T {
 	if x < y {
