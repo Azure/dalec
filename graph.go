@@ -26,9 +26,6 @@ type dependency struct {
 	v2 *vertex
 }
 
-type cycle []*vertex
-type cycleList []cycle
-
 func (g *Graph) Target() *Spec {
 	return g.specs[g.target]
 }
@@ -290,18 +287,6 @@ func cycleString(c []*vertex) string {
 	sb.WriteString(" }")
 	return sb.String()
 }
-
-// func (cs cycleList) String() string {
-// 	sb := strings.Builder{}
-// 	for i, component := range cs {
-// 		sb.WriteString(component.String())
-// 		if i+1 == len(cs) {
-// 			break
-// 		}
-// 		sb.WriteRune('\n')
-// 	}
-// 	return sb.String()
-// }
 
 func min[T constraints.Ordered](x, y T) T {
 	if x < y {
