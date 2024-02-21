@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
@@ -17,59 +16,66 @@ type FilterFunc = func(string, []string, []string, ...llb.ConstraintsOpt) llb.St
 
 var errNoSourceVariant = fmt.Errorf("no source variant found")
 
-func GetSource(src Source, name string, filter FilterFunc, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, bool, error) {
+func (src Source) handlesOwnPath() bool {
+	// docker images handle their own path extraction if they have an attached command,
+	// and this information is needed in the case of mounts when we can do path
+	// extraction at mount time
+	return src.DockerImage != nil && src.DockerImage.Cmd != nil
+}
+
+func GetFilter(src Source, forMount bool, opts ...llb.ConstraintsOpt) llb.StateOption {
+	var path = src.Path
+	switch {
+	case src.HTTP != nil,
+		src.Git != nil,
+		src.Build != nil:
+		if forMount {
+			// if we're using a mount for these sources, the mount will handle path extraction
+			path = "/"
+		}
+		return filterState(path, src.Includes, src.Excludes, opts...)
+	case src.Context != nil:
+		if forMount {
+			// same case as above
+			path = "/"
+		}
+		// context sources handle includes and excludes
+		return filterState(path, []string{}, []string{})
+	case src.DockerImage != nil:
+		if src.DockerImage.Cmd != nil || forMount {
+			// if a docker image source has a command,
+			// the path extraction will be handled with a mount on the command
+			path = "/"
+		}
+
+		return filterState(path, src.Includes, src.Excludes)
+	}
+
+	return func(_ llb.State) llb.State { return llb.Scratch() }
+}
+
+func GetSource(src Source, name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (st llb.State, err error) {
 	// load the source
 	switch {
 	case src.HTTP != nil:
-		st, err := src.HTTP.AsState(name, opts...)
-		if err != nil {
-			return llb.Scratch(), false, err
-		}
-
-		return st.With(filter(src.Path, src.Includes, src.Excludes, opts...)), true, nil
+		st, err = src.HTTP.AsState(name, opts...)
 	case src.Git != nil:
-		st, err := src.Git.AsState(opts...)
-		if err != nil {
-			return llb.Scratch(), false, err
-		}
-		return st.With(filter(src.Path, src.Includes, src.Excludes)), true, nil
+		st, err = src.Git.AsState(opts...)
 	case src.Context != nil:
-		st, err := src.Context.AsState(&src, sOpt, opts...)
-		if err != nil {
-			return llb.Scratch(), false, nil
-		}
-		return st.With(filter(src.Path, []string{}, []string{})), true, nil
-
+		st, err = src.Context.AsState(src.Includes, src.Excludes, sOpt, opts...)
 	case src.DockerImage != nil:
-		st, err := src.DockerImage.AsState(name, &src, sOpt, opts...)
-		if err != nil {
-			return llb.Scratch(), false, err
-		}
-
-		var pathHandledByFilter bool
-		if src.DockerImage.Cmd != nil {
-			st = st.With(filter("/", src.Includes, src.Excludes))
-			pathHandledByFilter = false
-		} else {
-			pathHandledByFilter = true
-			st = st.With(filter(src.Path, src.Includes, src.Excludes))
-		}
-		return st, pathHandledByFilter, nil
-
+		st, err = src.DockerImage.AsState(name, src.Path, sOpt, opts...)
 	case src.Build != nil:
-		st, err := src.Build.AsState(name, &src, filter, sOpt, opts...)
-		if err != nil {
-			return llb.Scratch(), false, err
-		}
-
-		return st.With(filter(src.Path, src.Includes, src.Excludes)), true, nil
+		st, err = src.Build.AsState(name, &src, sOpt, opts...)
+	default:
+		st, err = llb.Scratch(), errNoSourceVariant
 	}
 
-	return llb.Scratch(), false, errNoSourceVariant
+	return
 }
 
-func (src *SourceContext) AsState(parent *Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(parent.Includes, parent.Excludes), withConstraints(opts))
+func (src *SourceContext) AsState(includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(includes, excludes), withConstraints(opts))
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -98,19 +104,13 @@ func (src *SourceGit) AsState(opts ...llb.ConstraintsOpt) (llb.State, error) {
 	// TODO: Pass git secrets
 }
 
-func (src *SourceDockerImage) AsState(name string, parent *Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	bklog.L.Printf("DockerImage: %v", src)
-
+func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	st := llb.Image(src.Ref, llb.WithMetaResolver(sOpt.Resolver), withConstraints(opts))
 	if src.Cmd == nil {
 		return st, nil
 	}
 
-	if parent.Path == "" {
-		parent.Path = "/"
-	}
-
-	st, err := generateSourceFromImage(name, st, src.Cmd, sOpt, parent.Path, opts...)
+	st, err := generateSourceFromImage(name, st, src.Cmd, sOpt, path, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -126,8 +126,8 @@ func TargetMountSourceFilter(_ string, includes, excludes []string, opts ...llb.
 	return filterState("/", includes, excludes, opts...)
 }
 
-func (src *SourceBuild) AsState(name string, _ *Source, filter FilterFunc, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, _, err := GetSource(src.Source, name, filter, sOpt, opts...)
+func (src *SourceBuild) AsState(name string, _ *Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	st, err := GetSource(src.Source, name, sOpt, opts...)
 	if err != nil {
 		if !errors.Is(err, errNoSourceVariant) || src.Inline == "" {
 			return llb.Scratch(), err
@@ -169,9 +169,9 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
 	}
 
-	if subPath == "" {
-		return llb.Scratch(), fmt.Errorf("empty subPath")
-	}
+	// if subPath == "" {
+	// 	return llb.Scratch(), fmt.Errorf("empty subPath")
+	// }
 
 	for k, v := range cmd.Env {
 		st = st.AddEnv(k, v)
@@ -183,18 +183,17 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
 	for _, src := range cmd.Mounts {
-		srcSt, pathHandledByFilter, err := GetSource(src.Spec, name, TargetMountSourceFilter, sOpts, opts...)
+		srcSt, err := GetSource(src.Spec, name, sOpts, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
 		var mountOpt []llb.MountOption
 
 		// This handles the case where we are mounting a source with a target extract path and
-		// no includes and excludes. In this case, because we are mounting,
-		// we can pass in TargetMountSourceFilter to GetSource (see above), which makes filter a no-op for any
-		// source that relies on the filter for path extraction. Then we can extract the path here as a source mount
+		// no includes and excludes. In this case, we can extract the path here as a source mount
+		// if the source does not handle its own path extraction. This saves an extra llb.Copy operation
 		if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 &&
-			pathHandledByFilter {
+			!src.Spec.handlesOwnPath() {
 			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
 		}
 		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
@@ -227,8 +226,11 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 }
 
 func Source2LLBGetter(_ *Spec, src Source, name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, _, err := GetSource(src, name, DefaultSourceFilter, sOpt, opts...)
-	return st, err
+	st, err := GetSource(src, name, sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	return st.With(GetFilter(src, false)), nil
 }
 
 func isRoot(extract string) bool {
