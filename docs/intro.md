@@ -288,6 +288,33 @@ targets:
             image: docker.io/my/custom:mariner2
 ```
 
+### Metadata
+
+You can include client-side metadata in the spec file.
+This may be useful when you want to parse the spec file and do something with your own tooling.
+
+Any field at the top-level that begins with `x-` will be ignored by the dalec parser.
+Any unknown fields besides those that start with `x-` will cause the parser to fail.
+
+```yaml
+soruces:
+  src:
+    http:
+      url: https://example.com/foo.tar.gz
+
+x-my-custom-field: "foo"
+```
+
+As an example use-case, you may want to use this to store the targeted image name for a CI/CD pipeline.
+
+```yaml
+x-image-name: "my-package-image:1.0.0"
+```
+
+Your CI/CD tooling can then parse the spec file and use the `x-image-name` field to tag the built image.
+
+To re-itterate: the `x-` fields are ignored by the dalec parser and are only for client-side use.
+
 ## Additional Reading
 
 * Details on editor support in [editor-support.md](editor-support.md)
