@@ -292,6 +292,12 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 // LoadSpec loads a spec from the given data.
 func LoadSpec(dt []byte) (*Spec, error) {
 	var spec Spec
+
+	dt, err := stripXFields(dt)
+	if err != nil {
+		return nil, fmt.Errorf("error stripping x-fields: %w", err)
+	}
+
 	if err := yaml.UnmarshalWithOptions(dt, &spec, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
 	}
@@ -302,6 +308,21 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	spec.FillDefaults()
 
 	return &spec, nil
+}
+
+func stripXFields(dt []byte) ([]byte, error) {
+	var obj map[string]interface{}
+	if err := yaml.Unmarshal(dt, &obj); err != nil {
+		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
+	}
+
+	for k := range obj {
+		if strings.HasPrefix(k, "x-") {
+			delete(obj, k)
+		}
+	}
+
+	return yaml.Marshal(obj)
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {

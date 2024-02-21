@@ -399,3 +399,53 @@ func TestSourceNameWithPathSeparator(t *testing.T) {
 		t.Errorf("expected error to be sourceNamePathSeparatorError, got: %v", err)
 	}
 }
+
+func TestUnmarshal(t *testing.T) {
+	t.Run("x-fields are stripped from spec", func(t *testing.T) {
+		dt := []byte(`
+sources:
+  test:
+    inline:
+      file:
+        contents: "Hello world!"
+x-some-field: "some value"
+x-some-other-field: "some other value"
+`)
+
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		src, ok := spec.Sources["test"]
+		if !ok {
+			t.Fatal("expected source to be present")
+		}
+
+		if src.Inline == nil {
+			t.Fatal("expected inline source to be present")
+		}
+
+		if src.Inline.File == nil {
+			t.Fatal("expected inline file to be present")
+		}
+
+		const xContents = "Hello world!"
+		if src.Inline.File.Contents != xContents {
+			t.Fatalf("expected %q, got %s", xContents, src.Inline.File.Contents)
+		}
+	})
+
+	t.Run("unknown fields cause parse error", func(t *testing.T) {
+		dt := []byte(`
+sources:
+  test:
+    noSuchField: "some value"
+`)
+
+		_, err := LoadSpec(dt)
+		if err == nil {
+			t.Fatal("expected error, but received none")
+		}
+	})
+}
