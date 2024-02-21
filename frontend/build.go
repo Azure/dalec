@@ -15,20 +15,6 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-func initGraph(ctx context.Context, client *dockerui.Client, subTarget, dalecTarget string) error {
-	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
-	if err != nil {
-		return fmt.Errorf("could not read spec file: %w", err)
-	}
-
-	specs, err := dalec.LoadSpecs(bytes.TrimSpace(src.Data))
-	if err != nil {
-		return fmt.Errorf("error loading spec: %w", err)
-	}
-
-	return dalec.InitGraph(specs, subTarget, dalecTarget)
-}
-
 func loadSpecs(ctx context.Context, client *dockerui.Client) ([]*dalec.Spec, error) {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
