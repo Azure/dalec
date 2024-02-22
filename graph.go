@@ -12,13 +12,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type graph struct {
-	target   string
-	specs    map[string]*Spec
-	ordered  []*Spec
-	indices  map[string]int
-	vertices []*vertex
-	edges    sets.Set[dependency]
+type Graph struct {
+	m       *sync.Mutex
+	target  string
+	specs   map[string]Spec
+	ordered []Spec
+	edges   sets.Set[dependency]
 }
 
 type dependency struct {
@@ -26,11 +25,11 @@ type dependency struct {
 	v2 *vertex
 }
 
-func (g *graph) Target() *Spec {
+func (g *Graph) Target() Spec {
 	return g.specs[g.target]
 }
 
-func (g *graph) Get(name string) (*Spec, bool) {
+func (g *Graph) Get(name string) (Spec, bool) {
 	s, ok := g.specs[name]
 	return s, ok
 }
@@ -38,9 +37,9 @@ func (g *graph) Get(name string) (*Spec, bool) {
 // OrderedSlice returns an array of Specs in dependency order, up to and
 // including `target`. If `target` is the empty string, return the entire list.
 // If the target is not found, return an empty array.
-func (g *graph) OrderedSlice(target string) []*Spec {
+func (g *Graph) OrderedSlice(target string) []Spec {
 	if target == "" {
-		return []*Spec(g.ordered)
+		return []Spec(g.ordered)
 	}
 
 	for i, dep := range g.ordered {
@@ -49,12 +48,12 @@ func (g *graph) OrderedSlice(target string) []*Spec {
 		}
 	}
 
-	return []*Spec{}
+	return []Spec{}
 }
 
 // Returns the length of the ordred list of dependencies, up to and including
 // `target`. If `target` is the empty string, return the entire length.
-func (g *graph) OrderedLen(target string) int {
+func (g *Graph) OrderedLen(target string) int {
 	if target == "" {
 		return len(g.ordered)
 	}
@@ -71,67 +70,89 @@ type vertex struct {
 
 var (
 	graphLock  sync.Mutex
-	BuildGraph *graph
+	BuildGraph *Graph
 	NotFound   = errors.New("dependency not found")
 )
 
-func (g *graph) Last() *Spec {
+func (g *Graph) Last() Spec {
 	return g.ordered[len(g.ordered)-1]
 }
 
-func (g *graph) Lock() {
-	graphLock.Lock()
-}
-func (g *graph) Unlock() {
-	graphLock.Unlock()
-}
+type (
+	GraphConfig struct{}
+	GraphOpt    func(*GraphConfig) error
+)
 
 func InitGraph(specs []*Spec, subtarget, dalecTarget string) error {
 	if BuildGraph != nil {
 		return nil
 	}
 
-	if BuildGraph == nil {
-		BuildGraph = new(graph)
-		BuildGraph.Lock()
-		defer BuildGraph.Unlock()
-		*BuildGraph = graph{
-			target:   subtarget,
-			edges:    sets.New[dependency](),
-			vertices: make([]*vertex, len(specs)),
-			specs:    make(map[string]*Spec),
-			indices:  make(map[string]int),
-			ordered:  nil,
+	g, err := NewGraph(specs, subtarget, dalecTarget)
+	if err != nil {
+		return err
+	}
+
+	BuildGraph = &g
+	return nil
+}
+
+func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (Graph, error) {
+	cfg := GraphConfig{}
+
+	g := Graph{
+		m:      new(sync.Mutex),
+		target: subtarget,
+		edges:  sets.New[dependency](),
+		specs:  make(map[string]Spec),
+	}
+
+	vertices := make([]*vertex, len(specs))
+	indices := make(map[string]int)
+
+	for _, f := range opts {
+		if err := f(&cfg); err != nil {
+			return Graph{}, fmt.Errorf("error initializing graph: %w", err)
 		}
 	}
 
+	// In case we decide to make the graph mutable further down the pipeline
+	g.m.Lock()
+	defer g.m.Unlock()
+
 	for i, spec := range specs {
+		if spec == nil {
+			return Graph{}, fmt.Errorf("nil spec provided")
+		}
+
 		name := spec.Name
-		BuildGraph.specs[name] = spec
+		g.specs[name] = *spec
 		v := &vertex{name: name}
-		BuildGraph.indices[name] = i
-		BuildGraph.vertices[i] = v
+		indices[name] = i
+		vertices[i] = v
 	}
 
-	if _, ok := BuildGraph.specs[BuildGraph.target]; !ok {
-		return fmt.Errorf("subtarget %q not found", BuildGraph.target)
+	if _, ok := g.specs[g.target]; !ok {
+		return Graph{}, fmt.Errorf("subtarget %q not found", g.target)
 	}
 
 	group, _, ok := strings.Cut(dalecTarget, "/")
 	if !ok {
-		return fmt.Errorf("unable to extract group from target %q", dalecTarget)
+		return Graph{}, fmt.Errorf("unable to extract group from target %q", dalecTarget)
 	}
 
-	for name, spec := range BuildGraph.specs {
-		buildDeps := getBuildDeps(spec, group)
-		runtimeDeps := getRuntimeDeps(spec, group)
+	for name, spec := range g.specs {
+		buildDeps := getBuildDeps(&spec, group)
+		runtimeDeps := getRuntimeDeps(&spec, group)
+
 		if spec.Dependencies == nil {
 			continue
 		}
-		vi := BuildGraph.indices[name]
-		v := BuildGraph.vertices[vi]
-		type depMap []string
-		runtimeAndBuildDeps := []depMap{
+
+		vi := indices[name]
+		v := vertices[vi]
+
+		runtimeAndBuildDeps := [][]string{
 			buildDeps,
 			runtimeDeps,
 		}
@@ -145,13 +166,13 @@ func InitGraph(specs []*Spec, subtarget, dalecTarget string) error {
 				if name == dep {
 					continue // ignore if cycle is length 1
 				}
-				wi, ok := BuildGraph.indices[dep]
+				wi, ok := indices[dep]
 				if !ok {
 					// this is dependency in the package repo
 					continue
 				}
-				w := BuildGraph.vertices[wi]
-				BuildGraph.edges.Insert(dependency{
+				w := vertices[wi]
+				g.edges.Insert(dependency{
 					v1: v,
 					v2: w,
 				})
@@ -159,19 +180,19 @@ func InitGraph(specs []*Spec, subtarget, dalecTarget string) error {
 		}
 	}
 
-	output := BuildGraph.topSort()
+	output := g.topSort(vertices)
 
-	if err := BuildGraph.verify(output); err != nil {
-		return err
+	if err := g.verify(output); err != nil {
+		return Graph{}, err
 	}
 
-	BuildGraph.setOrdered(output)
+	g.setOrdered(output, len(vertices))
 
-	return nil
+	return g, nil
 }
 
-func (g *graph) setOrdered(output [][]*vertex) {
-	specs := make([]*Spec, 0, len(g.vertices))
+func (g *Graph) setOrdered(output [][]*vertex, length int) {
+	specs := make([]Spec, 0, length)
 	for _, components := range output {
 		for _, component := range components {
 			specs = append(specs, g.specs[component.name])
@@ -182,7 +203,7 @@ func (g *graph) setOrdered(output [][]*vertex) {
 }
 
 // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
-func (g *graph) topSort() [][]*vertex {
+func (g *Graph) topSort(vertices []*vertex) [][]*vertex {
 	if g.ordered != nil {
 		return nil
 	}
@@ -244,7 +265,7 @@ func (g *graph) topSort() [][]*vertex {
 		}
 	}
 
-	for _, v := range g.vertices {
+	for _, v := range vertices {
 		if v.index != nil {
 			continue
 		}
@@ -255,7 +276,7 @@ func (g *graph) topSort() [][]*vertex {
 	return output
 }
 
-func (g *graph) verify(output [][]*vertex) error {
+func (g *Graph) verify(output [][]*vertex) error {
 	for _, components := range output {
 		if len(components) > 1 {
 			return fmt.Errorf("dalec dependency cycle: %s", disp(components))
