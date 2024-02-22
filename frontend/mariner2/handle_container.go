@@ -85,7 +85,7 @@ func buildRPMDirs(spec *dalec.Spec, baseImg llb.State, sOpt dalec.SourceOpts, pg
 	orderedDeps := dalec.BuildGraph.OrderedSlice(spec.Name)
 
 	for _, depSpec := range orderedDeps {
-		if err := updateRPMDirs(depSpec, mutRPMDirs, baseImg, spec, sOpt, pg); err != nil {
+		if err := updateRPMDirs(&depSpec, mutRPMDirs, baseImg, spec, sOpt, pg); err != nil {
 			return nil, err
 		}
 	}

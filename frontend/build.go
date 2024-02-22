@@ -128,7 +128,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	}
 
 	for _, spec := range ordered {
-		if err := registerSpecHandlers(ctx, spec, client); err != nil {
+		if err := registerSpecHandlers(ctx, &spec, client); err != nil {
 			return nil, err
 		}
 	}
@@ -174,14 +174,15 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		args := dalec.DuplicateMap(bc.BuildArgs)
 		fillPlatformArgs("TARGET", args, targetPlatform)
 		fillPlatformArgs("BUILD", args, buildPlatform)
+		allArgs := map[string]map[string]string{}
 		for _, spec := range dalec.BuildGraph.OrderedSlice(subtarget) {
+			name := spec.Name
 			dupe := dalec.DuplicateMap(args)
-			if err := spec.SubstituteArgs(dupe); err != nil {
-				return nil, nil, err
-			}
+			allArgs[name] = dupe
 		}
+		dalec.BuildGraph.SubstituteArgs(allArgs)
 
-		return f(ctx, client, spec)
+		return f(ctx, client, &spec)
 	})
 	if err != nil {
 		return nil, err

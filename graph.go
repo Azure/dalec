@@ -20,6 +20,27 @@ type Graph struct {
 	edges   sets.Set[dependency]
 }
 
+type SubFunc func(*Graph)
+
+func (g *Graph) SubstituteArgs(allArgs map[string]map[string]string) error {
+	g.m.Lock()
+	defer g.m.Unlock()
+	var once sync.Once
+	var err error
+
+	once.Do(func() {
+		for name, args := range allArgs {
+			s := g.specs[name]
+			if err = s.SubstituteArgs(args); err != nil {
+				return
+			}
+			g.specs[name] = s
+		}
+	})
+
+	return err
+}
+
 type dependency struct {
 	v1 *vertex
 	v2 *vertex
