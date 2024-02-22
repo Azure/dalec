@@ -10,12 +10,10 @@ updates:
     schedule:
       interval: weekly
 
-  - package-ecosystem: docker
-    directory: /frontend/mariner2
-    schedule:
-      interval: weekly
-
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
