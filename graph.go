@@ -13,13 +13,13 @@ import (
 )
 
 type Graph struct {
-	m       *sync.Mutex
-	target  string
-	specs   map[string]Spec
-	ordered []Spec
+	m          *sync.Mutex
+	subArgs    *sync.Once
+	setOrdered *sync.Once
+	target     string
+	specs      map[string]Spec
+	ordered    []string // index into specs map
 }
-
-var subArgs sync.Once
 
 func (g *Graph) SubstituteArgs(allArgs map[string]map[string]string) error {
 	g.m.Lock()
@@ -27,7 +27,7 @@ func (g *Graph) SubstituteArgs(allArgs map[string]map[string]string) error {
 
 	var err error
 
-	subArgs.Do(func() {
+	g.subArgs.Do(func() {
 		for name, args := range allArgs {
 			s := g.specs[name]
 			if err = s.SubstituteArgs(args); err != nil {
@@ -51,31 +51,32 @@ func (g *Graph) Get(name string) (Spec, bool) {
 	return s, ok
 }
 
-// OrderedSlice returns an array of Specs in dependency order, up to and
+// Ordered returns an array of Specs in dependency order, up to and
 // including `target`. If `target` is the empty string, return the entire list.
 // If the target is not found, return an empty array.
-func (g *Graph) OrderedSlice(target string) []Spec {
-	if target == "" {
-		return []Spec(g.ordered)
-	}
-
-	for i, dep := range g.ordered {
-		if dep.Name == target {
-			return g.ordered[:i+1]
+func (g *Graph) Ordered() []Spec {
+	orderedSpecs := make([]Spec, 0, len(g.specs))
+	for _, name := range g.ordered {
+		spec := g.specs[name]
+		orderedSpecs = append(orderedSpecs, spec)
+		if name == g.target && g.target != "" {
+			break
 		}
 	}
 
-	return []Spec{}
+	return orderedSpecs
 }
 
 // Returns the length of the ordred list of dependencies, up to and including
 // `target`. If `target` is the empty string, return the entire length.
-func (g *Graph) OrderedLen(target string) int {
-	if target == "" {
-		return len(g.ordered)
+func (g *Graph) Len() int {
+	for i, name := range g.ordered {
+		if name == g.target {
+			return i + 1
+		}
 	}
 
-	return len(g.OrderedSlice(target))
+	return len(g.ordered)
 }
 
 type vertex struct {
@@ -90,10 +91,6 @@ var (
 	BuildGraph *Graph
 	NotFound   = errors.New("dependency not found")
 )
-
-func (g *Graph) Last() Spec {
-	return g.ordered[len(g.ordered)-1]
-}
 
 type (
 	GraphConfig struct{}
@@ -121,9 +118,11 @@ func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (G
 	cfg := GraphConfig{}
 
 	g := Graph{
-		m:      new(sync.Mutex),
-		target: subtarget,
-		specs:  make(map[string]Spec),
+		m:          new(sync.Mutex),
+		subArgs:    new(sync.Once),
+		setOrdered: new(sync.Once),
+		target:     subtarget,
+		specs:      make(map[string]Spec),
 	}
 
 	vertices := make([]*vertex, len(specs))
@@ -206,20 +205,22 @@ func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (G
 		return Graph{}, err
 	}
 
-	g.setOrdered(output, len(vertices))
+	g.setDepOrder(output, len(vertices))
 
 	return g, nil
 }
 
-func (g *Graph) setOrdered(output [][]*vertex, length int) {
-	specs := make([]Spec, 0, length)
-	for _, components := range output {
-		for _, component := range components {
-			specs = append(specs, g.specs[component.name])
+func (g *Graph) setDepOrder(connected [][]*vertex, length int) {
+	g.setOrdered.Do(func() {
+		specs := make([]string, 0, length)
+		for _, components := range connected {
+			for _, component := range components {
+				specs = append(specs, component.name)
+			}
 		}
-	}
 
-	g.ordered = specs
+		g.ordered = specs
+	})
 }
 
 // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm

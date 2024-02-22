@@ -73,16 +73,11 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 func buildRPMDirs(spec *dalec.Spec, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
 	mutRPMDirs := make(map[string]llb.State)
 
-	switch dalec.BuildGraph.OrderedLen(spec.Name) {
-	case 0:
+	if dalec.BuildGraph.Len() == 0 {
 		return nil, fmt.Errorf("no specs found in build graph")
-	// case 1:
-	// 	rpmDirs := mutRPMDirs
-	// 	return rpmDirs, nil
-	default:
 	}
 
-	orderedDeps := dalec.BuildGraph.OrderedSlice(spec.Name)
+	orderedDeps := dalec.BuildGraph.Ordered()
 
 	for _, depSpec := range orderedDeps {
 		if err := updateRPMDirs(&depSpec, mutRPMDirs, baseImg, spec, sOpt, pg); err != nil {
