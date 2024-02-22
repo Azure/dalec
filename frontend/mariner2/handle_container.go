@@ -22,7 +22,8 @@ const (
 	marinerDistrolessRef = "mcr.microsoft.com/cbl-mariner/distroless/base:2.0"
 )
 
-func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func handleContainer(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+	spec := graph.Target()
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, nil, err
@@ -31,12 +32,12 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	pg := dalec.ProgressGroup("Build mariner2 container: " + spec.Name)
 	baseImg := getWorkerImage(sOpt, pg)
 
-	rpmDirs, err := buildRPMDirs(spec, baseImg, sOpt, pg)
+	rpmDirs, err := buildRPMDirs(&spec, graph, baseImg, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	st, err := specsToContainerLLB(spec, targetKey, baseImg, rpmDirs, sOpt, pg)
+	st, err := specsToContainerLLB(&spec, targetKey, baseImg, rpmDirs, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -53,7 +54,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	img, err := buildImageConfig(ctx, spec, targetKey, client)
+	img, err := buildImageConfig(ctx, &spec, targetKey, client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -63,24 +64,23 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	if err := frontend.RunTests(ctx, client, spec, ref, targetKey); err != nil {
+	if err := frontend.RunTests(ctx, client, &spec, ref, targetKey); err != nil {
 		return nil, nil, err
 	}
 
 	return ref, img, err
 }
 
-func buildRPMDirs(spec *dalec.Spec, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
+func buildRPMDirs(spec *dalec.Spec, graph *dalec.Graph, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
 	mutRPMDirs := make(map[string]llb.State)
 
-	if dalec.BuildGraph.Len() == 0 {
+	orderedDeps := graph.Ordered()
+	if len(orderedDeps) == 0 {
 		return nil, fmt.Errorf("no specs found in build graph")
 	}
 
-	orderedDeps := dalec.BuildGraph.Ordered()
-
 	for _, depSpec := range orderedDeps {
-		if err := updateRPMDirs(&depSpec, mutRPMDirs, baseImg, spec, sOpt, pg); err != nil {
+		if err := updateRPMDirs(&depSpec, graph, mutRPMDirs, baseImg, spec, sOpt, pg); err != nil {
 			return nil, err
 		}
 	}
@@ -89,8 +89,8 @@ func buildRPMDirs(spec *dalec.Spec, baseImg llb.State, sOpt dalec.SourceOpts, pg
 	return rpmDirs, nil
 }
 
-func updateRPMDirs(depSpec *dalec.Spec, rpmDirs map[string]llb.State, baseImg llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) error {
-	bDeps, _ := partitionBuildDeps(depSpec)
+func updateRPMDirs(depSpec *dalec.Spec, graph *dalec.Graph, rpmDirs map[string]llb.State, baseImg llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) error {
+	bDeps, _ := partitionBuildDeps(depSpec, graph)
 
 	rpms := llb.Scratch()
 	for _, bd := range bDeps {
@@ -110,7 +110,7 @@ func updateRPMDirs(depSpec *dalec.Spec, rpmDirs map[string]llb.State, baseImg ll
 		).AddMount(outdir, rpms)
 	}
 
-	rpmState, err := specToRpmLLBWithBuildDeps(depSpec, sOpt, rpms, pg)
+	rpmState, err := specToRpmLLBWithBuildDeps(depSpec, graph, sOpt, rpms, pg)
 	if err != nil {
 		return fmt.Errorf("error building dependency %q", depSpec.Name)
 	}

@@ -21,7 +21,7 @@ import (
 
 const dalecTargetOptKey = "dalec.target"
 
-type BuildFunc func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error)
+type BuildFunc func(ctx context.Context, client gwclient.Client, spec *dalec.Graph) (gwclient.Reference, *image.Image, error)
 
 type targetWrapper struct {
 	bktargets.Target

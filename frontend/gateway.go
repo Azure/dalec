@@ -134,14 +134,16 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 }
 
 func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
-	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (_ gwclient.Reference, _ *image.Image, retErr error) {
+	return func(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (_ gwclient.Reference, _ *image.Image, retErr error) {
 		defer func() {
 			if retErr != nil {
 				retErr = errors.Wrapf(retErr, "error forwarding build to frontend %q for target %s", specT.Frontend.Image, bkt.Name)
 			}
 		}()
 
-		dt, err := yaml.Marshal(spec)
+		spec := graph.Target()
+
+		dt, err := yaml.Marshal(&spec)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error marshalling spec to yaml")
 		}

@@ -15,8 +15,10 @@ import (
 )
 
 func SpecHandler(target string) frontend.BuildFunc {
-	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-		st, err := Dalec2SpecLLB(spec, llb.Scratch(), target, "")
+	return func(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+		spec := graph.Target()
+
+		st, err := Dalec2SpecLLB(&spec, llb.Scratch(), target, "")
 		if err != nil {
 			return nil, nil, err
 		}

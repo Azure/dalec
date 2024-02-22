@@ -116,13 +116,14 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		subtarget = tgt
 	}
 
-	if err := dalec.InitGraph(specs, subtarget, dalecTarget); err != nil {
+	graph, err := dalec.NewGraph(specs, subtarget, dalecTarget)
+	if err != nil {
 		return nil, fmt.Errorf("failed to build dependency graph: %w", err)
 	}
 
 	// By this point, we know the subtarget and only need the deps up through
 	// the subtarget, in dependency order.
-	ordered := dalec.BuildGraph.Ordered()
+	ordered := graph.Ordered()
 	if len(ordered) == 0 {
 		return nil, fmt.Errorf("dependency graph failed to resolve")
 	}
@@ -132,8 +133,6 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 			return nil, err
 		}
 	}
-
-	spec := ordered[len(ordered)-1]
 
 	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(bc.Target))
 	if err != nil || handled {
@@ -171,11 +170,10 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 		buildPlatform = bc.BuildPlatforms[0]
 
-		ordered := dalec.BuildGraph.Ordered()
 		allArgs := collectBuildArgs(bc.BuildArgs, targetPlatform, buildPlatform, ordered)
-		dalec.BuildGraph.SubstituteArgs(allArgs)
+		graph.SubstituteArgs(allArgs)
 
-		return f(ctx, client, &spec)
+		return f(ctx, client, &graph)
 	})
 	if err != nil {
 		return nil, err

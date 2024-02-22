@@ -101,6 +101,7 @@ var initGraph sync.Once
 
 func InitGraph(specs []*Spec, subtarget, dalecTarget string) error {
 	var err error
+
 	initGraph.Do(func() {
 		var g Graph
 
@@ -111,6 +112,7 @@ func InitGraph(specs []*Spec, subtarget, dalecTarget string) error {
 
 		BuildGraph = &g
 	})
+
 	return err
 }
 

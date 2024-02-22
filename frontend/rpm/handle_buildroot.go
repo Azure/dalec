@@ -12,13 +12,15 @@ import (
 )
 
 func BuildrootHandler(target string) frontend.BuildFunc {
-	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+	return func(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+		spec := graph.Target()
+
 		sOpt, err := frontend.SourceOptFromClient(ctx, client)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		st, err := SpecToBuildrootLLB(spec, target, sOpt)
+		st, err := SpecToBuildrootLLB(&spec, target, sOpt)
 		if err != nil {
 			return nil, nil, err
 		}
