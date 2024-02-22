@@ -45,7 +45,7 @@ func handleRPM(ctx context.Context, client gwclient.Client, graph *dalec.Graph) 
 	}
 
 	baseImg := getWorkerImage(sOpt, pg)
-	rpmDirs, err := buildRPMDirs(&spec, graph, baseImg, sOpt, pg)
+	rpmDirs, err := buildRPMDirs(graph, baseImg, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,7 +106,7 @@ func partitionBuildDeps(spec *dalec.Spec, graph *dalec.Graph) ([]string, []strin
 	repoDeps := make([]string, 0, len(buildDeps))
 
 	for _, dep := range buildDeps {
-		if _, ok := dalec.BuildGraph.Get(dep); ok {
+		if _, ok := graph.Get(dep); ok {
 			dalecDeps = append(dalecDeps, dep)
 			continue
 		}
@@ -167,14 +167,13 @@ func installSpecLocalBuildDeps(specLocalDeps []string, depRPMs llb.State, opts .
 	}
 }
 
-func specToRpmLLBWithBuildDeps(spec *dalec.Spec, graph *dalec.Graph, sOpt dalec.SourceOpts, depRPMs llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specToRpmLLBWithBuildDeps(spec *dalec.Spec, dalecDeps []string, repoDeps []string, sOpt dalec.SourceOpts, depRPMs llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	br, err := rpm.SpecToBuildrootLLB(spec, targetKey, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 
-	specLocalDeps, dalecDeps := partitionBuildDeps(spec, graph)
-	base := getWorkerImage(sOpt, opts...).With(installBuildDeps(dalecDeps, opts...)).With(installSpecLocalBuildDeps(specLocalDeps, depRPMs, opts...))
+	base := getWorkerImage(sOpt, opts...).With(installBuildDeps(repoDeps, opts...)).With(installSpecLocalBuildDeps(dalecDeps, depRPMs, opts...))
 	return rpm.Build(br, base, specPath, opts...), nil
 }

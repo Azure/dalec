@@ -32,7 +32,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, graph *dalec.G
 	pg := dalec.ProgressGroup("Build mariner2 container: " + spec.Name)
 	baseImg := getWorkerImage(sOpt, pg)
 
-	rpmDirs, err := buildRPMDirs(&spec, graph, baseImg, sOpt, pg)
+	rpmDirs, err := buildRPMDirs(graph, baseImg, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -71,7 +71,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, graph *dalec.G
 	return ref, img, err
 }
 
-func buildRPMDirs(spec *dalec.Spec, graph *dalec.Graph, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
+func buildRPMDirs(graph *dalec.Graph, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
 	mutRPMDirs := make(map[string]llb.State)
 
 	orderedDeps := graph.Ordered()
@@ -80,7 +80,8 @@ func buildRPMDirs(spec *dalec.Spec, graph *dalec.Graph, baseImg llb.State, sOpt 
 	}
 
 	for _, depSpec := range orderedDeps {
-		if err := updateRPMDirs(&depSpec, graph, mutRPMDirs, baseImg, spec, sOpt, pg); err != nil {
+		dalecDeps, repoDeps := partitionBuildDeps(&depSpec, graph)
+		if err := updateRPMDirs(&depSpec, dalecDeps, repoDeps, mutRPMDirs, baseImg, sOpt, pg); err != nil {
 			return nil, err
 		}
 	}
@@ -89,30 +90,29 @@ func buildRPMDirs(spec *dalec.Spec, graph *dalec.Graph, baseImg llb.State, sOpt 
 	return rpmDirs, nil
 }
 
-func updateRPMDirs(depSpec *dalec.Spec, graph *dalec.Graph, rpmDirs map[string]llb.State, baseImg llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) error {
-	bDeps, _ := partitionBuildDeps(depSpec, graph)
+func updateRPMDirs(depSpec *dalec.Spec, dalecDeps []string, repoDeps []string, rpmDirs map[string]llb.State, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) error {
+	rpms := make([]llb.State, 0, len(dalecDeps))
 
-	rpms := llb.Scratch()
-	for _, bd := range bDeps {
+	for _, bd := range dalecDeps {
 		rpmfileState, ok := rpmDirs[bd]
 
 		// by definition, the first spec in the graph will have no
 		// dependencies, so the below should never happen
-		// execute build
 		if !ok {
 			return fmt.Errorf("dependency ordering error: rpm state %q not found", bd)
 		}
 
 		const outdir = "/tmp/buildrpms"
-		rpms = baseImg.Run(
+		justRPM := baseImg.Run(
 			shArgs(`find /tmp/mountedrpm -type f -name "*.rpm" -not -name "*.src.rpm" -exec cp {} `+outdir+` \;`),
 			llb.AddMount("/tmp/mountedrpm", rpmfileState),
-		).AddMount(outdir, rpms)
+		).AddMount(outdir, llb.Scratch())
+		rpms = append(rpms, justRPM)
 	}
 
-	rpmState, err := specToRpmLLBWithBuildDeps(depSpec, graph, sOpt, rpms, pg)
+	rpmState, err := specToRpmLLBWithBuildDeps(depSpec, dalecDeps, repoDeps, sOpt, llb.Merge(rpms), pg)
 	if err != nil {
-		return fmt.Errorf("error building dependency %q", depSpec.Name)
+		return fmt.Errorf("error building dependency %q: %w", depSpec.Name, err)
 	}
 
 	rpmDirs[depSpec.Name] = rpmState

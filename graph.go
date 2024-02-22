@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/pmengelbert/stack"
 	"golang.org/x/exp/constraints"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -86,35 +85,10 @@ type vertex struct {
 	onStack bool
 }
 
-var (
-	graphLock  sync.Mutex
-	BuildGraph *Graph
-	NotFound   = errors.New("dependency not found")
-)
-
 type (
 	GraphConfig struct{}
 	GraphOpt    func(*GraphConfig) error
 )
-
-var initGraph sync.Once
-
-func InitGraph(specs []*Spec, subtarget, dalecTarget string) error {
-	var err error
-
-	initGraph.Do(func() {
-		var g Graph
-
-		g, err = NewGraph(specs, subtarget, dalecTarget)
-		if err != nil {
-			return
-		}
-
-		BuildGraph = &g
-	})
-
-	return err
-}
 
 func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (Graph, error) {
 	cfg := GraphConfig{}
