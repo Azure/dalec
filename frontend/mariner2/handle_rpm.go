@@ -34,7 +34,7 @@ func tdnfCacheMountWithPrefix(prefix string) llb.RunOption {
 
 func handleRPM(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
 	spec := graph.Target()
-	if err := rpm.ValidateSpec(spec); err != nil {
+	if err := rpm.ValidateSpec(&spec); err != nil {
 		return nil, nil, fmt.Errorf("rpm: invalid spec: %w", err)
 	}
 

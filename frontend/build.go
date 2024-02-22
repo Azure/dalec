@@ -171,7 +171,9 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		buildPlatform = bc.BuildPlatforms[0]
 
 		allArgs := collectBuildArgs(bc.BuildArgs, targetPlatform, buildPlatform, ordered)
-		graph.SubstituteArgs(allArgs)
+		if err := graph.SubstituteArgs(allArgs); err != nil {
+			return nil, nil, fmt.Errorf("could not substitute build args: %w", err)
+		}
 
 		return f(ctx, client, &graph)
 	})
