@@ -15,9 +15,7 @@ sources:
     inline:
       file:
         contents: |
-          #!/usr/bin/env bash
-          echo "hello, world!"
-          woiejfoije
+          hello, world!
         permissions: 0755
 
 artifacts:
@@ -100,7 +98,13 @@ artifacts:
     eraser/bin/eraser-manager: {}
     foo: {}
 
+# tests:
+#   - name: Check files
+#     files:
+#       /usr/bin/eraser-manager:
+#         permissions: 0755
 ---
+# syntax=local/dalec/frontend:latest
 args:
   VERSION: v1.3.0
   COMMIT: 6f5a5abf937f1f0e97c626cdea32af82f20c9d26
@@ -125,3 +129,9 @@ build:
 artifacts:
   binaries:
     /build/manager:
+
+# tests:
+#   - name: Check files
+#     files:
+#       /usr/bin/manager:
+#         permissions: 0755

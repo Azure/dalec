@@ -98,7 +98,6 @@ func updateRPMDirs(depSpec *dalec.Spec, rpmDirs map[string]llb.State, baseImg ll
 	bDeps, _ := partitionBuildDeps(depSpec)
 
 	rpms := llb.Scratch()
-	rpmStates := []llb.State{}
 	for _, bd := range bDeps {
 		rpmfileState, ok := rpmDirs[bd]
 
@@ -108,14 +107,13 @@ func updateRPMDirs(depSpec *dalec.Spec, rpmDirs map[string]llb.State, baseImg ll
 		if !ok {
 			return fmt.Errorf("dependency ordering error: rpm state %q not found", bd)
 		}
-		rpmStates = append(rpmStates, rpmfileState)
 
+		const outdir = "/tmp/buildrpms"
+		rpms = baseImg.Run(
+			shArgs(`find /tmp/mountedrpm -type f -name "*.rpm" -not -name "*.src.rpm" -exec cp {} `+outdir+` \;`),
+			llb.AddMount("/tmp/mountedrpm", rpmfileState),
+		).AddMount(outdir, rpms)
 	}
-	// const outdir = "/tmp/buildrpms"
-	// rpms = baseImg.Run(
-	// 	shArgs(`find /tmp/mountedrpm -type f -name "*.rpm" -not -name "*.src.rpm" -exec cp {} `+outdir+` \;`),
-	// 	llb.AddMount("/tmp/mountedrpm", rpmfileState),
-	// ).AddMount(outdir, rpms)
 
 	rpmState, err := specToRpmLLBWithBuildDeps(depSpec, sOpt, rpms, pg)
 	if err != nil {
