@@ -17,7 +17,6 @@ type Graph struct {
 	target  string
 	specs   map[string]Spec
 	ordered []Spec
-	edges   sets.Set[dependency]
 }
 
 type SubFunc func(*Graph)
@@ -25,6 +24,7 @@ type SubFunc func(*Graph)
 func (g *Graph) SubstituteArgs(allArgs map[string]map[string]string) error {
 	g.m.Lock()
 	defer g.m.Unlock()
+
 	var once sync.Once
 	var err error
 
@@ -41,10 +41,7 @@ func (g *Graph) SubstituteArgs(allArgs map[string]map[string]string) error {
 	return err
 }
 
-type dependency struct {
-	v1 *vertex
-	v2 *vertex
-}
+type edge [2]*vertex
 
 func (g *Graph) Target() Spec {
 	return g.specs[g.target]
@@ -124,12 +121,12 @@ func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (G
 	g := Graph{
 		m:      new(sync.Mutex),
 		target: subtarget,
-		edges:  sets.New[dependency](),
 		specs:  make(map[string]Spec),
 	}
 
 	vertices := make([]*vertex, len(specs))
 	indices := make(map[string]int)
+	edges := sets.New[edge]()
 
 	for _, f := range opts {
 		if err := f(&cfg); err != nil {
@@ -193,15 +190,15 @@ func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (G
 					continue
 				}
 				w := vertices[wi]
-				g.edges.Insert(dependency{
-					v1: v,
-					v2: w,
+				edges.Insert(edge{
+					0: v,
+					1: w,
 				})
 			}
 		}
 	}
 
-	output := g.topSort(vertices)
+	output := g.topSort(vertices, edges)
 
 	if err := g.verify(output); err != nil {
 		return Graph{}, err
@@ -224,7 +221,7 @@ func (g *Graph) setOrdered(output [][]*vertex, length int) {
 }
 
 // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
-func (g *Graph) topSort(vertices []*vertex) [][]*vertex {
+func (g *Graph) topSort(vertices []*vertex, edges sets.Set[edge]) [][]*vertex {
 	if g.ordered != nil {
 		return nil
 	}
@@ -243,12 +240,12 @@ func (g *Graph) topSort(vertices []*vertex) [][]*vertex {
 		s.Push(v)
 		v.onStack = true
 
-		for edge := range g.edges {
-			if v.name != edge.v1.name {
+		for edge := range edges {
+			if v.name != edge[0].name {
 				continue
 			}
 
-			w := edge.v2
+			w := edge[1]
 			if w.index == nil {
 				strongConnect(w)
 

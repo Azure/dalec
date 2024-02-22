@@ -171,15 +171,8 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 		buildPlatform = bc.BuildPlatforms[0]
 
-		args := dalec.DuplicateMap(bc.BuildArgs)
-		fillPlatformArgs("TARGET", args, targetPlatform)
-		fillPlatformArgs("BUILD", args, buildPlatform)
-		allArgs := map[string]map[string]string{}
-		for _, spec := range dalec.BuildGraph.OrderedSlice(subtarget) {
-			name := spec.Name
-			dupe := dalec.DuplicateMap(args)
-			allArgs[name] = dupe
-		}
+		ordered := dalec.BuildGraph.OrderedSlice(subtarget)
+		allArgs := collectBuildArgs(bc.BuildArgs, targetPlatform, buildPlatform, ordered)
 		dalec.BuildGraph.SubstituteArgs(allArgs)
 
 		return f(ctx, client, &spec)
@@ -190,6 +183,24 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 
 	return rb.Finalize()
 
+}
+
+func collectBuildArgs(buildArgs map[string]string, targetPlatform ocispecs.Platform, buildPlatform ocispecs.Platform, specs []dalec.Spec) map[string]map[string]string {
+	const tgt = "TARGET"
+	const bld = "BUILD"
+
+	args := dalec.DuplicateMap(buildArgs)
+	fillPlatformArgs(tgt, args, targetPlatform)
+	fillPlatformArgs(bld, args, buildPlatform)
+	allArgs := make(map[string]map[string]string)
+
+	for _, spec := range specs {
+		name := spec.Name
+		dupe := dalec.DuplicateMap(args)
+		allArgs[name] = dupe
+	}
+
+	return allArgs
 }
 
 func getDefaultSubtarget(specs []*dalec.Spec, subTarget string) (string, error) {
