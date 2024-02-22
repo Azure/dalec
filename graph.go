@@ -19,16 +19,15 @@ type Graph struct {
 	ordered []Spec
 }
 
-type SubFunc func(*Graph)
+var subArgs sync.Once
 
 func (g *Graph) SubstituteArgs(allArgs map[string]map[string]string) error {
 	g.m.Lock()
 	defer g.m.Unlock()
 
-	var once sync.Once
 	var err error
 
-	once.Do(func() {
+	subArgs.Do(func() {
 		for name, args := range allArgs {
 			s := g.specs[name]
 			if err = s.SubstituteArgs(args); err != nil {
@@ -101,18 +100,21 @@ type (
 	GraphOpt    func(*GraphConfig) error
 )
 
+var initGraph sync.Once
+
 func InitGraph(specs []*Spec, subtarget, dalecTarget string) error {
-	if BuildGraph != nil {
-		return nil
-	}
+	var err error
+	initGraph.Do(func() {
+		var g Graph
 
-	g, err := NewGraph(specs, subtarget, dalecTarget)
-	if err != nil {
-		return err
-	}
+		g, err = NewGraph(specs, subtarget, dalecTarget)
+		if err != nil {
+			return
+		}
 
-	BuildGraph = &g
-	return nil
+		BuildGraph = &g
+	})
+	return err
 }
 
 func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (Graph, error) {
