@@ -410,6 +410,7 @@ sources:
         contents: "Hello world!"
 x-some-field: "some value"
 x-some-other-field: "some other value"
+X-capitalized-other-field: "some other value capitalized X key"
 `)
 
 		spec, err := LoadSpec(dt)

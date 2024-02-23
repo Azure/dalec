@@ -317,7 +317,7 @@ func stripXFields(dt []byte) ([]byte, error) {
 	}
 
 	for k := range obj {
-		if strings.HasPrefix(k, "x-") {
+		if strings.HasPrefix(k, "x-") || strings.HasPrefix(k, "X-") {
 			delete(obj, k)
 		}
 	}
