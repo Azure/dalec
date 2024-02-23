@@ -18,11 +18,17 @@ import (
 )
 
 var (
-	baseCtx = context.Background()
-	testEnv *testenv.BuildxEnv
+	baseCtx          = context.Background()
+	testEnv          *testenv.BuildxEnv
+	externalTestHost = os.Getenv("TEST_DALEC_EXTERNAL_HOST")
 )
 
 func TestMain(m *testing.M) {
+	if externalTestHost == "" {
+		externalTestHost = "https://github.com"
+	}
+	flag.StringVar(&externalTestHost, "external-test-host", externalTestHost, "http server to use for validating network access")
+
 	flag.Parse()
 
 	if testing.Short() {
