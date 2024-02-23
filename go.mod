@@ -19,7 +19,7 @@ require (
 	github.com/tonistiigi/fsutil v0.0.0-20230629203738-36ef4d8c0dbb
 	go.opentelemetry.io/otel v1.14.0
 	golang.org/x/sys v0.15.0
-	google.golang.org/grpc v1.57.1
+	google.golang.org/grpc v1.57.2
 )
 
 require (
