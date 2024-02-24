@@ -33,6 +33,10 @@ func tdnfCacheMountWithPrefix(prefix string) llb.RunOption {
 }
 
 func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+	if err := rpm.ValidateSpec(spec); err != nil {
+		return nil, nil, fmt.Errorf("rpm: invalid spec: %w", err)
+	}
+
 	pg := dalec.ProgressGroup("Building mariner2 rpm: " + spec.Name)
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {

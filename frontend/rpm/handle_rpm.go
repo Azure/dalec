@@ -1,6 +1,9 @@
 package rpm
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
 )
@@ -34,4 +37,27 @@ func Build(topDir, workerImg llb.State, specPath string, opts ...llb.Constraints
 		dalec.WithConstraints(opts...),
 	).
 		AddMount("/build/out", llb.Scratch())
+}
+
+var errMissingRequiredField = errors.New("missing required field")
+
+// ValidateSpec makes sure all the necessary fields are present in the spec to make rpmbuild work
+// This validation is specific to rpmbuild.
+func ValidateSpec(spec *dalec.Spec) (out error) {
+	if spec.Name == "" {
+		out = errors.Join(out, fmt.Errorf("%w: name", errMissingRequiredField))
+	}
+	if spec.Version == "" {
+		out = errors.Join(out, fmt.Errorf("%w: version", errMissingRequiredField))
+	}
+	if spec.Revision == "" {
+		out = errors.Join(out, fmt.Errorf("%w: revision", errMissingRequiredField))
+	}
+	if spec.Description == "" {
+		out = errors.Join(out, fmt.Errorf("%w: description", errMissingRequiredField))
+	}
+	if spec.Website == "" {
+		out = errors.Join(out, fmt.Errorf("%w: website", errMissingRequiredField))
+	}
+	return out
 }

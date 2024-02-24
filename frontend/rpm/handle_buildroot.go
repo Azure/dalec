@@ -42,6 +42,9 @@ func BuildrootHandler(target string) frontend.BuildFunc {
 
 // SpecToBuildrootLLB converts a dalec.Spec to an rpm buildroot
 func SpecToBuildrootLLB(spec *dalec.Spec, target string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	if err := ValidateSpec(spec); err != nil {
+		return llb.Scratch(), fmt.Errorf("invalid spec: %w", err)
+	}
 	opts = append(opts, dalec.ProgressGroup("Create RPM buildroot"))
 	sources, err := Dalec2SourcesLLB(spec, sOpt, opts...)
 	if err != nil {
