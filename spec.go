@@ -18,7 +18,7 @@ type Spec struct {
 	// Website is the URL to store in the metadata of the package.
 	Website string `yaml:"website" json:"website"`
 
-	// Version setst he version of the package.
+	// Version sets the version of the package.
 	Version string `yaml:"version" json:"version" jsonschema:"required"`
 	// Revision sets the package revision.
 	// This will generally get merged into the package version when generating the package.

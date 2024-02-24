@@ -659,7 +659,7 @@
 				},
 				"version": {
 					"type": "string",
-					"description": "Version setst he version of the package."
+					"description": "Version sets the version of the package."
 				},
 				"revision": {
 					"oneOf": [
