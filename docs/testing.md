@@ -232,12 +232,15 @@ tests:
                 dest: /target/mount/path
                 spec:
                     build:
-                        inline: |
-                            FROM busybox
-                            RUN echo hello > /hello
+                        source:
+                            inline:
+                                file:
+                                    contents: |
+                                        FROM busybox
+                                        RUN echo hello > /hello
 
-                            FROM scratch
-                            COPY --from=busybox /hello /hello
+                                        FROM scratch
+                                        COPY --from=busybox /hello /hello
         steps:
             -
                 command: cat /path/in/container

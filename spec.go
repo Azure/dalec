@@ -195,12 +195,7 @@ type SourceBuild struct {
 
 	// DockerFile is the path to the build file in the build context
 	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
-	// This is exclusive with [Inline]
 	DockerFile string `yaml:"dockerfile,omitempty" json:"dockerfile,omitempty"`
-	// Inline is an inline build spec to use.
-	// This can be used to specify a dockerfile instead of using one in the build context
-	// This is exclusive with [File]
-	Inline string `yaml:"inline,omitempty" json:"inline,omitempty" jsonschema:"example=FROM busybox\nRUN echo hello world"`
 
 	// Target specifies the build target to use.
 	// If unset, the default target is determined by the frontend implementation

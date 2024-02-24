@@ -27,10 +27,7 @@ const (
 func getDockerfile(ctx context.Context, client gwclient.Client, build *dalec.SourceBuild, defPb *pb.Definition) ([]byte, error) {
 	dockerfilePath := dockerui.DefaultDockerfileName
 
-	switch {
-	case build.Inline != "":
-		return []byte(build.Inline), nil
-	case build.DockerFile != "":
+	if build.DockerFile != "" {
 		dockerfilePath = build.DockerFile
 	}
 

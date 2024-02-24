@@ -155,10 +155,6 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 	}
 	if s.Build != nil {
 		c := s.Build.DockerFile
-		if s.Build.Inline != "" {
-			c = s.Build.Inline
-		}
-
 		if err := s.Build.validate("build source with dockerfile", "`"+c+"`"); err != nil {
 			retErr = goerrors.Join(retErr, err)
 		}
@@ -194,14 +190,6 @@ func (s *SourceBuild) validate(failContext ...string) (retErr error) {
 
 	if s.Source.Build != nil {
 		return goerrors.Join(retErr, fmt.Errorf("build sources cannot be recursive"))
-	}
-
-	if s.DockerFile != "" && s.Inline != "" {
-		retErr = goerrors.Join(retErr, fmt.Errorf("build sources may use either `dockerfile` or `inline`, but not both"))
-	}
-
-	if s.DockerFile == "" && s.Inline == "" {
-		retErr = goerrors.Join(retErr, fmt.Errorf("build must use either `dockerfile` or `inline`"))
 	}
 
 	if err := s.Source.validate("build subsource"); err != nil {

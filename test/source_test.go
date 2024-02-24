@@ -60,3 +60,82 @@ func TestSourceCmd(t *testing.T) {
 		return gwclient.NewResult(), nil
 	})
 }
+
+func TestSourceBuild(t *testing.T) {
+	t.Parallel()
+
+	doBuildTest := func(t *testing.T, subTest string, spec *dalec.Spec) {
+		t.Run(subTest, func(t *testing.T) {
+			t.Parallel()
+
+			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+				ro := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+
+				res, err := gwc.Solve(ctx, ro)
+				if err != nil {
+					return nil, err
+				}
+				checkFile(ctx, t, "hello", res, []byte("hello\n"))
+				return gwclient.NewResult(), nil
+			})
+		})
+	}
+
+	const dockerfile = "FROM busybox\nRUN echo hello > /hello"
+
+	newBuildSpec := func(p string, f func() dalec.Source) *dalec.Spec {
+		return &dalec.Spec{
+			Sources: map[string]dalec.Source{
+				"test": {
+					Path: "/hello",
+					Build: &dalec.SourceBuild{
+						DockerFile: p,
+						Source:     f(),
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("inline", func(t *testing.T) {
+		fileSrc := func() dalec.Source {
+			return dalec.Source{
+				Inline: &dalec.SourceInline{
+					File: &dalec.SourceInlineFile{
+						Contents: dockerfile,
+					},
+				},
+			}
+		}
+		dirSrc := func(p string) func() dalec.Source {
+			return func() dalec.Source {
+				return dalec.Source{
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								p: {
+									Contents: dockerfile,
+								},
+							},
+						},
+					},
+				}
+			}
+		}
+
+		t.Run("unspecified build file path", func(t *testing.T) {
+			doBuildTest(t, "file", newBuildSpec("", fileSrc))
+			doBuildTest(t, "dir", newBuildSpec("", dirSrc("Dockerfile")))
+		})
+
+		t.Run("Dockerfile as build file path", func(t *testing.T) {
+			doBuildTest(t, "file", newBuildSpec("Dockerfile", fileSrc))
+			doBuildTest(t, "dir", newBuildSpec("Dockerfile", dirSrc("Dockerfile")))
+		})
+
+		t.Run("non-standard build file path", func(t *testing.T) {
+			doBuildTest(t, "file", newBuildSpec("foo", fileSrc))
+			doBuildTest(t, "dir", newBuildSpec("foo", dirSrc("foo")))
+		})
+	})
+}

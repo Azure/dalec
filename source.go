@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
@@ -125,9 +125,16 @@ func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts,
 }
 
 func (src *SourceBuild) AsState(name string, _ *Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	if src.Source.Inline != nil && src.Source.Inline.File != nil {
+		name = src.DockerFile
+		if name == "" {
+			name = dockerui.DefaultDockerfileName
+		}
+	}
+
 	st, err := src.Source.AsState(name, sOpt, opts...)
 	if err != nil {
-		if !errors.Is(err, errNoSourceVariant) || src.Inline == "" {
+		if !errors.Is(err, errNoSourceVariant) {
 			return llb.Scratch(), err
 		}
 		st = llb.Scratch()
@@ -349,24 +356,11 @@ func (s Source) Doc(name string) (io.Reader, error) {
 			}
 		}
 
-		switch {
-		case s.Build.Inline != "":
-			fmt.Fprintln(b, "	Dockerfile:")
-
-			scanner := bufio.NewScanner(strings.NewReader(s.Build.Inline))
-			for scanner.Scan() {
-				fmt.Fprintf(b, "		%s\n", scanner.Text())
-			}
-			if scanner.Err() != nil {
-				return nil, scanner.Err()
-			}
-		default:
-			p := "Dockerfile"
-			if s.Build.DockerFile != "" {
-				p = s.Build.DockerFile
-			}
-			fmt.Fprintln(b, "	Dockerfile path in context:", p)
+		p := "Dockerfile"
+		if s.Build.DockerFile != "" {
+			p = s.Build.DockerFile
 		}
+		fmt.Fprintln(b, "	Dockerfile path in context:", p)
 	case s.HTTP != nil:
 		fmt.Fprintln(b, "Generated from a http(s) source:")
 		fmt.Fprintln(b, "	URL:", s.HTTP.URL)

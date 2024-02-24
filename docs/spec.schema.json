@@ -480,14 +480,7 @@
 				},
 				"dockerfile": {
 					"type": "string",
-					"description": "DockerFile is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.\nThis is exclusive with [Inline]"
-				},
-				"inline": {
-					"type": "string",
-					"description": "Inline is an inline build spec to use.\nThis can be used to specify a dockerfile instead of using one in the build context\nThis is exclusive with [File]",
-					"examples": [
-						"FROM busybox\nRUN echo hello world"
-					]
+					"description": "DockerFile is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context."
 				},
 				"target": {
 					"type": "string",
