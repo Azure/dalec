@@ -41,7 +41,7 @@ func main() {
 	}
 }
 
-func phonyBuild(ctx context.Context, client gwclient.Client, _ *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+func phonyBuild(ctx context.Context, client gwclient.Client, _ dalec.Graph) (gwclient.Reference, *image.Image, error) {
 	def, err := llb.Scratch().File(llb.Mkfile("hello", 0o644, []byte("phony hello"))).Marshal(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -60,7 +60,7 @@ func phonyBuild(ctx context.Context, client gwclient.Client, _ *dalec.Graph) (gw
 	return ref, &image.Image{}, nil
 }
 
-func phonyResolve(ctx context.Context, client gwclient.Client, _ *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+func phonyResolve(ctx context.Context, client gwclient.Client, _ dalec.Graph) (gwclient.Reference, *image.Image, error) {
 	def, err := llb.Scratch().File(llb.Mkfile("resolve", 0o644, []byte("phony resolve"))).Marshal(ctx)
 	if err != nil {
 		return nil, nil, err

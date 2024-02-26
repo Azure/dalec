@@ -13,7 +13,7 @@ import (
 )
 
 // HandleResolve is a handler that generates a resolved spec file with all the build args and variables expanded.
-func HandleResolve(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+func HandleResolve(ctx context.Context, client gwclient.Client, graph dalec.Graph) (gwclient.Reference, *image.Image, error) {
 	var b bytes.Buffer
 	y := yaml.NewEncoder(&b)
 	for _, spec := range graph.Ordered() {

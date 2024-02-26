@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func handleDepsOnly(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+func handleDepsOnly(ctx context.Context, client gwclient.Client, graph dalec.Graph) (gwclient.Reference, *image.Image, error) {
 	spec := graph.Target()
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {

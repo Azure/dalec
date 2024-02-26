@@ -8,25 +8,51 @@ import (
 
 	"github.com/pmengelbert/stack"
 	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/slices"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type Graph struct {
-	m          *sync.Mutex
-	subArgs    *sync.Once
-	setOrdered *sync.Once
-	target     string
-	specs      map[string]Spec
-	ordered    []string // index into specs map
+type graph struct {
+	m            *sync.Mutex
+	subArgs      *sync.Once
+	setOrdered   *sync.Once
+	target       string
+	specs        map[string]Spec
+	ordered      []string // index into specs map
+	orderedSpecs []Spec   // duplicates map data, but saves work
 }
 
-func (g *Graph) SubstituteArgs(allArgs map[string]map[string]string) error {
+type Graph interface {
+	// SubstituteArgs returns a copy of the graph with the args substituted
+	SubstituteArgs(map[string]map[string]string) (Graph, error)
+	Target() Spec
+	Get(string) (Spec, bool)
+	Ordered() []Spec
+	Len() int
+}
+
+func (g *graph) SubstituteArgs(allArgs map[string]map[string]string) (Graph, error) {
 	g.m.Lock()
 	defer g.m.Unlock()
 
-	var err error
+	m := &sync.Mutex{}
+	subArgs := &sync.Once{}
+	ordered := slices.Clone(g.ordered)
+	orderedSpecs := slices.Clone(g.orderedSpecs)
+	specs := DuplicateMap(g.specs)
 
-	g.subArgs.Do(func() {
+	newGraph := graph{
+		m:            m,
+		subArgs:      subArgs,
+		setOrdered:   g.setOrdered,
+		target:       g.target,
+		specs:        specs,
+		ordered:      ordered,
+		orderedSpecs: orderedSpecs,
+	}
+
+	var err error
+	newGraph.subArgs.Do(func() {
 		for name, args := range allArgs {
 			s := g.specs[name]
 			if err = s.SubstituteArgs(args); err != nil {
@@ -36,16 +62,20 @@ func (g *Graph) SubstituteArgs(allArgs map[string]map[string]string) error {
 		}
 	})
 
-	return err
+	if err != nil {
+		return nil, err
+	}
+
+	return &newGraph, nil
 }
 
 type edge [2]*vertex
 
-func (g *Graph) Target() Spec {
+func (g *graph) Target() Spec {
 	return g.specs[g.target]
 }
 
-func (g *Graph) Get(name string) (Spec, bool) {
+func (g *graph) Get(name string) (Spec, bool) {
 	s, ok := g.specs[name]
 	return s, ok
 }
@@ -53,22 +83,13 @@ func (g *Graph) Get(name string) (Spec, bool) {
 // Ordered returns an array of Specs in dependency order, up to and
 // including `target`. If `target` is the empty string, return the entire list.
 // If the target is not found, return an empty array.
-func (g *Graph) Ordered() []Spec {
-	orderedSpecs := make([]Spec, 0, len(g.specs))
-	for _, name := range g.ordered {
-		spec := g.specs[name]
-		orderedSpecs = append(orderedSpecs, spec)
-		if name == g.target && g.target != "" {
-			break
-		}
-	}
-
-	return orderedSpecs
+func (g *graph) Ordered() []Spec {
+	return g.orderedSpecs
 }
 
 // Returns the length of the ordred list of dependencies, up to and including
 // `target`. If `target` is the empty string, return the entire length.
-func (g *Graph) Len() int {
+func (g *graph) Len() int {
 	for i, name := range g.ordered {
 		if name == g.target {
 			return i + 1
@@ -93,10 +114,13 @@ type (
 func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (Graph, error) {
 	cfg := GraphConfig{}
 
-	g := Graph{
-		m:          new(sync.Mutex),
-		subArgs:    new(sync.Once),
-		setOrdered: new(sync.Once),
+	m := &sync.Mutex{}
+	subArgs := &sync.Once{}
+	setOrdered := &sync.Once{}
+	g := graph{
+		m:          m,
+		subArgs:    subArgs,
+		setOrdered: setOrdered,
 		target:     subtarget,
 		specs:      make(map[string]Spec),
 	}
@@ -107,7 +131,7 @@ func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (G
 
 	for _, f := range opts {
 		if err := f(&cfg); err != nil {
-			return Graph{}, fmt.Errorf("error initializing graph: %w", err)
+			return &graph{}, fmt.Errorf("error initializing graph: %w", err)
 		}
 	}
 
@@ -117,7 +141,7 @@ func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (G
 
 	for i, spec := range specs {
 		if spec == nil {
-			return Graph{}, fmt.Errorf("nil spec provided")
+			return &graph{}, fmt.Errorf("nil spec provided")
 		}
 
 		name := spec.Name
@@ -128,12 +152,12 @@ func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (G
 	}
 
 	if _, ok := g.specs[g.target]; !ok {
-		return Graph{}, fmt.Errorf("subtarget %q not found", g.target)
+		return &graph{}, fmt.Errorf("subtarget %q not found", g.target)
 	}
 
 	group, _, ok := strings.Cut(dalecTarget, "/")
 	if !ok {
-		return Graph{}, fmt.Errorf("unable to extract group from target %q", dalecTarget)
+		return &graph{}, fmt.Errorf("unable to extract group from target %q", dalecTarget)
 	}
 
 	for name, spec := range g.specs {
@@ -178,15 +202,15 @@ func NewGraph(specs []*Spec, subtarget, dalecTarget string, opts ...GraphOpt) (G
 	output := g.topSort(vertices, edges)
 
 	if err := g.verify(output); err != nil {
-		return Graph{}, err
+		return &graph{}, err
 	}
 
 	g.setDepOrder(output, len(vertices))
 
-	return g, nil
+	return &g, nil
 }
 
-func (g *Graph) setDepOrder(connected [][]*vertex, length int) {
+func (g *graph) setDepOrder(connected [][]*vertex, length int) {
 	g.setOrdered.Do(func() {
 		specs := make([]string, 0, length)
 		for _, components := range connected {
@@ -196,11 +220,21 @@ func (g *Graph) setDepOrder(connected [][]*vertex, length int) {
 		}
 
 		g.ordered = specs
+
+		orderedSpecs := make([]Spec, 0, len(specs))
+		for _, name := range g.ordered {
+			spec := g.specs[name]
+			orderedSpecs = append(orderedSpecs, spec)
+			if name == g.target && g.target != "" {
+				break
+			}
+		}
+		g.orderedSpecs = orderedSpecs
 	})
 }
 
 // https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm
-func (g *Graph) topSort(vertices []*vertex, edges sets.Set[edge]) [][]*vertex {
+func (g *graph) topSort(vertices []*vertex, edges sets.Set[edge]) [][]*vertex {
 	if g.ordered != nil {
 		return nil
 	}
@@ -273,7 +307,7 @@ func (g *Graph) topSort(vertices []*vertex, edges sets.Set[edge]) [][]*vertex {
 	return output
 }
 
-func (g *Graph) verify(output [][]*vertex) error {
+func (g *graph) verify(output [][]*vertex) error {
 	for _, components := range output {
 		if len(components) > 1 {
 			return fmt.Errorf("dalec dependency cycle: %s", disp(components))

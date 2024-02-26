@@ -32,7 +32,7 @@ func tdnfCacheMountWithPrefix(prefix string) llb.RunOption {
 	return llb.AddMount(filepath.Join(prefix, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheName, llb.CacheMountLocked))
 }
 
-func handleRPM(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+func handleRPM(ctx context.Context, client gwclient.Client, graph dalec.Graph) (gwclient.Reference, *image.Image, error) {
 	spec := graph.Target()
 	if err := rpm.ValidateSpec(&spec); err != nil {
 		return nil, nil, fmt.Errorf("rpm: invalid spec: %w", err)
@@ -100,7 +100,7 @@ func getBuildDeps(spec *dalec.Spec) []string {
 // Partitions build deps into dalec spec-local build deps (first return value)
 // and build deps that are expected to be found in the package repo (second
 // return value).
-func partitionBuildDeps(spec *dalec.Spec, graph *dalec.Graph) ([]string, []string) {
+func partitionBuildDeps(spec *dalec.Spec, graph dalec.Graph) ([]string, []string) {
 	buildDeps := getBuildDeps(spec)
 	dalecDeps := make([]string, 0, len(buildDeps))
 	repoDeps := make([]string, 0, len(buildDeps))

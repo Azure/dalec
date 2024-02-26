@@ -134,7 +134,7 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 }
 
 func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
-	return func(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (_ gwclient.Reference, _ *image.Image, retErr error) {
+	return func(ctx context.Context, client gwclient.Client, graph dalec.Graph) (_ gwclient.Reference, _ *image.Image, retErr error) {
 		defer func() {
 			if retErr != nil {
 				retErr = errors.Wrapf(retErr, "error forwarding build to frontend %q for target %s", specT.Frontend.Image, bkt.Name)

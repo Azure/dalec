@@ -12,7 +12,7 @@ import (
 )
 
 func BuildrootHandler(target string) frontend.BuildFunc {
-	return func(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+	return func(ctx context.Context, client gwclient.Client, graph dalec.Graph) (gwclient.Reference, *image.Image, error) {
 		spec := graph.Target()
 
 		sOpt, err := frontend.SourceOptFromClient(ctx, client)

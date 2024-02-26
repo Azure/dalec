@@ -22,7 +22,7 @@ const (
 	marinerDistrolessRef = "mcr.microsoft.com/cbl-mariner/distroless/base:2.0"
 )
 
-func handleContainer(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+func handleContainer(ctx context.Context, client gwclient.Client, graph dalec.Graph) (gwclient.Reference, *image.Image, error) {
 	spec := graph.Target()
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
@@ -71,7 +71,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, graph *dalec.G
 	return ref, img, err
 }
 
-func buildRPMDirs(graph *dalec.Graph, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
+func buildRPMDirs(graph dalec.Graph, baseImg llb.State, sOpt dalec.SourceOpts, pg llb.ConstraintsOpt) (map[string]llb.State, error) {
 	mutRPMDirs := make(map[string]llb.State)
 
 	orderedDeps := graph.Ordered()

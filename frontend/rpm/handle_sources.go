@@ -41,7 +41,7 @@ func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	return worker.AddMount(outBase, llb.Scratch())
 }
 
-func HandleSources(ctx context.Context, client gwclient.Client, graph *dalec.Graph) (gwclient.Reference, *image.Image, error) {
+func HandleSources(ctx context.Context, client gwclient.Client, graph dalec.Graph) (gwclient.Reference, *image.Image, error) {
 	spec := graph.Target()
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
