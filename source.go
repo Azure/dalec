@@ -25,24 +25,21 @@ func (src Source) handlesOwnPath() bool {
 
 func GetFilter(src Source, forMount bool, opts ...llb.ConstraintsOpt) llb.StateOption {
 	var path = src.Path
+	if forMount {
+		// if we're using a mount for these sources, the mount will handle path extraction
+		path = "/"
+	}
 	switch {
 	case src.HTTP != nil,
 		src.Git != nil,
-		src.Build != nil:
-		if forMount {
-			// if we're using a mount for these sources, the mount will handle path extraction
-			path = "/"
-		}
+		src.Build != nil,
+		src.Inline != nil:
 		return filterState(path, src.Includes, src.Excludes, opts...)
 	case src.Context != nil:
-		if forMount {
-			// same case as above
-			path = "/"
-		}
 		// context sources handle includes and excludes
 		return filterState(path, []string{}, []string{})
 	case src.DockerImage != nil:
-		if src.DockerImage.Cmd != nil || forMount {
+		if src.DockerImage.Cmd != nil {
 			// if a docker image source has a command,
 			// the path extraction will be handled with a mount on the command
 			path = "/"
@@ -67,11 +64,20 @@ func GetSource(src Source, name string, sOpt SourceOpts, opts ...llb.Constraints
 		st, err = src.DockerImage.AsState(name, src.Path, sOpt, opts...)
 	case src.Build != nil:
 		st, err = src.Build.AsState(name, &src, sOpt, opts...)
+	case src.Inline != nil:
+		st, err = src.Inline.AsState(name)
 	default:
 		st, err = llb.Scratch(), errNoSourceVariant
 	}
 
 	return
+}
+
+func (src *SourceInline) AsState(name string) (llb.State, error) {
+	if src.File != nil {
+		return llb.Scratch().With(src.File.PopulateAt(name)), nil
+	}
+	return llb.Scratch().With(src.Dir.PopulateAt("/")), nil
 }
 
 func (src *SourceContext) AsState(includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
