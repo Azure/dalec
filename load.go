@@ -1,6 +1,7 @@
 package dalec
 
 import (
+	"encoding/json"
 	goerrors "errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/pkg/errors"
+	"golang.org/x/exp/slices"
 )
 
 func knownArg(key string) bool {
@@ -310,18 +312,100 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	return &spec, nil
 }
 
-func stripXFields(dt []byte) ([]byte, error) {
-	var obj map[string]interface{}
-	if err := yaml.Unmarshal(dt, &obj); err != nil {
+func isEmpty(s *Spec) bool {
+	if s == nil {
+		return true
+	}
+
+	var empty Spec
+	j, _ := json.Marshal(&empty)
+	k, _ := json.Marshal(s)
+
+	return slices.Compare(j, k) == 0
+}
+
+// LoadSpec loads a spec from the given data.
+func LoadProject(dt []byte) (*Project, error) {
+	var project Project
+
+	dt, err := stripXFields(dt)
+	if err != nil {
+		return nil, fmt.Errorf("error stripping x-fields: %w", err)
+	}
+
+	if err := yaml.UnmarshalWithOptions(dt, &project, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
 	}
 
-	for k := range obj {
-		if strings.HasPrefix(k, "x-") || strings.HasPrefix(k, "X-") {
-			delete(obj, k)
+	if isEmpty(project.Spec) && len(project.Specs) == 0 {
+		return nil, fmt.Errorf("no specs provided")
+	}
+
+	if !isEmpty(project.Spec) && len(project.Specs) != 0 {
+		return nil, fmt.Errorf("format of project must be either a single spec or a list of specs nested under the `specs` key")
+	}
+
+	validateAndFillDefaults := func(s *Spec) error {
+		if err := s.Validate(); err != nil {
+			return err
+		}
+
+		s.FillDefaults()
+		return nil
+	}
+
+	switch {
+	case project.Spec != nil:
+		if err := validateAndFillDefaults(project.Spec); err != nil {
+			return nil, fmt.Errorf("error loading project: %w", err)
+		}
+	case len(project.Specs) != 0:
+		for i := range project.Specs {
+			if err := validateAndFillDefaults(&project.Specs[i]); err != nil {
+				return nil, fmt.Errorf("error loading project spec with name %q: %w", project.Specs[i].Name, err)
+			}
 		}
 	}
 
+	return &project, nil
+}
+
+func stripXFields(dt []byte) ([]byte, error) {
+	var obj map[string]interface{}
+	if err := yaml.Unmarshal(dt, &obj); err != nil {
+		return nil, fmt.Errorf("ERROR error unmarshaling spec: %w", err)
+	}
+
+	specs, ok := obj["specs"]
+	fixup := func(o map[string]interface{}) {
+		for k := range o {
+			if strings.HasPrefix(k, "x-") || strings.HasPrefix(k, "X-") {
+				delete(o, k)
+			}
+		}
+	}
+
+	if !ok {
+		fixup(obj)
+		return yaml.Marshal(obj)
+	}
+
+	specsYaml, err := yaml.Marshal(specs)
+	if err != nil {
+		return nil, fmt.Errorf("error during intermediate marshal: %w", err)
+	}
+
+	var objs []map[string]interface{}
+	if err := yaml.Unmarshal(specsYaml, &objs); err != nil {
+		return nil, fmt.Errorf("error unmarshaling multiple specs")
+	}
+
+	for i, subObj := range objs {
+		fixup(subObj)
+		objs[i] = subObj
+	}
+
+	obj["specs"] = objs
 	return yaml.Marshal(obj)
 }
 

@@ -15,16 +15,35 @@ import (
 )
 
 func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error) {
+	project, err := loadProject(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	switch len(project.Specs) {
+	case 0:
+		if project.Spec == nil {
+			return nil, fmt.Errorf("no specs provided")
+		}
+		return project.Spec, nil
+	case 1:
+		return &project.Specs[0], nil
+	default:
+		return nil, fmt.Errorf("multi-spec not yet supported")
+	}
+}
+
+func loadProject(ctx context.Context, client *dockerui.Client) (*dalec.Project, error) {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
 		return nil, fmt.Errorf("could not read spec file: %w", err)
 	}
 
-	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data))
+	project, err := dalec.LoadProject(bytes.TrimSpace(src.Data))
 	if err != nil {
 		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
-	return spec, nil
+	return project, nil
 }
 
 func listBuildTargets(group string) []*targetWrapper {
@@ -102,7 +121,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 
 	spec, err := loadSpec(ctx, bc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
 
 	if err := registerSpecHandlers(ctx, spec, client); err != nil {
