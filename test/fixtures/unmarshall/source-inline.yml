@@ -1,0 +1,19 @@
+sources:
+  TestFileOctelPreGo113:
+    inline:
+      file:
+        contents: Hello world!
+        permissions: 0644
+  TestFileOctelGo113:
+    inline:
+      file:
+        contents: Hello world!
+        permissions: 0o644
+  TestDirOctelPreGo113:
+    inline:
+      dir:
+        permissions: 0755
+  TestDirOctelGo113:
+    inline:
+      dir:
+        permissions: 0o755

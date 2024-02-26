@@ -39,11 +39,12 @@ func getBuildPlatform(ctx context.Context, t *testing.T) *platforms.Platform {
 func TestPassthroughVars(t *testing.T) {
 	runTest := func(t *testing.T, f gwclient.BuildFunc) {
 		t.Helper()
-		ctx := startTestSpan(t)
+		ctx := startTestSpan(baseCtx, t)
 		testEnv.RunTest(ctx, t, f)
 	}
 
-	var buildPlatform = getBuildPlatform(startTestSpan(t), t)
+	ctx := startTestSpan(baseCtx, t)
+	var buildPlatform = getBuildPlatform(ctx, t)
 
 	tests := []struct {
 		name               string

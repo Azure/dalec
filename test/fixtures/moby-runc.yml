@@ -70,12 +70,10 @@ build:
     CGO_ENABLED: 1
     GOGC: off
     GOFLAGS: -trimpath
-    GOROOT: /usr/lib/golang
   steps:
     - command: |
         set -e
         cd src
-        export GOROOT=/usr/lib/golang
         make man runc BUILDTAGS=seccomp
 artifacts:
   binaries:

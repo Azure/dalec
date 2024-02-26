@@ -39,6 +39,9 @@ func SpecHandler(target string) frontend.BuildFunc {
 }
 
 func Dalec2SpecLLB(spec *dalec.Spec, in llb.State, target, dir string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	if err := ValidateSpec(spec); err != nil {
+		return llb.Scratch(), fmt.Errorf("invalid spec: %w", err)
+	}
 	opts = append(opts, dalec.ProgressGroup("Generate RPM spec"))
 	buf := bytes.NewBuffer(nil)
 	info, _ := debug.ReadBuildInfo()

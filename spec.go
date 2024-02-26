@@ -18,7 +18,7 @@ type Spec struct {
 	// Website is the URL to store in the metadata of the package.
 	Website string `yaml:"website" json:"website"`
 
-	// Version setst he version of the package.
+	// Version sets the version of the package.
 	Version string `yaml:"version" json:"version" jsonschema:"required"`
 	// Revision sets the package revision.
 	// This will generally get merged into the package version when generating the package.
@@ -175,6 +175,26 @@ type ImageConfig struct {
 	// Base is the base image to use for the output image.
 	// This only affects the output image, not the intermediate build image.
 	Base string `yaml:"base,omitempty" json:"base,omitempty"`
+
+	// Post is the post install configuration for the image.
+	// This allows making additional modifications to the container rootfs after the package(s) are installed.
+	//
+	// Use this to perform actions that would otherwise require additional tooling inside the container that is not relavent to
+	// the resulting container and makes a post-install script as part of the package unnecessary.
+	Post *PostInstall `yaml:"post,omitempty" json:"post,omitempty"`
+}
+
+// PostInstall is the post install configuration for the image.
+type PostInstall struct {
+	// Symlinks is the list of symlinks to create in the container rootfs after the package(s) are installed.
+	// The key is the path the symlink should point to.
+	Symlinks map[string]SymlinkTarget `yaml:"symlinks,omitempty" json:"symlinks,omitempty"`
+}
+
+// SymlinkTarget specifies the properties of a symlink
+type SymlinkTarget struct {
+	// Path is the path where the symlink should be placed
+	Path string `yaml:"path" json:"path" jsonschema:"required"`
 }
 
 type SourceDockerImage struct {
@@ -225,6 +245,51 @@ type SourceBuild struct {
 	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
 }
 
+// SourceInlineFile is used to specify the content of an inline source.
+type SourceInlineFile struct {
+	// Contents is the content.
+	Contents string `yaml:"contents,omitempty" json:"contents,omitempty"`
+	// Permissions is the octal file permissions to set on the file.
+	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	// UID is the user ID to set on the directory and all files and directories within it.
+	// UID must be greater than or equal to 0
+	UID int `yaml:"uid,omitempty" json:"uid,omitempty"`
+	// GID is the group ID to set on the directory and all files and directories within it.
+	// UID must be greater than or equal to 0
+	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
+}
+
+// SourceInlineDir is used by by [SourceInline] to represent a filesystem directory.
+type SourceInlineDir struct {
+	// Files is the list of files to include in the directory.
+	// The map key is the name of the file.
+	//
+	// Files with path separators in the key will be rejected.
+	Files map[string]*SourceInlineFile `yaml:"files,omitempty" json:"files,omitempty"`
+	// Permissions is the octal permissions to set on the directory.
+	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+
+	// UID is the user ID to set on the directory and all files and directories within it.
+	// UID must be greater than or equal to 0
+	UID int `yaml:"uid,omitempty" json:"uid,omitempty"`
+	// GID is the group ID to set on the directory and all files and directories within it.
+	// UID must be greater than or equal to 0
+	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
+}
+
+// SourceInline is used to generate a source from inline content.
+type SourceInline struct {
+	// File is the inline file to generate.
+	// File is treated as a literal single file.
+	// [SourceIsDir] will return false when this is set.
+	// This is mutally exclusive with [Dir]
+	File *SourceInlineFile `yaml:"file,omitempty" json:"file,omitempty"`
+	// Dir creates a directory with the given files and directories.
+	// [SourceIsDir] will return true when this is set.
+	// This is mutally exclusive with [File]
+	Dir *SourceInlineDir `yaml:"dir,omitempty" json:"dir,omitempty"`
+}
+
 // Command is used to execute a command to generate a source from a docker image.
 type Command struct {
 	// Dir is the working directory to run the command in.
@@ -256,6 +321,7 @@ type Source struct {
 	HTTP        *SourceHTTP        `yaml:"http,omitempty" json:"http,omitempty"`
 	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
 	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
+	Inline      *SourceInline      `yaml:"inline,omitempty" json:"inline,omitempty"`
 	// === End Source Variants ===
 
 	// Path is the path to the source after fetching it based on the identifier.
@@ -370,17 +436,34 @@ type Target struct {
 type TestSpec struct {
 	// Name is the name of the test
 	// This will be used to output the test results
-	Name    string `yaml:"name" json:"name" jsonschema:"required"`
-	Command `yaml:",inline"`
+	Name string `yaml:"name" json:"name" jsonschema:"required"`
+
+	// Dir is the working directory to run the command in.
+	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
+
+	// Mounts is the list of sources to mount into the build steps.
+	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
+
+	// List of CacheDirs which will be used across all Steps
+	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
+
+	// Env is the list of environment variables to set for all commands in this step group.
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+
 	// Steps is the list of commands to run to test the package.
 	Steps []TestStep `yaml:"steps" json:"steps" jsonschema:"required"`
+
 	// Files is the list of files to check after running the steps.
 	Files map[string]FileCheckOutput `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
 // TestStep is a wrapper for [BuildStep] to include checks on stdio streams
 type TestStep struct {
-	BuildStep `yaml:",inline"`
+	// Command is the command to run to build the artifact(s).
+	// This will always be wrapped as /bin/sh -c "<command>", or whatever the equivalent is for the target distro.
+	Command string `yaml:"command" json:"command" jsonschema:"required"`
+	// Env is the list of environment variables to set for the command.
+	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 	// Stdout is the expected output on stdout
 	Stdout CheckOutput `yaml:"stdout,omitempty" json:"stdout,omitempty"`
 	// Stderr is the expected output on stderr
@@ -462,6 +545,9 @@ type FileCheckOutput struct {
 	IsDir bool `yaml:"is_dir,omitempty" json:"is_dir,omitempty"`
 	// NotExist is used to check that the file does not exist.
 	NotExist bool `yaml:"not_exist,omitempty" json:"not_exist,omitempty"`
+
+	// TODO: Support checking symlinks
+	// This is not currently possible with buildkit as it does not expose information about the symlink
 }
 
 // Check is used to check the output file.

@@ -175,6 +175,7 @@ func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]l
 		return err
 	}
 
+	var outErr error
 	for p, check := range t.Files {
 		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
 			Path: p,
@@ -198,30 +199,33 @@ func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]l
 				Filename: p,
 			})
 			if err != nil {
-				return errors.Wrapf(err, "read failed: %s", p)
+				outErr = stderrors.Join(errors.Wrapf(err, "read failed: %s", p))
 			}
 		}
 		if err := check.Check(string(dt), fs.FileMode(stat.Mode), stat.IsDir(), p); err != nil {
-			return errors.WithStack(err)
+			outErr = stderrors.Join(errors.WithStack(err))
 		}
 	}
 
 	for i, st := range ios {
 		def, err := st.Marshal(ctx)
 		if err != nil {
-			return err
+			outErr = stderrors.Join(errors.Wrap(err, "failed to marshal stdio state"))
+			continue
 		}
 		res, err := client.Solve(ctx, gwclient.SolveRequest{
 			Definition: def.ToPB(),
 			Evaluate:   true,
 		})
 		if err != nil {
-			return err
+			outErr = stderrors.Join(errors.Wrap(err, "failed to solve stdio state"))
+			continue
 		}
 
 		ref, err := res.SingleRef()
 		if err != nil {
-			return err
+			outErr = stderrors.Join(errors.Wrap(err, "failed to get stdio ref for %d"))
+			continue
 		}
 
 		checkFile := func(c dalec.CheckOutput, name string) error {
@@ -242,14 +246,14 @@ func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]l
 
 		step := t.Steps[i]
 		if err := checkFile(step.Stdout, "stdout"); err != nil {
-			return err
+			outErr = stderrors.Join(err)
 		}
 		if err := checkFile(step.Stderr, "stderr"); err != nil {
-			return err
+			outErr = stderrors.Join(err)
 		}
 	}
 
-	return nil
+	return outErr
 }
 
 type errorList struct {

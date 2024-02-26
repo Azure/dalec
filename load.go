@@ -3,6 +3,7 @@ package dalec
 import (
 	goerrors "errors"
 	"fmt"
+	"os"
 	"path"
 	"strings"
 
@@ -114,6 +115,7 @@ func fillDefaults(s *Source) {
 		}
 	case s.Build != nil:
 		fillDefaults(&s.Build.Source)
+	case s.Inline != nil:
 	}
 }
 
@@ -141,9 +143,6 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 
 		count++
 	}
-	if retErr != nil {
-		return retErr
-	}
 
 	if s.Git != nil {
 		count++
@@ -164,6 +163,13 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 			retErr = goerrors.Join(retErr, err)
 		}
 
+		count++
+	}
+
+	if s.Inline != nil {
+		if err := s.Inline.validate(s.Path); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
 		count++
 	}
 
@@ -286,7 +292,13 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 // LoadSpec loads a spec from the given data.
 func LoadSpec(dt []byte) (*Spec, error) {
 	var spec Spec
-	if err := yaml.Unmarshal(dt, &spec); err != nil {
+
+	dt, err := stripXFields(dt)
+	if err != nil {
+		return nil, fmt.Errorf("error stripping x-fields: %w", err)
+	}
+
+	if err := yaml.UnmarshalWithOptions(dt, &spec, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
 	}
 
@@ -296,6 +308,21 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	spec.FillDefaults()
 
 	return &spec, nil
+}
+
+func stripXFields(dt []byte) ([]byte, error) {
+	var obj map[string]interface{}
+	if err := yaml.Unmarshal(dt, &obj); err != nil {
+		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
+	}
+
+	for k := range obj {
+		if strings.HasPrefix(k, "x-") || strings.HasPrefix(k, "X-") {
+			delete(obj, k)
+		}
+	}
+
+	return yaml.Marshal(obj)
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {
@@ -358,14 +385,17 @@ func (s *Spec) FillDefaults() {
 
 func (s Spec) Validate() error {
 	for name, src := range s.Sources {
+		if strings.ContainsRune(name, os.PathSeparator) {
+			return &InvalidSourceError{Name: name, Err: sourceNamePathSeparatorError}
+		}
 		if err := src.validate(); err != nil {
-			return fmt.Errorf("error validating source ref %q: %w", name, err)
+			return &InvalidSourceError{Name: name, Err: fmt.Errorf("error validating source ref %q: %w", name, err)}
 		}
 
 		if src.DockerImage != nil && src.DockerImage.Cmd != nil {
 			for p, cfg := range src.DockerImage.Cmd.CacheDirs {
 				if _, err := sharingMode(cfg.Mode); err != nil {
-					return errors.Wrapf(err, "invalid sharing mode for source %q with cache mount at path %q", name, p)
+					return &InvalidSourceError{Name: name, Err: errors.Wrapf(err, "invalid sharing mode for source %q with cache mount at path %q", name, p)}
 				}
 			}
 		}
@@ -418,8 +448,28 @@ func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) e
 }
 
 func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
-	if err := c.Command.processBuildArgs(lex, args, name); err != nil {
-		return err
+	for _, s := range c.Mounts {
+		if err := s.Spec.substituteBuildArgs(args); err != nil {
+			return fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err)
+		}
+	}
+	for k, v := range c.Env {
+		updated, err := lex.ProcessWordWithMap(v, args)
+		if err != nil {
+			return fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
+		}
+		c.Env[k] = updated
+	}
+
+	for i, step := range c.Steps {
+		for k, v := range step.Env {
+			updated, err := lex.ProcessWordWithMap(v, args)
+			if err != nil {
+				return fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
+			}
+			step.Env[k] = updated
+			c.Steps[i] = step
+		}
 	}
 
 	for i, step := range c.Steps {

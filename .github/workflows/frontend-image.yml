@@ -5,6 +5,11 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       tag:
@@ -42,4 +47,4 @@ jobs:
             --set frontend.platform=linux/amd64,linux/arm64 \
             frontend
         env:
-          FRONTEND_REF: ghcr.io/${{ github.repository }}/frontend:${{ github.event.inputs.tag }}
+          FRONTEND_REF: ghcr.io/${{ github.repository }}/frontend:${{ inputs.tag }}

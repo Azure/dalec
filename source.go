@@ -150,6 +150,24 @@ func (src *SourceHTTP) AsState(name string, opts ...llb.ConstraintsOpt) (llb.Sta
 	return st, nil
 }
 
+// InvalidSourceError is an error type returned when a source is invalid.
+type InvalidSourceError struct {
+	Name string
+	Err  error
+}
+
+func (s *InvalidSourceError) Error() string {
+	return fmt.Sprintf("invalid source %s: %v", s.Name, s.Err)
+}
+
+func (s *InvalidSourceError) Unwrap() error {
+	return s.Err
+}
+
+var sourceNamePathSeparatorError = errors.New("source name must not container path separator")
+
+type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
+
 type ForwarderFunc func(llb.State, *SourceBuild) (llb.State, error)
 
 type SourceOpts struct {
@@ -168,10 +186,6 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 	if len(cmd.Steps) == 0 {
 		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
 	}
-
-	// if subPath == "" {
-	// 	return llb.Scratch(), fmt.Errorf("empty subPath")
-	// }
 
 	for k, v := range cmd.Env {
 		st = st.AddEnv(k, v)
@@ -289,6 +303,8 @@ func SourceIsDir(src Source) (bool, error) {
 		return true, nil
 	case src.HTTP != nil:
 		return false, nil
+	case src.Inline != nil:
+		return src.Inline.Dir != nil, nil
 	default:
 		return false, fmt.Errorf("unsupported source type")
 	}
@@ -297,7 +313,7 @@ func SourceIsDir(src Source) (bool, error) {
 // Doc returns the details of how the source was created.
 // This should be included, where applicable, in build in build specs (such as RPM spec files)
 // so that others can reproduce the build.
-func (s Source) Doc() (io.Reader, error) {
+func (s Source) Doc(name string) (io.Reader, error) {
 	b := bytes.NewBuffer(nil)
 	switch {
 	case s.Context != nil:
@@ -305,7 +321,7 @@ func (s Source) Doc() (io.Reader, error) {
 	case s.Build != nil:
 		fmt.Fprintln(b, "Generated from a docker build:")
 		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
-		sub, err := s.Build.Source.Doc()
+		sub, err := s.Build.Source.Doc(name)
 		if err != nil {
 			return nil, err
 		}
@@ -398,7 +414,7 @@ func (s Source) Doc() (io.Reader, error) {
 			if len(img.Cmd.Mounts) > 0 {
 				fmt.Fprintln(b, "	With the following items mounted:")
 				for _, src := range img.Cmd.Mounts {
-					sub, err := src.Spec.Doc()
+					sub, err := src.Spec.Doc(name)
 					if err != nil {
 						return nil, err
 					}
@@ -415,6 +431,9 @@ func (s Source) Doc() (io.Reader, error) {
 			}
 			return b, nil
 		}
+	case s.Inline != nil:
+		fmt.Fprintln(b, "Generated from an inline source:")
+		s.Inline.Doc(b, name)
 	default:
 		// This should be unrecable.
 		// We could panic here, but ultimately this is just a doc string and parsing user generated content.

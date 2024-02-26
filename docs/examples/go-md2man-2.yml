@@ -37,7 +37,6 @@ dependencies:
 
 build:
   env:
-    GOROOT: /usr/lib/golang # Note: This is needed due to a bug in the golang package for mariner
     CGO_ENABLED: "0"
   steps:
     - command: |
