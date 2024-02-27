@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -176,6 +177,15 @@ func TestSourceHTTP(t *testing.T) {
 	}
 }
 
+func toImageRef(ref string) string {
+	return "docker-image://" + ref
+}
+
+var (
+	noMountCheck = []expectMount{}
+	rootMount    = expectMount{dest: "/", selector: "", typ: pb.MountType_BIND}
+)
+
 func TestSourceDockerImage(t *testing.T) {
 	imgRef := "localhost:0/does/not/exist:latest"
 	src := Source{
@@ -188,9 +198,33 @@ func TestSourceDockerImage(t *testing.T) {
 
 	op := ops[0].GetSource()
 
-	xID := "docker-image://" + imgRef
+	xID := toImageRef(imgRef)
 	if op.Identifier != xID {
 		t.Errorf("expected identifier %q, got %q", xID, op.Identifier)
+	}
+
+	contextMount := SourceMount{
+		Dest: "/dst",
+		Spec: Source{
+			Context: &SourceContext{
+				Name: "."},
+		},
+	}
+
+	imageMount := SourceMount{
+		Dest: "/dst",
+		Spec: Source{
+			DockerImage: &SourceDockerImage{
+				Ref: "localhost:0/some/image:latest",
+				Cmd: &Command{
+					Steps: []*BuildStep{
+						{
+							Command: "mkdir /nested/dir && echo 'some file contents' > /nested/dir/foo.txt",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	t.Run("with cmd", func(t *testing.T) {
@@ -214,7 +248,7 @@ func TestSourceDockerImage(t *testing.T) {
 		if img.Identifier != xID {
 			t.Errorf("expected identifier %q, got %q", xID, img.Identifier)
 		}
-		checkCmd(t, ops[1:], &src)
+		checkCmd(t, ops[1:], &src, [][]expectMount{noMountCheck, noMountCheck})
 
 		t.Run("with filters", func(t *testing.T) {
 			t.Run("include and exclude", func(t *testing.T) {
@@ -223,7 +257,7 @@ func TestSourceDockerImage(t *testing.T) {
 				src.Excludes = []string{"baz"}
 
 				ops := getSourceOp(ctx, t, src)
-				checkCmd(t, ops[1:len(ops)-1], &src)
+				checkCmd(t, ops[1:len(ops)-1], &src, [][]expectMount{noMountCheck, noMountCheck})
 				// When include/exclude are used, we are expecting a copy operation to be last.
 				checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 			})
@@ -238,7 +272,7 @@ func TestSourceDockerImage(t *testing.T) {
 					t.Errorf("expected identifier %q, got %q", xID, img.Identifier)
 				}
 
-				checkCmd(t, ops[1:], &src)
+				checkCmd(t, ops[1:], &src, [][]expectMount{{rootMount}, {rootMount}})
 			})
 
 			t.Run("subpath with include-exclude", func(t *testing.T) {
@@ -255,13 +289,137 @@ func TestSourceDockerImage(t *testing.T) {
 				}
 				ops = ops[1:]
 
+				// When a subpath is used, we expect a mount to be applied.
+				// There should be 2 mounts, one for the rootfs and one for our subdir
+				checkCmd(t, ops[:len(ops)-1], &src, [][]expectMount{{rootMount, {dest: "subdir"}}, {rootMount, {dest: "subdir"}}})
+
 				// last op is (should be) the include/exclude filter and not a cmd
-				checkCmd(t, ops[:len(ops)-1], &src)
 				// When include/exclude are used, we are expecting a copy operation to be last.
 				checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 			})
+
+			t.Run("subpath within context mount", func(t *testing.T) {
+				src := src
+				contextMount := contextMount
+				contextMount.Spec.Path = "subdir"
+
+				// Add source to mounts
+				src.DockerImage.Cmd.Mounts = []SourceMount{contextMount}
+
+				ops := getSourceOp(ctx, t, src)
+
+				var contextOp *pb.Op
+
+				// we must scan through the sources to find one with a matching id,
+				// since the order of the source ops isn't always deterministic
+				// (possible buildkit marshaling bug)
+				if imageOp := findMatchingSource(ops, src); imageOp == nil {
+					t.Errorf("could not find source with identifier %q", img.Identifier)
+					return
+				}
+
+				if contextOp = findMatchingSource(ops, contextMount.Spec); contextOp == nil {
+					t.Errorf("could not find source with identifier %q", contextMount.Spec.Path)
+					return
+				}
+
+				checkContext(t, contextOp.GetSource(), &contextMount.Spec)
+				// there should be no copy operation, since we have no includes and excludes,
+				// so we can simply extract the dest path with a mount
+				checkCmd(t, ops[2:], &src,
+					[][]expectMount{{{dest: "/dst", selector: "subdir"}},
+						{{dest: "/dst", selector: "subdir"}}})
+			})
+
+			t.Run("subpath within cmd mount", func(t *testing.T) {
+				src := src
+				imageMount := imageMount
+				imageMount.Spec.Path = "/subdir"
+				src.DockerImage.Cmd.Mounts = []SourceMount{imageMount}
+
+				ops := getSourceOp(ctx, t, src)
+
+				var img, subImg *pb.Op
+
+				if img = findMatchingSource(ops, src); img == nil {
+					t.Errorf("could not find source with identifier %q", src.DockerImage.Ref)
+				}
+
+				if subImg = findMatchingSource(ops, imageMount.Spec); subImg == nil {
+					t.Errorf("could not find source with identifier %q", imageMount.Spec.DockerImage.Ref)
+				}
+
+				dMap := toDigestMap(ops)
+				childOps := getChildren(subImg, ops, dMap)
+				if len(childOps) != 1 {
+					t.Fatalf("expecting single child op for %v\n", subImg.GetSource())
+				}
+
+				cmd := childOps[0]
+				checkCmd(t, []*pb.Op{cmd}, &imageMount.Spec, [][]expectMount{noMountCheck, noMountCheck})
+
+				nextCmd1 := getChildren(cmd, ops, dMap)
+				nextCmd2 := getChildren(nextCmd1[0], ops, dMap)
+
+				checkCmd(t, []*pb.Op{nextCmd1[0], nextCmd2[0]}, &src, [][]expectMount{{{dest: "/dst", selector: ""}}, noMountCheck})
+			})
 		})
 	})
+}
+
+func getChildren(op *pb.Op, ops []*pb.Op, digests map[*pb.Op]digest.Digest) []*pb.Op {
+	children := make([]*pb.Op, 0, len(ops))
+	for _, maybeChild := range ops {
+		for _, input := range maybeChild.Inputs {
+			if input.Digest == digests[op] {
+				children = append(children, maybeChild)
+			}
+		}
+	}
+
+	return children
+}
+
+func toDigestMap(ops []*pb.Op) map[*pb.Op]digest.Digest {
+	hashes := make(map[*pb.Op]digest.Digest)
+	for _, op := range ops {
+		bytes, err := op.Marshal()
+		if err != nil {
+			panic(err)
+		}
+		hashes[op] = digest.FromBytes(bytes)
+	}
+
+	return hashes
+}
+
+func toContextRef(ctxRef string) string {
+	return "local://" + ctxRef
+}
+
+func sourcesMatch(src Source, op *pb.SourceOp) bool {
+	switch {
+	case src.DockerImage != nil:
+		return op.Identifier == toImageRef(src.DockerImage.Ref)
+	case src.Context != nil:
+		return op.Identifier == toContextRef(src.Context.Name)
+	default:
+		panic("unsupported source")
+	}
+}
+
+func findMatchingSource(sOps []*pb.Op, src Source) *pb.Op {
+	for _, s := range sOps {
+		sOp := s.GetSource()
+		if sOp == nil {
+			continue
+		}
+		if sourcesMatch(src, sOp) {
+			return s
+		}
+	}
+
+	return nil
 }
 
 func TestSourceBuild(t *testing.T) {
@@ -299,7 +457,7 @@ RUN echo hello
 		},
 	}
 
-	checkCmd(t, ops[1:], &Source{DockerImage: &srcDI})
+	checkCmd(t, ops[1:], &Source{DockerImage: &srcDI}, [][]expectMount{noMountCheck, noMountCheck})
 
 	t.Run("with filters", func(t *testing.T) {
 		t.Run("subdir", func(t *testing.T) {
@@ -308,7 +466,8 @@ RUN echo hello
 
 			// for build soruce, we expect to have a copy operation as the last op
 			ops := getSourceOp(ctx, t, src)
-			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI})
+
+			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{rootMount}, {rootMount, expectMount{dest: "subdir"}}})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 		})
 
@@ -319,7 +478,7 @@ RUN echo hello
 
 			// for build soruce, we expect to have a copy operation as the last op
 			ops := getSourceOp(ctx, t, src)
-			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI})
+			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{noMountCheck, noMountCheck})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 		})
 
@@ -329,9 +488,9 @@ RUN echo hello
 			src.Includes = []string{"foo", "bar"}
 			src.Excludes = []string{"baz"}
 
-			// for build soruce, we expect to have a copy operation as the last op
+			// for build source, we expect to have a copy operation as the last op
 			ops := getSourceOp(ctx, t, src)
-			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI})
+			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{rootMount}, {rootMount, expectMount{dest: "subdir"}}})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 		})
 	})
@@ -371,6 +530,10 @@ func TestSourceContext(t *testing.T) {
 				ops := getSourceOp(ctx, t, src)
 				checkContext(t, ops[0].GetSource(), &src)
 				// for context soruce, we expect to have a copy operation as the last op when subdir is used
+
+				// set includes, excludes to nil before checking against filter, as includes and excludes are
+				// handled before filter operation for context sources
+				src.Includes, src.Excludes = nil, nil
 				checkFilter(t, ops[1].GetFile(), &src)
 			})
 		})
@@ -630,13 +793,6 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 
 	fillDefaults(&src)
 
-	spec := &Spec{
-		Sources: map[string]Source{
-			"test": src,
-		},
-	}
-	getSource := Source2LLBGetter(spec, src, "test")
-
 	var sOpt SourceOpts
 	if src.Build != nil {
 		if src.Build.Inline == "" {
@@ -654,16 +810,12 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 		}
 	}
 
-	if src.Context != nil {
-		// Note: We use this `GetContext` function (normally) to abstract away things like dockerignore and other things that docker clients tend to expect.
-		// None of that makes any sense here, so we just use the normal llb.Local call.
-		sOpt.GetContext = func(name string, opts ...llb.LocalOption) (*llb.State, error) {
-			st := llb.Local(name, opts...)
-			return &st, nil
-		}
+	sOpt.GetContext = func(name string, opts ...llb.LocalOption) (*llb.State, error) {
+		st := llb.Local(name, opts...)
+		return &st, nil
 	}
 
-	st, err := getSource(sOpt)
+	st, err := src.AsState("test", sOpt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -755,7 +907,28 @@ func checkFilter(t *testing.T, op *pb.FileOp, src *Source) {
 	}
 }
 
-func checkCmd(t *testing.T, ops []*pb.Op, src *Source) {
+type expectMount struct {
+	dest     string
+	selector string
+	typ      pb.MountType
+}
+
+func mountMatches(gotMount *pb.Mount, wantMount expectMount) bool {
+	return wantMount.dest == gotMount.Dest && wantMount.selector == gotMount.Selector &&
+		wantMount.typ == gotMount.MountType
+}
+
+func checkContainsMount(t *testing.T, mounts []*pb.Mount, expect expectMount) {
+	for _, mnt := range mounts {
+		if mountMatches(mnt, expect) {
+			return
+		}
+	}
+
+	t.Errorf("could not find mount with dest=%s selector=%s type=%q in mounts %v", expect.dest, expect.selector, expect.typ, mounts)
+}
+
+func checkCmd(t *testing.T, ops []*pb.Op, src *Source, expectMounts [][]expectMount) {
 	if len(ops) != len(src.DockerImage.Cmd.Steps) {
 		t.Fatalf("unexpected number of ops, expected %d, got %d", len(src.DockerImage.Cmd.Steps), len(ops))
 	}
@@ -778,24 +951,14 @@ func checkCmd(t *testing.T, ops []*pb.Op, src *Source) {
 		}
 
 		xCwd := src.DockerImage.Cmd.Dir
-		if exec.Meta.Cwd != xCwd {
+		if exec.Meta.Cwd != path.Join("/", xCwd) {
 			t.Errorf("expected cwd %q, got %q", xCwd, exec.Meta.Cwd)
 		}
 
-		if src.Path == "" {
-			continue
+		for _, expectMount := range expectMounts[i] {
+			checkContainsMount(t, exec.Mounts, expectMount)
 		}
 
-		// When a subpath is used, we expect a mount to be applied.
-		// There should be 2 mounts, one for the rootfs and one for our subdir
-		// We only care to check the 2nd mount.
-		mnt := exec.Mounts[1]
-		if mnt.MountType != pb.MountType_BIND {
-			t.Errorf("expected bind mount, got %v", mnt.MountType)
-		}
-		if mnt.Dest != src.Path {
-			t.Errorf("expected dest %q, got %q", src.Path, mnt.Dest)
-		}
 	}
 }
 
@@ -807,6 +970,30 @@ func checkContext(t *testing.T, op *pb.SourceOp, src *Source) {
 	xID := "local://" + name
 	if op.Identifier != xID {
 		t.Errorf("expected identifier %q, got %q", xID, op.Identifier)
+	}
+
+	if src.Includes != nil {
+		includesJson, err := json.Marshal(src.Includes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		localIncludes := op.Attrs["local.includepattern"]
+
+		if string(includesJson) != localIncludes {
+			t.Errorf("expected includes %q on local op, got %q", includesJson, localIncludes)
+		}
+	}
+
+	if src.Excludes != nil {
+		excludesJson, err := json.Marshal(src.Excludes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		localExcludes := op.Attrs["local.excludepatterns"]
+
+		if string(excludesJson) != localExcludes {
+			t.Errorf("expected includes %q on local op, got %q", excludesJson, localExcludes)
+		}
 	}
 }
 
