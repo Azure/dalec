@@ -187,24 +187,6 @@ type SourceContext struct {
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 }
 
-// SourceBuild is used to generate source from a DockerFile build, either
-// inline or from a local file.
-type SourceBuild struct {
-	// A source specification to use as the context for the Dockerfile build
-	Source Source `yaml:"source,omitempty" json:"source,omitempty"`
-
-	// DockerFile is the path to the build file in the build context
-	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
-	DockerFile string `yaml:"dockerfile,omitempty" json:"dockerfile,omitempty"`
-
-	// Target specifies the build target to use.
-	// If unset, the default target is determined by the frontend implementation
-	// (e.g. the dockerfile frontend uses the last build stage as the default).
-	Target string `yaml:"target,omitempty" json:"target,omitempty"`
-	// Args are the build args to pass to the build.
-	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
-}
-
 // SourceInlineFile is used to specify the content of an inline source.
 type SourceInlineFile struct {
 	// Contents is the content.

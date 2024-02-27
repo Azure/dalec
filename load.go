@@ -181,24 +181,6 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 	return retErr
 }
 
-func (s *SourceBuild) validate(failContext ...string) (retErr error) {
-	defer func() {
-		if retErr != nil && failContext != nil {
-			retErr = errors.Wrap(retErr, strings.Join(failContext, " "))
-		}
-	}()
-
-	if s.Source.Build != nil {
-		return goerrors.Join(retErr, fmt.Errorf("build sources cannot be recursive"))
-	}
-
-	if err := s.Source.validate("build subsource"); err != nil {
-		retErr = goerrors.Join(retErr, err)
-	}
-
-	return
-}
-
 func (s *Spec) SubstituteArgs(env map[string]string) error {
 	lex := shell.NewLex('\\')
 

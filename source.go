@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
@@ -117,30 +116,6 @@ func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts,
 	}
 
 	st, err := generateSourceFromImage(name, st, src.Cmd, sOpt, path, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return st, nil
-}
-
-func (src *SourceBuild) AsState(name string, _ *Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	if src.Source.Inline != nil && src.Source.Inline.File != nil {
-		name = src.DockerFile
-		if name == "" {
-			name = dockerui.DefaultDockerfileName
-		}
-	}
-
-	st, err := src.Source.AsState(name, sOpt, opts...)
-	if err != nil {
-		if !errors.Is(err, errNoSourceVariant) {
-			return llb.Scratch(), err
-		}
-		st = llb.Scratch()
-	}
-
-	st, err = sOpt.Forward(st, src)
 	if err != nil {
 		return llb.Scratch(), err
 	}
