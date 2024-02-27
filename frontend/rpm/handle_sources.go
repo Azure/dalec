@@ -104,7 +104,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.Const
 		}
 
 		pg := dalec.ProgressGroup("Add spec source: " + k + " " + s)
-		st, err := dalec.Source2LLBGetter(spec, src, k, sOpt, append(opts, pg)...)
+		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, err
 		}

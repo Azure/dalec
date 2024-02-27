@@ -23,7 +23,7 @@ func (src Source) handlesOwnPath() bool {
 	return src.DockerImage != nil && src.DockerImage.Cmd != nil
 }
 
-func GetFilter(src Source, forMount bool, opts ...llb.ConstraintsOpt) llb.StateOption {
+func getFilter(src Source, forMount bool, opts ...llb.ConstraintsOpt) llb.StateOption {
 	var path = src.Path
 	if forMount {
 		// if we're using a mount for these sources, the mount will handle path extraction
@@ -48,10 +48,10 @@ func GetFilter(src Source, forMount bool, opts ...llb.ConstraintsOpt) llb.StateO
 		return filterState(path, src.Includes, src.Excludes)
 	}
 
-	return func(_ llb.State) llb.State { return llb.Scratch() }
+	return func(st llb.State) llb.State { return st }
 }
 
-func GetSource(src Source, name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (st llb.State, err error) {
+func getSource(src Source, name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (st llb.State, err error) {
 	// load the source
 	switch {
 	case src.HTTP != nil:
@@ -124,16 +124,8 @@ func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts,
 	return st, nil
 }
 
-func DefaultSourceFilter(extract string, includes, excludes []string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return filterState(extract, includes, excludes, opts...)
-}
-
-func TargetMountSourceFilter(_ string, includes, excludes []string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return filterState("/", includes, excludes, opts...)
-}
-
 func (src *SourceBuild) AsState(name string, _ *Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := GetSource(src.Source, name, sOpt, opts...)
+	st, err := src.Source.AsState(name, sOpt, opts...)
 	if err != nil {
 		if !errors.Is(err, errNoSourceVariant) || src.Inline == "" {
 			return llb.Scratch(), err
@@ -186,6 +178,23 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
+func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	st, err := getSource(*s, name, sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	return st.With(getFilter(*s, forMount)), nil
+}
+
+func (s *Source) AsState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	return s.asState(name, false, sOpt, opts...)
+}
+
+func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	return s.asState(name, true, sOpt, opts...)
+}
+
 // must not be called with a nil cmd pointer
 // subPath must be a valid non-empty path
 func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -203,7 +212,7 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
 	for _, src := range cmd.Mounts {
-		srcSt, err := GetSource(src.Spec, name, sOpts, opts...)
+		srcSt, err := src.Spec.AsMount(name, sOpts, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -243,14 +252,6 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 	}
 
 	return out, nil
-}
-
-func Source2LLBGetter(_ *Spec, src Source, name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := GetSource(src, name, sOpt, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-	return st.With(GetFilter(src, false)), nil
 }
 
 func isRoot(extract string) bool {

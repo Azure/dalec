@@ -181,8 +181,10 @@ func toImageRef(ref string) string {
 	return "docker-image://" + ref
 }
 
-var NoMountCheck = []expectMount{}
-var RootMount = expectMount{dest: "/", selector: "", typ: pb.MountType_BIND}
+var (
+	noMountCheck = []expectMount{}
+	rootMount    = expectMount{dest: "/", selector: "", typ: pb.MountType_BIND}
+)
 
 func TestSourceDockerImage(t *testing.T) {
 	imgRef := "localhost:0/does/not/exist:latest"
@@ -246,7 +248,7 @@ func TestSourceDockerImage(t *testing.T) {
 		if img.Identifier != xID {
 			t.Errorf("expected identifier %q, got %q", xID, img.Identifier)
 		}
-		checkCmd(t, ops[1:], &src, [][]expectMount{NoMountCheck, NoMountCheck})
+		checkCmd(t, ops[1:], &src, [][]expectMount{noMountCheck, noMountCheck})
 
 		t.Run("with filters", func(t *testing.T) {
 			t.Run("include and exclude", func(t *testing.T) {
@@ -255,7 +257,7 @@ func TestSourceDockerImage(t *testing.T) {
 				src.Excludes = []string{"baz"}
 
 				ops := getSourceOp(ctx, t, src)
-				checkCmd(t, ops[1:len(ops)-1], &src, [][]expectMount{NoMountCheck, NoMountCheck})
+				checkCmd(t, ops[1:len(ops)-1], &src, [][]expectMount{noMountCheck, noMountCheck})
 				// When include/exclude are used, we are expecting a copy operation to be last.
 				checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 			})
@@ -270,7 +272,7 @@ func TestSourceDockerImage(t *testing.T) {
 					t.Errorf("expected identifier %q, got %q", xID, img.Identifier)
 				}
 
-				checkCmd(t, ops[1:], &src, [][]expectMount{{RootMount}, {RootMount}})
+				checkCmd(t, ops[1:], &src, [][]expectMount{{rootMount}, {rootMount}})
 			})
 
 			t.Run("subpath with include-exclude", func(t *testing.T) {
@@ -289,7 +291,7 @@ func TestSourceDockerImage(t *testing.T) {
 
 				// When a subpath is used, we expect a mount to be applied.
 				// There should be 2 mounts, one for the rootfs and one for our subdir
-				checkCmd(t, ops[:len(ops)-1], &src, [][]expectMount{{RootMount, {dest: "subdir"}}, {RootMount, {dest: "subdir"}}})
+				checkCmd(t, ops[:len(ops)-1], &src, [][]expectMount{{rootMount, {dest: "subdir"}}, {rootMount, {dest: "subdir"}}})
 
 				// last op is (should be) the include/exclude filter and not a cmd
 				// When include/exclude are used, we are expecting a copy operation to be last.
@@ -354,12 +356,12 @@ func TestSourceDockerImage(t *testing.T) {
 				}
 
 				cmd := childOps[0]
-				checkCmd(t, []*pb.Op{cmd}, &imageMount.Spec, [][]expectMount{NoMountCheck, NoMountCheck})
+				checkCmd(t, []*pb.Op{cmd}, &imageMount.Spec, [][]expectMount{noMountCheck, noMountCheck})
 
 				nextCmd1 := getChildren(cmd, ops, dMap)
 				nextCmd2 := getChildren(nextCmd1[0], ops, dMap)
 
-				checkCmd(t, []*pb.Op{nextCmd1[0], nextCmd2[0]}, &src, [][]expectMount{{{dest: "/dst", selector: ""}}, NoMountCheck})
+				checkCmd(t, []*pb.Op{nextCmd1[0], nextCmd2[0]}, &src, [][]expectMount{{{dest: "/dst", selector: ""}}, noMountCheck})
 			})
 		})
 	})
@@ -455,7 +457,7 @@ RUN echo hello
 		},
 	}
 
-	checkCmd(t, ops[1:], &Source{DockerImage: &srcDI}, [][]expectMount{NoMountCheck, NoMountCheck})
+	checkCmd(t, ops[1:], &Source{DockerImage: &srcDI}, [][]expectMount{noMountCheck, noMountCheck})
 
 	t.Run("with filters", func(t *testing.T) {
 		t.Run("subdir", func(t *testing.T) {
@@ -464,7 +466,8 @@ RUN echo hello
 
 			// for build soruce, we expect to have a copy operation as the last op
 			ops := getSourceOp(ctx, t, src)
-			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{RootMount}, {RootMount, expectMount{dest: "subdir"}}})
+
+			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{rootMount}, {rootMount, expectMount{dest: "subdir"}}})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 		})
 
@@ -475,7 +478,7 @@ RUN echo hello
 
 			// for build soruce, we expect to have a copy operation as the last op
 			ops := getSourceOp(ctx, t, src)
-			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{NoMountCheck, NoMountCheck})
+			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{noMountCheck, noMountCheck})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 		})
 
@@ -487,7 +490,7 @@ RUN echo hello
 
 			// for build source, we expect to have a copy operation as the last op
 			ops := getSourceOp(ctx, t, src)
-			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{RootMount}, {RootMount, expectMount{dest: "subdir"}}})
+			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{rootMount}, {rootMount, expectMount{dest: "subdir"}}})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 		})
 	})
@@ -812,7 +815,7 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 		return &st, nil
 	}
 
-	st, err := Source2LLBGetter(nil, src, "test", sOpt)
+	st, err := src.AsState("test", sOpt)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ func HandleSources(ctx context.Context, gwc client.Client, spec *dalec.Spec) (cl
 
 	sources := make([]llb.State, 0, len(spec.Sources))
 	for name, src := range spec.Sources {
-		st, err := dalec.Source2LLBGetter(spec, src, name, sOpt)
+		st, err := src.AsState(name, sOpt)
 		if err != nil {
 			return nil, nil, err
 		}
