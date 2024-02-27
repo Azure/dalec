@@ -87,10 +87,12 @@ func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, clie
 		return nil, fmt.Errorf("error unmarshalling image config: %w", err)
 	}
 
-	if err := dalec.MergeImageConfig(&img, mergeSpecImage(spec, targetKey)); err != nil {
+	cfg := img.Config
+	if err := dalec.MergeImageConfig(&cfg, mergeSpecImage(spec, targetKey)); err != nil {
 		return nil, err
 	}
 
+	img.Config = cfg
 	return &img, nil
 }
 
