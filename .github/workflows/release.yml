@@ -14,19 +14,31 @@ permissions:
   packages: write
 
 jobs:
-  trimTagRef:
+  tagList:
     runs-on: ubuntu-latest
     outputs:
-      TRIMMED_REF_NAME: ${{ steps.trim.outputs.TRIMMED_REF_NAME }}
+      tags: ${{ steps.tags.outputs.OUTPUT_TAGS }}
     steps:
-      - name: Trim tag ref
-        id: trim
-        run: echo "TRIMMED_REF_NAME=${REF_NAME#v}" >> "$GITHUB_OUTPUT" && cat "$GITHUB_OUTPUT"
+      - name: Get image tag list
+        id: tags
+        run: |
+          set -eux -o pipefail
+
+          # Remove leading "v" from tag name
+          TRIMMED_REF_NAME="${REF_NAME#v}"
+
+          # Creates a comma separated list of tags
+          # - latest
+          # - <major>.<minor>
+          # - <major>.<minor>.<patch>
+          OUTPUT_TAGS="latest,${TRIMMED_REF_NAME%.*},${TRIMMED_REF_NAME}"
+          
+          echo "OUTPUT_TAGS=${OUTPUT_TAGS}" >> "$GITHUB_OUTPUT" && cat "$GITHUB_OUTPUT"
         env:
           REF_NAME: ${{ github.ref_name }}
-
+        shell: bash
   build:
-    needs: trimTagRef
+    needs: tagList
     uses: ./.github/workflows/frontend-image.yml
     with:
-      tag: ${{needs.trimTagRef.outputs.TRIMMED_REF_NAME}}
+      tag: ${{needs.tagList.outputs.tags}}
