@@ -10,12 +10,10 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/google/shlex"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -89,7 +87,7 @@ func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, clie
 		return nil, fmt.Errorf("error unmarshalling image config: %w", err)
 	}
 
-	if err := copyImageConfig(&img, mergeSpecImage(spec, targetKey)); err != nil {
+	if err := dalec.MergeImageConfig(&img, mergeSpecImage(spec, targetKey)); err != nil {
 		return nil, err
 	}
 
@@ -268,54 +266,4 @@ type runOptionFunc func(*llb.ExecInfo)
 
 func (f runOptionFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
-}
-
-func copyImageConfig(dst *image.Image, src *dalec.ImageConfig) error {
-	if src == nil {
-		return nil
-	}
-
-	if src.Entrypoint != "" {
-		split, err := shlex.Split(src.Entrypoint)
-		if err != nil {
-			return errors.Wrap(err, "error splitting entrypoint into args")
-		}
-		dst.Config.Entrypoint = split
-		// Reset cmd as this may be totally invalid now
-		// This is the same behavior as the Dockerfile frontend
-		dst.Config.Cmd = nil
-	}
-	if src.Cmd != "" {
-		split, err := shlex.Split(src.Cmd)
-		if err != nil {
-			return errors.Wrap(err, "error splitting cmd into args")
-		}
-		dst.Config.Cmd = split
-	}
-
-	if len(src.Env) > 0 {
-		// Env is append only
-		// If the env var already exists, replace it
-		envIdx := make(map[string]int)
-		for i, env := range dst.Config.Env {
-			envIdx[env] = i
-		}
-
-		for _, env := range src.Env {
-			if idx, ok := envIdx[env]; ok {
-				dst.Config.Env[idx] = env
-			} else {
-				dst.Config.Env = append(dst.Config.Env, env)
-			}
-		}
-	}
-
-	if src.WorkingDir != "" {
-		dst.Config.WorkingDir = src.WorkingDir
-	}
-	if src.StopSignal != "" {
-		dst.Config.StopSignal = src.StopSignal
-	}
-
-	return nil
 }
