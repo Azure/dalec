@@ -41,10 +41,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - run: |
-          export FRONTEND_REF="$(tr '[:upper:]' '[:lower:]' <<<"${FRONTEND_REF}")"
+          set -eux -o pipefail
+
+          FRONTEND_REPO="$(tr '[:upper:]' '[:lower:]' <<<"${FRONTEND_REPO}")"
           docker buildx create --use
+          
+          set_tags=""
+          IFS=, read -ra SPLIT_TAGS <<<"${FRONTEND_TAGS}"
+          
+          for tag in "${SPLIT_TAGS[@]}"; do
+              set_tags+=" --set frontend.tags=${FRONTEND_REPO}:${tag}"
+          done
+          
           docker buildx bake --push \
-            --set frontend.platform=linux/amd64,linux/arm64 \
-            frontend
+              frontend \
+                  --set frontend.platform=linux/amd64,linux/arm64 \
+                  ${set_tags}
         env:
-          FRONTEND_REF: ghcr.io/${{ github.repository }}/frontend:${{ inputs.tag }}
+          FRONTEND_REPO: ghcr.io/${{ github.repository }}/frontend
+          FRONTEND_TAGS: ${{ inputs.tag }}
