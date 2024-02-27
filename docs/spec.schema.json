@@ -342,6 +342,10 @@
 				"post": {
 					"$ref": "#/$defs/PostInstall",
 					"description": "Post is the post install configuration for the image.\nThis allows making additional modifications to the container rootfs after the package(s) are installed.\n\nUse this to perform actions that would otherwise require additional tooling inside the container that is not relavent to\nthe resulting container and makes a post-install script as part of the package unnecessary."
+				},
+				"user": {
+					"type": "string",
+					"description": "User is the that the image should run as."
 				}
 			},
 			"additionalProperties": false,

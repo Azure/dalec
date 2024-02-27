@@ -56,5 +56,9 @@ func MergeImageConfig(dst *image.Image, src *ImageConfig) error {
 		dst.Config.StopSignal = src.StopSignal
 	}
 
+	if src.User != "" {
+		dst.Config.User = src.User
+	}
+
 	return nil
 }
