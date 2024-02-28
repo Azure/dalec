@@ -27,8 +27,8 @@ const (
 func getDockerfile(ctx context.Context, client gwclient.Client, build *dalec.SourceBuild, defPb *pb.Definition) ([]byte, error) {
 	dockerfilePath := dockerui.DefaultDockerfileName
 
-	if build.DockerFile != "" {
-		dockerfilePath = build.DockerFile
+	if build.DockerfilePath != "" {
+		dockerfilePath = build.DockerfilePath
 	}
 
 	// First we need to read the dockerfile to determine what frontend to forward to

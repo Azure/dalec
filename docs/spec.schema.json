@@ -478,9 +478,9 @@
 					"$ref": "#/$defs/Source",
 					"description": "A source specification to use as the context for the Dockerfile build"
 				},
-				"dockerfile": {
+				"dockerfile_path": {
 					"type": "string",
-					"description": "DockerFile is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context."
+					"description": "DockerfilePath is the path to the build file in the build context\nIf not set the default is assumed by buildkit to be `Dockerfile` at the root of the context."
 				},
 				"target": {
 					"type": "string",
@@ -496,7 +496,7 @@
 			},
 			"additionalProperties": false,
 			"type": "object",
-			"description": "SourceBuild is used to generate source from a DockerFile build, either inline or from a local file."
+			"description": "SourceBuild is used to generate source from a DockerFile build."
 		},
 		"SourceContext": {
 			"properties": {

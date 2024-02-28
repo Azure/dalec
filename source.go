@@ -62,7 +62,7 @@ func getSource(src Source, name string, sOpt SourceOpts, opts ...llb.Constraints
 	case src.DockerImage != nil:
 		st, err = src.DockerImage.AsState(name, src.Path, sOpt, opts...)
 	case src.Build != nil:
-		st, err = src.Build.AsState(name, &src, sOpt, opts...)
+		st, err = src.Build.AsState(name, sOpt, opts...)
 	case src.Inline != nil:
 		st, err = src.Inline.AsState(name)
 	default:
@@ -332,8 +332,8 @@ func (s Source) Doc(name string) (io.Reader, error) {
 		}
 
 		p := "Dockerfile"
-		if s.Build.DockerFile != "" {
-			p = s.Build.DockerFile
+		if s.Build.DockerfilePath != "" {
+			p = s.Build.DockerfilePath
 		}
 		fmt.Fprintln(b, "	Dockerfile path in context:", p)
 	case s.HTTP != nil:
