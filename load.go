@@ -1,7 +1,6 @@
 package dalec
 
 import (
-	"encoding/json"
 	goerrors "errors"
 	"fmt"
 	"os"
@@ -12,7 +11,6 @@ import (
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/pkg/errors"
-	"golang.org/x/exp/slices"
 )
 
 func knownArg(key string) bool {
@@ -323,57 +321,6 @@ func LoadProject(dt []byte) (*Project, error) {
 
 	if err := yaml.UnmarshalWithOptions(dt, &project, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
-	}
-
-	// Because the Spec is `yaml:",inline", it will never be nil, so we need to
-	// check if it was provided some other way.`
-	var empty *bool
-	isEmpty := func(s *Spec) bool {
-		if empty != nil {
-			return *empty
-		}
-
-		if s == nil {
-			return true
-		}
-
-		// Specs cannot be directly compared because they contain slices and maps
-		var e Spec
-		j, _ := json.Marshal(&e)
-		k, _ := json.Marshal(s)
-		b := slices.Compare(j, k) == 0
-		empty = &b
-		return b
-	}
-
-	if isEmpty(project.Spec) && len(project.Specs) == 0 {
-		return nil, fmt.Errorf("no specs provided")
-	}
-
-	if !isEmpty(project.Spec) && len(project.Specs) != 0 {
-		return nil, fmt.Errorf("format of project must be either a single spec or a list of specs nested under the `specs` key")
-	}
-
-	validateAndFillDefaults := func(s *Spec) error {
-		if err := s.Validate(); err != nil {
-			return err
-		}
-
-		s.FillDefaults()
-		return nil
-	}
-
-	switch {
-	case !isEmpty(project.Spec):
-		if err := validateAndFillDefaults(project.Spec); err != nil {
-			return nil, fmt.Errorf("error loading project: %w", err)
-		}
-	case len(project.Specs) != 0:
-		for i := range project.Specs {
-			if err := validateAndFillDefaults(&project.Specs[i]); err != nil {
-				return nil, fmt.Errorf("error loading project spec with name %q: %w", project.Specs[i].Name, err)
-			}
-		}
 	}
 
 	return &project, nil

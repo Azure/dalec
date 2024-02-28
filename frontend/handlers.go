@@ -128,8 +128,9 @@ func SetDefault(group, name string) {
 	registeredHandlers.defaultHandler = t
 }
 
-func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient.Client) error {
+func registerSpecHandlers(ctx context.Context, project *projectWrapper, client gwclient.Client) error {
 	var def *pb.Definition
+	spec := project.GetSpec()
 	marshlSpec := func() (*pb.Definition, error) {
 		if def != nil {
 			return def, nil
@@ -161,9 +162,10 @@ func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient
 	}
 
 	register := func(group string) error {
-		spec := spec
+		project := project
+		
 		grp, _, _ := strings.Cut(group, "/")
-		t, ok := spec.Targets[grp]
+		t, ok := project.Targets[grp]
 		if !ok {
 			bklog.G(ctx).WithField("group", group).Debug("No target found in forwarded build")
 			return nil
