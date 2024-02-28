@@ -89,8 +89,8 @@ func TestSourceBuild(t *testing.T) {
 				"test": {
 					Path: "/hello",
 					Build: &dalec.SourceBuild{
-						DockerFile: p,
-						Source:     f(),
+						DockerfilePath: p,
+						Source:         f(),
 					},
 				},
 			},

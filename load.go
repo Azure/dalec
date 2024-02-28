@@ -83,11 +83,11 @@ func (s *Source) substituteBuildArgs(args map[string]string) error {
 			return err
 		}
 
-		updated, err := lex.ProcessWordWithMap(s.Build.DockerFile, args)
+		updated, err := lex.ProcessWordWithMap(s.Build.DockerfilePath, args)
 		if err != nil {
 			return err
 		}
-		s.Build.DockerFile = updated
+		s.Build.DockerfilePath = updated
 
 		updated, err = lex.ProcessWordWithMap(s.Build.Target, args)
 		if err != nil {
@@ -154,7 +154,7 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 		count++
 	}
 	if s.Build != nil {
-		c := s.Build.DockerFile
+		c := s.Build.DockerfilePath
 		if err := s.Build.validate("build source with dockerfile", "`"+c+"`"); err != nil {
 			retErr = goerrors.Join(retErr, err)
 		}

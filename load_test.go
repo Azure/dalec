@@ -85,13 +85,13 @@ func TestSourceValidation(t *testing.T) {
 				Build: &SourceBuild{
 					Source: Source{
 						Build: &SourceBuild{
-							DockerFile: "/other/nonempty/Dockerfile/path",
+							DockerfilePath: "/other/nonempty/Dockerfile/path",
 							Source: Source{
 								Git: &SourceGit{},
 							},
 						},
 					},
-					DockerFile: "/nonempty/Dockerfile/path",
+					DockerfilePath: "/nonempty/Dockerfile/path",
 				},
 			},
 		},
@@ -105,7 +105,7 @@ func TestSourceValidation(t *testing.T) {
 							Ref: "",
 						},
 					},
-					DockerFile: "/nonempty/Dockerfile/path",
+					DockerfilePath: "/nonempty/Dockerfile/path",
 				},
 			},
 		},
@@ -131,7 +131,7 @@ func TestSourceValidation(t *testing.T) {
 							},
 						},
 					},
-					DockerFile: "/nonempty/Dockerfile/path",
+					DockerfilePath: "/nonempty/Dockerfile/path",
 				},
 			},
 		},

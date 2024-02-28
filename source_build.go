@@ -10,15 +10,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SourceBuild is used to generate source from a DockerFile build, either
-// inline or from a local file.
+// SourceBuild is used to generate source from a DockerFile build.
 type SourceBuild struct {
 	// A source specification to use as the context for the Dockerfile build
 	Source Source `yaml:"source,omitempty" json:"source,omitempty"`
 
-	// DockerFile is the path to the build file in the build context
+	// DockerfilePath is the path to the build file in the build context
 	// If not set the default is assumed by buildkit to be `Dockerfile` at the root of the context.
-	DockerFile string `yaml:"dockerfile,omitempty" json:"dockerfile,omitempty"`
+	DockerfilePath string `yaml:"dockerfile_path,omitempty" json:"dockerfile_path,omitempty"`
 
 	// Target specifies the build target to use.
 	// If unset, the default target is determined by the frontend implementation
@@ -46,9 +45,9 @@ func (s *SourceBuild) validate(failContext ...string) (retErr error) {
 	return
 }
 
-func (src *SourceBuild) AsState(name string, _ *Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func (src *SourceBuild) AsState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if src.Source.Inline != nil && src.Source.Inline.File != nil {
-		name = src.DockerFile
+		name = src.DockerfilePath
 		if name == "" {
 			name = dockerui.DefaultDockerfileName
 		}
