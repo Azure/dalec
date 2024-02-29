@@ -228,7 +228,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	dalecTarget := bc.Target
 	specTarget := ""
 
-	f, err := lookupHandler(bc.Target)
+	handlerFunc, err := lookupHandler(bc.Target)
 	if errors.Is(err, HandlerNotFound) {
 		tgt, rest, ok := strings.Cut(bc.Target, "/")
 		if !ok {
@@ -238,7 +238,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		specTarget = tgt
 		dalecTarget = rest
 
-		f, err = lookupHandler(dalecTarget)
+		handlerFunc, err = lookupHandler(dalecTarget)
 		if err != nil {
 			return nil, fmt.Errorf("can't route target %q: %w", bc.Target, err)
 		}
@@ -287,11 +287,13 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		args := dalec.DuplicateMap(bc.BuildArgs)
 		fillPlatformArgs("TARGET", args, targetPlatform)
 		fillPlatformArgs("BUILD", args, buildPlatform)
+
+		spec := project.GetSpec()
 		if err := spec.SubstituteArgs(args); err != nil {
 			return nil, nil, err
 		}
 
-		return f(ctx, client, spec)
+		return handlerFunc(ctx, client, spec)
 	})
 	if err != nil {
 		return nil, err
