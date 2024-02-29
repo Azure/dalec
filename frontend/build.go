@@ -3,10 +3,8 @@ package frontend
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/Azure/dalec"
@@ -86,13 +84,8 @@ func newProjectWrapper(p *dalec.Project, opts ...projectOpt) (*projectWrapper, e
 		isSingleSpec: false,
 	}
 
-	// Specs cannot be directly compared because they contain
-	// slices and maps.
-	if pw.Spec != nil {
-		var e dalec.Spec
-		j, _ := json.Marshal(&e)
-		k, _ := json.Marshal(pw.Spec)
-		pw.isSingleSpec = slices.Compare(j, k) != 0
+	if pw.Project.Spec != nil {
+		pw.isSingleSpec = true
 	}
 
 	if pw.isSingleSpec && pw.target != "" {
@@ -127,29 +120,35 @@ func loadProject(ctx context.Context, client *dockerui.Client, target string) (*
 		return nil, fmt.Errorf("format of project must be either a single spec or a list of specs nested under the `specs` key")
 	}
 
-	validateAndFillDefaults := func(s *dalec.Spec) error {
-		if err := s.Validate(); err != nil {
-			return err
-		}
-
-		s.FillDefaults()
-		return nil
-	}
-
-	switch {
-	case pw.isSingleSpec:
-		if err := validateAndFillDefaults(project.Spec); err != nil {
-			return nil, fmt.Errorf("error loading project: %w", err)
-		}
-	case len(project.Specs) != 0:
-		for i := range project.Specs {
-			if err := validateAndFillDefaults(&project.Specs[i]); err != nil {
-				return nil, fmt.Errorf("error validating project spec with name %q: %w", project.Specs[i].Name, err)
-			}
-		}
+	if err := pw.validateAndFillDefaults(); err != nil {
+		return nil, fmt.Errorf("error validating project: %w", err)
 	}
 
 	return pw, nil
+}
+
+func validateAndFillDefaults(s *dalec.Spec) error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+
+	s.FillDefaults()
+	return nil
+}
+
+func (pw *projectWrapper) validateAndFillDefaults() error {
+	if pw.isSingleSpec {
+		return validateAndFillDefaults(pw.Project.Spec)
+	}
+
+	for i := range pw.Project.Specs {
+		if err := validateAndFillDefaults(&pw.Project.Specs[i]); err != nil {
+			return fmt.Errorf("error validating project spec with name %q: %w", pw.Project.Specs[i].Name, err)
+
+		}
+	}
+	
+	return nil
 }
 
 func listBuildTargets(group string) []*targetWrapper {
