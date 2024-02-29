@@ -58,12 +58,6 @@ type Spec struct {
 	// Build is the configuration for building the artifacts in the package.
 	Build ArtifactBuild `yaml:"build,omitempty" json:"build,omitempty"`
 
-	// Args is the list of arguments that can be used for shell-style expansion in (certain fields of) the spec.
-	// Any arg supplied in the build request which does not appear in this list will cause an error.
-	// Attempts to use an arg in the spec which is not specified here will assume to be a literal string.
-	// The map value is the default value to use if the arg is not supplied in the build request.
-	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
-
 	// License is the license of the package.
 	License string `yaml:"license" json:"license"`
 	// Vendor is the vendor of the package.

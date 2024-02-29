@@ -284,15 +284,22 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 		buildPlatform = bc.BuildPlatforms[0]
 
-		args := dalec.DuplicateMap(bc.BuildArgs)
-		fillPlatformArgs("TARGET", args, targetPlatform)
-		fillPlatformArgs("BUILD", args, buildPlatform)
+		for _, spec := range project.GetSpecs() {
+			env := dalec.DuplicateMap(bc.BuildArgs)
+			fillPlatformArgs("TARGET", env, targetPlatform)
+			fillPlatformArgs("BUILD", env, buildPlatform)
 
-		spec := project.GetSpec()
-		if err := spec.SubstituteArgs(args); err != nil {
-			return nil, nil, err
+			args := make(map[string]string)
+			for k, v := range project.Args {
+				args[k] = v
+			}
+
+			if err := spec.SubstituteArgs(env, args); err != nil {
+				return nil, nil, err
+			}
 		}
 
+		spec := project.GetSpec()
 		return handlerFunc(ctx, client, spec)
 	})
 	if err != nil {
@@ -300,4 +307,16 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	}
 
 	return rb.Finalize()
+}
+
+func (p *projectWrapper) GetSpecs() []*dalec.Spec {
+	if p.isSingleSpec {
+		return []*dalec.Spec{p.Spec}
+	}
+
+	specs := make([]*dalec.Spec, len(p.Specs))
+	for i := range p.Specs {
+		specs[i] = &p.Specs[i]
+	}
+	return specs
 }

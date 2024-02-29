@@ -211,13 +211,9 @@ func (s *SourceBuild) validate(failContext ...string) (retErr error) {
 	return
 }
 
-func (s *Spec) SubstituteArgs(env map[string]string) error {
+func (s *Spec) SubstituteArgs(env, args map[string]string) error {
 	lex := shell.NewLex('\\')
 
-	args := make(map[string]string)
-	for k, v := range s.Args {
-		args[k] = v
-	}
 	for k, v := range env {
 		if _, ok := args[k]; !ok {
 			if !knownArg(k) {
