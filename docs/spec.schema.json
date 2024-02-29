@@ -724,13 +724,6 @@
 					"$ref": "#/$defs/ArtifactBuild",
 					"description": "Build is the configuration for building the artifacts in the package."
 				},
-				"args": {
-					"additionalProperties": {
-						"type": "string"
-					},
-					"type": "object",
-					"description": "Args is the list of arguments that can be used for shell-style expansion in (certain fields of) the spec.\nAny arg supplied in the build request which does not appear in this list will cause an error.\nAttempts to use an arg in the spec which is not specified here will assume to be a literal string.\nThe map value is the default value to use if the arg is not supplied in the build request."
-				},
 				"license": {
 					"type": "string",
 					"description": "License is the license of the package."
