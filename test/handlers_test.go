@@ -76,14 +76,17 @@ func TestHandlerTargetForwarding(t *testing.T) {
 						Image: phonyRef,
 					},
 				},
-				Spec: &dalec.Spec{
-					Targets: map[string]dalec.Target{
-						"phony": {},
+				Specs: []dalec.Spec{
+					{
+						Name: "baloney",
+						Targets: map[string]dalec.Target{
+							"phony": {},
+						},
 					},
 				},
 			}
 
-			sr := newSolveRequest(withProject(ctx, t, project), withBuildTarget("phony/check"))
+			sr := newSolveRequest(withProject(ctx, t, project), withBuildTarget("baloney/phony/check"))
 			res, err := gwc.Solve(ctx, sr)
 			if err != nil {
 				t.Fatal(err)

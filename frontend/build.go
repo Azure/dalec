@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/containerd/containerd/platforms"
@@ -96,7 +95,7 @@ func newProjectWrapper(p *dalec.Project, opts ...projectOpt) (*projectWrapper, e
 
 }
 
-func loadProject(ctx context.Context, client *dockerui.Client, target string) (*projectWrapper, error) {
+func loadProject(ctx context.Context, client *dockerui.Client) (*projectWrapper, error) {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
 		return nil, fmt.Errorf("could not read spec file: %w", err)
@@ -107,7 +106,7 @@ func loadProject(ctx context.Context, client *dockerui.Client, target string) (*
 		return nil, err
 	}
 
-	pw, err := newProjectWrapper(project, withTarget(target))
+	pw, err := newProjectWrapper(project)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing project: %w", err)
 	}
@@ -144,10 +143,9 @@ func (pw *projectWrapper) validateAndFillDefaults() error {
 	for i := range pw.Project.Specs {
 		if err := validateAndFillDefaults(&pw.Project.Specs[i]); err != nil {
 			return fmt.Errorf("error validating project spec with name %q: %w", pw.Project.Specs[i].Name, err)
-
 		}
 	}
-	
+
 	return nil
 }
 
@@ -224,36 +222,34 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	dalecTarget := bc.Target
-	specTarget := ""
-
-	handlerFunc, err := lookupHandler(bc.Target)
-	if errors.Is(err, UnknownTarget) {
-		tgt, rest, ok := strings.Cut(bc.Target, "/")
-		if !ok {
-			return nil, fmt.Errorf("unable to parse target %q", bc.Target)
-		}
-
-		specTarget = tgt
-		dalecTarget = rest
-
-		handlerFunc, err = lookupHandler(dalecTarget)
-		if err != nil {
-			return nil, fmt.Errorf("can't route target %q: %w", bc.Target, err)
-		}
-	}
-
-	project, err := loadProject(ctx, bc, specTarget)
+	project, err := loadProject(ctx, bc)
 	if err != nil {
 		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
 
+	
 	if err := registerProjectHandlers(ctx, project, client); err != nil {
 		return nil, err
 	}
 
-	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(dalecTarget))
+	s := ""
+	for _, t := range listBuildTargets("") {
+		s += t.Name + "\n"
+	}	
+	
+	handlerFunc, err := lookupHandler(bc.Target)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s\n%s", err, bc.Target, s)
+	}
+
+
+	// return nil, fmt.Errorf("ERROR:\n%s", s)
+	
+	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(bc.Target))
 	if err != nil || handled {
+		if err != nil {
+			return nil, fmt.Errorf("here: %s", bc.Target)
+		}
 		return res, err
 	}
 

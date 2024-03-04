@@ -159,7 +159,7 @@ func checkTargetExists(t *testing.T, ls targets.List, name string) {
 	t.Helper()
 
 	if !containsTarget(ls, name) {
-		t.Fatalf("did not find target %q", name)
+		t.Fatalf("did not find target %q. %#v", name, ls)
 	}
 }
 
