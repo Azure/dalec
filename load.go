@@ -314,38 +314,41 @@ func LoadProject(dt []byte) (*Project, error) {
 	}
 
 	var (
-		spec    Spec
 		project Project
+		canary  struct {
+			Specs *interface{} `yaml:"specs,omitempty" json:"specs,omitempty"` 
+		}
 	)
 
-	singleSpecErr := yaml.Unmarshal(dt, &spec)
-	if singleSpecErr == nil {
-		// This means we have a single spec, but there may be
-		// relevant information in adjacent fields, so it must
-		// be unmarshaled as a project.
+	multiSpecErr := yaml.Unmarshal(dt, &canary)
+	if multiSpecErr == nil || canary.Specs != nil {
+		// At this point, we have either a malformed project
+		// or a vailid multi-spec project.
 		if err := yaml.UnmarshalWithOptions(dt, &project, yaml.Strict()); err != nil {
-			return nil, fmt.Errorf("error unmarshaling project: %w", err)
+			return nil, fmt.Errorf("error unmarshalling spec/project: %w", err)
 		}
 
+		// Explicitly set this to nil, since unmarshaling to a
+		// project struct will not do so. This allows us to
+		// distinguish between the two later.
+		project.Spec = nil
 		return &project, nil
+
+	}
+
+	// This means we have a single spec, but there may be relevant
+	// information in adjacent fields, so it must be unmarshaled
+	// as a project.
+	if err := yaml.UnmarshalWithOptions(dt, &project, yaml.Strict()); err != nil {
+		// There are now two errors, so join them
+		return nil, fmt.Errorf("error unmarshaling project: %w", goerrors.Join(multiSpecErr, err))
 	}
 
 	if project.Spec == nil {
 		return nil, fmt.Errorf("error unmarshaling spec as project: spec was nil")
 	}
 
-	// At this point, we have either a malformed project or a
-	// vailid multi-spec project.
-	if err := yaml.UnmarshalWithOptions(dt, &project, yaml.Strict()); err != nil {
-		// There are now two errors, so join them
-		err := goerrors.Join(singleSpecErr, err)
-		return nil, fmt.Errorf("error unmarshalling spec/project: %w", err)
-	}
-
-	// Explicitly set this to nil, since unmarshaling to a project
-	// struct will not do so. This allows us to distinguish
-	// between the two later.
-	project.Spec = nil
+	project.Specs = nil
 	return &project, nil
 }
 
