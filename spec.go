@@ -416,11 +416,6 @@ type Target struct {
 	// Image is the image configuration when the target output is a container image.
 	Image *ImageConfig `yaml:"image,omitempty" json:"image,omitempty"`
 
-	// Frontend is the frontend configuration to use for the target.
-	// This is used to forward the build to a different, dalec-compatabile frontend.
-	// This can be useful when testing out new distros or using a different version of the frontend for a given distro.
-	Frontend *Frontend `yaml:"frontend,omitempty" json:"frontend,omitempty"`
-
 	// Tests are the list of tests to run which are specific to the target.
 	// Tests are appended to the list of tests in the main [Spec]
 	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`

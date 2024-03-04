@@ -30,6 +30,11 @@ func TestHandlerTargetForwarding(t *testing.T) {
 					// Note: This is not setting the frontend image, so it should use the default frontend.
 					"phony": {},
 				},
+				Spec: &dalec.Spec{
+					Targets: map[string]dalec.Target{
+						"phony": {},
+					},
+				},
 			})
 
 			checkTargetExists(t, ls, "debug/resolve")
@@ -45,7 +50,13 @@ func TestHandlerTargetForwarding(t *testing.T) {
 					"phony": {
 						Image: phonyRef,
 					},
-				}}
+				},
+				Spec: &dalec.Spec{
+					Targets: map[string]dalec.Target{
+						"phony": {},
+					},
+				},
+			}
 
 			// Make sure phony is in the list of targets since it should be registered in the forwarded frontend.
 			ls = listTargets(ctx, t, gwc, project)
@@ -64,7 +75,13 @@ func TestHandlerTargetForwarding(t *testing.T) {
 					"phony": {
 						Image: phonyRef,
 					},
-				}}
+				},
+				Spec: &dalec.Spec{
+					Targets: map[string]dalec.Target{
+						"phony": {},
+					},
+				},
+			}
 
 			sr := newSolveRequest(withProject(ctx, t, project), withBuildTarget("phony/check"))
 			res, err := gwc.Solve(ctx, sr)
@@ -107,16 +124,19 @@ func TestHandlerTargetForwarding(t *testing.T) {
 	t.Run("target not found", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			spec := &dalec.Spec{
-				Targets: map[string]dalec.Target{
+			spec := &dalec.Project{
+				Frontends: map[string]dalec.Frontend{
 					"phony": {
-						Frontend: &dalec.Frontend{
-							Image: phonyRef,
-						},
+						Image: phonyRef,
+					},
+				},
+				Spec: &dalec.Spec{
+					Targets: map[string]dalec.Target{
+						"phony": {},
 					},
 				},
 			}
-			sr := newSolveRequest(withBuildTarget("phony/does-not-exist"), withSpec(ctx, t, spec))
+			sr := newSolveRequest(withBuildTarget("phony/does-not-exist"), withProject(ctx, t, spec))
 
 			_, err := gwc.Solve(ctx, sr)
 			expect := "unknown target"

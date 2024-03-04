@@ -128,7 +128,7 @@ func SetDefault(group, name string) {
 	registeredHandlers.defaultHandler = t
 }
 
-func registerSpecHandlers(ctx context.Context, wrapper *projectWrapper, client gwclient.Client) error {
+func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, client gwclient.Client) error {
 	var def *pb.Definition
 	project := wrapper.Project
 	marshlProj := func() (*pb.Definition, error) {
@@ -163,7 +163,7 @@ func registerSpecHandlers(ctx context.Context, wrapper *projectWrapper, client g
 
 	register := func(group string) error {
 		project := wrapper
-		
+
 		grp, _, _ := strings.Cut(group, "/")
 		t, ok := project.Frontends[grp]
 		if !ok {
@@ -234,10 +234,13 @@ func registerSpecHandlers(ctx context.Context, wrapper *projectWrapper, client g
 		}
 	}
 
-	for group := range project.Targets {
-		if err := register(group); err != nil {
-			return err
+	for _, spec := range wrapper.GetSpecs() {
+		for group := range spec.Targets {
+			if err := register(group); err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }

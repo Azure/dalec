@@ -248,7 +248,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
 
-	if err := registerSpecHandlers(ctx, project, client); err != nil {
+	if err := registerProjectHandlers(ctx, project, client); err != nil {
 		return nil, err
 	}
 
