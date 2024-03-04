@@ -316,12 +316,12 @@ func LoadProject(dt []byte) (*Project, error) {
 	var (
 		project Project
 		canary  struct {
-			Specs *interface{} `yaml:"specs,omitempty" json:"specs,omitempty"` 
+			Specs interface{} `yaml:"specs,omitempty" json:"specs,omitempty"` 
 		}
 	)
 
 	multiSpecErr := yaml.Unmarshal(dt, &canary)
-	if multiSpecErr == nil || canary.Specs != nil {
+	if multiSpecErr == nil && canary.Specs != nil {
 		// At this point, we have either a malformed project
 		// or a vailid multi-spec project.
 		if err := yaml.UnmarshalWithOptions(dt, &project, yaml.Strict()); err != nil {

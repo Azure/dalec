@@ -113,7 +113,7 @@ func loadProject(ctx context.Context, client *dockerui.Client, target string) (*
 	}
 
 	if !pw.isSingleSpec && len(project.Specs) == 0 {
-		return nil, fmt.Errorf("no specs provided")
+		return nil, fmt.Errorf("no specs provided: %#v", project)
 	}
 
 	if pw.isSingleSpec && len(project.Specs) != 0 {
