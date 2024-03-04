@@ -25,8 +25,8 @@ func TestHandlerTargetForwarding(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 			// Make sure phony is not in the list of targets since it shouldn't be registered in the base frontend.
-			ls := listTargets(ctx, t, gwc, &dalec.Spec{
-				Targets: map[string]dalec.Target{
+			ls := listTargets(ctx, t, gwc, &dalec.Project{
+				Frontends: map[string]dalec.Frontend{
 					// Note: This is not setting the frontend image, so it should use the default frontend.
 					"phony": {},
 				},
@@ -40,17 +40,15 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			}
 
 			// Now make sure the forwarded target works.
-			spec := &dalec.Spec{
-				Targets: map[string]dalec.Target{
+			project := &dalec.Project{
+				Frontends: map[string]dalec.Frontend{
 					"phony": {
-						Frontend: &dalec.Frontend{
-							Image: phonyRef,
-						},
+						Image: phonyRef,
 					},
 				}}
 
 			// Make sure phony is in the list of targets since it should be registered in the forwarded frontend.
-			ls = listTargets(ctx, t, gwc, spec)
+			ls = listTargets(ctx, t, gwc, project)
 			checkTargetExists(t, ls, "debug/resolve")
 			checkTargetExists(t, ls, "phony/check")
 			checkTargetExists(t, ls, "phony/debug/resolve")
@@ -61,16 +59,14 @@ func TestHandlerTargetForwarding(t *testing.T) {
 	t.Run("execute target", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			spec := &dalec.Spec{
-				Targets: map[string]dalec.Target{
+			project := &dalec.Project{
+				Frontends: map[string]dalec.Frontend{
 					"phony": {
-						Frontend: &dalec.Frontend{
-							Image: phonyRef,
-						},
+						Image: phonyRef,
 					},
 				}}
 
-			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("phony/check"))
+			sr := newSolveRequest(withProject(ctx, t, project), withBuildTarget("phony/check"))
 			res, err := gwc.Solve(ctx, sr)
 			if err != nil {
 				t.Fatal(err)
@@ -86,7 +82,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			// Technically I suppose the target in the user-supplied spec could technically interfere with the base frontend, but that's not really a concern.
 			// e.g. if a user-supplied target was called "debug" it could overwrite the "debug/resolve" target in the base frontend.
 
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("debug/resolve"))
+			sr = newSolveRequest(withProject(ctx, t, project), withBuildTarget("debug/resolve"))
 			res, err = gwc.Solve(ctx, sr)
 			if err != nil {
 				return nil, err
@@ -95,7 +91,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			// The builtin debug/resolve target adds the resolved spec to /spec.yml, so check that its there.
 			statFile(ctx, t, "spec.yml", res)
 
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("phony/debug/resolve"))
+			sr = newSolveRequest(withProject(ctx, t, project), withBuildTarget("phony/debug/resolve"))
 			res, err = gwc.Solve(ctx, sr)
 			if err != nil {
 				return nil, err

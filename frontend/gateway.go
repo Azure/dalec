@@ -133,11 +133,11 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 	return "", false
 }
 
-func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
+func makeTargetForwarder(specT dalec.Frontend, bkt bktargets.Target) BuildFunc {
 	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (_ gwclient.Reference, _ *image.Image, retErr error) {
 		defer func() {
 			if retErr != nil {
-				retErr = errors.Wrapf(retErr, "error forwarding build to frontend %q for target %s", specT.Frontend.Image, bkt.Name)
+				retErr = errors.Wrapf(retErr, "error forwarding build to frontend %q for target %s", specT.Image, bkt.Name)
 			}
 		}()
 
@@ -157,8 +157,8 @@ func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
 				"dockerfile": def.ToPB(),
 			},
 			FrontendOpt: map[string]string{
-				"source":     specT.Frontend.Image,
-				"cmdline":    specT.Frontend.CmdLine,
+				"source":     specT.Image,
+				"cmdline":    specT.CmdLine,
 				"target":     bkt.Name,
 				requestIDKey: dalecSubrequstForwardBuild,
 			},

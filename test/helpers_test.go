@@ -128,10 +128,10 @@ func checkFile(ctx context.Context, t *testing.T, name string, res *gwclient.Res
 	}
 }
 
-func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec) targets.List {
+func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, project *dalec.Project) targets.List {
 	t.Helper()
 
-	sr := newSolveRequest(withListTargetsOnly, withSpec(ctx, t, spec))
+	sr := newSolveRequest(withListTargetsOnly, withProject(ctx, t, project))
 	res, err := gwc.Solve(ctx, sr)
 	if err != nil {
 		t.Fatalf("could not solve list targets: %v", err)

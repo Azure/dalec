@@ -128,15 +128,15 @@ func SetDefault(group, name string) {
 	registeredHandlers.defaultHandler = t
 }
 
-func registerSpecHandlers(ctx context.Context, project *projectWrapper, client gwclient.Client) error {
+func registerSpecHandlers(ctx context.Context, wrapper *projectWrapper, client gwclient.Client) error {
 	var def *pb.Definition
-	spec := project.GetSpec()
-	marshlSpec := func() (*pb.Definition, error) {
+	project := wrapper.Project
+	marshlProj := func() (*pb.Definition, error) {
 		if def != nil {
 			return def, nil
 		}
 
-		dt, err := yaml.Marshal(spec)
+		dt, err := yaml.Marshal(project)
 		if err != nil {
 			return nil, err
 		}
@@ -162,20 +162,20 @@ func registerSpecHandlers(ctx context.Context, project *projectWrapper, client g
 	}
 
 	register := func(group string) error {
-		project := project
+		project := wrapper
 		
 		grp, _, _ := strings.Cut(group, "/")
-		t, ok := project.Targets[grp]
+		t, ok := project.Frontends[grp]
 		if !ok {
 			bklog.G(ctx).WithField("group", group).Debug("No target found in forwarded build")
 			return nil
 		}
 
-		if t.Frontend == nil || t.Frontend.Image == "" {
+		if t.Image == "" {
 			return nil
 		}
 
-		def, err := marshlSpec()
+		def, err := marshlProj()
 		if err != nil {
 			return err
 		}
@@ -186,8 +186,8 @@ func registerSpecHandlers(ctx context.Context, project *projectWrapper, client g
 				"dockerfile": def,
 			},
 			FrontendOpt: map[string]string{
-				"source":          t.Frontend.Image,
-				"cmdline":         t.Frontend.CmdLine,
+				"source":          t.Image,
+				"cmdline":         t.CmdLine,
 				dalecTargetOptKey: group,
 				requestIDKey:      bktargets.SubrequestsTargetsDefinition.Name,
 			},
@@ -200,16 +200,16 @@ func registerSpecHandlers(ctx context.Context, project *projectWrapper, client g
 		caps := req.FrontendOpt["frontend.caps"]
 		req.FrontendOpt["frontend.caps"] = strings.Join(append(strings.Split(caps, ","), "moby.buildkit.frontend.subrequests"), ",")
 
-		bklog.G(ctx).WithField("group", group).WithField("target", t.Frontend.Image).Debug("Requesting target list")
+		bklog.G(ctx).WithField("group", group).WithField("target", t.Image).Debug("Requesting target list")
 		res, err := client.Solve(ctx, req)
 		if err != nil {
-			return errors.Wrapf(err, "error getting targets from frontend %q", t.Frontend.Image)
+			return errors.Wrapf(err, "error getting targets from frontend %q", t.Image)
 		}
 
 		dt := res.Metadata["result.json"]
 		var tl bktargets.List
 		if err := json.Unmarshal(dt, &tl); err != nil {
-			return errors.Wrapf(err, "error unmarshalling targets from frontend %q", t.Frontend.Image)
+			return errors.Wrapf(err, "error unmarshalling targets from frontend %q", t.Image)
 		}
 
 		for _, bkt := range tl.Targets {
@@ -234,7 +234,7 @@ func registerSpecHandlers(ctx context.Context, project *projectWrapper, client g
 		}
 	}
 
-	for group := range spec.Targets {
+	for group := range project.Targets {
 		if err := register(group); err != nil {
 			return err
 		}

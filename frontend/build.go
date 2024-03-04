@@ -16,7 +16,7 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-var HandlerNotFound = errors.New("handler not found")
+var UnknownTarget = errors.New("unknown target")
 
 // `projectWrapper` provides some additional functionality to the
 // project struct while leaving the Project struct as simple data.
@@ -165,7 +165,7 @@ func lookupHandler(target string) (BuildFunc, error) {
 
 	t := registeredHandlers.Get(target)
 	if t == nil {
-		return nil, HandlerNotFound
+		return nil, UnknownTarget
 	}
 	return t.Build, nil
 }
@@ -228,7 +228,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	specTarget := ""
 
 	handlerFunc, err := lookupHandler(bc.Target)
-	if errors.Is(err, HandlerNotFound) {
+	if errors.Is(err, UnknownTarget) {
 		tgt, rest, ok := strings.Cut(bc.Target, "/")
 		if !ok {
 			return nil, fmt.Errorf("unable to parse target %q", bc.Target)
