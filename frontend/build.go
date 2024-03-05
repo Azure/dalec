@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/containerd/containerd/platforms"
@@ -158,12 +157,13 @@ func listBuildTargets(group string) []*targetWrapper {
 	return registeredHandlers.All()
 }
 
-func lookupHandler(target string) (BuildFunc, error) {
-	if target == "" {
+func lookupHandler(key HandlerKey) (BuildFunc, error) {
+	var empty HandlerKey
+	if key == empty {
 		return registeredHandlers.Default().Build, nil
 	}
 
-	t := registeredHandlers.Get(target)
+	t := registeredHandlers.Get(key)
 	if t == nil {
 		return nil, UnknownTarget
 	}
@@ -224,26 +224,17 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	dalecTarget := bc.Target
-	specTarget := ""
-
-	handlerFunc, err := lookupHandler(bc.Target)
-	if errors.Is(err, UnknownTarget) {
-		tgt, rest, ok := strings.Cut(bc.Target, "/")
-		if !ok {
-			return nil, fmt.Errorf("unable to parse target %q", bc.Target)
-		}
-
-		specTarget = tgt
-		dalecTarget = rest
-
-		handlerFunc, err = lookupHandler(dalecTarget)
-		if err != nil {
-			return nil, fmt.Errorf("can't route target %q: %w", bc.Target, err)
-		}
+	key, err := parseTarget(bc.Target)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse target: %w", err)
+	}
+	
+	handlerFunc, err := lookupHandler(key)
+	if err != nil {
+		return nil, fmt.Errorf("no handler found with key: %+v", key)
 	}
 
-	project, err := loadProject(ctx, bc, specTarget)
+	project, err := loadProject(ctx, bc, key.SpecName)
 	if err != nil {
 		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
@@ -252,7 +243,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, err
 	}
 
-	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(dalecTarget))
+	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(key.Path))
 	if err != nil || handled {
 		return res, err
 	}

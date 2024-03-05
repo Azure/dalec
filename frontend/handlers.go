@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	goerrors "errors"
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -32,23 +31,23 @@ type targetWrapper struct {
 
 type handlerList struct {
 	mu             sync.Mutex
-	ls             map[string]*targetWrapper
+	ls             map[HandlerKey]*targetWrapper
 	groupIdx       map[string][]*targetWrapper
 	defaultHandler *targetWrapper
 	lastHandler    *targetWrapper
 }
 
-// additions to this struct must be key-value pairs.
-type handlerKey struct {
-	path     string
-	group    string
-	specName string
+// Additions to this struct must be name-string pairs.
+type HandlerKey struct {
+	Path     string
+	Group    string
+	SpecName string
 }
 
-func parseHandlerKey(targetString string) (handlerKey, error) {
+func parseTarget(targetString string) (HandlerKey, error) {
 	pairs := strings.Split(targetString, ",")
 
-	var ret handlerKey
+	var ret HandlerKey
 	paths := 0
 	for _, pair := range pairs {
 		kv := strings.Split(pair, "=")
@@ -56,57 +55,53 @@ func parseHandlerKey(targetString string) (handlerKey, error) {
 			// i.e. this is the target path, make sure it's the only one
 			paths++
 			if paths > 1 {
-				return handlerKey{}, fmt.Errorf("target %q has multiple paths", targetString)
+				return HandlerKey{}, fmt.Errorf("target %q has multiple paths", targetString)
 			}
 
 			group, _, ok := strings.Cut(kv[0], "/")
 			if !ok {
-				return handlerKey{}, fmt.Errorf("target %q has no group", targetString)
+				return HandlerKey{}, fmt.Errorf("target %q has no group", targetString)
 			}
 
-			ret.path = kv[0]
-			ret.group = group
+			ret.Path = kv[0]
+			ret.Group = group
 			continue
 		}
 
 		k := kv[0]
 		switch k {
 		case "name":
-			ret.specName = kv[1]
+			ret.SpecName = kv[1]
 		default:
-			return handlerKey{}, fmt.Errorf("target key %q not recognized", k)
+			return HandlerKey{}, fmt.Errorf("target key %q not recognized", k)
 		}
 	}
 
 	if err := ret.validate(targetString); err != nil {
-		return handlerKey{}, err
+		return HandlerKey{}, err
 	}
 
 	return ret, nil
 }
 
-func (hk *handlerKey) validate(targetString string) error {
+func (hk *HandlerKey) validate(targetString string) error {
 	var errs error
-	if hk.group == "" {
-		errs = goerrors.Join(errs, fmt.Errorf("target %q has no group %q", targetString, hk.group))
+	if hk.Group == "" {
+		errs = goerrors.Join(errs, fmt.Errorf("target %q has no group %q", targetString, hk.Group))
 	}
-	if hk.path == "" {
-		errs = goerrors.Join(errs, fmt.Errorf("target %q has no path %q", targetString, hk.path))
+	if hk.Path == "" {
+		errs = goerrors.Join(errs, fmt.Errorf("target %q has no path %q", targetString, hk.Path))
 	}
 
 	return errs
 }
 
-func (s *handlerList) Add(group string, value *targetWrapper) {
+func (s *handlerList) Add(key HandlerKey, value *targetWrapper) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !strings.HasPrefix(value.Name+"/", group) {
-		value.Name = path.Join(group, value.Name)
-	}
-
-	s.ls[value.Name] = value
-	s.groupIdx[group] = append(s.groupIdx[group], value)
+	s.ls[key] = value
+	s.groupIdx[key.Group] = append(s.groupIdx[key.Group], value)
 	if value.Default {
 		if s.defaultHandler == nil {
 			s.defaultHandler = value
@@ -115,10 +110,10 @@ func (s *handlerList) Add(group string, value *targetWrapper) {
 	s.lastHandler = value
 }
 
-func (s *handlerList) Get(name string) *targetWrapper {
+func (s *handlerList) Get(key HandlerKey) *targetWrapper {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.ls[name]
+	return s.ls[key]
 }
 
 func (s *handlerList) All() []*targetWrapper {
@@ -155,7 +150,7 @@ func (s *handlerList) Default() *targetWrapper {
 }
 
 var registeredHandlers = &handlerList{
-	ls:       make(map[string]*targetWrapper),
+	ls:       make(map[HandlerKey]*targetWrapper),
 	groupIdx: make(map[string][]*targetWrapper),
 }
 
@@ -165,24 +160,24 @@ var registeredHandlers = &handlerList{
 // This can be changed by calling [SetDefault].
 //
 // Registered handlers may be overridden by [dalec.Spec.Targets].
-func RegisterHandler(group string, t bktargets.Target, build BuildFunc) {
-	registeredHandlers.Add(group, &targetWrapper{Target: t, Build: build})
+func RegisterHandler(key HandlerKey, t bktargets.Target, build BuildFunc) {
+	registeredHandlers.Add(key, &targetWrapper{Target: t, Build: build})
 }
 
 // SetDefault sets the default handler for when no handler is specified.
-func SetDefault(group, name string) {
+func SetDefault(key HandlerKey) {
 	registeredHandlers.mu.Lock()
 	defer registeredHandlers.mu.Unlock()
 
-	t := registeredHandlers.ls[group+"/"+name]
+	t := registeredHandlers.ls[key]
 	if t == nil {
-		panic("target not found: " + group + "/" + name)
+		panic("target not found: " + key.Group + "/" + key.Path)
 	}
 	t.Default = true
 
-	registeredHandlers.ls[group] = &targetWrapper{
+	registeredHandlers.ls[key] = &targetWrapper{
 		Target: bktargets.Target{
-			Name:        group,
+			Name:        key.Group,
 			Description: "Alias for target " + t.Name,
 		},
 	}
@@ -222,13 +217,12 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 		return nil
 	}
 
-	register := func(group string) error {
+	register := func(key HandlerKey) error {
 		project := wrapper
 
-		grp, _, _ := strings.Cut(group, "/")
-		t, ok := project.Frontends[grp]
+		t, ok := project.Frontends[key.Group]
 		if !ok {
-			bklog.G(ctx).WithField("group", group).Debug("No target found in forwarded build")
+			bklog.G(ctx).WithField("group", key.Group).Debug("No target found in forwarded build")
 			return nil
 		}
 
@@ -249,7 +243,7 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 			FrontendOpt: map[string]string{
 				"source":          t.Image,
 				"cmdline":         t.CmdLine,
-				dalecTargetOptKey: group,
+				dalecTargetOptKey: key.Group,
 				requestIDKey:      bktargets.SubrequestsTargetsDefinition.Name,
 			},
 		}
@@ -261,7 +255,7 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 		caps := req.FrontendOpt["frontend.caps"]
 		req.FrontendOpt["frontend.caps"] = strings.Join(append(strings.Split(caps, ","), "moby.buildkit.frontend.subrequests"), ",")
 
-		bklog.G(ctx).WithField("group", group).WithField("target", t.Image).Debug("Requesting target list")
+		bklog.G(ctx).WithField("group", key.Group).WithField("target", t.Image).Debug("Requesting target list")
 		res, err := client.Solve(ctx, req)
 		if err != nil {
 			return errors.Wrapf(err, "error getting targets from frontend %q", t.Image)
@@ -274,14 +268,15 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 		}
 
 		for _, bkt := range tl.Targets {
-			// capture loop variables
-			grp := strings.TrimSuffix(group, "/"+bkt.Name)
-			bklog.G(ctx).WithField("group", grp).WithField("target", bkt.Name).Debug("Registering forwarded target")
-			RegisterHandler(grp, bkt, makeTargetForwarder(t, bkt))
+			if key.Path == "" {
+				key.Path = bkt.Name
+			}
+			bklog.G(ctx).WithField("group", key.Group).WithField("target", bkt.Name).Debug("Registering forwarded target")
+			RegisterHandler(key, bkt, makeTargetForwarder(t, bkt))
 		}
 
 		if len(tl.Targets) == 0 {
-			bklog.G(ctx).WithField("group", group).Debug("No targets found in forwarded build")
+			bklog.G(ctx).WithField("group", key.Group).Debug("No targets found in forwarded build")
 		}
 
 		return nil
@@ -291,13 +286,23 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 	// ... unless this is a target list request, in which case we register all targets.
 	if opts[requestIDKey] != bktargets.SubrequestsTargetsDefinition.Name {
 		if t := opts["target"]; t != "" {
-			return register(t)
+			key, err := parseTarget(t)
+			if err != nil {
+				return fmt.Errorf("could not parse target: %w", err)
+			}
+			return register(key)
 		}
 	}
 
 	for _, spec := range wrapper.GetSpecs() {
-		for group := range spec.Targets {
-			if err := register(group); err != nil {
+		name := spec.Name
+		for grp := range spec.Targets {
+			k := HandlerKey{
+				Path:     "",
+				Group:    grp,
+				SpecName: name,
+			}
+			if err := register(k); err != nil {
 				return err
 			}
 		}
