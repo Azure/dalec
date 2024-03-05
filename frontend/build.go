@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Azure/dalec"
 	"github.com/containerd/containerd/platforms"
@@ -215,6 +216,11 @@ func fillPlatformArgs(prefix string, args map[string]string, platform ocispecs.P
 func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	if !SupportsDiffMerge(client) {
 		dalec.DisableDiffMerge(true)
+	}
+
+	wait := true
+	for wait {
+		time.Sleep(1 * time.Second)
 	}
 
 	bc, err := dockerui.NewClient(client)
