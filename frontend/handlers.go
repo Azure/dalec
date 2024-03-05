@@ -3,7 +3,6 @@ package frontend
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -162,7 +161,7 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 		return nil
 	}
 
-	register := func(group, name string) error {
+	register := func(group string) error {
 		project := wrapper
 
 		grp, _, _ := strings.Cut(group, "/")
@@ -216,17 +215,8 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 		for _, bkt := range tl.Targets {
 			// capture loop variables
 			grp := strings.TrimSuffix(group, "/"+bkt.Name)
-			if bkt.Name == group {
-				grp = group
-			}
-			
 			bklog.G(ctx).WithField("group", grp).WithField("target", bkt.Name).Debug("Registering forwarded target")
-			fullName := grp
-			if name != "" {
-				fullName = fmt.Sprintf("%s/%s", name, group)
-			}
-		
-			RegisterHandler(fullName, bkt, makeTargetForwarder(t, bkt))
+			RegisterHandler(grp, bkt, makeTargetForwarder(t, bkt))
 		}
 
 		if len(tl.Targets) == 0 {
@@ -240,35 +230,13 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 	// ... unless this is a target list request, in which case we register all targets.
 	if opts[requestIDKey] != bktargets.SubrequestsTargetsDefinition.Name {
 		if t := opts["target"]; t != "" {
-			if wrapper.isSingleSpec {
-				return register(t, "")
-			}
-
-			name, group, ok := strings.Cut(t, "/")
-			if !ok {
-				return fmt.Errorf("unexpected error, badly formatted target: %s", t)
-			}
-			err := register(group, name)
-			if err != nil {
-				return fmt.Errorf("here: %w, group: %s, name: %s", err, group, name)
-			}
-			return nil
+			return register(t)
 		}
-	}
-
-	if wrapper.isSingleSpec {
-		for group := range project.Spec.Targets {
-			if err := register(group, ""); err != nil {
-				return err
-			}
-		}
-		return nil
 	}
 
 	for _, spec := range wrapper.GetSpecs() {
-		name := spec.Name
 		for group := range spec.Targets {
-			if err := register(group, name); err != nil {
+			if err := register(group); err != nil {
 				return err
 			}
 		}
