@@ -3,6 +3,8 @@ package frontend
 import (
 	"context"
 	"encoding/json"
+	goerrors "errors"
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -34,6 +36,65 @@ type handlerList struct {
 	groupIdx       map[string][]*targetWrapper
 	defaultHandler *targetWrapper
 	lastHandler    *targetWrapper
+}
+
+// additions to this struct must be key-value pairs.
+type handlerKey struct {
+	path     string
+	group    string
+	specName string
+}
+
+func parseHandlerKey(targetString string) (handlerKey, error) {
+	pairs := strings.Split(targetString, ",")
+
+	var ret handlerKey
+	paths := 0
+	for _, pair := range pairs {
+		kv := strings.Split(pair, "=")
+		if len(kv) == 1 {
+			// i.e. this is the target path, make sure it's the only one
+			paths++
+			if paths > 1 {
+				return handlerKey{}, fmt.Errorf("target %q has multiple paths", targetString)
+			}
+
+			group, _, ok := strings.Cut(kv[0], "/")
+			if !ok {
+				return handlerKey{}, fmt.Errorf("target %q has no group", targetString)
+			}
+
+			ret.path = kv[0]
+			ret.group = group
+			continue
+		}
+
+		k := kv[0]
+		switch k {
+		case "name":
+			ret.specName = kv[1]
+		default:
+			return handlerKey{}, fmt.Errorf("target key %q not recognized", k)
+		}
+	}
+
+	if err := ret.validate(targetString); err != nil {
+		return handlerKey{}, err
+	}
+
+	return ret, nil
+}
+
+func (hk *handlerKey) validate(targetString string) error {
+	var errs error
+	if hk.group == "" {
+		errs = goerrors.Join(errs, fmt.Errorf("target %q has no group %q", targetString, hk.group))
+	}
+	if hk.path == "" {
+		errs = goerrors.Join(errs, fmt.Errorf("target %q has no path %q", targetString, hk.path))
+	}
+
+	return errs
 }
 
 func (s *handlerList) Add(group string, value *targetWrapper) {
