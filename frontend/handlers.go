@@ -296,14 +296,22 @@ func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, clien
 
 	for _, spec := range wrapper.GetSpecs() {
 		name := spec.Name
+
 		for grp := range spec.Targets {
-			k := HandlerKey{
-				Path:     "",
-				Group:    grp,
-				SpecName: name,
-			}
-			if err := register(k); err != nil {
-				return err
+			for hkey := range registeredHandlers.ls {
+				if hkey.Group != grp {
+					continue
+				}
+
+				k := HandlerKey{
+					Path:     hkey.Path,
+					Group:    hkey.Group,
+					SpecName: name,
+				}
+
+				if err := register(k); err != nil {
+					return err
+				}
 			}
 		}
 	}

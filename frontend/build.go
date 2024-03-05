@@ -87,10 +87,6 @@ func newProjectWrapper(p *dalec.Project, opts ...projectOpt) (*projectWrapper, e
 		pw.isSingleSpec = true
 	}
 
-	if pw.isSingleSpec && pw.target != "" {
-		return nil, fmt.Errorf("name %q requested as project target, but project is a single spec", pw.target)
-	}
-
 	return &pw, nil
 
 }
@@ -228,11 +224,6 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 	if err != nil {
 		return nil, fmt.Errorf("could not parse target: %w", err)
 	}
-	
-	handlerFunc, err := lookupHandler(key)
-	if err != nil {
-		return nil, fmt.Errorf("no handler found with key: %+v", key)
-	}
 
 	project, err := loadProject(ctx, bc, key.SpecName)
 	if err != nil {
@@ -241,6 +232,11 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 
 	if err := registerProjectHandlers(ctx, project, client); err != nil {
 		return nil, err
+	}
+	
+	handlerFunc, err := lookupHandler(key)
+	if err != nil {
+		return nil, fmt.Errorf("no handler found with key: %+v", key)
 	}
 
 	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(key.Path))
