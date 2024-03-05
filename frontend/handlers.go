@@ -3,7 +3,8 @@ package frontend
 import (
 	"context"
 	"encoding/json"
-	"path"
+	goerrors "errors"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -30,22 +31,77 @@ type targetWrapper struct {
 
 type handlerList struct {
 	mu             sync.Mutex
-	ls             map[string]*targetWrapper
+	ls             map[HandlerKey]*targetWrapper
 	groupIdx       map[string][]*targetWrapper
 	defaultHandler *targetWrapper
 	lastHandler    *targetWrapper
 }
 
-func (s *handlerList) Add(group string, value *targetWrapper) {
+// Additions to this struct must be name-string pairs.
+type HandlerKey struct {
+	Path     string
+	Group    string
+	SpecName string
+}
+
+func parseTarget(targetString string) (HandlerKey, error) {
+	pairs := strings.Split(targetString, ",")
+
+	var ret HandlerKey
+	paths := 0
+	for _, pair := range pairs {
+		kv := strings.Split(pair, "=")
+		if len(kv) == 1 {
+			// i.e. this is the target path, make sure it's the only one
+			paths++
+			if paths > 1 {
+				return HandlerKey{}, fmt.Errorf("target %q has multiple paths", targetString)
+			}
+
+			group, _, ok := strings.Cut(kv[0], "/")
+			if !ok {
+				return HandlerKey{}, fmt.Errorf("target %q has no group", targetString)
+			}
+
+			ret.Path = kv[0]
+			ret.Group = group
+			continue
+		}
+
+		k := kv[0]
+		switch k {
+		case "name":
+			ret.SpecName = kv[1]
+		default:
+			return HandlerKey{}, fmt.Errorf("target key %q not recognized", k)
+		}
+	}
+
+	if err := ret.validate(targetString); err != nil {
+		return HandlerKey{}, err
+	}
+
+	return ret, nil
+}
+
+func (hk *HandlerKey) validate(targetString string) error {
+	var errs error
+	if hk.Group == "" {
+		errs = goerrors.Join(errs, fmt.Errorf("target %q has no group %q", targetString, hk.Group))
+	}
+	if hk.Path == "" {
+		errs = goerrors.Join(errs, fmt.Errorf("target %q has no path %q", targetString, hk.Path))
+	}
+
+	return errs
+}
+
+func (s *handlerList) Add(key HandlerKey, value *targetWrapper) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !strings.HasPrefix(value.Name+"/", group) {
-		value.Name = path.Join(group, value.Name)
-	}
-
-	s.ls[value.Name] = value
-	s.groupIdx[group] = append(s.groupIdx[group], value)
+	s.ls[key] = value
+	s.groupIdx[key.Group] = append(s.groupIdx[key.Group], value)
 	if value.Default {
 		if s.defaultHandler == nil {
 			s.defaultHandler = value
@@ -54,10 +110,10 @@ func (s *handlerList) Add(group string, value *targetWrapper) {
 	s.lastHandler = value
 }
 
-func (s *handlerList) Get(name string) *targetWrapper {
+func (s *handlerList) Get(key HandlerKey) *targetWrapper {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.ls[name]
+	return s.ls[key]
 }
 
 func (s *handlerList) All() []*targetWrapper {
@@ -94,7 +150,7 @@ func (s *handlerList) Default() *targetWrapper {
 }
 
 var registeredHandlers = &handlerList{
-	ls:       make(map[string]*targetWrapper),
+	ls:       make(map[HandlerKey]*targetWrapper),
 	groupIdx: make(map[string][]*targetWrapper),
 }
 
@@ -104,38 +160,39 @@ var registeredHandlers = &handlerList{
 // This can be changed by calling [SetDefault].
 //
 // Registered handlers may be overridden by [dalec.Spec.Targets].
-func RegisterHandler(group string, t bktargets.Target, build BuildFunc) {
-	registeredHandlers.Add(group, &targetWrapper{Target: t, Build: build})
+func RegisterHandler(key HandlerKey, t bktargets.Target, build BuildFunc) {
+	registeredHandlers.Add(key, &targetWrapper{Target: t, Build: build})
 }
 
 // SetDefault sets the default handler for when no handler is specified.
-func SetDefault(group, name string) {
+func SetDefault(key HandlerKey) {
 	registeredHandlers.mu.Lock()
 	defer registeredHandlers.mu.Unlock()
 
-	t := registeredHandlers.ls[group+"/"+name]
+	t := registeredHandlers.ls[key]
 	if t == nil {
-		panic("target not found: " + group + "/" + name)
+		panic("target not found: " + key.Group + "/" + key.Path)
 	}
 	t.Default = true
 
-	registeredHandlers.ls[group] = &targetWrapper{
+	registeredHandlers.ls[key] = &targetWrapper{
 		Target: bktargets.Target{
-			Name:        group,
+			Name:        key.Group,
 			Description: "Alias for target " + t.Name,
 		},
 	}
 	registeredHandlers.defaultHandler = t
 }
 
-func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient.Client) error {
+func registerProjectHandlers(ctx context.Context, wrapper *projectWrapper, client gwclient.Client) error {
 	var def *pb.Definition
-	marshlSpec := func() (*pb.Definition, error) {
+	project := wrapper.Project
+	marshlProj := func() (*pb.Definition, error) {
 		if def != nil {
 			return def, nil
 		}
 
-		dt, err := yaml.Marshal(spec)
+		dt, err := yaml.Marshal(project)
 		if err != nil {
 			return nil, err
 		}
@@ -160,20 +217,20 @@ func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient
 		return nil
 	}
 
-	register := func(group string) error {
-		spec := spec
-		grp, _, _ := strings.Cut(group, "/")
-		t, ok := spec.Targets[grp]
+	register := func(key HandlerKey) error {
+		project := wrapper
+
+		t, ok := project.Frontends[key.Group]
 		if !ok {
-			bklog.G(ctx).WithField("group", group).Debug("No target found in forwarded build")
+			bklog.G(ctx).WithField("group", key.Group).Debug("No target found in forwarded build")
 			return nil
 		}
 
-		if t.Frontend == nil || t.Frontend.Image == "" {
+		if t.Image == "" {
 			return nil
 		}
 
-		def, err := marshlSpec()
+		def, err := marshlProj()
 		if err != nil {
 			return err
 		}
@@ -184,9 +241,9 @@ func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient
 				"dockerfile": def,
 			},
 			FrontendOpt: map[string]string{
-				"source":          t.Frontend.Image,
-				"cmdline":         t.Frontend.CmdLine,
-				dalecTargetOptKey: group,
+				"source":          t.Image,
+				"cmdline":         t.CmdLine,
+				dalecTargetOptKey: key.Group,
 				requestIDKey:      bktargets.SubrequestsTargetsDefinition.Name,
 			},
 		}
@@ -198,27 +255,28 @@ func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient
 		caps := req.FrontendOpt["frontend.caps"]
 		req.FrontendOpt["frontend.caps"] = strings.Join(append(strings.Split(caps, ","), "moby.buildkit.frontend.subrequests"), ",")
 
-		bklog.G(ctx).WithField("group", group).WithField("target", t.Frontend.Image).Debug("Requesting target list")
+		bklog.G(ctx).WithField("group", key.Group).WithField("target", t.Image).Debug("Requesting target list")
 		res, err := client.Solve(ctx, req)
 		if err != nil {
-			return errors.Wrapf(err, "error getting targets from frontend %q", t.Frontend.Image)
+			return errors.Wrapf(err, "error getting targets from frontend %q", t.Image)
 		}
 
 		dt := res.Metadata["result.json"]
 		var tl bktargets.List
 		if err := json.Unmarshal(dt, &tl); err != nil {
-			return errors.Wrapf(err, "error unmarshalling targets from frontend %q", t.Frontend.Image)
+			return errors.Wrapf(err, "error unmarshalling targets from frontend %q", t.Image)
 		}
 
 		for _, bkt := range tl.Targets {
-			// capture loop variables
-			grp := strings.TrimSuffix(group, "/"+bkt.Name)
-			bklog.G(ctx).WithField("group", grp).WithField("target", bkt.Name).Debug("Registering forwarded target")
-			RegisterHandler(grp, bkt, makeTargetForwarder(t, bkt))
+			if key.Path == "" {
+				key.Path = bkt.Name
+			}
+			bklog.G(ctx).WithField("group", key.Group).WithField("target", bkt.Name).Debug("Registering forwarded target")
+			RegisterHandler(key, bkt, makeTargetForwarder(t, bkt))
 		}
 
 		if len(tl.Targets) == 0 {
-			bklog.G(ctx).WithField("group", group).Debug("No targets found in forwarded build")
+			bklog.G(ctx).WithField("group", key.Group).Debug("No targets found in forwarded build")
 		}
 
 		return nil
@@ -228,14 +286,35 @@ func registerSpecHandlers(ctx context.Context, spec *dalec.Spec, client gwclient
 	// ... unless this is a target list request, in which case we register all targets.
 	if opts[requestIDKey] != bktargets.SubrequestsTargetsDefinition.Name {
 		if t := opts["target"]; t != "" {
-			return register(t)
+			key, err := parseTarget(t)
+			if err != nil {
+				return fmt.Errorf("could not parse target: %w", err)
+			}
+			return register(key)
 		}
 	}
 
-	for group := range spec.Targets {
-		if err := register(group); err != nil {
-			return err
+	for _, spec := range wrapper.GetSpecs() {
+		name := spec.Name
+
+		for grp := range spec.Targets {
+			for hkey := range registeredHandlers.ls {
+				if hkey.Group != grp {
+					continue
+				}
+
+				k := HandlerKey{
+					Path:     hkey.Path,
+					Group:    hkey.Group,
+					SpecName: name,
+				}
+
+				if err := register(k); err != nil {
+					return err
+				}
+			}
 		}
 	}
+
 	return nil
 }

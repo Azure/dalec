@@ -60,6 +60,28 @@ func specToSolveRequest(ctx context.Context, t *testing.T, spec *dalec.Spec, sr 
 	sr.FrontendInputs[dockerui.DefaultLocalNameDockerfile] = def.ToPB()
 }
 
+// specToSolveRequest injects the spec as the build context into the solve request.
+func projectToSolveRequest(ctx context.Context, t *testing.T, project *dalec.Project, sr *gwclient.SolveRequest) {
+	t.Helper()
+
+	dt, err := yaml.Marshal(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	def, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0o644, dt)).Marshal(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sr.FrontendInputs == nil {
+		sr.FrontendInputs = make(map[string]*pb.Definition)
+	}
+
+	sr.FrontendInputs[dockerui.DefaultLocalNameContext] = def.ToPB()
+	sr.FrontendInputs[dockerui.DefaultLocalNameDockerfile] = def.ToPB()
+}
+
 func readFile(ctx context.Context, t *testing.T, name string, res *gwclient.Result) []byte {
 	t.Helper()
 
@@ -106,10 +128,10 @@ func checkFile(ctx context.Context, t *testing.T, name string, res *gwclient.Res
 	}
 }
 
-func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec) targets.List {
+func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, project *dalec.Project) targets.List {
 	t.Helper()
 
-	sr := newSolveRequest(withListTargetsOnly, withSpec(ctx, t, spec))
+	sr := newSolveRequest(withListTargetsOnly, withProject(ctx, t, project))
 	res, err := gwc.Solve(ctx, sr)
 	if err != nil {
 		t.Fatalf("could not solve list targets: %v", err)
@@ -172,6 +194,12 @@ func withPlatform(platform platforms.Platform) srOpt {
 func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {
 	return func(sr *gwclient.SolveRequest) {
 		specToSolveRequest(ctx, t, spec, sr)
+	}
+}
+
+func withProject(ctx context.Context, t *testing.T, project *dalec.Project) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		projectToSolveRequest(ctx, t, project, sr)
 	}
 }
 

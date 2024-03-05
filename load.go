@@ -211,13 +211,9 @@ func (s *SourceBuild) validate(failContext ...string) (retErr error) {
 	return
 }
 
-func (s *Spec) SubstituteArgs(env map[string]string) error {
+func (s *Spec) SubstituteArgs(env, args map[string]string) error {
 	lex := shell.NewLex('\\')
 
-	args := make(map[string]string)
-	for k, v := range s.Args {
-		args[k] = v
-	}
 	for k, v := range env {
 		if _, ok := args[k]; !ok {
 			if !knownArg(k) {
@@ -310,18 +306,88 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	return &spec, nil
 }
 
+// LoadSpec loads a spec from the given data.
+func LoadProject(dt []byte) (*Project, error) {
+	dt, err := stripXFields(dt)
+	if err != nil {
+		return nil, fmt.Errorf("error stripping x-fields: %w", err)
+	}
+
+	var (
+		project Project
+		canary  struct {
+			Specs interface{} `yaml:"specs,omitempty" json:"specs,omitempty"` 
+		}
+	)
+
+	multiSpecErr := yaml.Unmarshal(dt, &canary)
+	if multiSpecErr == nil && canary.Specs != nil {
+		// At this point, we have either a malformed project
+		// or a vailid multi-spec project.
+		if err := yaml.UnmarshalWithOptions(dt, &project, yaml.Strict()); err != nil {
+			return nil, fmt.Errorf("error unmarshalling spec/project: %w", err)
+		}
+
+		// Explicitly set this to nil, since unmarshaling to a
+		// project struct will not do so. This allows us to
+		// distinguish between the two later.
+		project.Spec = nil
+		return &project, nil
+
+	}
+
+	// This means we have a single spec, but there may be relevant
+	// information in adjacent fields, so it must be unmarshaled
+	// as a project.
+	if err := yaml.UnmarshalWithOptions(dt, &project, yaml.Strict()); err != nil {
+		// There are now two errors, so join them
+		return nil, fmt.Errorf("error unmarshaling project: %w", goerrors.Join(multiSpecErr, err))
+	}
+
+	if project.Spec == nil {
+		return nil, fmt.Errorf("error unmarshaling spec as project: spec was nil")
+	}
+
+	project.Specs = nil
+	return &project, nil
+}
+
 func stripXFields(dt []byte) ([]byte, error) {
 	var obj map[string]interface{}
 	if err := yaml.Unmarshal(dt, &obj); err != nil {
-		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
+		return nil, fmt.Errorf("error unmarshaling spec: %w", err)
 	}
 
-	for k := range obj {
-		if strings.HasPrefix(k, "x-") || strings.HasPrefix(k, "X-") {
-			delete(obj, k)
+	specs, ok := obj["specs"]
+	fixup := func(o map[string]interface{}) {
+		for k := range o {
+			if strings.HasPrefix(k, "x-") || strings.HasPrefix(k, "X-") {
+				delete(o, k)
+			}
 		}
 	}
 
+	if !ok {
+		fixup(obj)
+		return yaml.Marshal(obj)
+	}
+
+	specsYaml, err := yaml.Marshal(specs)
+	if err != nil {
+		return nil, fmt.Errorf("error during intermediate marshal: %w", err)
+	}
+
+	var objs []map[string]interface{}
+	if err := yaml.Unmarshal(specsYaml, &objs); err != nil {
+		return nil, fmt.Errorf("error unmarshaling multiple specs")
+	}
+
+	for i, subObj := range objs {
+		fixup(subObj)
+		objs[i] = subObj
+	}
+
+	obj["specs"] = objs
 	return yaml.Marshal(obj)
 }
 

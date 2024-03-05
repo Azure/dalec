@@ -6,12 +6,12 @@ import (
 )
 
 func RegisterHandlers() {
-	frontend.RegisterHandler("debug", targets.Target{
+	frontend.RegisterHandler(frontend.HandlerKey { Path: "debug/resolve", Group: "debug" }, targets.Target{
 		Name:        "resolve",
 		Description: "Outputs the resolved dalec spec file with build args applied.",
 	}, HandleResolve)
 
-	frontend.RegisterHandler("debug", targets.Target{
+	frontend.RegisterHandler(frontend.HandlerKey { Path: "debug/sources", Group: "debug" }, targets.Target{
 		Name:        "sources",
 		Description: "Outputs all sources from a dalec spec file.",
 	}, HandleSources)

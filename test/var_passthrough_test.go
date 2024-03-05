@@ -128,8 +128,8 @@ func TestPassthroughVars(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-				spec := &dalec.Spec{Args: tt.optInArgs, Build: dalec.ArtifactBuild{Env: tt.env}}
-				req := newSolveRequest(withBuildTarget("debug/resolve"), withSpec(ctx, t, spec), withPlatform(tt.targetPlatform))
+				project := &dalec.Project{Args: tt.optInArgs, Spec: &dalec.Spec{Build: dalec.ArtifactBuild{Env: tt.env}}}
+				req := newSolveRequest(withBuildTarget("debug/resolve"), withProject(ctx, t, project), withPlatform(tt.targetPlatform))
 				res, err := gwc.Solve(ctx, req)
 				if err != nil {
 					return nil, err

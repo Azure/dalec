@@ -3,6 +3,7 @@ package frontend
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Azure/dalec"
@@ -14,17 +15,135 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error) {
+var UnknownTarget = errors.New("unknown target")
+
+// `projectWrapper` provides some additional functionality to the
+// project struct while leaving the Project struct as simple data.
+type projectWrapper struct {
+	*dalec.Project
+	target       string
+	isSingleSpec bool
+}
+
+func (p *projectWrapper) GetProject() *dalec.Project {
+	return p.Project
+}
+
+// `GetSpec` returns the main spec to build. When the Project is a
+// single spec, return that spec. When the Project is a slice of
+// specs, return the first matching spec with the `name` as specified
+// when `NewProjectWrapper` was called. If no name was specified,
+// return the last.
+func (p *projectWrapper) GetSpec() *dalec.Spec {
+	if p.isSingleSpec {
+		return p.Spec
+	}
+
+	for _, spec := range p.Specs {
+		if spec.Name == p.target {
+			return &spec
+		}
+	}
+
+	// The `loadProject` function has already ensured there is at
+	// least one spec.
+	return &p.Specs[len(p.Specs)-1]
+}
+
+// This is a placeholder until it is implemented by PR #146
+func (p *projectWrapper) GetGraph() *dalec.Graph {
+	panic("unimplemented")
+}
+
+type projectConfig struct {
+	target string
+}
+
+type projectOpt func(*projectConfig) error
+
+func withTarget(name string) projectOpt {
+	return func(cfg *projectConfig) error {
+		cfg.target = name
+		return nil
+	}
+}
+
+func newProjectWrapper(p *dalec.Project, opts ...projectOpt) (*projectWrapper, error) {
+	config := &projectConfig{}
+
+	for _, o := range opts {
+		if err := o(config); err != nil {
+			return nil, fmt.Errorf("failed to set up project wrapper config: %w", err)
+		}
+	}
+
+	pw := projectWrapper{
+		Project:      p,
+		target:       config.target,
+		isSingleSpec: false,
+	}
+
+	if pw.Project.Spec != nil {
+		pw.isSingleSpec = true
+	}
+
+	return &pw, nil
+
+}
+
+func loadProject(ctx context.Context, client *dockerui.Client, target string) (*projectWrapper, error) {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
 		return nil, fmt.Errorf("could not read spec file: %w", err)
 	}
 
-	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data))
+	project, err := dalec.LoadProject(bytes.TrimSpace(src.Data))
 	if err != nil {
-		return nil, fmt.Errorf("error loading spec: %w", err)
+		return nil, err
 	}
-	return spec, nil
+
+	pw, err := newProjectWrapper(project, withTarget(target))
+	if err != nil {
+		return nil, fmt.Errorf("error initializing project: %w", err)
+	}
+
+	if !pw.isSingleSpec && len(project.Specs) == 0 {
+		return nil, fmt.Errorf("no specs provided: %#v", project)
+	}
+
+	if pw.isSingleSpec && len(project.Specs) != 0 {
+		return nil, fmt.Errorf("format of project must be either a single spec or a list of specs nested under the `specs` key")
+	}
+
+	if err := pw.validateAndFillDefaults(); err != nil {
+		return nil, fmt.Errorf("error validating project: %w", err)
+	}
+
+	return pw, nil
+}
+
+func validateAndFillDefaults(s *dalec.Spec) error {
+	if err := s.Validate(); err != nil {
+		return err
+	}
+
+	s.FillDefaults()
+	return nil
+}
+
+func (pw *projectWrapper) validateAndFillDefaults() error {
+	if pw.isSingleSpec {
+		return validateAndFillDefaults(pw.Project.Spec)
+	}
+
+	for i := range pw.Project.Specs {
+		if err := validateAndFillDefaults(&pw.Project.Specs[i]); err != nil {
+			return fmt.Errorf("error validating project spec with name %q: %w", pw.Project.Specs[i].Name, err)
+
+		}
+	}
+	
+	return nil
 }
 
 func listBuildTargets(group string) []*targetWrapper {
@@ -34,14 +153,15 @@ func listBuildTargets(group string) []*targetWrapper {
 	return registeredHandlers.All()
 }
 
-func lookupHandler(target string) (BuildFunc, error) {
-	if target == "" {
+func lookupHandler(key HandlerKey) (BuildFunc, error) {
+	var empty HandlerKey
+	if key == empty {
 		return registeredHandlers.Default().Build, nil
 	}
 
-	t := registeredHandlers.Get(target)
+	t := registeredHandlers.Get(key)
 	if t == nil {
-		return nil, fmt.Errorf("unknown target %q", target)
+		return nil, UnknownTarget
 	}
 	return t.Build, nil
 }
@@ -100,16 +220,26 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	spec, err := loadSpec(ctx, bc)
+	key, err := parseTarget(bc.Target)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not parse target: %w", err)
 	}
 
-	if err := registerSpecHandlers(ctx, spec, client); err != nil {
-		return nil, err
+	project, err := loadProject(ctx, bc, key.SpecName)
+	if err != nil {
+		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
 
-	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(bc.Target))
+	if err := registerProjectHandlers(ctx, project, client); err != nil {
+		return nil, err
+	}
+	
+	handlerFunc, err := lookupHandler(key)
+	if err != nil {
+		return nil, fmt.Errorf("no handler found with key: %+v", key)
+	}
+
+	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(key.Path))
 	if err != nil || handled {
 		return res, err
 	}
@@ -123,11 +253,6 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		default:
 			return nil, fmt.Errorf("unknown request id %q", requestID)
 		}
-	}
-
-	f, err := lookupHandler(bc.Target)
-	if err != nil {
-		return nil, err
 	}
 
 	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
@@ -145,18 +270,39 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 		buildPlatform = bc.BuildPlatforms[0]
 
-		args := dalec.DuplicateMap(bc.BuildArgs)
-		fillPlatformArgs("TARGET", args, targetPlatform)
-		fillPlatformArgs("BUILD", args, buildPlatform)
-		if err := spec.SubstituteArgs(args); err != nil {
-			return nil, nil, err
+		for _, spec := range project.GetSpecs() {
+			env := dalec.DuplicateMap(bc.BuildArgs)
+			fillPlatformArgs("TARGET", env, targetPlatform)
+			fillPlatformArgs("BUILD", env, buildPlatform)
+
+			args := make(map[string]string)
+			for k, v := range project.Args {
+				args[k] = v
+			}
+
+			if err := spec.SubstituteArgs(env, args); err != nil {
+				return nil, nil, err
+			}
 		}
 
-		return f(ctx, client, spec)
+		spec := project.GetSpec()
+		return handlerFunc(ctx, client, spec)
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return rb.Finalize()
+}
+
+func (p *projectWrapper) GetSpecs() []*dalec.Spec {
+	if p.isSingleSpec {
+		return []*dalec.Spec{p.Spec}
+	}
+
+	specs := make([]*dalec.Spec, len(p.Specs))
+	for i := range p.Specs {
+		specs[i] = &p.Specs[i]
+	}
+	return specs
 }
