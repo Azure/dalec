@@ -12,101 +12,96 @@ import (
 //    Test harness should verify that cue spec catches errors for subfields
 //    particularly for things people are likely to make errors with
 
-// allow any filepath with no whitespace characters. can further restrict later
-let filepath =  =~ "^[^\\0\\s]+$"
+// this alias exists for the sake of being explicit, and in case we want to add restrictions later
+// on what kind of filepaths we allow in Dalec
+let filepath = string
 
 // {0, ..., 511} = {0o000, ..., 0o777} are valid unix perms
 let perms = >= 0 & <= 0o777
 
 // a source name must be alphanumeric, with the inclusion of '_' and '-'
 // TODO: consider including '.' to allow sources with a file extension
-// TEST: invalid source names
-#sourceName: =~ "^[a-zA-Z0-9_-]+$"
+let sourceName = =~ "^[a-zA-Z0-9_-.]+$"
 
 #BuildStep: close({
-   command: string //c
-   env?: [string]: string //c
+   command: string 
+   env?: [string]: string 
 })
 
-// TEST: invalid cache keys
 #CacheDirConfig: close({
-    mode?: "shared" | "private" | "locked" //c
-    key?: string //c
-    include_distro_key?: bool //c
-    include_arch_key?: bool //c
+    mode?: "shared" | "private" | "locked" 
+    key?: string 
+    include_distro_key?: bool 
+    include_arch_key?: bool 
 })
 
 #Command: close({
-   dir?: filepath //c
-   mounts?: [#SourceMount] //c
-   cache_dirs?: [filepath]: #CacheDirConfig //c
-   env?: [string]: string //c
-   steps: [#BuildStep] //c
+   dir?: filepath 
+   mounts?: [...#SourceMount] 
+   cache_dirs?: [filepath]: #CacheDirConfig 
+   env?: [string]: string 
+   steps: [...#BuildStep] 
 })
 
-// TEST: structural cycle case
-#SourceMount: close({
-    dest: filepath //c
+#SourceMount: {
+    dest: filepath 
     // structural cycle formed by source.image.mounts.spec.source must terminate somehow for cue to accept
-    // TODO: look into how this cycle could be terminated further up the chain, as this currently would allow
-    // a source mount with no provided spec which is invalid (though a significant edge case)
-    spec: null | #Source //c
-})
+    // even though there are non-recursive sources, (i.e., it is not required that SourceMount contain a recursive source, so there is
+    // implicitly a base case), cue's cycle detection is not currently sufficient to detect this.
+    spec: null | #Source 
+}
 
 #SourceContext: close({
     name?: string
-}) //c
+}) 
 
-#SourceDockerImage: close({ //c
-    ref: string //c
-    cmd?: #Command //c
+#SourceDockerImage: close({ 
+    ref: string 
+    cmd?: #Command 
 })
 
 #SourceHTTP: close({
     // TODO: specify url field further?
-    url: string //c
+    url: string 
 })
 
 #SourceBuild: close({
-    source?: #SubSource //c
-    dockerfile_path?: string //c
-    target?: string //c
-    args?: [string]: string //c
+    source?: #SubSource 
+    dockerfile_path?: filepath 
+    target?: string 
+    args?: [string]: string 
 })
 
-#SourceGit: close({
+#SourceGit: {
     // TODO: specify URL field further?
-    url: string //c
-    commit?: string //c
-    keepGitDir?: bool //c
-})
+    url: string 
+    commit?: string 
+    keepGitDir?: bool 
+}
 
-// TEST UID/GID < 0
 #SourceInlineFile: close({
-    contents?: string //c
-    permissions?: perms //c
-    uid?: >= 0 //c
-    gid?: >= 0 //c
+    contents?: string 
+    permissions?: perms 
+    uid?: >= 0 
+    gid?: >= 0 
 })
 
-
-// TEST UID/GID < 0
 #SourceInlineDir: close({
-    files?: [string]: #SourceInlineFile //c
-    permissions?: perms //c
-    uid?: >= 0 //c
-    gid?: >= 0 //c
+    files?: [sourceName]: #SourceInlineFile 
+    permissions?: perms 
+    uid?: >= 0 
+    gid?: >= 0 
 })
 
 #SourceInline: { file: #SourceInlineFile } | 
-                { dir: #SourceInlineDir } //c
+                { dir: #SourceInlineDir } 
 
 #SourceVariant: { context: #SourceContext } | 
                 { git: #SourceGit } |
                 { build: #SourceBuild } |
                 { http: #SourceHTTP } |
                 { image: #SourceDockerImage } |
-                #SourceInline //c
+                #SourceInline 
 
 // these are sources which are suitable as a sub-source for
 // SourceBuild's .source
@@ -114,163 +109,157 @@ let perms = >= 0 & <= 0o777
                    { git: #SourceGit } |
                    { http: #SourceHTTP } |
                    { image: #SourceDockerImage } |
-                    #SourceInline //c
+                    #SourceInline 
 
 // base properties which are source-independent
-#SourceBase: { path?: string //c
-               includes?: [string] //c
-               excludes?: [string] //c
+#SourceBase: { path?: filepath 
+               includes?: [...string] 
+               excludes?: [...string] 
             }
 
 #Source: {#SourceBase, #SourceVariant}
 #SubSource: {#SourceBase, #SubSourceVariant}
 
 #PackageDependencies: close({
-    build?: [string]: (null | [string]) //c
-    runtime?: [string]: (null | [string]) //c
-    recommends?: [string]: (null | [string]) //c
-    test?: [string]: (null | [string]) //c
+    build?: [string]: (null | [...string]) 
+    runtime?: [string]: (null | [...string]) 
+    recommends?: [string]: (null | [...string]) 
+    test?: [string]: (null | [...string]) 
 })
 
 #ArtifactBuild: close({
-    steps: [#BuildStep]  //c
-    env?: [string]: string //c
+    steps: [...#BuildStep]  
+    env?: [string]: string 
 })
 
 #ArtifactConfig: close({
-    // TODO: restrict path?
-    subPath?: string //c
-    name?: string //c
+    sub_path?: filepath 
+    name?: string 
 })
 
 #Artifacts: close({
-    binaries?: [string]: #ArtifactConfig //c
-    manpages?: [string]: #ArtifactConfig //c
+    binaries?: [filepath]: #ArtifactConfig 
+    manpages?: [filepath]: #ArtifactConfig 
 })
 
-// TEST: mixes of fields set
 #CheckOutput: close({
-    equals?: string //c
-    contains?: [string] //c
-    matches?: string //c
-    starts_with?: string //c
-    ends_with?: string //c
-    empty?: bool //c
+    equals?: string 
+    contains?: [...string] 
+    matches?: string 
+    starts_with?: string 
+    ends_with?: string 
+    empty?: bool 
  })
 
 #TestStep: close({
-    command?: string //c
-    env?: [string]: string //c
-    stdout?: #CheckOutput //c
-    stderr?: #CheckOutput //c
-    stdin?: string //c
+    command?: string 
+    env?: [string]: string 
+    stdout?: #CheckOutput 
+    stderr?: #CheckOutput 
+    stdin?: string 
 })
 
 #FileCheckOutput: {
-    #CheckOutput //c
-    permissions?: perms //c
-    isDir?: bool //c
-    notExist?: bool //c
+    #CheckOutput 
+    permissions?: perms 
+    isDir?: bool 
+    notExist?: bool 
 }
 
-// TEST: empty steps
 #TestSpec: close({
-    name: string //c
-    dir?: filepath //c
-    mounts?: [#SourceMount] //c
-    cacheDirs?: [string]: #CacheDirConfig //c
-    env?: [string]: string //c
-    steps: [#TestStep] //c
-    files?: [filepath]: #FileCheckOutput //c
+    name: string 
+    dir?: filepath 
+    mounts?: [...#SourceMount] 
+    cacheDirs?: [string]: #CacheDirConfig 
+    env?: [string]: string 
+    steps: [...#TestStep] 
+    files?: [filepath]: #FileCheckOutput 
 })
 
-// TEST: invalid path
 #SymlinkTarget: close({
-    path: string //c
+    path: filepath 
 })
 
 #PostInstall: close({
-    symlinks?: [string]: #SymlinkTarget //c
+    symlinks?: [filepath]: #SymlinkTarget 
 })
 
 #ImageConfig: close({
-    entrypoint?: string //c
-    cmd?: string //c
-    env?: [string] //c
-    labels?: [string]: string //c
-    volumes?: [string]: null //c
-    working_dir?: string //c
-    stop_signal?: string //c
-    base?: string //c
+    entrypoint?: string 
+    cmd?: string 
+    env?: [...string] 
+    labels?: [string]: string 
+    volumes?: [string]: null 
+    working_dir?: string 
+    stop_signal?: string 
+    base?: string 
     post?: #PostInstall
-    user?: string //c
+    user?: string 
 })
 
 #Frontend: close({
-    image: string //c
-    cmdline?: string //c
+    image: string 
+    cmdline?: string 
 })
 
 #Target: close({
-    dependencies?: #PackageDependencies //c
+    dependencies?: #PackageDependencies 
     image?: #ImageConfig // c
     frontend?: #Frontend // c
-    tests?: [#TestSpec] // c
+    tests?: [...#TestSpec] // c
 })
 
-
 #PatchSpec: close({
-    source: #sourceName //c
-    strip?: int //c
+    source: sourceName 
+    strip?: int 
 })
 
 // test: valid and invalid times
 #ChangelogEntry: close({
     date: time.Time
     author: string
-    changes: [string]
+    changes: [...string]
 })
 
-// test: multiple/no sources specified
 #Spec: close({
-    name: string //c
-    description: string //c
-    website?: string //c
-    version: string //c
-    revision: uint //c
-    noArch?: bool //c
+    name: string 
+    description: string 
+    website?: string 
+    version: string 
+    revision: >= 0 
+    noArch?: bool 
 
-    conflicts?: [string]: [string] //c
-    replaces?: [string]: [string] //c
-    provides?: [string] //c
+    conflicts?: [string]: [string] 
+    replaces?: [string]: [string] 
+    provides?: [...string] 
 
-    sources?: [#sourceName]: #Source //c
+    sources?: [sourceName]: #Source 
 
-    patches?: [#sourceName]: [#PatchSpec] //c
+    patches?: [sourceName]: [...#PatchSpec] 
 
-    build?: #ArtifactBuild //c 
+    build?: #ArtifactBuild  
 
     // should probably validate magic variables here 
     // TARGET* vars should not have any default values applied
-    args?: [string]: (string | null) //c
+    args?: [string]: (string | null) 
 
-    license: string //c
+    license: string 
 
-    vendor: string //c
+    vendor: string 
 
-    packager: string //c
+    packager: string 
 
-    artifacts?: #Artifacts  //c
+    artifacts?: #Artifacts  
 
-    targets?: [string]: #Target //c
+    targets?: [string]: #Target 
 
-    dependencies?: #PackageDependencies //c
+    dependencies?: #PackageDependencies 
 
-    image?: #ImageConfig //c
+    image?: #ImageConfig 
 
-    changelog?: [#ChangelogEntry] //c
+    changelog?: [...#ChangelogEntry] 
 
-    tests?: [#TestSpec] //c
+    tests?: [...#TestSpec] 
 })
 
 #Spec

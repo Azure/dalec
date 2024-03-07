@@ -1,17 +1,24 @@
 package dalec
 
 import (
+	_ "embed"
 	goerrors "errors"
 	"fmt"
 	"os"
 	"path"
 	"strings"
 
+	"cuelang.org/go/cue/cuecontext"
+	cueerrors "cuelang.org/go/cue/errors"
+	pkgyaml "cuelang.org/go/pkg/encoding/yaml"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/pkg/errors"
 )
+
+//go:embed cue/spec.cue
+var cueSpec string
 
 func knownArg(key string) bool {
 	switch key {
@@ -259,6 +266,25 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	return nil
 }
 
+func CueValidate(dt []byte) error {
+	cueCtx := cuecontext.New()
+	v := cueCtx.CompileString(cueSpec)
+
+	if v.Err() != nil {
+		return v.Err()
+	}
+
+	_, err := pkgyaml.Validate(dt, v)
+	errs := (cueerrors.Errors(err))
+
+	var retErrs []error = make([]error, 0, len(errs))
+	for _, err := range errs {
+		retErrs = append(retErrs, err)
+	}
+
+	return goerrors.Join(retErrs...)
+}
+
 // LoadSpec loads a spec from the given data.
 func LoadSpec(dt []byte) (*Spec, error) {
 	var spec Spec
@@ -266,6 +292,10 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	dt, err := stripXFields(dt)
 	if err != nil {
 		return nil, fmt.Errorf("error stripping x-fields: %w", err)
+	}
+
+	if err := CueValidate(dt); err != nil {
+		return nil, fmt.Errorf("error validating spec with cue: %w", err)
 	}
 
 	if err := yaml.UnmarshalWithOptions(dt, &spec, yaml.Strict()); err != nil {
