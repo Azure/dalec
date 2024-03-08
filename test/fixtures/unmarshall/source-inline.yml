@@ -1,12 +1,3 @@
-# # name: "name"
-# description: "desc"
-# revision: 1
-# version: "1.0"
-# license: "n/a"
-# vendor: "Microsoft"
-# packager: "n/a"
-
-
 sources:
   TestFileOctelPreGo113:
     inline:

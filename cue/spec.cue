@@ -4,8 +4,10 @@ import (
     "time"
 )
 
+// TODO: consider adding defaults to more fields
+
 // This alias exists for the sake of being explicit, and in case we want to add restrictions later
-// on what kind of filepaths we allow in Dalec
+// for what kind of filepaths we allow in Dalec
 let filepath = string
 
 // {0, ..., 511} = {0o000, ..., 0o777} are valid unix perms
@@ -15,54 +17,54 @@ let perms = >= 0 & <= 0o777
 let sourceName = =~ "^[a-zA-Z0-9_-|.]+$"
 let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
 
-#BuildStep: close({
+#BuildStep: {
    command: string
    env?: [string]: string 
-})
+}
 
-#CacheDirConfig: close({
+#CacheDirConfig: {
     mode?: "shared" | "private" | "locked" 
     key?: string 
     include_distro_key?: bool 
     include_arch_key?: bool 
-})
+}
 
-#Command: close({
+#Command: {
    dir?: filepath 
    mounts?: [...#SourceMount] 
    cache_dirs?: [filepath]: #CacheDirConfig 
    env?: [string]: string 
    steps: [...#BuildStep] 
-})
+}
 
 #SourceMount: {
     dest: filepath 
     // structural cycle formed by source.image.mounts.spec.source must terminate somehow for cue to accept
-    // even though there are non-recursive sources, (i.e., it is not required that SourceMount contain a recursive source, so there is
-    // implicitly a base case), cue's cycle detection is not currently sufficient to detect this.
+    // even though there are non-recursive source variants so there is implicitly a base case, 
+    // cue's cycle detection is not currently buggy in this case
     spec: null | #Source 
 }
 
-#SourceContext: close({
+#SourceContext: {
     name?: string
-}) 
+}
 
-#SourceDockerImage: close({ 
+#SourceDockerImage: { 
     ref: string 
     cmd?: #Command 
-})
+}
 
-#SourceHTTP: close({
+#SourceHTTP: {
     // TODO: specify url field further?
     url: string 
-})
+}
 
-#SourceBuild: close({
+#SourceBuild: {
     source?: #SubSource 
     dockerfile_path?: filepath 
     target?: string 
     args?: [string]: string 
-})
+}
 
 #SourceGit: {
     // TODO: specify URL field further?
@@ -71,19 +73,19 @@ let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
     keepGitDir?: bool 
 }
 
-#SourceInlineFile: close({
+#SourceInlineFile: {
     contents?: string 
     permissions?: perms 
     uid?: >= 0 
     gid?: >= 0 
-})
+}
 
-#SourceInlineDir: close({
+#SourceInlineDir: {
     files?: [sourceName]: #SourceInlineFile 
     permissions?: perms 
     uid?: >= 0 
     gid?: >= 0 
-})
+}
 
 #SourceInlineVariant: { file: #SourceInlineFile } | 
                       { dir: #SourceInlineDir } 
@@ -113,44 +115,44 @@ let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
 #Source: {#SourceBase, #SourceVariant}
 #SubSource: {#SourceBase, #SubSourceVariant}
 
-#PackageDependencies: close({
+#PackageDependencies: {
     build?: [string]: (null | [...string]) 
     runtime?: [string]: (null | [...string]) 
     recommends?: [string]: (null | [...string]) 
     test?: [string]: (null | [...string]) 
-})
+}
 
-#ArtifactBuild: close({
+#ArtifactBuild: {
     steps: [...#BuildStep]  
     env?: [string]: string 
-})
+}
 
-#ArtifactConfig: close({
+#ArtifactConfig: {
     subpath?: filepath 
     name?: string 
-})
+}
 
-#Artifacts: close({
+#Artifacts: {
     binaries?: [filepath]: (null | #ArtifactConfig)
     manpages?: [filepath]: (null | #ArtifactConfig)
-})
+}
 
-#CheckOutput: close({
+#CheckOutput: {
     equals?: string 
     contains?: [...string] 
     matches?: string 
     starts_with?: string 
     ends_with?: string 
     empty?: bool 
- })
+ }
 
-#TestStep: close({
+#TestStep: {
     command?: string 
     env?: [string]: string 
     stdout?: #CheckOutput 
     stderr?: #CheckOutput 
     stdin?: string 
-})
+}
 
 #FileCheckOutput: {
     #CheckOutput 
@@ -159,7 +161,7 @@ let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
     not_exist?: bool 
 }
 
-#TestSpec: close({
+#TestSpec: {
     name: string 
     dir?: filepath 
     mounts?: [...#SourceMount] 
@@ -167,17 +169,17 @@ let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
     env?: [string]: string 
     steps: [...#TestStep] 
     files?: [filepath]: (null | #FileCheckOutput)
-})
+}
 
-#SymlinkTarget: close({
+#SymlinkTarget: {
     path: filepath 
-})
+}
 
-#PostInstall: close({
+#PostInstall: {
     symlinks?: [filepath]: #SymlinkTarget 
-})
+}
 
-#ImageConfig: close({
+#ImageConfig: {
     entrypoint?: string 
     cmd?: string 
     env?: [...string] 
@@ -188,32 +190,32 @@ let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
     base?: string 
     post?: #PostInstall
     user?: string 
-})
+}
 
-#Frontend: close({
+#Frontend: {
     image: string 
     cmdline?: string 
-})
+}
 
-#Target: close({
+#Target: {
     dependencies?: (null | #PackageDependencies)
-    image?: #ImageConfig // c
-    frontend?: #Frontend // c
-    tests?: [...#TestSpec] // c
-})
+    image?: #ImageConfig
+    frontend?: #Frontend
+    tests?: [...#TestSpec]
+}
 
-#PatchSpec: close({
+#PatchSpec: {
     source: sourceName 
     strip?: int 
-})
+}
 
-#ChangelogEntry: close({
+#ChangelogEntry: {
     date: time.Time
     author: string
     changes: [...string]
-})
+}
 
-#Spec: close({
+#Spec: {
     name: string | *"My Package"
     description: string | *"My Dalec Package"
     website?: string 
@@ -231,7 +233,7 @@ let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
 
     build?: #ArtifactBuild  
 
-    // should probably validate magic variables here 
+    // TODO: could probably validate magic variables here,
     // TARGET* vars should not have any default values applied
     args?: [string]: (string | int | null) 
 
@@ -252,6 +254,6 @@ let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
     changelog?: [...#ChangelogEntry] 
 
     tests?: [...#TestSpec] 
-})
+}
 
 #Spec
