@@ -60,7 +60,7 @@ build:
 
 changelog:
   -
-    date: 2023-10-10
+    date: 2023-10-10T00:00:00Z
     author: Brian Goff <brgoff@microsoft.com>
     changes:
       - Added a changelog item

@@ -193,17 +193,18 @@ func TestCueValidate_SourceInline(t *testing.T) {
 			name:          "file and dir variants both defined",
 			unmarshalInto: "#SourceInline",
 			yaml: `
-file: 
-  contents: "some file contents"
-dir:
-  files:
-    file1:
-      contents: "some file contents"
+inline:
+    file: 
+        contents: "some file contents"
+    dir:
+        files:
+            file1:
+                contents: "some file contents"
 `,
 			wantErrs: []string{
-				"#SourceInline: 2 errors in empty disjunction:",
-				"#SourceInline.dir: field not allowed",
-				"#SourceInline.file: field not allowed",
+				"#SourceInline.inline: 2 errors in empty disjunction:",
+				"#SourceInline.inline.dir: field not allowed",
+				"#SourceInline.inline.file: field not allowed",
 			},
 		},
 	}
@@ -340,7 +341,7 @@ source: mysource*
 strip: 1
 `,
 			wantErrs: []string{
-				`#PatchSpec.source: invalid value "mysource*" (out of bound =~"^[a-zA-Z0-9_-]+$")`,
+				`#PatchSpec.source: invalid value "mysource*" (out of bound =~"^[a-zA-Z0-9_-|.]+$")`,
 			},
 		},
 	}
