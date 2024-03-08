@@ -36,7 +36,7 @@ var testHeader = `
 name: "test-spec"
 description: "Test Spec Header"
 version: "0.1"
-revision: 1
+revision: "1"
 license: "Apache"
 vendor: "Microsoft"
 packager: "Azure Container Upstream"
@@ -341,7 +341,7 @@ source: mysource*
 strip: 1
 `,
 			wantErrs: []string{
-				`#PatchSpec.source: invalid value "mysource*" (out of bound =~"^[a-zA-Z0-9_-|.]+$")`,
+				`#PatchSpec.source: invalid value "mysource*" (out of bound =~"^[a-zA-Z0-9-._]+$")`,
 			},
 		},
 	}

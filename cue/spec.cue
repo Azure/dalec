@@ -14,8 +14,7 @@ let filepath = string
 let perms = >= 0 & <= 0o777
 
 // A source name must be alphanumeric, with the inclusion of '_', '-', and '.'
-let sourceName = =~ "^[a-zA-Z0-9_-|.]+$"
-let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
+let sourceName = =~ "^[a-zA-Z0-9-._]+$"
 
 #BuildStep: {
    command: string
@@ -220,7 +219,7 @@ let buildVar = =~ "^\\${[a-zA-Z_][a-zA-Z0-9_]*}$"
     description: string | *"My Dalec Package"
     website?: string 
     version: string | *"0.1"
-    revision: (buildVar | uint) | *1
+    revision: string | *"1"
     noarch?: bool 
 
     conflicts?: [string]: (null | [...string])
