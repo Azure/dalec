@@ -219,7 +219,7 @@ let sourceName = =~ "^[a-zA-Z0-9-._]+$"
     description: string | *"My Dalec Package"
     website?: string 
     version: string | *"0.1"
-    revision: string | *"1"
+    revision: uint | string | *"1"
     noarch?: bool 
 
     conflicts?: [string]: (null | [...string])
