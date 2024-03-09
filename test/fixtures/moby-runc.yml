@@ -67,7 +67,7 @@ sources:
 
 build:
   env:
-    CGO_ENABLED: 1
+    CGO_ENABLED: "1"
     GOGC: off
     GOFLAGS: -trimpath
   steps:
