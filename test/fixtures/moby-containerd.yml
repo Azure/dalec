@@ -8,6 +8,7 @@ args:
   REVISION: 1
   VERSION: "1.7.13"
   HCS_SHIM_REPO: https://github.com/Microsoft/hcsshim.git
+  TARGETARCH:
 
 name: moby-containerd
 description: |
