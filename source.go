@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
@@ -469,7 +470,7 @@ func Sources(spec *Spec, sOpt SourceOpts, mods ...SourceModifier) (map[string]ll
 
 	for k, src := range spec.Sources {
 		pg := llb.ProgressGroup(identity.NewID(), "Prepare source: "+k, false)
-		st, err := Source2LLBGetter(spec, src, k)(sOpt, pg)
+		st, err := src.AsState(k, sOpt)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error fetching source %q", k)
 		}
