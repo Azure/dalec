@@ -13,6 +13,11 @@ func RegisterHandlers() {
 	frontend.RegisterHandler(targetKey, targets.Target{
 		Name:        "zip",
 		Description: "Builds binaries combined into a zip file",
-		Default:     true,
 	}, handleZip)
+
+	frontend.RegisterHandler(targetKey, targets.Target{
+		Name:        "container",
+		Description: "Builds binaries and installs them into a Windows base image",
+		Default:     true,
+	}, handleContainer)
 }
