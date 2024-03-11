@@ -1,7 +1,17 @@
 package dalec
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/containerd/containerd/platforms"
 	"github.com/google/shlex"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
+	"github.com/moby/buildkit/exporter/containerimage/image"
+	"github.com/moby/buildkit/frontend/dockerui"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -47,10 +57,63 @@ type ImageConfig struct {
 	User string `yaml:"user,omitempty" json:"user,omitempty"`
 }
 
-// MergeImageConfig copies the fields from the source [ImageConfig] into the destination [dalec.DockerImageSpec].
+type imageBuilderConfig struct {
+	platform *ocispecs.Platform
+}
+
+type ConfigOpt func(*imageBuilderConfig)
+
+func WithPlatform(p ocispecs.Platform) ConfigOpt {
+	return func(c *imageBuilderConfig) {
+		c.platform = &p
+	}
+}
+
+func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *Spec, targetKey string, dflt string, opts ...ConfigOpt) (*image.Image, error) {
+	dc, err := dockerui.NewClient(client)
+	if err != nil {
+		return nil, err
+	}
+
+	builderCfg := imageBuilderConfig{}
+	for _, optFunc := range opts {
+		optFunc(&builderCfg)
+	}
+
+	baseImgRef := getBaseOutputImage(spec, targetKey, dflt)
+	platform := platforms.DefaultSpec()
+	if builderCfg.platform != nil {
+		platform = *builderCfg.platform
+	}
+
+	_, _, dt, err := client.ResolveImageConfig(ctx, baseImgRef, sourceresolver.Opt{
+		Platform: &platform,
+		ImageOpt: &sourceresolver.ResolveImageOpt{
+			ResolveMode: dc.ImageResolveMode.String(),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error resolving image config: %w", err)
+	}
+
+	var img image.Image
+	if err := json.Unmarshal(dt, &img); err != nil {
+		return nil, fmt.Errorf("error unmarshalling image config: %w", err)
+	}
+
+	cfg := img.Config
+	if err := MergeImageConfig(&cfg, mergeSpecImage(spec, targetKey)); err != nil {
+		return nil, err
+	}
+
+	img.Config = cfg
+	return &img, nil
+}
+
+// MergeImageConfig copies the fields from the source [ImageConfig] into the destination [image.Image].
 // If a field is not set in the source, it is not modified in the destination.
-// Envs from [ImageConfig] are merged into the destination [dalec.DockerImageSpec] and take precedence.
-func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
+// Envs from [ImageConfig] are merged into the destination [image.Image] and take precedence.
+func MergeImageConfig(dst *image.ImageConfig, src *ImageConfig) error {
 	if src == nil {
 		return nil
 	}
@@ -102,4 +165,54 @@ func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
 	}
 
 	return nil
+}
+
+func getBaseOutputImage(spec *Spec, target, defaultBase string) string {
+	baseRef := defaultBase
+	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
+		baseRef = spec.Targets[target].Image.Base
+	}
+	return baseRef
+}
+
+func mergeSpecImage(spec *Spec, target string) *ImageConfig {
+	var cfg ImageConfig
+
+	if spec.Image != nil {
+		cfg = *spec.Image
+	}
+
+	if i := spec.Targets[target].Image; i != nil {
+		if i.Entrypoint != "" {
+			cfg.Entrypoint = spec.Targets[target].Image.Entrypoint
+		}
+
+		if i.Cmd != "" {
+			cfg.Cmd = spec.Targets[target].Image.Cmd
+		}
+
+		cfg.Env = append(cfg.Env, i.Env...)
+
+		for k, v := range i.Volumes {
+			cfg.Volumes[k] = v
+		}
+
+		for k, v := range i.Labels {
+			cfg.Labels[k] = v
+		}
+
+		if i.WorkingDir != "" {
+			cfg.WorkingDir = i.WorkingDir
+		}
+
+		if i.StopSignal != "" {
+			cfg.StopSignal = i.StopSignal
+		}
+
+		if i.Base != "" {
+			cfg.Base = i.Base
+		}
+	}
+
+	return &cfg
 }

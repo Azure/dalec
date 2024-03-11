@@ -51,7 +51,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	img, err := buildImageConfig(ctx, spec, targetKey, client)
+	img, err := dalec.BuildImageConfig(ctx, client, spec, targetKey, marinerDistrolessRef)
 	if err != nil {
 		return nil, nil, err
 	}
