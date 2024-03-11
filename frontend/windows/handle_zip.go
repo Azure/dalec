@@ -33,7 +33,15 @@ func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 		return nil, nil, err
 	}
 
-	st, err := buildZip(spec, sOpt)
+	pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
+	worker := workerImg(sOpt, pg)
+
+	bin, err := buildBinaries(spec, worker, sOpt)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
+	}
+
+	st := getZipLLB(worker, spec.Name, bin)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -60,9 +68,23 @@ func (f RunOptFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
 }
 
-func buildZip(spec *dalec.Spec, sOpt dalec.SourceOpts) (llb.State, error) {
-	base := workerImg(sOpt)
+func SpecToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) (map[string]llb.State, error) {
+	m := make(map[string]llb.State, len(spec.Sources))
+	keys := dalec.SortMapKeys(spec.Sources)
 
+	for _, k := range keys {
+		src := spec.Sources[k]
+		st, err := src.AsState(spec.Name, sOpt)
+		if err != nil {
+			return nil, err
+		}
+		m[k] = st
+	}
+
+	return m, nil
+}
+
+func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
 	sources, err := dalec.Sources(spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
@@ -81,7 +103,7 @@ func buildZip(spec *dalec.Spec, sOpt dalec.SourceOpts) (llb.State, error) {
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
 
-	work := base.
+	work := worker.
 		Run(
 			shArgs("apt-get update && apt-get install -y "+strings.Join(buildDeps(spec), " ")),
 			varCacheAptMount,
@@ -94,14 +116,18 @@ func buildZip(spec *dalec.Spec, sOpt dalec.SourceOpts) (llb.State, error) {
 	)
 
 	artifacts := work.AddMount(outputDir, llb.Scratch())
-	zipped := getZipLLB(base, spec.Name, artifacts)
-
-	return zipped, nil
+	return artifacts, nil
 }
 
-func getZipLLB(base llb.State, name string, artifacts llb.State) llb.State {
+func buildZip(spec *dalec.Spec, worker llb.State, artifacts llb.State, sOpt dalec.SourceOpts) llb.State {
+	zipped := getZipLLB(worker, spec.Name, artifacts)
+
+	return zipped
+}
+
+func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {
 	outName := filepath.Join(outputDir, name+".zip")
-	zipped := base.Run(
+	zipped := worker.Run(
 		shArgs("zip "+outName+" *"),
 		llb.Dir("/tmp/artifacts"),
 		llb.AddMount("/tmp/artifacts", artifacts),
@@ -126,9 +152,9 @@ func buildDeps(spec *dalec.Spec) []string {
 	return ls
 }
 
-func workerImg(sOpt dalec.SourceOpts) llb.State {
+func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
 	// TODO: support named context override... also this should possibly be its own image, maybe?
-	return llb.Image(workerImgRef, llb.WithMetaResolver(sOpt.Resolver)).
+	return llb.Image(workerImgRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
 		Run(
 			shArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip"),
 			varCacheAptMount,
