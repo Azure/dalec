@@ -1,0 +1,137 @@
+# syntax=local/dalec/frontend:latest
+---
+
+version: v0.0.0
+revision: 1
+name: foo
+packager: Azure Container Upstream
+vendor: Microsoft
+license: Apache-2.0
+website: https://github.com/eraser-dev/eraser
+description: Manager component for Eraser
+
+sources:
+  foo:
+    inline:
+      file:
+        contents: |
+          hello, world!
+        permissions: 0755
+
+artifacts:
+  binaries:
+    foo: {}
+
+---
+
+args:
+  VERSION: v1.3.0
+  COMMIT: 6f5a5abf937f1f0e97c626cdea32af82f20c9d26
+
+name: kubernetes-eraser-manager
+packager: Azure Container Upstream
+vendor: Microsoft
+license: Apache-2.0
+website: https://github.com/eraser-dev/eraser
+description: Manager component for Eraser
+
+version: ${VERSION}
+revision: 1
+
+sources:
+  eraser:
+    git:
+      url: https://github.com/eraser-dev/eraser.git
+      commit: ${COMMIT}
+      keepGitDir: true
+  gomods:
+    path: /build/gomodcache
+    image:
+      ref: mcr.microsoft.com/oss/go/microsoft/golang:1.20
+      cmd:
+        dir: /build/eraser
+        mounts:
+          - dest: /build/eraser
+            spec:
+              git:
+                url: https://github.com/eraser-dev/eraser.git
+                commit: ${COMMIT}
+        steps:
+          - command: go mod download
+            env:
+              GOMODCACHE: /build/gomodcache
+
+dependencies:
+  build:
+    foo:
+    msft-golang:
+    git:
+    make:
+    gcc:
+  runtime:
+    openssl-libs:
+
+build:
+  env:
+    # Note: This is needed due to a bug in the golang package for mariner
+    # https://github.com/microsoft/CBL-Mariner/issues/6363
+    GOROOT: /usr/lib/golang
+
+    VERSION: ${VERSION}
+    GOPROXY: direct
+    GOEXPERIMENT: opensslcrypto # NOTE: This is linux only. msft-golang 1.21 (not currently in the mariner repos) adds support for `systemcrypto`f which is cross platorm
+    CGO_ENABLED: "1"
+  steps:
+    - command: |
+        export GOMODCACHE="$(pwd)/gomods"
+        cp /usr/bin/foo . || exit 1
+
+        cd eraser
+        export LDFLAGS="$(build/version.sh "${VERSION}")"
+        go build -tags requirefips -ldflags="${LDFLAGS}" -o bin/eraser-manager ./main.go
+
+        # Make sure this is using the openssl crypto backend
+        go tool nm bin/eraser-manager | grep -i openssl > /dev/null
+
+artifacts:
+  binaries:
+    eraser/bin/eraser-manager: {}
+    foo: {}
+
+# tests:
+#   - name: Check files
+#     files:
+#       /usr/bin/eraser-manager:
+#         permissions: 0755
+---
+# syntax=local/dalec/frontend:latest
+args:
+  VERSION: v1.3.0
+  COMMIT: 6f5a5abf937f1f0e97c626cdea32af82f20c9d26
+name: kubernetes-eraser-manager-compat
+packager: Azure Container Upstream
+vendor: Microsoft
+license: Apache-2.0
+website: https://github.com/eraser-dev/eraser
+description: Manager component for Eraser
+version: ${VERSION}
+revision: 1
+
+dependencies:
+  runtime:
+    kubernetes-eraser-manager:
+
+build:
+  steps:
+    - command: |
+        ln -s /usr/bin/eraser-manager /build/manager
+
+artifacts:
+  binaries:
+    /build/manager:
+
+# tests:
+#   - name: Check files
+#     files:
+#       /usr/bin/manager:
+#         permissions: 0755

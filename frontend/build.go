@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/containerd/containerd/platforms"
@@ -14,17 +15,13 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error) {
+func loadSpecs(ctx context.Context, client *dockerui.Client) ([]*dalec.Spec, error) {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
 		return nil, fmt.Errorf("could not read spec file: %w", err)
 	}
 
-	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data))
-	if err != nil {
-		return nil, fmt.Errorf("error loading spec: %w", err)
-	}
-	return spec, nil
+	return dalec.LoadSpecs(bytes.TrimSpace(src.Data))
 }
 
 func listBuildTargets(group string) []*targetWrapper {
@@ -100,16 +97,44 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, fmt.Errorf("could not create build client: %w", err)
 	}
 
-	spec, err := loadSpec(ctx, bc)
+	subtarget, dalecTarget, err := getTargetNames(bc.Target)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := registerSpecHandlers(ctx, spec, client); err != nil {
-		return nil, err
+	specs, err := loadSpecs(ctx, bc)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load specs: %w", err)
 	}
 
-	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(bc.Target))
+	if subtarget == "" {
+		tgt, err := getDefaultSubtarget(specs, subtarget)
+		if err != nil {
+			return nil, err
+		}
+
+		subtarget = tgt
+	}
+
+	withoutArgs, err := dalec.NewGraph(specs, subtarget, dalecTarget)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build dependency graph: %w", err)
+	}
+
+	// By this point, we know the subtarget and only need the deps up through
+	// the subtarget, in dependency order.
+	ordered := withoutArgs.Ordered()
+	if len(ordered) == 0 {
+		return nil, fmt.Errorf("dependency graph failed to resolve")
+	}
+
+	for _, spec := range ordered {
+		if err := registerSpecHandlers(ctx, &spec, client); err != nil {
+			return nil, err
+		}
+	}
+
+	res, handled, err := bc.HandleSubrequest(ctx, makeRequestHandler(dalecTarget))
 	if err != nil || handled {
 		return res, err
 	}
@@ -125,7 +150,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 	}
 
-	f, err := lookupHandler(bc.Target)
+	f, err := lookupHandler(dalecTarget)
 	if err != nil {
 		return nil, err
 	}
@@ -145,18 +170,71 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 		buildPlatform = bc.BuildPlatforms[0]
 
-		args := dalec.DuplicateMap(bc.BuildArgs)
-		fillPlatformArgs("TARGET", args, targetPlatform)
-		fillPlatformArgs("BUILD", args, buildPlatform)
-		if err := spec.SubstituteArgs(args); err != nil {
-			return nil, nil, err
+		allArgs := collectBuildArgs(bc.BuildArgs, targetPlatform, buildPlatform, ordered)
+		graph, err := withoutArgs.SubstituteArgs(allArgs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("could not substitute build args: %w", err)
 		}
 
-		return f(ctx, client, spec)
+		return f(ctx, client, graph)
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return rb.Finalize()
+
+}
+
+func collectBuildArgs(buildArgs map[string]string, targetPlatform ocispecs.Platform, buildPlatform ocispecs.Platform, specs []dalec.Spec) map[string]map[string]string {
+	const tgt = "TARGET"
+	const bld = "BUILD"
+
+	args := dalec.DuplicateMap(buildArgs)
+	fillPlatformArgs(tgt, args, targetPlatform)
+	fillPlatformArgs(bld, args, buildPlatform)
+	allArgs := make(map[string]map[string]string)
+
+	for _, spec := range specs {
+		name := spec.Name
+		dupe := dalec.DuplicateMap(args)
+		allArgs[name] = dupe
+	}
+
+	return allArgs
+}
+
+func getDefaultSubtarget(specs []*dalec.Spec, subTarget string) (string, error) {
+	if len(specs) == 0 {
+		return "", fmt.Errorf("no spec files provided")
+	}
+
+	if subTarget == "" {
+		subTarget = specs[len(specs)-1].Name
+	}
+	return subTarget, nil
+}
+
+func getTargetNames(tgt string) (string, string, error) {
+	// The user provided no target, use the default and the subtarget will be
+	// determined later
+	if tgt == "" {
+		dalecTarget := registeredHandlers.Default().Name
+		return "", dalecTarget, nil
+	}
+
+	// The user provided a known target with no subtarget. We will determine
+	// the subtarget later
+	if existing := registeredHandlers.Get(tgt); existing != nil {
+		dalecTarget := tgt
+		return "", dalecTarget, nil
+	}
+
+	// The user provided a subtarget and target in the form subtarget/target
+	subTarget, dalecTarget, ok := strings.Cut(tgt, "/")
+	if !ok {
+		return "", "", fmt.Errorf("malformed target: %q", tgt)
+	}
+
+	return subTarget, dalecTarget, nil
 }

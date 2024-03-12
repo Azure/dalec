@@ -10,9 +10,11 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func handleDepsOnly(ctx context.Context, client gwclient.Client, graph dalec.Graph) (gwclient.Reference, *image.Image, error) {
+	spec := graph.Target()
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, nil, err
@@ -21,13 +23,13 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spe
 	pg := dalec.ProgressGroup("Build mariner2 deps-only container: " + spec.Name)
 	baseImg := getWorkerImage(sOpt, pg)
 	rpmDir := baseImg.Run(
-		shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(getRuntimeDeps(spec), " ")),
+		shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(getRuntimeDeps(&spec), " ")),
 		defaultTndfCacheMount(),
 		pg,
 	).
 		AddMount("/tmp/rpms", llb.Scratch())
 
-	st, err := specToContainerLLB(spec, targetKey, baseImg, rpmDir, sOpt, pg)
+	st, err := specToContainerLLB(&spec, targetKey, baseImg, rpmDir, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -44,7 +46,7 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spe
 		return nil, nil, err
 	}
 
-	img, err := buildImageConfig(ctx, spec, targetKey, client)
+	img, err := buildImageConfig(ctx, &spec, targetKey, client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -77,4 +79,13 @@ func getRuntimeDeps(spec *dalec.Spec) []string {
 
 	sort.Strings(out)
 	return out
+}
+
+func getRuntimeDepSet(spec *dalec.Spec) sets.Set[string] {
+	deps := getRuntimeDeps(spec)
+	s := sets.New[string]()
+	for _, dep := range deps {
+		s.Insert(dep)
+	}
+	return s
 }

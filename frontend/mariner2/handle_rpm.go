@@ -32,8 +32,9 @@ func tdnfCacheMountWithPrefix(prefix string) llb.RunOption {
 	return llb.AddMount(filepath.Join(prefix, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheName, llb.CacheMountLocked))
 }
 
-func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	if err := rpm.ValidateSpec(spec); err != nil {
+func handleRPM(ctx context.Context, client gwclient.Client, graph dalec.Graph) (gwclient.Reference, *image.Image, error) {
+	spec := graph.Target()
+	if err := rpm.ValidateSpec(&spec); err != nil {
 		return nil, nil, fmt.Errorf("rpm: invalid spec: %w", err)
 	}
 
@@ -42,12 +43,19 @@ func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := specToRpmLLB(spec, sOpt, pg)
+
+	baseImg := getWorkerImage(sOpt, pg)
+	rpmDirs, err := buildRPMDirs(graph, baseImg, sOpt, pg)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	def, err := st.Marshal(ctx, pg)
+	rpm, ok := rpmDirs[spec.Name]
+	if !ok {
+		return nil, nil, fmt.Errorf("graph error: llb for final rpm %q not found", spec.Name)
+	}
+
+	def, err := rpm.Marshal(ctx, pg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 	}
@@ -89,6 +97,26 @@ func getBuildDeps(spec *dalec.Spec) []string {
 	return out
 }
 
+// Partitions build deps into dalec spec-local build deps (first return value)
+// and build deps that are expected to be found in the package repo (second
+// return value).
+func partitionBuildDeps(spec *dalec.Spec, graph dalec.Graph) ([]string, []string) {
+	buildDeps := getBuildDeps(spec)
+	dalecDeps := make([]string, 0, len(buildDeps))
+	repoDeps := make([]string, 0, len(buildDeps))
+
+	for _, dep := range buildDeps {
+		if _, ok := graph.Get(dep); ok {
+			dalecDeps = append(dalecDeps, dep)
+			continue
+		}
+
+		repoDeps = append(repoDeps, dep)
+	}
+
+	return dalecDeps, repoDeps
+}
+
 func getWorkerImage(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
 	opts = append(opts, dalec.ProgressGroup("Prepare worker image"))
 	return llb.Image(marinerRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
@@ -100,17 +128,16 @@ func getWorkerImage(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State
 		Root()
 }
 
-func installBuildDeps(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOption {
+func installBuildDeps(repoDeps []string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
-		deps := getBuildDeps(spec)
-		if len(deps) == 0 {
+		if len(repoDeps) == 0 {
 			return in
 		}
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
+		opts = append(opts, dalec.ProgressGroup("Install repo build deps"))
 
 		return in.
 			Run(
-				shArgs(fmt.Sprintf("tdnf install --releasever=2.0 -y %s", strings.Join(deps, " "))),
+				shArgs(fmt.Sprintf("tdnf install --releasever=2.0 -y %s", strings.Join(repoDeps, " "))),
 				defaultTndfCacheMount(),
 				dalec.WithConstraints(opts...),
 			).
@@ -118,13 +145,35 @@ func installBuildDeps(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOpt
 	}
 }
 
-func specToRpmLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func installSpecLocalBuildDeps(specLocalDeps []string, depRPMs llb.State, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(in llb.State) llb.State {
+		if len(specLocalDeps) == 0 {
+			return in
+		}
+		opts = append(opts, dalec.ProgressGroup("Install spec-local build deps"))
+
+		const depDir = "/tmp/builddeps"
+		return in.
+			Run(
+				shArgs(`
+                    find `+depDir+` -type f -name "*.rpm" -print0 |
+                        xargs -0 tdnf install --releasever=2.0 --nogpgcheck --setopt=reposdir=/etc/yum.repos.d -y
+                `),
+				llb.AddMount(depDir, depRPMs),
+				defaultTndfCacheMount(),
+				dalec.WithConstraints(opts...),
+			).
+			Root()
+	}
+}
+
+func specToRpmLLBWithBuildDeps(spec *dalec.Spec, dalecDeps []string, repoDeps []string, sOpt dalec.SourceOpts, depRPMs llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	br, err := rpm.SpecToBuildrootLLB(spec, targetKey, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 
-	base := getWorkerImage(sOpt, opts...).With(installBuildDeps(spec, opts...))
+	base := getWorkerImage(sOpt, opts...).With(installBuildDeps(repoDeps, opts...)).With(installSpecLocalBuildDeps(dalecDeps, depRPMs, opts...))
 	return rpm.Build(br, base, specPath, opts...), nil
 }

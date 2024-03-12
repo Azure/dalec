@@ -1,8 +1,10 @@
 package dalec
 
 import (
+	"bytes"
 	goerrors "errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -293,6 +295,57 @@ func stripXFields(dt []byte) ([]byte, error) {
 	}
 
 	return yaml.Marshal(obj)
+}
+
+func GetBuildTargets(specs []*Spec, target string) ([]*Spec, error) {
+	j := -1
+	for i, s := range specs {
+		if s.Name == target {
+			j = i
+		}
+	}
+	if j < 0 {
+		return nil, fmt.Errorf("target %q not found, or is unreachale", target)
+	}
+
+	return specs[:j+1], nil
+}
+
+// LoadSpec loads a spec from the given data.
+func LoadSpecs(b []byte) ([]*Spec, error) {
+	f := bytes.NewBuffer(b)
+	y := yaml.NewDecoder(f, yaml.Strict())
+	specs := []*Spec{}
+	for {
+		var spec Spec
+		err := y.Decode(&spec)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error unmarshalling spec: %w", err)
+		}
+
+		specs = append(specs, &spec)
+	}
+
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("no specs provided")
+	}
+
+	for _, spec := range specs {
+		if err := spec.Validate(); err != nil {
+			return nil, err
+		}
+		spec.FillDefaults()
+
+		args := DuplicateMap(spec.Args)
+		if err := spec.SubstituteArgs(args); err != nil {
+			return nil, err
+		}
+	}
+
+	return specs, nil
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {
