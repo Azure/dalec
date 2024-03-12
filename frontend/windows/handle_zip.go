@@ -119,12 +119,6 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (l
 	return artifacts, nil
 }
 
-func buildZip(spec *dalec.Spec, worker llb.State, artifacts llb.State, sOpt dalec.SourceOpts) llb.State {
-	zipped := getZipLLB(worker, spec.Name, artifacts)
-
-	return zipped
-}
-
 func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {
 	outName := filepath.Join(outputDir, name+".zip")
 	zipped := worker.Run(
