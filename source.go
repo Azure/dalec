@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
@@ -456,33 +455,4 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 	}
 
 	return states
-}
-
-// SourceModifier is a function that modifies the provided source LLB state.
-type SourceModifier func(key string, src *Source, st llb.State, opts ...llb.ConstraintsOpt) (llb.State, error)
-
-// Sources gets all the source LLB states from the spec.
-//
-// SourceModifiers can be provided to modify the source LLB state before it is returned.
-// The `key` argument to the SourceModifier is the name of the source.
-func Sources(spec *Spec, sOpt SourceOpts, mods ...SourceModifier) (map[string]llb.State, error) {
-	states := make(map[string]llb.State, len(spec.Sources))
-
-	for k, src := range spec.Sources {
-		pg := llb.ProgressGroup(identity.NewID(), "Prepare source: "+k, false)
-		st, err := src.AsState(k, sOpt)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error fetching source %q", k)
-		}
-
-		for _, mod := range mods {
-			st, err = mod(k, &src, st, pg)
-			if err != nil {
-				return nil, errors.Wrapf(err, "error modifying source: %s", k)
-			}
-		}
-		states[k] = st
-	}
-
-	return states, nil
 }
