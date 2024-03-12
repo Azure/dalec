@@ -85,7 +85,7 @@ func SpecToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) (map[string]llb.S
 }
 
 func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-	sources, err := dalec.Sources(spec, sOpt)
+	sources, err := SpecToSourcesLLB(spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
 	}
