@@ -1,24 +1,30 @@
 package windows
 
 import (
+	"context"
+
 	"github.com/Azure/dalec/frontend"
-	"github.com/moby/buildkit/frontend/subrequests/targets"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
 const (
-	targetKey = "windowscross"
-	outputKey = "windows"
+	DefaultTargetKey = "windowscross"
+	outputKey        = "windows"
 )
 
-func RegisterHandlers() {
-	frontend.RegisterHandler(targetKey, targets.Target{
+func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+	var mux frontend.BuildMux
+
+	mux.Add("zip", handleZip, &bktargets.Target{
 		Name:        "zip",
 		Description: "Builds binaries combined into a zip file",
-	}, handleZip)
+	})
 
-	frontend.RegisterHandler(targetKey, targets.Target{
+	mux.Add("container", handleContainer, &bktargets.Target{
 		Name:        "container",
 		Description: "Builds binaries and installs them into a Windows base image",
 		Default:     true,
-	}, handleContainer)
+	})
+	return mux.Handle(ctx, client)
 }
