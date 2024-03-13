@@ -283,19 +283,19 @@ func WithCreateDestPath() llb.CopyOption {
 	})
 }
 
-func SourceIsDir(src Source) (bool, error) {
+func SourceIsDir(src Source) bool {
 	switch {
 	case src.DockerImage != nil,
 		src.Git != nil,
 		src.Build != nil,
 		src.Context != nil:
-		return true, nil
+		return true
 	case src.HTTP != nil:
-		return false, nil
+		return false
 	case src.Inline != nil:
-		return src.Inline.Dir != nil, nil
+		return src.Inline.Dir != nil
 	default:
-		return false, fmt.Errorf("unsupported source type")
+		panic("unreachable")
 	}
 }
 
@@ -450,7 +450,12 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 		if !patchesExist {
 			continue
 		}
+
 		opts = append(opts, ProgressGroup("Patch spec source:"+sourceName))
+		isDir := SourceIsDir(spec.Sources[sourceName])
+		if isDir {
+
+		}
 		states[sourceName] = patchSource(worker, sourceState, states, patches, withConstraints(opts))
 	}
 
