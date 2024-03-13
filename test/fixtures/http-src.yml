@@ -1,6 +1,6 @@
 # syntax=ghcr.io/azure/dalec/frontend:latest
 
-name: dalec-test-fixutre-sources
+name: dalec-test-fixture-sources
 description: A test fixture for checking http sources
 website: https://www.github.com/Azure/dalec
 version: 0.0.1
