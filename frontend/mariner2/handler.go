@@ -1,31 +1,37 @@
 package mariner2
 
 import (
+	"context"
+
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/rpm"
-	"github.com/moby/buildkit/frontend/subrequests/targets"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
 const (
-	targetKey = "mariner2"
+	DefaultTargetKey = "mariner2"
 )
 
-func RegisterHandlers() {
-	frontend.RegisterHandler(targetKey, targets.Target{
+func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+	var mux frontend.BuildMux
+
+	mux.Add("rpm", handleRPM, &bktargets.Target{
 		Name:        "rpm",
 		Description: "Builds an rpm and src.rpm for mariner2.",
-	}, handleRPM)
+	})
+	mux.Add("rpm/debug", rpm.HandleDebug(), nil)
 
-	frontend.RegisterHandler(targetKey, targets.Target{
+	mux.Add("container", handleContainer, &bktargets.Target{
 		Name:        "container",
-		Description: "Builds a container with the RPM installed.",
+		Description: "Builds a container image for mariner2.",
 		Default:     true,
-	}, handleContainer)
+	})
 
-	frontend.RegisterHandler(targetKey, targets.Target{
+	mux.Add("container/depsonly", handleDepsOnly, &bktargets.Target{
 		Name:        "container/depsonly",
-		Description: "Builds a container with only the runtime dependencies installed.",
-	}, handleDepsOnly)
+		Description: "Builds a container image with only the runtime dependencies installed.",
+	})
 
-	rpm.RegisterHandlers(targetKey)
+	return mux.Handle(ctx, client)
 }
