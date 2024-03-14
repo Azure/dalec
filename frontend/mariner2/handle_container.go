@@ -11,6 +11,7 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -75,8 +76,10 @@ func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, clie
 	}
 
 	baseImgRef := getBaseOutputImage(spec, targetKey)
-	_, _, dt, err := client.ResolveImageConfig(ctx, baseImgRef, llb.ResolveImageConfigOpt{
-		ResolveMode: dc.ImageResolveMode.String(),
+	_, _, dt, err := client.ResolveImageConfig(ctx, baseImgRef, sourceresolver.Opt{
+		ImageOpt: &sourceresolver.ResolveImageOpt{
+			ResolveMode: dc.ImageResolveMode.String(),
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error resolving image config: %w", err)

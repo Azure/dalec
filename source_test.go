@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
 	"github.com/moby/buildkit/solver/pb"
@@ -728,7 +729,7 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 			// Note, we can't really test anything other than inline here because we don't have access to the actual buildkit client,
 			// so we can't extract extract the dockerfile from the input state (nor do we have any input state)
 			src := []byte(src.Build.Source.Inline.File.Contents)
-			st, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, src, dockerfile2llb.ConvertOpt{
+			st, _, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, src, dockerfile2llb.ConvertOpt{
 				MetaResolver: stubMetaResolver{},
 			})
 			return *st, err
@@ -933,7 +934,7 @@ func envMapToSlice(env map[string]string) []string {
 
 type stubMetaResolver struct{}
 
-func (stubMetaResolver) ResolveImageConfig(ctx context.Context, ref string, opts llb.ResolveImageConfigOpt) (string, digest.Digest, []byte, error) {
+func (stubMetaResolver) ResolveImageConfig(ctx context.Context, ref string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
 	// Craft a dummy image config
 	// If we don't put at least 1 diffID, buildkit will treat this as `FROM scratch` (and actually litterally convert it `llb.Scratch`)
 	// This affects what ops that get marshaled.

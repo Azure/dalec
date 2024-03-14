@@ -132,8 +132,16 @@ func withDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.Sol
 func displaySolveStatus(ctx context.Context, t *testing.T) (chan *client.SolveStatus, <-chan struct{}) {
 	ch := make(chan *client.SolveStatus)
 	done := make(chan struct{})
+	display, err := progressui.NewDisplay(&testWriter{t}, progressui.AutoMode, progressui.WithPhase(t.Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	go func() {
-		_, _ = progressui.DisplaySolveStatus(ctx, nil, &testWriter{t}, ch)
+		_, err := display.UpdateFrom(ctx, ch)
+		if err != nil {
+			t.Log(err)
+		}
 		close(done)
 	}()
 	return ch, done
