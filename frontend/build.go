@@ -7,10 +7,10 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/containerd/containerd/platforms"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
+	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -130,7 +130,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, err
 	}
 
-	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *image.Image, error) {
+	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (r gwclient.Reference, img, baseImg *dockerspec.DockerOCIImage, err error) {
 		var targetPlatform, buildPlatform ocispecs.Platform
 		if platform != nil {
 			targetPlatform = *platform
@@ -141,7 +141,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		// the dockerui client, given the current implementation, should only ever have
 		// a single build platform
 		if len(bc.BuildPlatforms) != 1 {
-			return nil, nil, fmt.Errorf("expected exactly one build platform, got %d", len(bc.BuildPlatforms))
+			return nil, nil, nil, fmt.Errorf("expected exactly one build platform, got %d", len(bc.BuildPlatforms))
 		}
 		buildPlatform = bc.BuildPlatforms[0]
 
@@ -149,10 +149,11 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		fillPlatformArgs("TARGET", args, targetPlatform)
 		fillPlatformArgs("BUILD", args, buildPlatform)
 		if err := spec.SubstituteArgs(args); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
-		return f(ctx, client, spec)
+		ref, img, err := f(ctx, client, spec)
+		return ref, img, nil, err
 	})
 	if err != nil {
 		return nil, err
