@@ -8,7 +8,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
@@ -41,7 +40,7 @@ func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	return worker.AddMount(outBase, llb.Scratch())
 }
 
-func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, nil, err
@@ -68,7 +67,7 @@ func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 	}
 	ref, err := res.SingleRef()
 	// Do not return a nil image, it may cause a panic
-	return ref, &image.Image{}, err
+	return ref, &dalec.DockerImageSpec{}, err
 }
 
 func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.State, error) {

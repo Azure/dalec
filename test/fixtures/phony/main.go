@@ -7,7 +7,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
@@ -41,7 +40,7 @@ func main() {
 	}
 }
 
-func phonyBuild(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func phonyBuild(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 	def, err := llb.Scratch().File(llb.Mkfile("hello", 0o644, []byte("phony hello"))).Marshal(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -57,10 +56,10 @@ func phonyBuild(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (
 	if err != nil {
 		return nil, nil, err
 	}
-	return ref, &image.Image{}, nil
+	return ref, &dalec.DockerImageSpec{}, nil
 }
 
-func phonyResolve(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func phonyResolve(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 	def, err := llb.Scratch().File(llb.Mkfile("resolve", 0o644, []byte("phony resolve"))).Marshal(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -75,5 +74,5 @@ func phonyResolve(ctx context.Context, client gwclient.Client, spec *dalec.Spec)
 	if err != nil {
 		return nil, nil, err
 	}
-	return ref, &image.Image{}, nil
+	return ref, &dalec.DockerImageSpec{}, nil
 }

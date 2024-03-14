@@ -6,12 +6,11 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/gateway/client"
 )
 
 // HandleSources is a handler that outputs all the sources.
-func HandleSources(ctx context.Context, gwc client.Client, spec *dalec.Spec) (client.Reference, *image.Image, error) {
+func HandleSources(ctx context.Context, gwc client.Client, spec *dalec.Spec) (client.Reference, *dalec.DockerImageSpec, error) {
 	sOpt, err := frontend.SourceOptFromClient(ctx, gwc)
 	if err != nil {
 		return nil, nil, err
@@ -42,5 +41,5 @@ func HandleSources(ctx context.Context, gwc client.Client, spec *dalec.Spec) (cl
 	if err != nil {
 		return nil, nil, err
 	}
-	return ref, &image.Image{}, nil
+	return ref, &dalec.DockerImageSpec{}, nil
 }
