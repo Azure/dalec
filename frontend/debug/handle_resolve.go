@@ -7,12 +7,11 @@ import (
 	"github.com/Azure/dalec"
 	yaml "github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
 // HandleResolve is a handler that generates a resolved spec file with all the build args and variables expanded.
-func HandleResolve(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func HandleResolve(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 	dt, err := yaml.Marshal(spec)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error marshalling spec: %w", err)
@@ -30,5 +29,5 @@ func HandleResolve(ctx context.Context, client gwclient.Client, spec *dalec.Spec
 	}
 	ref, err := res.SingleRef()
 	// Do not return a nil image, it may cause a panic
-	return ref, &image.Image{}, err
+	return ref, nil, err
 }

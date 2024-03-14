@@ -11,7 +11,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
@@ -21,7 +20,7 @@ import (
 
 const dalecTargetOptKey = "dalec.target"
 
-type BuildFunc func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error)
+type BuildFunc func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error)
 
 type targetWrapper struct {
 	bktargets.Target

@@ -2,9 +2,12 @@ package dalec
 
 import (
 	"github.com/google/shlex"
-	"github.com/moby/buildkit/exporter/containerimage/image"
+	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
+
+type DockerImageSpec = dockerspec.DockerOCIImage
+type DockerImageConfig = dockerspec.DockerOCIImageConfig
 
 // ImageConfig is the configuration for the output image.
 // When the target output is a container image, this is used to configure the image.
@@ -44,10 +47,10 @@ type ImageConfig struct {
 	User string `yaml:"user,omitempty" json:"user,omitempty"`
 }
 
-// MergeImageConfig copies the fields from the source [ImageConfig] into the destination [image.Image].
+// MergeImageConfig copies the fields from the source [ImageConfig] into the destination [dalec.DockerImageSpec].
 // If a field is not set in the source, it is not modified in the destination.
-// Envs from [ImageConfig] are merged into the destination [image.Image] and take precedence.
-func MergeImageConfig(dst *image.ImageConfig, src *ImageConfig) error {
+// Envs from [ImageConfig] are merged into the destination [dalec.DockerImageSpec] and take precedence.
+func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
 	if src == nil {
 		return nil
 	}

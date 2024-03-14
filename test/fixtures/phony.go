@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -39,8 +39,8 @@ func PhonyFrontend(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, 
 		).
 		AddMount("/build/out", llb.Scratch())
 
-	cfg := image.Image{
-		Config: image.ImageConfig{
+	cfg := dalec.DockerImageSpec{
+		Config: dalec.DockerImageConfig{
 			ImageConfig: ocispecs.ImageConfig{
 				Entrypoint: []string{"/phony"},
 			},
@@ -70,7 +70,7 @@ func PhonyFrontend(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, 
 	return res, nil
 }
 
-func injectFrontendLabels(cfg *image.Image) {
+func injectFrontendLabels(cfg *dalec.DockerImageSpec) {
 	if cfg.Config.Labels == nil {
 		cfg.Config.Labels = map[string]string{}
 	}

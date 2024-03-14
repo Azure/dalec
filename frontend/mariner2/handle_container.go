@@ -12,7 +12,6 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
@@ -21,7 +20,7 @@ const (
 	marinerDistrolessRef = "mcr.microsoft.com/cbl-mariner/distroless/base:2.0"
 )
 
-func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, nil, err
@@ -69,7 +68,7 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	return ref, img, err
 }
 
-func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, client gwclient.Client) (*image.Image, error) {
+func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, client gwclient.Client) (*dalec.DockerImageSpec, error) {
 	dc, err := dockerui.NewClient(client)
 	if err != nil {
 		return nil, err
@@ -85,7 +84,7 @@ func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, clie
 		return nil, fmt.Errorf("error resolving image config: %w", err)
 	}
 
-	var img image.Image
+	var img dalec.DockerImageSpec
 	if err := json.Unmarshal(dt, &img); err != nil {
 		return nil, fmt.Errorf("error unmarshalling image config: %w", err)
 	}

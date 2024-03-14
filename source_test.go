@@ -15,7 +15,6 @@ import (
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
@@ -939,7 +938,7 @@ func (stubMetaResolver) ResolveImageConfig(ctx context.Context, ref string, opt 
 	// If we don't put at least 1 diffID, buildkit will treat this as `FROM scratch` (and actually litterally convert it `llb.Scratch`)
 	// This affects what ops that get marshaled.
 	// Namely it removes our `docker-image` identifier op.
-	img := image.Image{
+	img := DockerImageSpec{
 		Image: v1.Image{
 			RootFS: v1.RootFS{
 				DiffIDs: []digest.Digest{digest.FromBytes(nil)},

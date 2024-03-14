@@ -10,7 +10,6 @@ import (
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
-	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -130,7 +129,7 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		return nil, err
 	}
 
-	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (r gwclient.Reference, img, baseImg *dockerspec.DockerOCIImage, err error) {
+	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (r gwclient.Reference, img, baseImg *dalec.DockerImageSpec, err error) {
 		var targetPlatform, buildPlatform ocispecs.Platform
 		if platform != nil {
 			targetPlatform = *platform

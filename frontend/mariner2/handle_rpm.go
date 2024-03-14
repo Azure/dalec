@@ -11,7 +11,6 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/rpm"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
@@ -32,7 +31,7 @@ func tdnfCacheMountWithPrefix(prefix string) llb.RunOption {
 	return llb.AddMount(filepath.Join(prefix, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheName, llb.CacheMountLocked))
 }
 
-func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 	if err := rpm.ValidateSpec(spec); err != nil {
 		return nil, nil, fmt.Errorf("rpm: invalid spec: %w", err)
 	}
@@ -60,7 +59,7 @@ func handleRPM(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 	}
 	ref, err := res.SingleRef()
 	// Do not return a nil image, it may cause a panic
-	return ref, &image.Image{}, err
+	return ref, &dalec.DockerImageSpec{}, err
 }
 
 func shArgs(cmd string) llb.RunOption {

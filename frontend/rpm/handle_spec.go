@@ -10,12 +10,11 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
 func SpecHandler(target string) frontend.BuildFunc {
-	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		st, err := Dalec2SpecLLB(spec, llb.Scratch(), target, "")
 		if err != nil {
 			return nil, nil, err
@@ -34,7 +33,7 @@ func SpecHandler(target string) frontend.BuildFunc {
 		}
 		ref, err := res.SingleRef()
 		// Do not return a nil image, it may cause a panic
-		return ref, &image.Image{}, err
+		return ref, &dalec.DockerImageSpec{}, err
 	}
 }
 
