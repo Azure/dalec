@@ -62,9 +62,6 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Should not have internet access during build",
-			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{"curl": {}},
-			},
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
 					{
@@ -154,11 +151,7 @@ index 0000000..5260cb1
 				},
 			},
 
-			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{
-					"bash": {},
-				},
-			},
+			Dependencies: &dalec.PackageDependencies{},
 
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{

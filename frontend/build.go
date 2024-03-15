@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/containerd/containerd/platforms"
@@ -13,13 +14,28 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+const (
+	windowsTargetKey    = "windows"
+	windowsTargetPrefix = windowsTargetKey + "/"
+)
+
 func loadSpec(ctx context.Context, client *dockerui.Client) (*dalec.Spec, error) {
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
 		return nil, fmt.Errorf("could not read spec file: %w", err)
 	}
 
-	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data))
+	opts := []dalec.LoadOpt{}
+	if strings.HasPrefix(client.Target, windowsTargetPrefix) {
+		opts = append(opts, dalec.WithValidation(func(s *dalec.Spec) error {
+			if len(s.GetRuntimeDeps(windowsTargetKey)) != 0 {
+				return fmt.Errorf("windows target had runtime dependencies: ")
+			}
+			return nil
+		}))
+	}
+
+	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data), opts...)
 	if err != nil {
 		return nil, fmt.Errorf("error loading spec: %w", err)
 	}
