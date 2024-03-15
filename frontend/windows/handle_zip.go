@@ -41,12 +41,12 @@ func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 		return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
 	}
 
-	// st := getZipLLB(worker, spec.Name, bin)
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
+	st := getZipLLB(worker, spec.Name, bin)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	def, err := bin.Marshal(ctx)
+	def, err := st.Marshal(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 	}
@@ -128,14 +128,12 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (l
 		return llb.Scratch(), err
 	}
 
-	combined := dalec.MergeAtPath(llb.Scratch(), mapToArraySortedByKeys(sources), "/")
 	patchedMap := dalec.PatchSources(worker, spec, sources)
 
 	patched := mapToArraySortedByKeys(patchedMap)
 
-	combined = dalec.MergeAtPath(llb.Scratch(), patched, "/")
+	combined := dalec.MergeAtPath(llb.Scratch(), patched, "/")
 	buildScript := createBuildScript(spec)
-	combined = combined.File(llb.Copy(buildScript, "/", "/scripts"))
 
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
@@ -153,7 +151,7 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (l
 		llb.Network(llb.NetModeNone),
 	)
 
-	artifacts := work.Root()
+	artifacts := work.AddMount(outputDir, llb.Scratch())
 	return artifacts, nil
 }
 
