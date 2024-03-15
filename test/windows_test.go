@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -12,14 +11,14 @@ import (
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 )
 
-func TestMariner2(t *testing.T) {
+func TestWindows(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, "mariner2/container")
+	testWindows(ctx, t, "windows/container")
 }
 
-func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string) {
+func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -212,51 +211,6 @@ echo "$BAR" > bar.txt
 					"bar.txt":  {},
 				},
 			},
-
-			Tests: []*dalec.TestSpec{
-				{
-					Name: "Check that the binary artifacts execute and provide the expected output",
-					Files: map[string]dalec.FileCheckOutput{
-						"/usr/bin/src1": {
-							Permissions: 0o700,
-						},
-						"/usr/bin/file2": {
-							Permissions: 0o700,
-						},
-					},
-					Steps: []dalec.TestStep{
-						{
-							Command: "/usr/bin/src1",
-							Stdout:  dalec.CheckOutput{Equals: "hello world\n"},
-							Stderr:  dalec.CheckOutput{Empty: true},
-						},
-						{
-							Command: "/usr/bin/file2",
-							Stdout:  dalec.CheckOutput{Equals: "Added a new file\n"},
-							Stderr:  dalec.CheckOutput{Empty: true},
-						},
-					},
-				},
-				{
-					Name: "Check that multi-line command (from build step) with env vars propagates env vars to whole command",
-					Files: map[string]dalec.FileCheckOutput{
-						"/usr/bin/foo0.txt": {CheckOutput: dalec.CheckOutput{StartsWith: "foo_0\n"}},
-						"/usr/bin/foo1.txt": {CheckOutput: dalec.CheckOutput{StartsWith: "foo_1\n"}},
-						"/usr/bin/bar.txt":  {CheckOutput: dalec.CheckOutput{StartsWith: "bar\n"}},
-					},
-				},
-				{
-					Name: "Post-install symlinks should be created",
-					Files: map[string]dalec.FileCheckOutput{
-						"/src1": {},
-					},
-					Steps: []dalec.TestStep{
-						{Command: "/bin/bash -c 'test -L /src1'"},
-						{Command: "/bin/bash -c 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
-						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
-					},
-				},
-			},
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
@@ -267,54 +221,12 @@ echo "$BAR" > bar.txt
 				return nil, err
 			}
 
-			ref, err := res.SingleRef()
+			_, err = res.SingleRef()
 			if err != nil {
 				return nil, err
-			}
-
-			var outErr error
-
-			if err := validateFilePerms(ctx, ref, "/usr/bin/src1", 0o700); err != nil {
-				outErr = errors.Join(outErr, err)
-			}
-
-			if err := validateFilePerms(ctx, ref, "/usr/bin/file2", 0o700); err != nil {
-				outErr = errors.Join(outErr, err)
-			}
-
-			// Make sure the test framework was actually executed by the build target.
-			// This appends a test case so that is expected to fail and as such cause the build to fail.
-			spec.Tests = append(spec.Tests, &dalec.TestSpec{
-				Name: "Test framework should be executed",
-				Steps: []dalec.TestStep{
-					{Command: "/bin/sh -c 'echo this command should fail; exit 42'"},
-				},
-			})
-
-			sr = newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
-			sr.Evaluate = true
-			if _, err := gwc.Solve(ctx, sr); err == nil {
-				outErr = errors.Join(outErr, fmt.Errorf("expected test spec to run with error but got none"))
-			}
-
-			if outErr != nil {
-				return nil, outErr
 			}
 
 			return gwclient.NewResult(), nil
 		})
 	})
-}
-
-func validateFilePerms(ctx context.Context, ref gwclient.Reference, p string, expected os.FileMode) error {
-	stat, err := ref.StatFile(ctx, gwclient.StatRequest{Path: p})
-	if err != nil {
-		return err
-	}
-
-	actual := os.FileMode(stat.Mode).Perm()
-	if actual != expected {
-		return fmt.Errorf("expected mode %O, got %O", expected, actual)
-	}
-	return nil
 }
