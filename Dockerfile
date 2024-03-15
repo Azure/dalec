@@ -9,8 +9,8 @@ ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 RUN \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -gcflags=all="-N -l" -o /frontend ./cmd/frontend && \
-    go build -gcflags=all="-N -l" -o /dalec-redirectio ./cmd/dalec-redirectio
+    go build -o /frontend ./cmd/frontend && \
+    go build -o /dalec-redirectio ./cmd/dalec-redirectio
 
 FROM scratch AS frontend
 COPY --from=frontend-build /frontend /frontend
