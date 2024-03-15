@@ -62,7 +62,7 @@ func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 	return ref, &image.Image{}, err
 }
 
-func SpecToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
 	// Sort the map keys so that the order is consistent This shouldn't be
 	// needed when MergeOp is supported, but when it is not this will improve
 	// cache hits for callers of this function.
@@ -117,7 +117,7 @@ func mapToArraySortedByKeys[T any](m map[string]T) []T {
 }
 
 func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-	sources, err := SpecToSourcesLLB(spec, sOpt)
+	sources, err := specToSourcesLLB(spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
 	}
