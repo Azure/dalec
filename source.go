@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/util/gitutil"
@@ -283,19 +284,19 @@ func WithCreateDestPath() llb.CopyOption {
 	})
 }
 
-func SourceIsDir(src Source) bool {
+func SourceIsDir(src Source) (bool, error) {
 	switch {
 	case src.DockerImage != nil,
 		src.Git != nil,
 		src.Build != nil,
 		src.Context != nil:
-		return true
+		return true, nil
 	case src.HTTP != nil:
-		return false
+		return false, nil
 	case src.Inline != nil:
-		return src.Inline.Dir != nil
+		return src.Inline.Dir != nil, nil
 	default:
-		panic("unreachable")
+		return false, fmt.Errorf("unsupported source type")
 	}
 }
 
@@ -419,7 +420,7 @@ func (s Source) Doc(name string) (io.Reader, error) {
 	return b, nil
 }
 
-func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
+func patchFileSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
 	for _, p := range patchNames {
 		patchState := sourceToState[p.Source]
 		// on each iteration, mount source state to /src to run `patch`, and
@@ -427,6 +428,22 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 		sourceState = worker.Run(
 			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(p.Source)),
 			llb.Dir("src"),
+			shArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
+			WithConstraints(opts...),
+		).AddMount("/src", sourceState)
+	}
+
+	return sourceState
+}
+
+func patchDirSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
+	for _, p := range patchNames {
+		patchState := sourceToState[p.Source]
+		// on each iteration, mount source state to /src to run `patch`, and
+		// set the state under /src to be the source state for the next iteration
+		sourceState = worker.Run(
+			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(p.Source)),
+			llb.Dir(filepath.Join("src", p.Source)),
 			shArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
 			WithConstraints(opts...),
 		).AddMount("/src", sourceState)
@@ -450,13 +467,12 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 		if !patchesExist {
 			continue
 		}
-
 		opts = append(opts, ProgressGroup("Patch spec source:"+sourceName))
-		isDir := SourceIsDir(spec.Sources[sourceName])
-		if isDir {
-
+		patchFunc := patchFileSource
+		if isDir, _ := SourceIsDir(spec.Sources[sourceName]); isDir {
+			patchFunc = patchDirSource
 		}
-		states[sourceName] = patchSource(worker, sourceState, states, patches, withConstraints(opts))
+		states[sourceName] = patchFunc(worker, sourceState, states, patches, withConstraints(opts))
 	}
 
 	return states
