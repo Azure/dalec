@@ -68,23 +68,58 @@ func (f RunOptFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
 }
 
-func SpecToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts) (map[string]llb.State, error) {
-	m := make(map[string]llb.State, len(spec.Sources))
-	keys := dalec.SortMapKeys(spec.Sources)
+func SpecToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+	// Sort the map keys so that the order is consistent This shouldn't be
+	// needed when MergeOp is supported, but when it is not this will improve
+	// cache hits for callers of this function.
+	sorted := dalec.SortMapKeys(spec.Sources)
 
-	for _, k := range keys {
+	out := make(map[string]llb.State, len(spec.Sources))
+	for _, k := range sorted {
 		src := spec.Sources[k]
-		st, err := src.AsState(spec.Name, sOpt)
+		isDir := dalec.SourceIsDir(src)
+
+		s := ""
+		switch {
+		case src.DockerImage != nil:
+			s = src.DockerImage.Ref
+		case src.Git != nil:
+			s = src.Git.URL
+		case src.HTTP != nil:
+			s = src.HTTP.URL
+		case src.Context != nil:
+			s = src.Context.Name
+		case src.Build != nil:
+			s = fmt.Sprintf("%v", src.Build.Source)
+		case src.Inline != nil:
+			s = "inline"
+		default:
+			return nil, fmt.Errorf("no non-nil source provided")
+		}
+
+		pg := dalec.ProgressGroup("Add spec source: " + k + " " + s)
+		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, err
 		}
-		if isDir, _ := dalec.SourceIsDir(src); isDir {
+
+		if isDir {
 			st = llb.Scratch().File(llb.Copy(st, "/", filepath.Join("/", k)))
 		}
-		m[k] = st
+
+		out[k] = st
 	}
 
-	return m, nil
+	return out, nil
+}
+
+func mapToArraySortedByKeys[T any](m map[string]T) []T {
+	keys := dalec.SortMapKeys(m)
+	out := make([]T, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, m[k])
+	}
+	return out
 }
 
 func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
@@ -93,17 +128,15 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (l
 		return llb.Scratch(), err
 	}
 
+	combined := dalec.MergeAtPath(llb.Scratch(), mapToArraySortedByKeys(sources), "/")
 	patchedMap := dalec.PatchSources(worker, spec, sources)
-	sorted := dalec.SortMapKeys(patchedMap)
-	patched := make([]llb.State, 0, len(patchedMap))
-	for _, k := range sorted {
-		patched = append(patched, patchedMap[k])
-	}
 
-	merged := dalec.MergeAtPath(llb.Scratch(), patched, "/")
-	return merged, nil
+	patched := mapToArraySortedByKeys(patchedMap)
 
+	combined = dalec.MergeAtPath(llb.Scratch(), patched, "/")
 	buildScript := createBuildScript(spec)
+	combined = combined.File(llb.Copy(buildScript, "/", "/scripts"))
+
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
 
@@ -115,11 +148,12 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (l
 		).Run(
 		shArgs(script.String()),
 		llb.Dir("/build"),
-		llb.AddMount("/build", merged),
+		llb.AddMount("/build", combined),
 		llb.AddMount("/build/scripts", buildScript),
+		llb.Network(llb.NetModeNone),
 	)
 
-	artifacts := work.AddMount(outputDir, llb.Scratch())
+	artifacts := work.Root()
 	return artifacts, nil
 }
 
@@ -135,6 +169,8 @@ func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {
 
 func generateInvocationScript(binaries []string) *strings.Builder {
 	script := &strings.Builder{}
+	fmt.Fprintln(script, "#!/usr/bin/env sh")
+	fmt.Fprintln(script, "set -ex")
 	fmt.Fprintf(script, "./scripts/%s\n", buildScriptName)
 	for _, bin := range binaries {
 		fmt.Fprintf(script, "mv '%s' '%s'\n", bin, outputDir)
@@ -168,6 +204,7 @@ func createBuildScript(spec *dalec.Spec) llb.State {
 	buf := bytes.NewBuffer(nil)
 
 	fmt.Fprintln(buf, "#!/usr/bin/env sh")
+	fmt.Fprintln(buf, "set -x")
 
 	for i, step := range spec.Build.Steps {
 		fmt.Fprintln(buf, "(")

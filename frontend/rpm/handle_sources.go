@@ -79,10 +79,7 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.Const
 	out := make([]llb.State, 0, len(spec.Sources))
 	for _, k := range sorted {
 		src := spec.Sources[k]
-		isDir, err := dalec.SourceIsDir(src)
-		if err != nil {
-			return nil, err
-		}
+		isDir := dalec.SourceIsDir(src)
 
 		s := ""
 		switch {
