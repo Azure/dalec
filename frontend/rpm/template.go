@@ -149,8 +149,10 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 	for idx, name := range keys {
 		src := w.Spec.Sources[name]
 		ref := name
-		isDir := dalec.SourceIsDir(src)
-
+		isDir, err := dalec.SourceIsDir(src)
+		if err != nil {
+			return nil, fmt.Errorf("error checking if source %s is a directory: %w", name, err)
+		}
 		if isDir {
 			ref += ".tar.gz"
 		}
@@ -206,7 +208,10 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 				return nil
 			}
 
-			isDir := dalec.SourceIsDir(src)
+			isDir, err := dalec.SourceIsDir(src)
+			if err != nil {
+				return err
+			}
 
 			if !isDir {
 				fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", name)
