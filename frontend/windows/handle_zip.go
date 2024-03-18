@@ -10,7 +10,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -27,7 +26,7 @@ var (
 	varLibAptMount   = dalec.WithMountedAptCache("/var/lib/apt", "dalec-windows-var-lib-apt")
 )
 
-func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
+func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, nil, err
@@ -59,7 +58,7 @@ func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 	}
 	ref, err := res.SingleRef()
 	// Do not return a nil image, it may cause a panic
-	return ref, &image.Image{}, err
+	return ref, &dalec.DockerImageSpec{}, err
 }
 
 func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {

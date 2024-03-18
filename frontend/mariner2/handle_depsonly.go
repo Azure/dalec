@@ -2,7 +2,6 @@ package mariner2
 
 import (
 	"context"
-	"sort"
 	"strings"
 
 	"github.com/Azure/dalec"
@@ -54,26 +53,4 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spe
 	}
 
 	return ref, img, nil
-}
-
-func getRuntimeDeps(spec *dalec.Spec) []string {
-	var deps *dalec.PackageDependencies
-	if t, ok := spec.Targets[targetKey]; ok {
-		deps = t.Dependencies
-	}
-
-	if deps == nil {
-		deps = spec.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
-	var out []string
-	for p := range deps.Runtime {
-		out = append(out, p)
-	}
-
-	sort.Strings(out)
-	return out
 }

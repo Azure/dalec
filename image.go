@@ -8,11 +8,10 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -69,7 +68,7 @@ func WithPlatform(p ocispecs.Platform) ConfigOpt {
 	}
 }
 
-func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *Spec, targetKey string, dflt string, opts ...ConfigOpt) (*image.Image, error) {
+func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *Spec, targetKey string, dflt string, opts ...ConfigOpt) (*DockerImageSpec, error) {
 	dc, err := dockerui.NewClient(client)
 	if err != nil {
 		return nil, err
@@ -96,7 +95,7 @@ func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *Spec, t
 		return nil, fmt.Errorf("error resolving image config: %w", err)
 	}
 
-	var img image.Image
+	var img DockerImageSpec
 	if err := json.Unmarshal(dt, &img); err != nil {
 		return nil, fmt.Errorf("error unmarshalling image config: %w", err)
 	}
@@ -113,7 +112,7 @@ func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *Spec, t
 // MergeImageConfig copies the fields from the source [ImageConfig] into the destination [image.Image].
 // If a field is not set in the source, it is not modified in the destination.
 // Envs from [ImageConfig] are merged into the destination [image.Image] and take precedence.
-func MergeImageConfig(dst *image.ImageConfig, src *ImageConfig) error {
+func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
 	if src == nil {
 		return nil
 	}
