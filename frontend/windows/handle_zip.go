@@ -23,8 +23,8 @@ const (
 )
 
 var (
-	varCacheAptMount = llb.AddMount("/var/cache/apt", llb.Scratch(), llb.AsPersistentCacheDir("dalec-windows-var-cache-apt", llb.CacheMountLocked))
-	varLibAptMount   = llb.AddMount("/var/lib/apt", llb.Scratch(), llb.AsPersistentCacheDir("dalec-windows-var-lib-apt", llb.CacheMountLocked))
+	varCacheAptMount = dalec.WithMountedAptCache("/var/cache/apt", "dalec-windows-var-cache-apt")
+	varLibAptMount   = dalec.WithMountedAptCache("/var/lib/apt", "dalec-windows-var-lib-apt")
 )
 
 func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
@@ -126,20 +126,27 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (l
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
 
-	work := worker.
-		Run(
-			shArgs("apt-get update && apt-get install -y "+strings.Join(buildDeps(spec), " ")),
+	buildDeps := spec.GetBuildDeps(targetKey)
+
+	work := worker
+	if len(buildDeps) > 0 {
+		slices.Sort(buildDeps)
+
+		work = work.Run(
+			shArgs("apt-get update && apt-get install -y "+strings.Join(buildDeps, " ")),
 			varCacheAptMount,
 			varLibAptMount,
-		).Run(
+		).Root()
+	}
+
+	artifacts := work.Run(
 		shArgs(script.String()),
 		llb.Dir("/build"),
 		llb.AddMount("/build", combined),
 		llb.AddMount("/build/scripts", buildScript),
 		llb.Network(llb.NetModeNone),
-	)
+	).AddMount(outputDir, llb.Scratch())
 
-	artifacts := work.AddMount(outputDir, llb.Scratch())
 	return artifacts, nil
 }
 
@@ -162,14 +169,6 @@ func generateInvocationScript(binaries []string) *strings.Builder {
 		fmt.Fprintf(script, "mv '%s' '%s'\n", bin, outputDir)
 	}
 	return script
-}
-
-func buildDeps(spec *dalec.Spec) []string {
-	deps := dalec.GetDeps(spec, targetKey)
-	ls := maps.Keys(deps.Build)
-	slices.Sort(ls)
-
-	return ls
 }
 
 func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {

@@ -520,12 +520,3 @@ type CheckOutputError struct {
 func (c *CheckOutputError) Error() string {
 	return fmt.Sprintf("expected %q %s %q, got %q", c.Path, c.Kind, c.Expected, c.Actual)
 }
-
-func GetDeps(spec *Spec, target string) *PackageDependencies {
-	if t, ok := spec.Targets[target]; ok {
-		if t.Dependencies != nil {
-			return t.Dependencies
-		}
-	}
-	return spec.Dependencies
-}
