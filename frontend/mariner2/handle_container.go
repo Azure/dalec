@@ -3,7 +3,6 @@ package mariner2
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -11,8 +10,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/client/llb/sourceresolver"
-	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
@@ -66,78 +63,6 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	}
 
 	return ref, img, err
-}
-
-func buildImageConfig(ctx context.Context, spec *dalec.Spec, target string, client gwclient.Client) (*dalec.DockerImageSpec, error) {
-	dc, err := dockerui.NewClient(client)
-	if err != nil {
-		return nil, err
-	}
-
-	baseImgRef := getBaseOutputImage(spec, targetKey)
-	_, _, dt, err := client.ResolveImageConfig(ctx, baseImgRef, sourceresolver.Opt{
-		ImageOpt: &sourceresolver.ResolveImageOpt{
-			ResolveMode: dc.ImageResolveMode.String(),
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error resolving image config: %w", err)
-	}
-
-	var img dalec.DockerImageSpec
-	if err := json.Unmarshal(dt, &img); err != nil {
-		return nil, fmt.Errorf("error unmarshalling image config: %w", err)
-	}
-
-	cfg := img.Config
-	if err := dalec.MergeImageConfig(&cfg, mergeSpecImage(spec, targetKey)); err != nil {
-		return nil, err
-	}
-
-	img.Config = cfg
-	return &img, nil
-}
-
-func mergeSpecImage(spec *dalec.Spec, target string) *dalec.ImageConfig {
-	var cfg dalec.ImageConfig
-
-	if spec.Image != nil {
-		cfg = *spec.Image
-	}
-
-	if i := spec.Targets[target].Image; i != nil {
-		if i.Entrypoint != "" {
-			cfg.Entrypoint = spec.Targets[target].Image.Entrypoint
-		}
-
-		if i.Cmd != "" {
-			cfg.Cmd = spec.Targets[target].Image.Cmd
-		}
-
-		cfg.Env = append(cfg.Env, i.Env...)
-
-		for k, v := range i.Volumes {
-			cfg.Volumes[k] = v
-		}
-
-		for k, v := range i.Labels {
-			cfg.Labels[k] = v
-		}
-
-		if i.WorkingDir != "" {
-			cfg.WorkingDir = i.WorkingDir
-		}
-
-		if i.StopSignal != "" {
-			cfg.StopSignal = i.StopSignal
-		}
-
-		if i.Base != "" {
-			cfg.Base = i.Base
-		}
-	}
-
-	return &cfg
 }
 
 func getBaseOutputImage(spec *dalec.Spec, target string) string {
