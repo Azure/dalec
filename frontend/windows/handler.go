@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	targetKey = "windows"
+	targetKey = "windowscross"
+	outputKey = "windows"
 )
 
 func RegisterHandlers() {
