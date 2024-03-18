@@ -15,7 +15,7 @@ func TestWindows(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testWindows(ctx, t, "windows/container")
+	testWindows(ctx, t, "windowscross/container")
 }
 
 func testWindows(ctx context.Context, t *testing.T, buildTarget string) {

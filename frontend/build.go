@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	windowsTargetKey    = "windows"
+	windowsTargetKey    = "windowscross"
 	windowsTargetPrefix = windowsTargetKey + "/"
 )
 

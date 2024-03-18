@@ -21,7 +21,7 @@ const (
 
 var (
 	defaultPlatform = ocispecs.Platform{
-		OS:           targetKey,
+		OS:           outputKey,
 		Architecture: runtime.GOARCH,
 	}
 )
