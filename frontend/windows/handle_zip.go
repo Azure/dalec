@@ -63,14 +63,8 @@ func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 }
 
 func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
-	// Sort the map keys so that the order is consistent This shouldn't be
-	// needed when MergeOp is supported, but when it is not this will improve
-	// cache hits for callers of this function.
-	sorted := dalec.SortMapKeys(spec.Sources)
-
 	out := make(map[string]llb.State, len(spec.Sources))
-	for _, k := range sorted {
-		src := spec.Sources[k]
+	for k, src := range spec.Sources {
 		isDir := dalec.SourceIsDir(src)
 
 		s := ""
