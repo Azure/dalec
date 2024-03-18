@@ -10,9 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/grpclog"
 
+	"github.com/Azure/dalec/cmd"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/debug"
-	"github.com/Azure/dalec/frontend/mariner2"
 )
 
 const (
@@ -25,8 +24,7 @@ func main() {
 
 	ctx := appcontext.Context()
 
-	mariner2.RegisterHandlers()
-	debug.RegisterHandlers()
+	cmd.LoadFrontend()
 
 	if err := grpcclient.RunFromEnvironment(ctx, frontend.Build); err != nil {
 		bklog.L.WithError(err).Fatal("error running frontend")

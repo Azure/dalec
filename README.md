@@ -91,6 +91,22 @@ targets:
 ```
 
 
+## Local development
+
+To aid in local development, there is a `localdev` cli included which will always build
+from your currently checked out code.
+No need to pre-build the frontend image or push it to a registry as you would need to with `docker build` or `docker buildx build`.
+
+The tooling is very limited and intended only to test out your changes without having to go through the docker directly.
+
+```console
+$ go run ./cmd/localdev build -f <path to spec> --target <target> [-o <output directory>] [--build-arg <key>=<value>]
+```
+
+Note in this case the frontend is compiled into the bianry.
+If you `go build` first, it will use whatever was in tree when you compiled it.
+This is why the example above uses `go run`
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
