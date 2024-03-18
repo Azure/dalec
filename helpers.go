@@ -48,6 +48,26 @@ func WithDirContentsOnly() llb.CopyOption {
 	})
 }
 
+type runOptionFunc func(*llb.ExecInfo)
+
+func (f runOptionFunc) SetRunOption(i *llb.ExecInfo) {
+	f(i)
+}
+
+func WithRemovedDockerCleanFile() llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		llb.AddMount("/etc/apt/apt.conf.d/docker-clean", llb.Scratch())
+	})
+}
+
+func WithMountedAptCache(dst, cacheName string) llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		WithRemovedDockerCleanFile().SetRunOption(ei)
+		llb.AddMount(dst, llb.Scratch(), llb.AsPersistentCacheDir(cacheName, llb.CacheMountLocked)).
+			SetRunOption(ei)
+	})
+}
+
 type constraintsOptFunc func(*llb.Constraints)
 
 func (f constraintsOptFunc) SetConstraintsOption(c *llb.Constraints) {
