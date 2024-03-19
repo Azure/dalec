@@ -66,25 +66,12 @@ func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.Const
 	for k, src := range spec.Sources {
 		isDir := dalec.SourceIsDir(src)
 
-		s := ""
-		switch {
-		case src.DockerImage != nil:
-			s = src.DockerImage.Ref
-		case src.Git != nil:
-			s = src.Git.URL
-		case src.HTTP != nil:
-			s = src.HTTP.URL
-		case src.Context != nil:
-			s = src.Context.Name
-		case src.Build != nil:
-			s = fmt.Sprintf("%v", src.Build.Source)
-		case src.Inline != nil:
-			s = "inline"
-		default:
-			return nil, fmt.Errorf("no non-nil source provided")
+		displayRef, err := src.GetDisplayRef()
+		if err != nil {
+			return nil, err
 		}
 
-		pg := dalec.ProgressGroup("Add spec source: " + k + " " + s)
+		pg := dalec.ProgressGroup("Add spec source: " + k + " " + displayRef)
 		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, err
