@@ -34,18 +34,6 @@ func listBuildTargets(group string) []*targetWrapper {
 	return registeredHandlers.All()
 }
 
-func lookupHandler(target string) (BuildFunc, error) {
-	if target == "" {
-		return registeredHandlers.Default().Build, nil
-	}
-
-	t := registeredHandlers.Get(target)
-	if t == nil {
-		return nil, fmt.Errorf("unknown target %q", target)
-	}
-	return t.Build, nil
-}
-
 func lookupTarget(target string) (*targetWrapper, error) {
 	t := registeredHandlers.Get(target)
 	if t == nil {

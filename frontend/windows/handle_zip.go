@@ -100,15 +100,6 @@ func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.Const
 	return out, nil
 }
 
-func mapToArraySortedByKeys[T any](m map[string]T) []T {
-	keys := dalec.SortMapKeys(m)
-	out := make([]T, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, m[k])
-	}
-	return out
-}
-
 func installBuildDeps(deps []string) llb.StateOption {
 	return func(s llb.State) llb.State {
 		if len(deps) == 0 {
