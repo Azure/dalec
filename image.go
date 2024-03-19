@@ -183,11 +183,11 @@ func mergeSpecImage(spec *Spec, target string) *ImageConfig {
 
 	if i := spec.Targets[target].Image; i != nil {
 		if i.Entrypoint != "" {
-			cfg.Entrypoint = spec.Targets[target].Image.Entrypoint
+			cfg.Entrypoint = i.Entrypoint
 		}
 
 		if i.Cmd != "" {
-			cfg.Cmd = spec.Targets[target].Image.Cmd
+			cfg.Cmd = i.Cmd
 		}
 
 		cfg.Env = append(cfg.Env, i.Env...)
