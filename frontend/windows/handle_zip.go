@@ -126,19 +126,40 @@ func installBuildDeps(deps []string) llb.StateOption {
 	}
 }
 
+func withSourcesMounted(dst string, states map[string]llb.State, sources map[string]dalec.Source) llb.RunOption {
+	opts := make([]llb.RunOption, 0, len(states))
+
+	sorted := dalec.SortMapKeys(states)
+	files := []llb.State{}
+
+	for _, k := range sorted {
+		state := states[k]
+		src := sources[k]
+
+		if !dalec.SourceIsDir(src) {
+			files = append(files, state)
+			continue
+		}
+
+		dirDst := filepath.Join(dst, k)
+		opts = append(opts, llb.AddMount(dirDst, state, llb.SourcePath(k)))
+	}
+
+	ordered := make([]llb.RunOption, 1, len(opts)+1)
+	ordered[0] = llb.AddMount(dst, dalec.MergeAtPath(llb.Scratch(), files, "/"))
+	ordered = append(ordered, opts...)
+
+	return dalec.WithRunOptions(ordered...)
+}
+
 func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
 	sources, err := specToSourcesLLB(spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	patchedMap := dalec.PatchSources(worker, spec, sources)
-
-	patched := mapToArraySortedByKeys(patchedMap)
-
-	combined := dalec.MergeAtPath(llb.Scratch(), patched, "/")
+	patched := dalec.PatchSources(worker, spec, sources)
 	buildScript := createBuildScript(spec)
-
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
 	work := worker.With(installBuildDeps(spec.GetBuildDeps(targetKey)))
@@ -146,8 +167,8 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (l
 	artifacts := work.Run(
 		shArgs(script.String()),
 		llb.Dir("/build"),
-		llb.AddMount("/build", combined),
-		llb.AddMount("/build/scripts", buildScript),
+		withSourcesMounted("/build", patched, spec.Sources),
+		llb.AddMount("/tmp/scripts", buildScript),
 		llb.Network(llb.NetModeNone),
 	).AddMount(outputDir, llb.Scratch())
 
@@ -168,7 +189,7 @@ func generateInvocationScript(binaries []string) *strings.Builder {
 	script := &strings.Builder{}
 	fmt.Fprintln(script, "#!/usr/bin/env sh")
 	fmt.Fprintln(script, "set -ex")
-	fmt.Fprintf(script, "./scripts/%s\n", buildScriptName)
+	fmt.Fprintf(script, "/tmp/scripts/%s\n", buildScriptName)
 	for _, bin := range binaries {
 		fmt.Fprintf(script, "mv '%s' '%s'\n", bin, outputDir)
 	}

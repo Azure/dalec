@@ -68,6 +68,14 @@ func WithMountedAptCache(dst, cacheName string) llb.RunOption {
 	})
 }
 
+func WithRunOptions(opts ...llb.RunOption) llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		for _, opt := range opts {
+			opt.SetRunOption(ei)
+		}
+	})
+}
+
 type constraintsOptFunc func(*llb.Constraints)
 
 func (f constraintsOptFunc) SetConstraintsOption(c *llb.Constraints) {
