@@ -198,7 +198,7 @@ func createBuildScript(spec *dalec.Spec) llb.State {
 		fmt.Fprintln(buf, "(")
 
 		for k, v := range step.Env {
-			fmt.Fprintf(buf, "export %s=%s\n", k, v)
+			fmt.Fprintf(buf, "export %s=\"%s\"", k, v)
 		}
 
 		fmt.Fprintln(buf, step.Command)
