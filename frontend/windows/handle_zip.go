@@ -109,6 +109,23 @@ func mapToArraySortedByKeys[T any](m map[string]T) []T {
 	return out
 }
 
+func installBuildDeps(deps []string) llb.StateOption {
+	return func(s llb.State) llb.State {
+		if len(deps) == 0 {
+			return s
+		}
+
+		sorted := slices.Clone(deps)
+		slices.Sort(sorted)
+
+		return s.Run(
+			shArgs("apt-get update && apt-get install -y "+strings.Join(sorted, " ")),
+			varCacheAptMount,
+			varLibAptMount,
+		).Root()
+	}
+}
+
 func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
 	sources, err := specToSourcesLLB(spec, sOpt)
 	if err != nil {
@@ -124,19 +141,7 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (l
 
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
-
-	buildDeps := spec.GetBuildDeps(targetKey)
-
-	work := worker
-	if len(buildDeps) > 0 {
-		slices.Sort(buildDeps)
-
-		work = work.Run(
-			shArgs("apt-get update && apt-get install -y "+strings.Join(buildDeps, " ")),
-			varCacheAptMount,
-			varLibAptMount,
-		).Root()
-	}
+	work := worker.With(installBuildDeps(spec.GetBuildDeps(targetKey)))
 
 	artifacts := work.Run(
 		shArgs(script.String()),
