@@ -20,7 +20,7 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spe
 	pg := dalec.ProgressGroup("Build mariner2 deps-only container: " + spec.Name)
 	baseImg := getWorkerImage(sOpt, pg)
 	rpmDir := baseImg.Run(
-		shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(getRuntimeDeps(spec), " ")),
+		shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(spec.GetRuntimeDeps(targetKey), " ")),
 		defaultTndfCacheMount(),
 		pg,
 	).
