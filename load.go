@@ -261,32 +261,9 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	return nil
 }
 
-type validateFunc func(*Spec) error
-
-type loadConfig struct {
-	validations []validateFunc
-}
-
-type LoadOpt func(*loadConfig)
-
-func WithValidation(f validateFunc) LoadOpt {
-	return func(cfg *loadConfig) {
-		if cfg.validations == nil {
-			cfg.validations = make([]validateFunc, 0)
-		}
-
-		cfg.validations = append(cfg.validations, f)
-	}
-}
-
 // LoadSpec loads a spec from the given data.
-func LoadSpec(dt []byte, opts ...LoadOpt) (*Spec, error) {
+func LoadSpec(dt []byte) (*Spec, error) {
 	var spec Spec
-	var cfg loadConfig
-
-	for _, f := range opts {
-		f(&cfg)
-	}
 
 	dt, err := stripXFields(dt)
 	if err != nil {
@@ -297,22 +274,11 @@ func LoadSpec(dt []byte, opts ...LoadOpt) (*Spec, error) {
 		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
 	}
 
-	var errs error
 	if err := spec.Validate(); err != nil {
-		errs = goerrors.Join(errs, err)
+		return nil, err
 	}
-
-	for _, validate := range cfg.validations {
-		if err := validate(&spec); err != nil {
-			errs = goerrors.Join(errs, err)
-		}
-	}
-
-	if errs != nil {
-		return nil, errs
-	}
-
 	spec.FillDefaults()
+
 	return &spec, nil
 }
 
