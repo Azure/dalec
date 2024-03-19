@@ -214,3 +214,49 @@ func ProgressGroup(name string) llb.ConstraintsOpt {
 		llb.ProgressGroup(identity.NewID(), name, false).SetConstraintsOption(c)
 	})
 }
+
+func (s *Spec) GetRuntimeDeps(targetKey string) []string {
+	var deps *PackageDependencies
+	if t, ok := s.Targets[targetKey]; ok {
+		deps = t.Dependencies
+	}
+
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	var out []string
+	for p := range deps.Runtime {
+		out = append(out, p)
+	}
+
+	sort.Strings(out)
+	return out
+
+}
+
+func (s *Spec) GetBuildDeps(targetKey string) []string {
+	var deps *PackageDependencies
+	if t, ok := s.Targets[targetKey]; ok {
+		deps = t.Dependencies
+	}
+
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	var out []string
+	for p := range deps.Build {
+		out = append(out, p)
+	}
+
+	sort.Strings(out)
+	return out
+
+}

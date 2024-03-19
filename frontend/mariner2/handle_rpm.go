@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/Azure/dalec"
@@ -66,28 +65,6 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
-func getBuildDeps(spec *dalec.Spec) []string {
-	var deps *dalec.PackageDependencies
-	if t, ok := spec.Targets[targetKey]; ok {
-		deps = t.Dependencies
-	}
-
-	if deps == nil {
-		deps = spec.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
-	var out []string
-	for p := range deps.Build {
-		out = append(out, p)
-	}
-
-	sort.Strings(out)
-	return out
-}
-
 func getWorkerImage(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
 	opts = append(opts, dalec.ProgressGroup("Prepare worker image"))
 	return llb.Image(marinerRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
@@ -101,7 +78,7 @@ func getWorkerImage(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State
 
 func installBuildDeps(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
-		deps := getBuildDeps(spec)
+		deps := spec.GetBuildDeps(targetKey)
 		if len(deps) == 0 {
 			return in
 		}
