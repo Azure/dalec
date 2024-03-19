@@ -3,6 +3,7 @@ package frontend
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Azure/dalec"
@@ -43,6 +44,14 @@ func lookupHandler(target string) (BuildFunc, error) {
 		return nil, fmt.Errorf("unknown target %q", target)
 	}
 	return t.Build, nil
+}
+
+func lookupTarget(target string) (*targetWrapper, error) {
+	t := registeredHandlers.Get(target)
+	if t == nil {
+		return nil, fmt.Errorf("unknown target %q", target)
+	}
+	return t, nil
 }
 
 func makeRequestHandler(target string) dockerui.RequestHandler {
@@ -124,10 +133,23 @@ func Build(ctx context.Context, client gwclient.Client) (*gwclient.Result, error
 		}
 	}
 
-	f, err := lookupHandler(bc.Target)
+	t, err := lookupTarget(bc.Target)
 	if err != nil {
 		return nil, err
 	}
+
+	var errs error
+	for _, validate := range t.Validations {
+		if err := validate(spec); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+
+	if errs != nil {
+		return nil, fmt.Errorf("error validating target %q: %w", bc.Target, errs)
+	}
+
+	f := t.Build
 
 	rb, err := bc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (r gwclient.Reference, img, baseImg *dalec.DockerImageSpec, err error) {
 		var targetPlatform, buildPlatform ocispecs.Platform

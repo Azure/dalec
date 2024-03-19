@@ -20,5 +20,5 @@ func RegisterHandlers() {
 		Name:        "container",
 		Description: "Builds binaries and installs them into a Windows base image",
 		Default:     true,
-	}, handleContainer)
+	}, handleContainer, frontend.WithValidations(validateRuntimeDeps))
 }
