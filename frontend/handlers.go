@@ -22,27 +22,9 @@ const dalecTargetOptKey = "dalec.target"
 
 type BuildFunc func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error)
 
-type validateFunc func(*dalec.Spec) error
-
-type handlerOpts struct {
-	validations []validateFunc
-}
-
-type handlerOpt func(*handlerOpts)
-
-func WithValidations(validations ...validateFunc) handlerOpt {
-	return func(h *handlerOpts) {
-		if h.validations == nil {
-			h.validations = make([]validateFunc, 0)
-		}
-		h.validations = append(h.validations, validations...)
-	}
-}
-
 type targetWrapper struct {
 	bktargets.Target
-	Build       BuildFunc
-	Validations []validateFunc
+	Build BuildFunc
 }
 
 type handlerList struct {
@@ -121,22 +103,8 @@ var registeredHandlers = &handlerList{
 // This can be changed by calling [SetDefault].
 //
 // Registered handlers may be overridden by [dalec.Spec.Targets].
-func RegisterHandler(group string, t bktargets.Target, build BuildFunc, opts ...handlerOpt) {
-	var cfg handlerOpts
-	for _, f := range opts {
-		f(&cfg)
-	}
-
-	validations := []validateFunc{}
-	if cfg.validations != nil {
-		validations = cfg.validations
-	}
-
-	registeredHandlers.Add(group, &targetWrapper{
-		Target:      t,
-		Build:       build,
-		Validations: validations,
-	})
+func RegisterHandler(group string, t bktargets.Target, build BuildFunc) {
+	registeredHandlers.Add(group, &targetWrapper{Target: t, Build: build})
 }
 
 // SetDefault sets the default handler for when no handler is specified.
