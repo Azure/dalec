@@ -3,14 +3,16 @@ package jammy
 import (
 	"context"
 	"path/filepath"
-	"golang.org/x/exp/slices"
 	"strings"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/deb"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/solver/pb"
 	"golang.org/x/exp/maps"
 )
 
@@ -83,9 +85,17 @@ func BuildDeb(spec *dalec.Spec, sOpt dalec.SourceOpts) (llb.State, error) {
 			shArgs("set -e; cd pkg; dpkg-buildpackage -us -uc -b && mkdir -p /tmp/out && mv ../*.deb /tmp/out/"),
 			llb.Dir("/work"),
 			llb.AddMount("/work/pkg", dr),
+			llb.Network(pb.NetMode_NONE),
 			dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 				for name, src := range sources {
-					llb.AddMount(filepath.Join("/work/pkg", name), src).SetRunOption(ei)
+					isDir := dalec.SourceIsDir(spec.Sources[name])
+
+					if isDir {
+						llb.AddMount(filepath.Join("/work/pkg", name), src).SetRunOption(ei)
+						continue
+					}
+
+					llb.AddMount(filepath.Join("/work/pkg", name), src, llb.SourcePath(name)).SetRunOption(ei)
 				}
 			}),
 		)
