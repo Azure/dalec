@@ -42,7 +42,7 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client, spec *dalec.Spe
 		return nil, nil, err
 	}
 
-	img, err := dalec.BuildImageConfig(ctx, client, spec, targetKey, marinerDistrolessRef)
+	img, err := frontend.BuildImageConfig(ctx, client, spec, targetKey, marinerDistrolessRef)
 	if err != nil {
 		return nil, nil, err
 	}
