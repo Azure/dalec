@@ -31,6 +31,10 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
+	if err := validateRuntimeDeps(spec); err != nil {
+		return nil, nil, fmt.Errorf("error validating windows spec: %w", err)
+	}
+
 	bc, err := dockerui.NewClient(client)
 	if err != nil {
 		return nil, nil, err
