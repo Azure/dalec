@@ -105,11 +105,12 @@ func createBuildScript(spec *dalec.Spec) llb.State {
 		}
 
 		fmt.Fprintln(buf, step.Command)
-		fmt.Fprintln(buf, ")")
+		fmt.Fprintf(buf, ")")
 
 		if i < len(spec.Build.Steps)-1 {
 			fmt.Fprintln(buf, "&& \\")
 		}
+		fmt.Fprintf(buf, "\n")
 	}
 
 	return llb.Scratch().
