@@ -55,7 +55,10 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 
 	baseImgName := getBaseOutputImage(spec, targetKey, defaultBaseImage)
 	baseImage := llb.Image(baseImgName, llb.Platform(targetPlatform))
-	out := baseImage.File(llb.Copy(bin, "/", windowsSystemDir))
+
+	out := baseImage.
+		File(llb.Copy(bin, "/", windowsSystemDir)).
+		With(copySymlinks(spec.GetSymlinks(targetKey)))
 
 	def, err := out.Marshal(ctx)
 	if err != nil {
@@ -79,6 +82,23 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 	ref, err := res.SingleRef()
 
 	return ref, img, err
+}
+
+func copySymlinks(lm map[string]dalec.SymlinkTarget) llb.StateOption {
+	return func(s llb.State) llb.State {
+		if len(lm) == 0 {
+			return s
+		}
+		keys := dalec.SortMapKeys(lm)
+		for _, srcPath := range keys {
+			l := lm[srcPath]
+			dstPath := l.Path
+			s = s.File(llb.Copy(s, srcPath, dstPath))
+		}
+
+		return s
+	}
+
 }
 
 func getTargetPlatform(bc *dockerui.Client) (ocispecs.Platform, error) {
