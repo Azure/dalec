@@ -322,3 +322,4 @@ To re-itterate: the `x-` fields are ignored by the dalec parser and are only for
 
 * Details on editor support in [editor-support.md](editor-support.md)
 * More in-depth documentation for testing can be found in [testing.md](testing.md).
+* Explanation of sources and how to use them can be found in [sources.md](sources.md).

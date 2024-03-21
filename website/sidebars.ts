@@ -18,6 +18,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'intro',
         'editor-support',
+        'sources',
         'testing'
       ],
     },
