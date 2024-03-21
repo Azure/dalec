@@ -288,3 +288,27 @@ func (s *Spec) GetBuildDeps(targetKey string) []string {
 	return out
 
 }
+
+func (s *Spec) GetSymlinks(target string) map[string]SymlinkTarget {
+	lm := make(map[string]SymlinkTarget)
+
+	if s.Image != nil && s.Image.Post != nil && s.Image.Post.Symlinks != nil {
+		for k, v := range s.Image.Post.Symlinks {
+			lm[k] = v
+		}
+	}
+
+	tgt, ok := s.Targets[target]
+	if !ok {
+		return lm
+	}
+
+	if tgt.Image != nil && tgt.Image.Post != nil && tgt.Image.Post.Symlinks != nil {
+		for k, v := range tgt.Image.Post.Symlinks {
+			// target-specific values replace the ones in the spec toplevel
+			lm[k] = v
+		}
+	}
+
+	return lm
+}

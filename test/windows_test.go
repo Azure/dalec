@@ -188,7 +188,7 @@ echo "$BAR" > bar.txt
 			Image: &dalec.ImageConfig{
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
-						"/usr/bin/src1": {Path: "/src1"},
+						"/Windows/System32/src1": {Path: "/src1"},
 					},
 				},
 			},
@@ -214,9 +214,35 @@ echo "$BAR" > bar.txt
 				return nil, err
 			}
 
-			_, err = res.SingleRef()
+			ref, err := res.SingleRef()
 			if err != nil {
 				return nil, err
+			}
+
+			for srcPath, l := range spec.GetSymlinks("windowscross") {
+				b1, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+					Filename: srcPath,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("couldn't find Windows \"symlink\" target %q: %w", srcPath, err)
+				}
+
+				b2, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+					Filename: l.Path,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("couldn't find Windows \"symlink\" at destination %q: %w", l.Path, err)
+				}
+
+				if len(b1) != len(b2) {
+					return nil, fmt.Errorf("Windows \"symlink\" not identical to target file")
+				}
+
+				for i := range b1 {
+					if b1[i] != b2[i] {
+						return nil, fmt.Errorf("Windows \"symlink\" not identical to target file")
+					}
+				}
 			}
 
 			return gwclient.NewResult(), nil
