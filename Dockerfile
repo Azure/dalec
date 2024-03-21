@@ -3,9 +3,9 @@ FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/oss/go/microsoft/golang:1.21@
 FROM go  AS frontend-build
 WORKDIR /build
 COPY . .
-ENV CGO_ENABLED=0 GOFLAGS=-trimpath
-ARG TARGETARCH TARGETOS
-ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
+ENV CGO_ENABLED=0
+ARG TARGETARCH TARGETOS GOFLAGS=-trimpath
+ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOFLAGS=${GOFLAGS}
 RUN \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
