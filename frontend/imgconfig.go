@@ -25,7 +25,7 @@ func WithPlatform(p ocispecs.Platform) ConfigOpt {
 	}
 }
 
-func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, dflt string, opts ...ConfigOpt) (*dalec.DockerImageSpec, error) {
+func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, baseImgRef string, opts ...ConfigOpt) (*dalec.DockerImageSpec, error) {
 	dc, err := dockerui.NewClient(client)
 	if err != nil {
 		return nil, err
@@ -36,7 +36,6 @@ func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *dalec.S
 		optFunc(&builderCfg)
 	}
 
-	baseImgRef := getBaseOutputImage(spec, targetKey, dflt)
 	platform := platforms.DefaultSpec()
 	if builderCfg.platform != nil {
 		platform = *builderCfg.platform
@@ -66,7 +65,7 @@ func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *dalec.S
 	return &img, nil
 }
 
-func getBaseOutputImage(spec *dalec.Spec, target, defaultBase string) string {
+func GetBaseOutputImage(spec *dalec.Spec, target, defaultBase string) string {
 	baseRef := defaultBase
 	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
 		baseRef = spec.Targets[target].Image.Base

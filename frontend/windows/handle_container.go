@@ -69,7 +69,9 @@ func handleContainer(ctx context.Context, client gwclient.Client, spec *dalec.Sp
 		return nil, nil, err
 	}
 
-	img, err := frontend.BuildImageConfig(ctx, client, spec, targetKey, defaultBaseImage, frontend.WithPlatform(targetPlatform))
+	base := frontend.GetBaseOutputImage(spec, targetKey, defaultBaseImage)
+
+	img, err := frontend.BuildImageConfig(ctx, client, spec, targetKey, base, frontend.WithPlatform(targetPlatform))
 	if err != nil {
 		return nil, nil, err
 	}
