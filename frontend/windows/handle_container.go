@@ -109,7 +109,8 @@ func getTargetPlatform(bc *dockerui.Client) (ocispecs.Platform, error) {
 	case 1:
 		platform = bc.TargetPlatforms[0]
 	default:
-		return ocispecs.Platform{}, fmt.Errorf("multiple targets for a windows build, only amd64 is supported")
+		return ocispecs.Platform{},
+			fmt.Errorf("multiple target supplied for build: %v. note: only amd64 is supported for windows outputs", bc.TargetPlatforms)
 	}
 
 	return platform, nil
