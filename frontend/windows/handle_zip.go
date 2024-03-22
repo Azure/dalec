@@ -64,8 +64,6 @@ func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (g
 func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
 	out := make(map[string]llb.State, len(spec.Sources))
 	for k, src := range spec.Sources {
-		isDir := dalec.SourceIsDir(src)
-
 		displayRef, err := src.GetDisplayRef()
 		if err != nil {
 			return nil, err
@@ -75,10 +73,6 @@ func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.Const
 		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, err
-		}
-
-		if isDir {
-			st = llb.Scratch().File(llb.Copy(st, "/", filepath.Join("/", k)))
 		}
 
 		out[k] = st
@@ -120,7 +114,7 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 		}
 
 		dirDst := filepath.Join(dst, k)
-		opts = append(opts, llb.AddMount(dirDst, state, llb.SourcePath(k)))
+		opts = append(opts, llb.AddMount(dirDst, state))
 	}
 
 	ordered := make([]llb.RunOption, 1, len(opts)+1)

@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"path/filepath"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
@@ -441,19 +441,19 @@ func (s Source) Doc(name string) (io.Reader, error) {
 
 	return b, nil
 }
-
-func patchSource(worker llb.State, nestedPath string, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
+func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
 	for _, p := range patchNames {
 		patchState := sourceToState[p.Source]
 		// on each iteration, mount source state to /src to run `patch`, and
 		// set the state under /src to be the source state for the next iteration
 		sourceState = worker.Run(
 			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(p.Source)),
-			llb.Dir(filepath.Join("src", nestedPath)),
+			llb.Dir("src"),
 			shArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
 			WithConstraints(opts...),
 		).AddMount("/src", sourceState)
 	}
+
 	return sourceState
 }
 
@@ -463,6 +463,7 @@ func patchSource(worker llb.State, nestedPath string, sourceState llb.State, sou
 func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
 	// duplicate map to avoid possibly confusing behavior of mutating caller's map
 	states := DuplicateMap(sourceToState)
+	pgID := identity.NewID()
 	sorted := SortMapKeys(spec.Sources)
 
 	for _, sourceName := range sorted {
@@ -472,14 +473,8 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 		if !patchesExist {
 			continue
 		}
-		opts = append(opts, ProgressGroup("Patch spec source:"+sourceName))
-
-		var nestedPath string
-		if SourceIsDir(spec.Sources[sourceName]) {
-			nestedPath = sourceName
-		}
-
-		states[sourceName] = patchSource(worker, nestedPath, sourceState, states, patches, withConstraints(opts))
+		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" ", false)
+		states[sourceName] = patchSource(worker, sourceState, states, patches, pg, withConstraints(opts))
 	}
 
 	return states
