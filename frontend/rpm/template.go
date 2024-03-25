@@ -201,12 +201,16 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	for _, name := range keys {
 		src := w.Spec.Sources[name]
 		err := func(name string, src dalec.Source) error {
-			if patches[name] {
+			isDir := dalec.SourceIsDir(src)
+			if patches[name] && !isDir {
 				// This source is a patch so we don't need to set anything up
 				return nil
+			} else if patches[name] && isDir {
+				fmt.Fprintf(b, "tar -C \"%%{_sourcedir}\" -xzf \"%%{_sourcedir}/%s.tar.gz\" \"./%s.patch\"\n", name, name)
+				fmt.Fprintf(b, "mv \"%%{_sourcedir}/%s.patch\" \"%%{_sourcedir}/%s\"\n", name, name)
+				// fmt.Fprintf(b, "rm \"%%{_sourcedir}/%s.tar.gz\"\n", name) # Fails on this
+				return nil
 			}
-
-			isDir := dalec.SourceIsDir(src)
 
 			if !isDir {
 				fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", name)
