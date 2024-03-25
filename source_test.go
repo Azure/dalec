@@ -799,7 +799,7 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 		return &st, nil
 	}
 
-	st, err := src.AsState("test", sOpt)
+	st, _, err := src.AsState("test", sOpt)
 	if err != nil {
 		t.Fatal(err)
 	}

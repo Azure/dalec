@@ -161,6 +161,7 @@ func TestStateWrapper_ReadDir_GitSource(t *testing.T) {
 		})
 	}
 }
+
 func TestStateWrapper_ReadDir_Context(t *testing.T) {
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 		sOpt, err := frontend.SourceOptFromClient(ctx, c)

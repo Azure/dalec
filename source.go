@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"path"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
@@ -60,7 +61,7 @@ func getSource(src Source, name string, sOpt SourceOpts, opts ...llb.Constraints
 	case src.Git != nil:
 		st, err = src.Git.AsState(opts...)
 	case src.Context != nil:
-		st, err = src.Context.AsState(src.Includes, src.Excludes, sOpt, opts...)
+		st, err = src.Context.AsState(name, src.Path, src.Includes, src.Excludes, sOpt, opts...)
 	case src.DockerImage != nil:
 		st, err = src.DockerImage.AsState(name, src.Path, sOpt, opts...)
 	case src.Build != nil:
@@ -81,8 +82,8 @@ func (src *SourceInline) AsState(name string) (llb.State, error) {
 	return llb.Scratch().With(src.Dir.PopulateAt("/")), nil
 }
 
-func (src *SourceContext) AsState(includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(includes, excludes), withConstraints(opts))
+func (src *SourceContext) AsState(name string, srcPath string, includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	st, err := sOpt.GetContext(src.Name, LocalIncludeExcludeMerge(includes, excludes), withConstraints(opts))
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -90,7 +91,25 @@ func (src *SourceContext) AsState(includes []string, excludes []string, sOpt Sou
 	if st == nil {
 		return llb.Scratch(), errors.Errorf("context %q not found", src.Name)
 	}
-
+	stFS := sOpt.GetFS(*st)
+	// if srcPath != "" {
+	// 	srcName := path.Join("/", srcPath)
+	// 	if !isDir(srcName, stFS) {
+	// 		// 		return *st, nil
+	// 		// 	} else {
+	// 		destName := path.Join("/", name)
+	// 		return llb.Scratch().File(llb.Copy(*st, srcName, destName)), nil
+	// 	}
+	// }
+	entries, err := stFS.ReadDir("/")
+	if err != nil {
+		return llb.Scratch(), errors.Errorf("docker-context %q not found: %s", src.Name, err)
+	}
+	if len(entries) == 1 && !entries[0].IsDir() {
+		srcName := path.Join("/", entries[0].Name())
+		destName := path.Join("/", name)
+		return llb.Scratch().File(llb.Copy(*st, srcName, destName)), nil
+	}
 	return *st, nil
 }
 
@@ -178,20 +197,22 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
-func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, bool, error) {
 	st, err := getSource(*s, name, sOpt, opts...)
 	if err != nil {
-		return llb.Scratch(), err
+		return llb.Scratch(), false, err
 	}
-
-	return st.With(getFilter(*s, forMount)), nil
+	isDir := s.IsDir(st, sOpt)
+	return st.With(getFilter(*s, forMount)), isDir, nil
 }
 
-func (s *Source) AsState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+// returns llb.State of Source, bool for IsDirectory, and error
+func (s *Source) AsState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, bool, error) {
 	return s.asState(name, false, sOpt, opts...)
 }
 
-func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+// returns llb.State of Source, bool for IsDirectory, and error
+func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, bool, error) {
 	return s.asState(name, true, sOpt, opts...)
 }
 
@@ -212,7 +233,7 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
 	for _, src := range cmd.Mounts {
-		srcSt, err := src.Spec.AsMount(src.Dest, sOpts, opts...)
+		srcSt, _, err := src.Spec.AsMount(src.Dest, sOpts, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -226,7 +247,7 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
 		}
 
-		if !SourceIsDir(src.Spec) {
+		if !SourceIsDir(src.Spec, srcSt, sOpts) {
 			mountOpt = append(mountOpt, llb.SourcePath(src.Dest))
 		}
 		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
@@ -305,12 +326,52 @@ func WithCreateDestPath() llb.CopyOption {
 	})
 }
 
-func SourceIsDir(src Source) bool {
+func (s *Source) IsDir(srcState llb.State, sOpt SourceOpts) bool {
+	return SourceIsDir(*s, srcState, sOpt)
+}
+
+func isDir(inPath string, fs fs.ReadDirFS) bool {
+	pathDir := path.Dir(inPath)
+	baseName := path.Base(inPath)
+	entries, err := fs.ReadDir(pathDir)
+	if err != nil {
+		panic(err)
+	}
+	for _, e := range entries {
+		if e.Name() == baseName {
+			return e.IsDir()
+		}
+	}
+	panic("need to handle") // could not exist?
+}
+
+func isContextDir(src Source, srcState llb.State, sOpt SourceOpts) bool {
+	srcFS := sOpt.GetFS(srcState)
+	if src.Path != "" {
+		p := path.Join("/", src.Path)
+		return isDir(p, srcFS)
+	}
+	// return true
+	entries, err := srcFS.ReadDir("/")
+	if err != nil {
+		panic(err)
+	}
+	if len(entries) == 1 {
+		return entries[0].IsDir()
+	} else if len(entries) == 0 {
+		panic("shouldn't be the case")
+	}
+	return true
+}
+
+func SourceIsDir(src Source, srcState llb.State, sOpt SourceOpts) bool {
 	switch {
+	case src.Context != nil:
+		// return true
+		return isContextDir(src, srcState, sOpt)
 	case src.DockerImage != nil,
 		src.Git != nil,
-		src.Build != nil,
-		src.Context != nil:
+		src.Build != nil:
 		return true
 	case src.HTTP != nil:
 		return false
@@ -510,7 +571,7 @@ func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc f
 			continue
 		}
 
-		st, err := src.AsState(name, sOpt, opts...)
+		st, _, err := src.AsState(name, sOpt, opts...)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get source state for %q", name)
 		}
@@ -522,7 +583,7 @@ func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc f
 				return nil, errors.Errorf("patch source %q not found", p.Source)
 			}
 
-			states[p.Source], err = src.AsState(p.Source, sOpt, opts...)
+			states[p.Source], _, err = src.AsState(p.Source, sOpt, opts...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to get patch source state for %q", p.Source)
 			}

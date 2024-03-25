@@ -47,6 +47,7 @@ BuildArch: noarch
 type specWrapper struct {
 	*dalec.Spec
 	Target string
+	sOpts  dalec.SourceOpts
 }
 
 func (w *specWrapper) Changelog() (fmt.Stringer, error) {
@@ -152,7 +153,10 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 	for idx, name := range keys {
 		src := w.Spec.Sources[name]
 		ref := name
-		isDir := dalec.SourceIsDir(src)
+		_, isDir, err := src.AsState(name, w.sOpts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get state of src: %s", err)
+		}
 
 		if isDir {
 			ref += ".tar.gz"
@@ -218,12 +222,18 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		src := w.Spec.Sources[name]
 
 		err := func(name string, src dalec.Source) error {
-			if patches[name] {
+			_, isDir, err := src.AsState(name, w.sOpts)
+			if err != nil {
+				return fmt.Errorf("failed to get state of src: %s", err)
+			}
+			if patches[name] && !isDir {
 				// This source is a patch so we don't need to set anything up
 				return nil
+			} else if patches[name] && isDir {
+				// fmt.Fprintf(b, "rm \"%%{_sourcedir}/%s.tar.gz\"\n", name) # Fails on this
+				// TODO: apply our add all of these to be applied?
+				return nil
 			}
-
-			isDir := dalec.SourceIsDir(src)
 
 			if !isDir {
 				fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", name)
@@ -351,8 +361,8 @@ func (w *specWrapper) Files() fmt.Stringer {
 }
 
 // WriteSpec generates an rpm spec from the provided [dalec.Spec] and distro target and writes it to the passed in writer
-func WriteSpec(spec *dalec.Spec, target string, w io.Writer) error {
-	s := &specWrapper{spec, target}
+func WriteSpec(spec *dalec.Spec, target string, w io.Writer, sOpts dalec.SourceOpts) error {
+	s := &specWrapper{spec, target, sOpts}
 
 	err := specTmpl.Execute(w, s)
 	if err != nil {

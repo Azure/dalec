@@ -21,7 +21,7 @@ func Sources(ctx context.Context, client gwclient.Client) (*client.Result, error
 
 		sources := make([]llb.State, 0, len(spec.Sources))
 		for name, src := range spec.Sources {
-			st, err := src.AsState(name, sOpt)
+			st, _, err := src.AsState(name, sOpt)
 			if err != nil {
 				return nil, nil, err
 			}

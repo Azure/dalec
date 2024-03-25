@@ -53,7 +53,7 @@ func (src *SourceBuild) AsState(name string, sOpt SourceOpts, opts ...llb.Constr
 		}
 	}
 
-	st, err := src.Source.AsState(name, sOpt, opts...)
+	st, _, err := src.Source.AsState(name, sOpt, opts...)
 	if err != nil {
 		if !errors.Is(err, errNoSourceVariant) {
 			return llb.Scratch(), err
