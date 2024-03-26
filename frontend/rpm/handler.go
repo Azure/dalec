@@ -3,6 +3,7 @@ package rpm
 import (
 	"path"
 
+	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 )
@@ -11,7 +12,7 @@ func RegisterHandlers(group string) {
 	frontend.RegisterHandler(path.Join(group, "rpm"), bktargets.Target{
 		Name:        "buildroot",
 		Description: "Outputs an rpm buildroot suitable for passing to rpmbuild.",
-	}, BuildrootHandler(group))
+	}, BuildrootHandler(dalec.DefaultTarWorker, group))
 	frontend.RegisterHandler(path.Join(group, "rpm"), bktargets.Target{
 		Name:        "sources",
 		Description: "Outputs all the sources specified in the spec file.",

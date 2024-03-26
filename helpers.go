@@ -215,16 +215,16 @@ func CacheDirsToRunOpt(mounts map[string]CacheDirConfig, distroKey, archKey stri
 		opts = append(opts, llb.AddMount(p, llb.Scratch(), llb.AsPersistentCacheDir(key, mode)))
 	}
 
-	return runOptFunc(func(ei *llb.ExecInfo) {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
 		for _, opt := range opts {
 			opt.SetRunOption(ei)
 		}
 	})
 }
 
-type runOptFunc func(*llb.ExecInfo)
+type RunOptFunc func(*llb.ExecInfo)
 
-func (f runOptFunc) SetRunOption(ei *llb.ExecInfo) {
+func (f RunOptFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
 }
 

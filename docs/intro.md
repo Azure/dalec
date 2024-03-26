@@ -152,6 +152,12 @@ build:
   steps:
     - command: |
         export GOMODCACHE="$(pwd)/gomods"
+
+        if ! test -d $(go env GOROOT) && grep 'ID=mariner' /etc/os-release; then
+          # Workaround for https://github.com/microsoft/CBL-Mariner/issues/6363
+          export GOROOT=/usr/lib/golang
+        fi
+
         cd src
         go build -o go-md2man .
 
@@ -234,6 +240,12 @@ build:
   steps:
     - command: |
         export GOMODCACHE="$(pwd)/gomods"
+
+        if ! test -d $(go env GOROOT) && grep 'ID=mariner' /etc/os-release; then
+          # Workaround for https://github.com/microsoft/CBL-Mariner/issues/6363
+          export GOROOT=/usr/lib/golang
+        fi
+
         cd src
         go build -o go-md2man .
 

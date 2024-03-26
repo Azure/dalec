@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"slices"
+	"golang.org/x/exp/slices"
 	"testing"
 
 	"github.com/Azure/dalec"

@@ -16,10 +16,25 @@ revision: ${REVISION}
 vendor: Moby
 
 targets: # Distro specific build requirements
-  mariner2:
+  jammy:
     image:
-      entrypoint: runc
-      cmd: --help
+    dependencies:
+      build:
+        libseccomp-dev:
+        gcc:
+        go-md2man:
+        git:
+        tar:
+        make:
+        golang:
+        libtool:
+        libltdl-dev:
+      runtime:
+        libseccomp2:
+          version:
+            - ">= 2.3"
+
+  mariner2:
     dependencies:
       build:
         libseccomp-devel:
@@ -36,8 +51,12 @@ targets: # Distro specific build requirements
       runtime:
         /bin/sh:
         libseccomp:
-          - ">= 2.3"
+          version:
+            - ">= 2.3"
     tests:
+      - name: mariner manpages
+        files:
+          /usr/share/man/man8/runc-create.8.gz:
       - name: mariner rpm manifest files
         files:
           /var/lib/rpmmanifest/container-manifest-1:
@@ -58,7 +77,7 @@ conflicts:
   runc-io:
   containerd.io:
 provides:
-  - runc
+  runc:
 sources:
   src:
     git:
@@ -87,7 +106,6 @@ tests:
     files:
       /usr/bin/runc:
         permissions: 0755
-      /usr/share/man/man8/runc-create.8.gz:
   - name: version reporting
     steps:
       - command: runc --version
@@ -97,3 +115,7 @@ tests:
             - "libseccomp: "
         stderr:
           empty: true
+
+image:
+  entrypoint: runc
+  cmd: --help

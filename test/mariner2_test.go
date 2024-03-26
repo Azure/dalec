@@ -24,7 +24,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string) {
 		t.Parallel()
 		spec := dalec.Spec{
 			Name:        "test-build-commands-fail",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -56,7 +56,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string) {
 		t.Parallel()
 		spec := dalec.Spec{
 			Name:        "test-no-internet-access",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -64,7 +64,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string) {
 			Packager:    "Dalec",
 			Description: "Should not have internet access during build",
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{"curl": {}},
+				Runtime: map[string]dalec.PackageConstraints{"curl": {}},
 			},
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
@@ -90,7 +90,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string) {
 	t.Run("container", func(t *testing.T) {
 		spec := dalec.Spec{
 			Name:        "test-container-build",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -156,7 +156,7 @@ index 0000000..5260cb1
 			},
 
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{
+				Runtime: map[string]dalec.PackageConstraints{
 					"bash": {},
 				},
 			},
