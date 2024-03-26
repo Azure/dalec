@@ -1,18 +1,26 @@
 package debug
 
 import (
+	"context"
+
 	"github.com/Azure/dalec/frontend"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
-func RegisterHandlers() {
-	frontend.RegisterHandler("debug", targets.Target{
+const DebugRoute = "debug"
+
+func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+	var r frontend.BuildMux
+
+	r.Add("resolve", Resolve, &targets.Target{
 		Name:        "resolve",
 		Description: "Outputs the resolved dalec spec file with build args applied.",
-	}, HandleResolve)
-
-	frontend.RegisterHandler("debug", targets.Target{
+	})
+	r.Add("sources", Sources, &targets.Target{
 		Name:        "sources",
 		Description: "Outputs all sources from a dalec spec file.",
-	}, HandleSources)
+	})
+
+	return r.Handle(ctx, client)
 }

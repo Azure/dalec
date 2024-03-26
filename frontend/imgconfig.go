@@ -66,21 +66,21 @@ func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *dalec.S
 }
 
 func GetBaseOutputImage(spec *dalec.Spec, target, defaultBase string) string {
-	baseRef := defaultBase
-	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
-		baseRef = spec.Targets[target].Image.Base
+	i := spec.Targets[target].Image
+	if i == nil || i.Base == "" {
+		return defaultBase
 	}
-	return baseRef
+	return i.Base
 }
 
-func mergeSpecImage(spec *dalec.Spec, target string) *dalec.ImageConfig {
+func mergeSpecImage(spec *dalec.Spec, targetKey string) *dalec.ImageConfig {
 	var cfg dalec.ImageConfig
 
 	if spec.Image != nil {
 		cfg = *spec.Image
 	}
 
-	if i := spec.Targets[target].Image; i != nil {
+	if i := spec.Targets[targetKey].Image; i != nil {
 		if i.Entrypoint != "" {
 			cfg.Entrypoint = i.Entrypoint
 		}

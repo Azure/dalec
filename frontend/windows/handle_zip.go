@@ -11,6 +11,7 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
@@ -26,39 +27,40 @@ var (
 	varLibAptMount   = dalec.WithMountedAptCache("/var/lib/apt", "dalec-windows-var-lib-apt")
 )
 
-func handleZip(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-	sOpt, err := frontend.SourceOptFromClient(ctx, client)
-	if err != nil {
-		return nil, nil, err
-	}
+func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
+		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		if err != nil {
+			return nil, nil, err
+		}
 
-	pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
-	worker := workerImg(sOpt, pg)
+		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
+		worker := workerImg(sOpt, pg)
 
-	bin, err := buildBinaries(spec, worker, sOpt)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
-	}
+		bin, err := buildBinaries(spec, worker, sOpt, targetKey)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
+		}
 
-	st := getZipLLB(worker, spec.Name, bin)
-	if err != nil {
-		return nil, nil, err
-	}
+		st := getZipLLB(worker, spec.Name, bin)
+		if err != nil {
+			return nil, nil, err
+		}
 
-	def, err := st.Marshal(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
-	}
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+		}
 
-	res, err := client.Solve(ctx, gwclient.SolveRequest{
-		Definition: def.ToPB(),
+		res, err := client.Solve(ctx, gwclient.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		ref, err := res.SingleRef()
+		return ref, nil, err
 	})
-	if err != nil {
-		return nil, nil, err
-	}
-	ref, err := res.SingleRef()
-	// Do not return a nil image, it may cause a panic
-	return ref, &dalec.DockerImageSpec{}, err
 }
 
 func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
@@ -124,7 +126,7 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 	return dalec.WithRunOptions(ordered...)
 }
 
-func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
+func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
 	sources, err := specToSourcesLLB(spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), err

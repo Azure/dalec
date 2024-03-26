@@ -26,11 +26,16 @@ func main() {
 
 	ctx := appcontext.Context()
 
-	debug.RegisterHandlers()
-	mariner2.RegisterHandlers()
-	windows.RegisterHandlers()
+	var mux frontend.BuildMux
 
-	if err := grpcclient.RunFromEnvironment(ctx, frontend.Build); err != nil {
+	mux.Add(debug.DebugRoute, debug.Handle, nil)
+
+	if err := grpcclient.RunFromEnvironment(ctx, mux.Handler(
+		// copy/paster's beware: [frontend.WithTargetForwardingHandler] should not be set except for the root dalec frontend.
+		frontend.WithBuiltinHandler(mariner2.DefaultTargetKey, mariner2.Handle),
+		frontend.WithBuiltinHandler(windows.DefaultTargetKey, windows.Handle),
+		frontend.WithTargetForwardingHandler,
+	)); err != nil {
 		bklog.L.WithError(err).Fatal("error running frontend")
 		os.Exit(137)
 	}

@@ -123,7 +123,7 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			sr := newSolveRequest(withBuildTarget("phony/does-not-exist"), withSpec(ctx, t, spec))
 
 			_, err := gwc.Solve(ctx, sr)
-			expect := "unknown target"
+			expect := "no such handler for target"
 			if err == nil || !strings.Contains(err.Error(), expect) {
 				t.Fatalf("expected error %q, got %v", expect, err)
 			}

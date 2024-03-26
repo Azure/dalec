@@ -3,7 +3,7 @@
 args:
   file_to_import: go.mod
 
-name: dalec-test-fixutre-cmd-src-ref
+name: dalec-test-fixture-cmd-src-ref
 description: A test fixture for checking http sources
 website: https://www.github.com/Azure/dalec
 version: 0.0.1
