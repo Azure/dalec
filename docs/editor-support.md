@@ -39,7 +39,7 @@ Here are some examples of vscode workspace configs `settings.json` enabling the 
 
 You may find with this extension that null-able yaml objects will show as errors in the editor unless you specify the empty value. An example:
 
-```yml
+```yaml
 args:
     FOO:
 ```
@@ -47,7 +47,7 @@ args:
 In this example the json schema says that `FOO` should be a string but we've left it null which is perfectly valid yaml and will unmarshal to an empty string.
 The yaml plugin will complain that it is an incorrect type. To fix this you can specify the empty string as the value:
 
-```yml
+```yaml
 args:
     FOO: ""
 ```
