@@ -135,7 +135,7 @@ rm -rf ` + rpmdbDir + `
 	worker := builderImg.
 		Run(
 			shArgs("/tmp/install.sh"),
-			defaultTndfCacheMount(),
+			defaultTdnfCacheMount(),
 			llb.AddMount("/tmp/rpms", rpmDir, llb.SourcePath("/RPMS")),
 			llb.AddMount("/tmp/install.sh", installer, llb.SourcePath("install.sh")),
 			// Mount the tdnf cache into the workpath so that:

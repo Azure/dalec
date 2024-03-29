@@ -20,7 +20,7 @@ const (
 	tdnfCacheName = "mariner2-tdnf-cache"
 )
 
-func defaultTndfCacheMount() llb.RunOption {
+func defaultTdnfCacheMount() llb.RunOption {
 	return tdnfCacheMountWithPrefix("")
 }
 
@@ -70,7 +70,7 @@ func getWorkerImage(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State
 	return llb.Image(marinerRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
 		Run(
 			shArgs("tdnf install -y rpm-build mariner-rpm-macros build-essential"),
-			defaultTndfCacheMount(),
+			defaultTdnfCacheMount(),
 			dalec.WithConstraints(opts...),
 		).
 		Root()
@@ -87,7 +87,7 @@ func installBuildDeps(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOpt
 		return in.
 			Run(
 				shArgs(fmt.Sprintf("tdnf install --releasever=2.0 -y %s", strings.Join(deps, " "))),
-				defaultTndfCacheMount(),
+				defaultTdnfCacheMount(),
 				dalec.WithConstraints(opts...),
 			).
 			Root()
