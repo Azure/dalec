@@ -22,13 +22,11 @@ func TestStateWrapper_Open(t *testing.T) {
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		fs := dalec.NewStateRefFS(st, context.Background(), gwc)
 		f, err := fs.Open("/foo")
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Nil(t, err)
 
 		b := make([]byte, 11)
 		n, err := f.Read(b)
-		assert.Nil(t, err)
+		assert.Equal(t, err, io.EOF)
 		assert.Equal(t, n, 11)
 
 		return fs.Res()
@@ -58,6 +56,7 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkdir("/bar", 0644)).
 		File(llb.Mkfile("/bar/foo", 0644, []byte("file contents"))).
 		File(llb.Mkdir("/bar/baz", 0644))
+
 	var expectInfo = map[string]struct {
 		perms    fs.FileMode
 		isDir    bool
@@ -81,7 +80,6 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 		entries, err := rfs.ReadDir(root)
 		assert.Nil(t, err)
 
-		fmt.Println(entries)
 		for _, e := range entries {
 			p := path.Join(root, e.Name())
 			want, ok := expectInfo[p]
@@ -189,7 +187,7 @@ func TestStateWrapper_Walk(t *testing.T) {
 			assert.Equal(t, expect.perms, info.Mode())
 			assert.Equal(t, expect.isDir, info.IsDir())
 
-			if !d.IsDir() {
+			if !d.IsDir() { // file
 				fmt.Println("opening ", path)
 				fmt.Println(d.Name())
 				f, err := rfs.Open(path)

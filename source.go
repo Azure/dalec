@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
@@ -170,6 +171,7 @@ type SourceOpts struct {
 	Resolver   llb.ImageMetaResolver
 	Forward    ForwarderFunc
 	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
+	GetFS      func(st llb.State) fs.ReadDirFS
 }
 
 func shArgs(cmd string) llb.RunOption {
