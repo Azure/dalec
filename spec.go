@@ -402,6 +402,21 @@ type Target struct {
 	// Tests are the list of tests to run which are specific to the target.
 	// Tests are appended to the list of tests in the main [Spec]
 	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
+
+	// PackageConfig is the configuration to use for artifact targets, such as
+	// rpms, debs, or zip files containing Windows binaries
+	PackageConfig *PackageConfig `yaml:"package_config,omitempty" json:"package_config,omitempty"`
+}
+
+// PackageConfig encapsulates the configuration for artifact targets
+type PackageConfig struct {
+	// Signer is the configuration to use for signing packages
+	Signer *Signer `yaml:"signer,omitempty" json:"signer,omitempty"`
+}
+
+// Signer encapsulates the configuration for an image that performs package signing
+type Signer struct {
+	Image *SourceDockerImage `yaml:"image,omitempty" json:"image,omitempty"`
 }
 
 // TestSpec is used to execute tests against a container with the package installed in it.
