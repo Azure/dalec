@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/moby/buildkit/client/llb"
@@ -96,6 +97,102 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 		return rfs.Res()
 	})
 
+}
+
+func TestStateWrapper_ReadDir_HTTPSource(t *testing.T) {
+	url := "https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/120134.patch"
+	st := llb.HTTP(url)
+	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+		rfs := dalec.NewStateRefFS(st, ctx, c)
+		baseName := path.Base(url)
+		root := "/"
+		entries, err := rfs.ReadDir(root)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(entries))
+		assert.Equal(t, baseName, entries[0].Name())
+		info, err := entries[0].Info()
+		assert.NoError(t, err)
+		assert.False(t, info.IsDir())
+		return rfs.Res()
+	})
+}
+func TestStateWrapper_ReadDir_GitSource(t *testing.T) {
+	gomd2manUrl := "https://github.com/cpuguy83/go-md2man.git"
+	gomd2manRef := "d6816bfbea7506064a28119f805fb79f9bc5aeec"
+	var cases = map[string]struct {
+		gOpts        []llb.GitOption
+		gitUrl       string
+		gitRef       string
+		state        llb.State
+		expectGitDir bool
+	}{
+		"keepGitDir": {
+			gOpts:        []llb.GitOption{llb.KeepGitDir()},
+			gitUrl:       gomd2manUrl,
+			gitRef:       gomd2manRef,
+			expectGitDir: true,
+		},
+		"NoGitDir": {
+			gitUrl:       gomd2manUrl,
+			gitRef:       gomd2manRef,
+			expectGitDir: false,
+		},
+	}
+	for key := range cases {
+		test := cases[key]
+		test.state = llb.Git(test.gitUrl, test.gitRef, test.gOpts...)
+		testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+			rfs := dalec.NewStateRefFS(test.state, ctx, c)
+			p := path.Join("/", "")
+			entries, err := rfs.ReadDir(p)
+			assert.NoError(t, err)
+			found := false
+			for _, e := range entries {
+				if e.Name() != ".git" {
+					continue
+				}
+				found = true
+				info, err := e.Info()
+				assert.NoError(t, err)
+				assert.True(t, info.IsDir())
+			}
+			assert.Equal(t, test.expectGitDir, found)
+			return rfs.Res()
+		})
+	}
+}
+func TestStateWrapper_ReadDir_Context(t *testing.T) {
+	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+		sOpt, err := frontend.SourceOptFromClient(ctx, c)
+		assert.NoError(t, err)
+
+		contextName := "context" // Using default context name
+		sourcePath := "./docs/examples"
+		include := []string{sourcePath}
+		st, err := sOpt.GetContext(contextName, dalec.LocalIncludeExcludeMerge(include, []string{}))
+		assert.NoError(t, err)
+
+		rfs := dalec.NewStateRefFS(*st, ctx, c)
+		root := "/"
+		p := path.Join(root, sourcePath)
+		pathDir := path.Dir(p)
+		baseName := path.Base(p)
+		entries, err := rfs.ReadDir(pathDir)
+		assert.NoError(t, err)
+
+		found := false
+		for _, e := range entries {
+			if e.Name() != baseName {
+				continue
+			}
+			found = true
+			info, err := e.Info()
+			assert.NoError(t, err)
+			assert.True(t, info.IsDir())
+		}
+		assert.True(t, found)
+		return rfs.Res()
+	})
 }
 
 func TestStateWrapper_Walk(t *testing.T) {
