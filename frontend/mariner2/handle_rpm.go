@@ -2,6 +2,7 @@ package mariner2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/rpm"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/pb"
@@ -39,44 +41,66 @@ func hasSigner(t *dalec.Target) bool {
 	return t != nil && t.PackageConfig != nil && t.PackageConfig.Signer != nil && t.PackageConfig.Signer.Image != nil
 }
 
-func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.Signer, s llb.State, sOpt dalec.SourceOpts) (llb.State, error) {
-	signer := llb.Image(cfg.Image.Ref, llb.WithMetaResolver(sOpt.Resolver))
+func compound(k, v string) string {
+	return fmt.Sprintf("%s:%s", k, v)
+}
 
-	d, err := signer.Marshal(ctx)
-	if err != nil {
-		return llb.Scratch(), err
-	}
+func forwardToSigner(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, cfg *dalec.Signer, s llb.State) (llb.State, error) {
+	const (
+		sourceKey               = "source"
+		contextKey              = "context"
+		targetKey               = "target"
+		inputKey                = "input"
+		resolveModeKey          = "image.resolvemode"
+		containerImageConfigKey = "containerimage.config"
+		inputMetadataKey        = "input-metadata"
 
-	res, err := client.Solve(ctx, gwclient.SolveRequest{
-		Definition: d.ToPB(),
-	})
-	if err != nil {
-		return llb.Scratch(), err
-	}
+		gatewayFrontend = "gateway.v0"
+	)
 
-	r, _ := res.SingleRef()
-	_ = r
-
-	dt := res.Metadata["result.json"]
-	_ = dt
+	opts := client.BuildOpts().Opts
+	signer := llb.Image(cfg.Image.Ref)
+	id := identity.NewID()
 
 	req := gwclient.SolveRequest{
-		Frontend:       "gateway.v0",
+		Frontend:       gatewayFrontend,
 		FrontendOpt:    make(map[string]string),
 		FrontendInputs: make(map[string]*pb.Definition),
 	}
-	id := identity.NewID()
-	req.FrontendOpt["context:"+id] = "input:" + id
 
-	signerDef, err := signer.Marshal(ctx)
+	_, _, b, err := client.ResolveImageConfig(ctx, cfg.Image.Ref, sourceresolver.Opt{
+		Platform: platform,
+		ImageOpt: &sourceresolver.ResolveImageOpt{
+			ResolveMode: opts[resolveModeKey],
+		},
+	})
+
+	withConfig, err := signer.WithImageConfig(b)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	req.FrontendInputs[id] = signerDef.ToPB()
-	req.FrontendOpt["source"] = id
-	req.FrontendOpt["cmdline"] = ""
-	req.FrontendOpt["context:"+initialState] = "input:" + initialState
+	signerDef, err := withConfig.Marshal(ctx)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	signerPB := signerDef.ToPB()
+
+	req.FrontendOpt[compound(contextKey, id)] = compound(inputKey, id)
+	req.FrontendInputs[id] = signerPB
+	req.FrontendOpt[sourceKey] = id
+	req.FrontendOpt[compound(contextKey, initialState)] = compound(inputKey, initialState)
+	req.FrontendOpt[targetKey] = "check"
+	req.FrontendInputs[contextKey] = signerPB
+
+	meta := map[string][]byte{
+		containerImageConfigKey: b,
+	}
+	metaDt, err := json.Marshal(meta)
+	if err != nil {
+		return llb.Scratch(), fmt.Errorf("error marshaling local frontend metadata: %w", err)
+	}
+	req.FrontendOpt[compound(inputMetadataKey, id)] = string(metaDt)
 
 	stateDef, err := s.Marshal(ctx)
 	if err != nil {
@@ -85,17 +109,17 @@ func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.Sig
 
 	req.FrontendInputs[initialState] = stateDef.ToPB()
 
-	res, err = client.Solve(ctx, req)
+	res, err := client.Solve(ctx, req)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	r2, err := res.SingleRef()
+	ref, err := res.SingleRef()
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	return r2.ToState()
+	return ref.ToState()
 }
 
 func handleRPM(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -117,31 +141,12 @@ func handleRPM(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 
 		t := spec.Targets[targetKey]
 		if hasSigner(&t) {
-			signed, err := forwardToSigner(ctx, client, t.PackageConfig.Signer, st, sOpt)
+			signed, err := forwardToSigner(ctx, client, platform, t.PackageConfig.Signer, st)
 			if err != nil {
 				return nil, nil, err
 			}
 
 			st = signed
-
-			def, err := st.Marshal(ctx, pg)
-			if err != nil {
-				return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
-			}
-
-			res, err := client.Solve(ctx, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-
-			ref, err := res.SingleRef()
-			if err != nil {
-				return nil, nil, err
-			}
-
-			return ref, nil, nil
 		}
 
 		def, err := st.Marshal(ctx, pg)
