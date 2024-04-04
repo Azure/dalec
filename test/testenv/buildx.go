@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cpuguy83/dockercfg"
 	"github.com/cpuguy83/go-docker"
@@ -189,6 +190,7 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 		}
 
 		c, err := client.New(ctx, "", client.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+			conn2.SetDeadline(time.Now().Add(time.Hour * 24))
 			return conn2, nil
 		}))
 		if err != nil {
