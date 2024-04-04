@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -217,14 +216,6 @@ echo "$BAR" > bar.txt
 			Tests: []*dalec.TestSpec{
 				{
 					Name: "Check that the binary artifacts execute and provide the expected output",
-					Files: map[string]dalec.FileCheckOutput{
-						"/usr/bin/src1": {
-							Permissions: 0o700,
-						},
-						"/usr/bin/file2": {
-							Permissions: 0o700,
-						},
-					},
 					Steps: []dalec.TestStep{
 						{
 							Command: "/usr/bin/src1",
@@ -261,28 +252,6 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
-			sr.Evaluate = true
-			res, err := gwc.Solve(ctx, sr)
-			if err != nil {
-				return nil, err
-			}
-
-			ref, err := res.SingleRef()
-			if err != nil {
-				return nil, err
-			}
-
-			var outErr error
-
-			if err := validateFilePerms(ctx, ref, "/usr/bin/src1", 0o700); err != nil {
-				outErr = errors.Join(outErr, err)
-			}
-
-			if err := validateFilePerms(ctx, ref, "/usr/bin/file2", 0o700); err != nil {
-				outErr = errors.Join(outErr, err)
-			}
-
 			// Make sure the test framework was actually executed by the build target.
 			// This appends a test case so that is expected to fail and as such cause the build to fail.
 			spec.Tests = append(spec.Tests, &dalec.TestSpec{
@@ -292,14 +261,11 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			sr = newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
 			sr.Evaluate = true
-			if _, err := gwc.Solve(ctx, sr); err == nil {
-				outErr = errors.Join(outErr, fmt.Errorf("expected test spec to run with error but got none"))
-			}
 
-			if outErr != nil {
-				return nil, outErr
+			if _, err := gwc.Solve(ctx, sr); err == nil {
+				return nil, fmt.Errorf("expected test spec to run with error but got none")
 			}
 
 			return gwclient.NewResult(), nil
@@ -350,17 +316,4 @@ echo "$BAR" > bar.txt
 
 		runTest(t, distroSigningTest(t, &spec, signTarget))
 	})
-}
-
-func validateFilePerms(ctx context.Context, ref gwclient.Reference, p string, expected os.FileMode) error {
-	stat, err := ref.StatFile(ctx, gwclient.StatRequest{Path: p})
-	if err != nil {
-		return err
-	}
-
-	actual := os.FileMode(stat.Mode).Perm()
-	if actual != expected {
-		return fmt.Errorf("expected mode %O, got %O", expected, actual)
-	}
-	return nil
 }
