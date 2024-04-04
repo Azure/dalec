@@ -1,8 +1,11 @@
 package dalec
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"path"
+	"path/filepath"
 	"slices"
 	"sort"
 	"sync/atomic"
@@ -316,28 +319,53 @@ func (s *Spec) GetTestDeps(targetKey string) []string {
 	return out
 }
 
-func (s *Spec) GetSymlinks(target string) map[string]SymlinkTarget {
-	lm := make(map[string]SymlinkTarget)
-
-	if s.Image != nil && s.Image.Post != nil && s.Image.Post.Symlinks != nil {
-		for k, v := range s.Image.Post.Symlinks {
-			lm[k] = v
+func (s *Spec) GetImagePost(target string) *PostInstall {
+	img := s.Targets[target].Image
+	if img != nil {
+		if img.Post != nil {
+			return img.Post
 		}
 	}
 
-	tgt, ok := s.Targets[target]
-	if !ok {
-		return lm
+	if s.Image != nil {
+		return s.Image.Post
 	}
 
-	if tgt.Image != nil && tgt.Image.Post != nil && tgt.Image.Post.Symlinks != nil {
-		for k, v := range tgt.Image.Post.Symlinks {
-			// target-specific values replace the ones in the spec toplevel
-			lm[k] = v
+	return nil
+}
+
+// ShArgs returns a RunOption that runs the given command in a shell.
+func ShArgs(args string) llb.RunOption {
+	return llb.Args(append([]string{"sh", "-c"}, args))
+}
+
+// InstallPostSymlinks returns a RunOption that adds symlinks defined in the [PostInstall] underneath the provided rootfs path.
+func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		if post == nil {
+			return
 		}
-	}
 
-	return lm
+		if len(post.Symlinks) == 0 {
+			return
+		}
+
+		llb.Dir(rootfsPath).SetRunOption(ei)
+
+		buf := bytes.NewBuffer(nil)
+		buf.WriteString("set -ex\n")
+
+		for src, tgt := range post.Symlinks {
+			fmt.Fprintf(buf, "ln -s %q %q\n", src, filepath.Join(rootfsPath, tgt.Path))
+		}
+
+		const name = "tmp.dalec.symlink.sh"
+		script := llb.Scratch().File(llb.Mkfile(name, 0o400, buf.Bytes()))
+
+		llb.AddMount(name, script, llb.SourcePath(name)).SetRunOption(ei)
+		llb.Args([]string{"/bin/sh", name}).SetRunOption(ei)
+		ProgressGroup("Add post-install symlinks").SetRunOption(ei)
+	})
 }
 
 func (s *Spec) GetSigner(targetKey string) (*PackageSigner, bool) {
