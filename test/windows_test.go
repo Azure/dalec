@@ -233,7 +233,8 @@ echo "$BAR" > bar.txt
 				return nil, err
 			}
 
-			for srcPath, l := range spec.GetSymlinks("windowscross") {
+			post := spec.GetImagePost("windowscross")
+			for srcPath, l := range post.Symlinks {
 				b1, err := ref.ReadFile(ctx, gwclient.ReadRequest{
 					Filename: srcPath,
 				})
