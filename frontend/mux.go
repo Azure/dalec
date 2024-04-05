@@ -67,19 +67,19 @@ type handler struct {
 
 // Add adds a handler for the given target
 // [targetKey] is the resource path to be handled
-func (m *BuildMux) Add(targePath string, bf gwclient.BuildFunc, info *bktargets.Target) {
+func (m *BuildMux) Add(targetPath string, bf gwclient.BuildFunc, info *bktargets.Target) {
 	if m.handlers == nil {
 		m.handlers = make(map[string]handler)
 	}
 
 	h := handler{bf, info}
-	m.handlers[targePath] = h
+	m.handlers[targetPath] = h
 
 	if info != nil && info.Default {
 		m.defaultH = &h
 	}
 
-	bklog.G(context.TODO()).WithField("target", targePath).Info("Added handler to router")
+	bklog.G(context.TODO()).WithField("target", targetPath).Info("Added handler to router")
 }
 
 const keyTarget = "target"
