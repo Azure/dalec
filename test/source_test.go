@@ -2,10 +2,12 @@ package test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/opencontainers/go-digest"
 )
 
 func TestSourceCmd(t *testing.T) {
@@ -175,5 +177,48 @@ func TestSourceBuild(t *testing.T) {
 			doBuildTest(t, "file", newBuildSpec("foo", fileSrc))
 			doBuildTest(t, "dir", newBuildSpec("foo", dirSrc("foo")))
 		})
+	})
+}
+
+func TestSourceHTTP(t *testing.T) {
+	t.Parallel()
+
+	url := "https://raw.githubusercontent.com/Azure/dalec/0ae22acf69ab6ef0a0503affed1a8952c9dd1384/README.md"
+	const badDigest = digest.Digest("sha256:000084c7170b4cfbad0690412259b5e252f84c0ccff79aaca023beb3f3ed0000")
+	const goodDigest = digest.Digest("sha256:b0fa84c7170b4cfbad0690412259b5e252f84c0ccff79aaca023beb3f3ed6380")
+
+	newSpec := func(url string, digest digest.Digest) *dalec.Spec {
+		return &dalec.Spec{
+			Sources: map[string]dalec.Source{
+				"test": {
+					HTTP: &dalec.SourceHTTP{
+						URL:    url,
+						Digest: digest,
+					},
+				},
+			},
+		}
+	}
+
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		bad := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, newSpec(url, badDigest)))
+		bad.Evaluate = true
+		_, err := gwc.Solve(ctx, bad)
+		if err == nil {
+			t.Fatal("expected digest mismatch, but received none")
+		}
+
+		if !strings.Contains(err.Error(), "digest mismatch") {
+			t.Fatalf("expected digest mismatch, got: %v", err)
+		}
+
+		good := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, newSpec(url, goodDigest)))
+		good.Evaluate = true
+		_, err = gwc.Solve(ctx, good)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return gwclient.NewResult(), nil
 	})
 }

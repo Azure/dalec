@@ -150,6 +150,9 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 		count++
 	}
 	if s.HTTP != nil {
+		if err := s.HTTP.validate(); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
 		count++
 	}
 	if s.Context != nil {

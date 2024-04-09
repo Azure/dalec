@@ -175,6 +175,27 @@ func TestSourceHTTP(t *testing.T) {
 	if op.Attrs[httpFilename] != "test" {
 		t.Errorf("expected http.filename %q, got %q", xFilename, op.Attrs[httpFilename])
 	}
+
+	t.Run("with digest", func(t *testing.T) {
+		dgst := digest.Canonical.FromBytes(nil)
+		src.HTTP.Digest = dgst
+
+		ops := getSourceOp(ctx, t, src)
+		op := ops[0].GetSource()
+
+		if len(op.Attrs) != 2 {
+			t.Errorf("expected 2 attribute, got %d", len(op.Attrs))
+		}
+
+		if op.Attrs[httpFilename] != "test" {
+			t.Errorf("expected http.filename %q, got %q", xFilename, op.Attrs[httpFilename])
+		}
+
+		const httpChecksum = "http.checksum"
+		if op.Attrs[httpChecksum] != dgst.String() {
+			t.Errorf("expected http.checksum %q, got %q", dgst.String(), op.Attrs[httpChecksum])
+		}
+	})
 }
 
 func toImageRef(ref string) string {

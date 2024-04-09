@@ -547,7 +547,12 @@
 		"SourceHTTP": {
 			"properties": {
 				"url": {
-					"type": "string"
+					"type": "string",
+					"description": "URL is the URL to download the file from."
+				},
+				"digest": {
+					"type": "string",
+					"description": "Digest is the digest of the file to download.\nThis is used to verify the integrity of the file.\nForm: \u003calgorithm\u003e:\u003cdigest\u003e"
 				}
 			},
 			"additionalProperties": false,
@@ -555,7 +560,7 @@
 			"required": [
 				"url"
 			],
-			"description": "No longer supports `.git` URLs as git repos."
+			"description": "SourceHTTP is used to download a file from an HTTP(s) URL."
 		},
 		"SourceInline": {
 			"properties": {
