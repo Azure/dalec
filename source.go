@@ -127,8 +127,23 @@ func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts,
 func (src *SourceHTTP) AsState(name string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	httpOpts := []llb.HTTPOption{withConstraints(opts)}
 	httpOpts = append(httpOpts, llb.Filename(name))
+	if src.Digest != "" {
+		httpOpts = append(httpOpts, llb.Checksum(src.Digest))
+	}
 	st := llb.HTTP(src.URL, httpOpts...)
 	return st, nil
+}
+
+func (src *SourceHTTP) validate() error {
+	if src.URL == "" {
+		return errors.New("http source must have a URL")
+	}
+	if src.Digest != "" {
+		if err := src.Digest.Validate(); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
 }
 
 // InvalidSourceError is an error type returned when a source is invalid.

@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/opencontainers/go-digest"
 )
 
 // Spec is the specification for a package build.
@@ -173,10 +175,14 @@ type SourceGit struct {
 	KeepGitDir bool   `yaml:"keepGitDir" json:"keepGitDir"`
 }
 
-// No longer supports `.git` URLs as git repos. That has to be done with
-// `SourceGit`
+// SourceHTTP is used to download a file from an HTTP(s) URL.
 type SourceHTTP struct {
+	// URL is the URL to download the file from.
 	URL string `yaml:"url" json:"url"`
+	// Digest is the digest of the file to download.
+	// This is used to verify the integrity of the file.
+	// Form: <algorithm>:<digest>
+	Digest digest.Digest `yaml:"digest,omitempty" json:"digest,omitempty"`
 }
 
 // SourceContext is used to generate a source from a build context. The path to
