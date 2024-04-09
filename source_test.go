@@ -227,6 +227,17 @@ func TestSourceDockerImage(t *testing.T) {
 		},
 	}
 
+	fileMount := SourceMount{
+		Dest: "/filedest",
+		Spec: Source{
+			Inline: &SourceInline{
+				File: &SourceInlineFile{
+					Contents: "some file contents",
+				},
+			},
+		},
+	}
+
 	t.Run("with cmd", func(t *testing.T) {
 		src := Source{
 			DockerImage: &SourceDockerImage{
@@ -244,11 +255,26 @@ func TestSourceDockerImage(t *testing.T) {
 		ctx := context.Background()
 		ops := getSourceOp(ctx, t, src)
 
-		img := ops[0].GetSource()
-		if img.Identifier != xID {
-			t.Errorf("expected identifier %q, got %q", xID, img.Identifier)
+		imgBaseOp := ops[0].GetSource()
+		if imgBaseOp.Identifier != xID {
+			t.Errorf("expected identifier %q, got %q", xID, imgBaseOp.Identifier)
 		}
 		checkCmd(t, ops[1:], &src, [][]expectMount{noMountCheck, noMountCheck})
+
+		t.Run("with file mount", func(t *testing.T) {
+			src := src
+
+			img := *src.DockerImage
+			cmd := *img.Cmd
+			cmd.Mounts = []SourceMount{fileMount}
+
+			img.Cmd = &cmd
+			src.DockerImage = &img
+
+			ops := getSourceOp(ctx, t, src)
+			fileMountCheck := []expectMount{{dest: "/filedest", selector: "/filedest", typ: pb.MountType_BIND}}
+			checkCmd(t, ops[2:], &src, [][]expectMount{noMountCheck, fileMountCheck})
+		})
 
 		t.Run("with filters", func(t *testing.T) {
 			t.Run("include and exclude", func(t *testing.T) {
@@ -304,7 +330,12 @@ func TestSourceDockerImage(t *testing.T) {
 				contextMount.Spec.Path = "subdir"
 
 				// Add source to mounts
-				src.DockerImage.Cmd.Mounts = []SourceMount{contextMount}
+				img := *src.DockerImage
+				cmd := *img.Cmd
+
+				cmd.Mounts = []SourceMount{contextMount}
+				img.Cmd = &cmd
+				src.DockerImage = &img
 
 				ops := getSourceOp(ctx, t, src)
 
@@ -314,7 +345,7 @@ func TestSourceDockerImage(t *testing.T) {
 				// since the order of the source ops isn't always deterministic
 				// (possible buildkit marshaling bug)
 				if imageOp := findMatchingSource(ops, src); imageOp == nil {
-					t.Errorf("could not find source with identifier %q", img.Identifier)
+					t.Errorf("could not find source with identifier %q", imgBaseOp.Identifier)
 					return
 				}
 
@@ -335,13 +366,20 @@ func TestSourceDockerImage(t *testing.T) {
 				src := src
 				imageMount := imageMount
 				imageMount.Spec.Path = "/subdir"
+
+				img := *src.DockerImage
+				cmd := *img.Cmd
+
+				cmd.Mounts = []SourceMount{imageMount}
+				img.Cmd = &cmd
+				src.DockerImage = &img
 				src.DockerImage.Cmd.Mounts = []SourceMount{imageMount}
 
 				ops := getSourceOp(ctx, t, src)
 
-				var img, subImg *pb.Op
+				var imgOp, subImg *pb.Op
 
-				if img = findMatchingSource(ops, src); img == nil {
+				if imgOp = findMatchingSource(ops, src); imgOp == nil {
 					t.Errorf("could not find source with identifier %q", src.DockerImage.Ref)
 				}
 
@@ -355,10 +393,10 @@ func TestSourceDockerImage(t *testing.T) {
 					t.Fatalf("expecting single child op for %v\n", subImg.GetSource())
 				}
 
-				cmd := childOps[0]
-				checkCmd(t, []*pb.Op{cmd}, &imageMount.Spec, [][]expectMount{noMountCheck, noMountCheck})
+				cmdOp := childOps[0]
+				checkCmd(t, []*pb.Op{cmdOp}, &imageMount.Spec, [][]expectMount{noMountCheck, noMountCheck})
 
-				nextCmd1 := getChildren(cmd, ops, dMap)
+				nextCmd1 := getChildren(cmdOp, ops, dMap)
 				nextCmd2 := getChildren(nextCmd1[0], ops, dMap)
 
 				checkCmd(t, []*pb.Op{nextCmd1[0], nextCmd2[0]}, &src, [][]expectMount{{{dest: "/dst", selector: ""}}, noMountCheck})
@@ -854,8 +892,9 @@ func checkContainsMount(t *testing.T, mounts []*pb.Mount, expect expectMount) {
 }
 
 func checkCmd(t *testing.T, ops []*pb.Op, src *Source, expectMounts [][]expectMount) {
+	t.Helper()
 	if len(ops) != len(src.DockerImage.Cmd.Steps) {
-		t.Fatalf("unexpected number of ops, expected %d, got %d", len(src.DockerImage.Cmd.Steps), len(ops))
+		t.Fatalf("unexpected number of ops, expected %d, got %d\n\n%v", len(src.DockerImage.Cmd.Steps), len(ops), ops)
 	}
 	for i, step := range src.DockerImage.Cmd.Steps {
 		exec := ops[i].GetExec()
@@ -883,7 +922,6 @@ func checkCmd(t *testing.T, ops []*pb.Op, src *Source, expectMounts [][]expectMo
 		for _, expectMount := range expectMounts[i] {
 			checkContainsMount(t, exec.Mounts, expectMount)
 		}
-
 	}
 }
 
