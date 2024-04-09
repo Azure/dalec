@@ -14,40 +14,43 @@ func TestSourceCmd(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 
 	sourceName := "checkcmd"
-	spec := &dalec.Spec{
-		Args: map[string]string{
-			"BAR": "bar",
-		},
-		Name: "cmd-source-ref",
-		Sources: map[string]dalec.Source{
-			sourceName: {
-				Path: "/output",
-				DockerImage: &dalec.SourceDockerImage{
-					Ref: "busybox:latest",
-					Cmd: &dalec.Command{
-						Steps: []*dalec.BuildStep{
-							{
-								Command: `mkdir -p /output; echo "$FOO $BAR" > /output/foo`,
-								Env: map[string]string{
-									"FOO": "foo",
-									"BAR": "$BAR", // make sure args are passed through
+	testSpec := func() *dalec.Spec {
+		return &dalec.Spec{
+			Args: map[string]string{
+				"BAR": "bar",
+			},
+			Name: "cmd-source-ref",
+			Sources: map[string]dalec.Source{
+				sourceName: {
+					Path: "/output",
+					DockerImage: &dalec.SourceDockerImage{
+						Ref: "busybox:latest",
+						Cmd: &dalec.Command{
+							Steps: []*dalec.BuildStep{
+								{
+									Command: `mkdir -p /output; echo "$FOO $BAR" > /output/foo`,
+									Env: map[string]string{
+										"FOO": "foo",
+										"BAR": "$BAR", // make sure args are passed through
+									},
 								},
-							},
-							// make sure state is preserved for multiple steps
-							{
-								Command: `echo "hello" > /output/hello`,
-							},
-							{
-								Command: `cat /output/foo | grep "foo bar"`,
+								// make sure state is preserved for multiple steps
+								{
+									Command: `echo "hello" > /output/hello`,
+								},
+								{
+									Command: `cat /output/foo | grep "foo bar"`,
+								},
 							},
 						},
 					},
 				},
 			},
-		},
+		}
 	}
 
 	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		spec := testSpec()
 		req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
 		res, err := gwc.Solve(ctx, req)
 		if err != nil {
@@ -58,6 +61,41 @@ func TestSourceCmd(t *testing.T) {
 		checkFile(ctx, t, "hello", res, []byte("hello\n"))
 
 		return gwclient.NewResult(), nil
+	})
+
+	t.Run("with mounted file", func(t *testing.T) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+			spec := testSpec()
+			spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
+				{
+					Command: `grep 'foo bar' /foo`,
+				},
+				{
+					Command: `mkdir -p /output; cp /foo /output/foo`,
+				},
+			}
+			spec.Sources[sourceName].DockerImage.Cmd.Mounts = []dalec.SourceMount{
+				{
+					Dest: "/foo",
+					Spec: dalec.Source{
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents: "foo bar",
+							},
+						},
+					},
+				},
+			}
+
+			req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+			res, err := gwc.Solve(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+
+			checkFile(ctx, t, "foo", res, []byte("foo bar"))
+			return gwclient.NewResult(), nil
+		})
 	})
 }
 

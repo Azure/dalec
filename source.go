@@ -116,7 +116,7 @@ func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts,
 		return st, nil
 	}
 
-	st, err := generateSourceFromImage(name, st, src.Cmd, sOpt, path, opts...)
+	st, err := generateSourceFromImage(st, src.Cmd, sOpt, path, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -180,7 +180,7 @@ func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOp
 
 // must not be called with a nil cmd pointer
 // subPath must be a valid non-empty path
-func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if len(cmd.Steps) == 0 {
 		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
 	}
@@ -195,7 +195,7 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
 	for _, src := range cmd.Mounts {
-		srcSt, err := src.Spec.AsMount(name, sOpts, opts...)
+		srcSt, err := src.Spec.AsMount(src.Dest, sOpts, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -207,6 +207,10 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 		if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 &&
 			!src.Spec.handlesOwnPath() {
 			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
+		}
+
+		if !SourceIsDir(src.Spec) {
+			mountOpt = append(mountOpt, llb.SourcePath(src.Dest))
 		}
 		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
 	}
