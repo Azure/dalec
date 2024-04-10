@@ -91,25 +91,7 @@ func (src *SourceContext) AsState(name string, srcPath string, includes []string
 	if st == nil {
 		return llb.Scratch(), errors.Errorf("context %q not found", src.Name)
 	}
-	stFS := sOpt.GetFS(*st)
-	// if srcPath != "" {
-	// 	srcName := path.Join("/", srcPath)
-	// 	if !isDir(srcName, stFS) {
-	// 		// 		return *st, nil
-	// 		// 	} else {
-	// 		destName := path.Join("/", name)
-	// 		return llb.Scratch().File(llb.Copy(*st, srcName, destName)), nil
-	// 	}
-	// }
-	entries, err := stFS.ReadDir("/")
-	if err != nil {
-		return llb.Scratch(), errors.Errorf("docker-context %q not found: %s", src.Name, err)
-	}
-	if len(entries) == 1 && !entries[0].IsDir() {
-		srcName := path.Join("/", entries[0].Name())
-		destName := path.Join("/", name)
-		return llb.Scratch().File(llb.Copy(*st, srcName, destName)), nil
-	}
+
 	return *st, nil
 }
 
@@ -197,13 +179,46 @@ func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
 }
 
+func handleRename(s *Source, name string, sOpt SourceOpts) llb.StateOption {
+	rename := func(st llb.State) llb.State {
+		stFS := sOpt.GetFS(st)
+		entries, err := stFS.ReadDir("/")
+
+		// we are not expecting an error here
+		if err != nil {
+			panic(err)
+		}
+
+		if len(entries) == 1 && !entries[0].IsDir() {
+			// we have a single file at the root of the source, we need to rename it
+			srcName := path.Join("/", entries[0].Name())
+			destName := path.Join("/", name)
+			return llb.Scratch().File(llb.Copy(st, srcName, destName))
+		}
+
+		return st
+	}
+	noRename := func(st llb.State) llb.State { return st }
+
+	if s.Context != nil && s.Path != "" {
+		return rename
+	}
+
+	return noRename
+}
+
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, bool, error) {
 	st, err := getSource(*s, name, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), false, err
 	}
 	isDir := s.IsDir(st, sOpt)
-	return st.With(getFilter(*s, forMount)), isDir, nil
+	sourceState := st.With(getFilter(name, *s, forMount)).
+		With(handleRename(s, name, sOpt)) // certain sources such as source context require an extra
+		// step to rename the contents to the source name if the contents
+		// are a single file
+
+	return sourceState, isDir, nil
 }
 
 // returns llb.State of Source, bool for IsDirectory, and error
@@ -367,7 +382,7 @@ func isContextDir(src Source, srcState llb.State, sOpt SourceOpts) bool {
 func SourceIsDir(src Source, srcState llb.State, sOpt SourceOpts) bool {
 	switch {
 	case src.Context != nil:
-		// return true
+		//return true
 		return isContextDir(src, srcState, sOpt)
 	case src.DockerImage != nil,
 		src.Git != nil,
