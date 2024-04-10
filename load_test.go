@@ -212,6 +212,26 @@ func TestSourceValidation(t *testing.T) {
 				},
 			},
 		},
+		{
+			title:     "has invalid genator config",
+			expectErr: true,
+			src: Source{
+				Inline: &SourceInline{
+					File: &SourceInlineFile{},
+				},
+				Generate: []*SourceGenerator{{}},
+			},
+		},
+		{
+			title:     "has valid genator",
+			expectErr: false,
+			src: Source{
+				Inline: &SourceInline{
+					File: &SourceInlineFile{},
+				},
+				Generate: []*SourceGenerator{{Gomod: &GeneratorGomod{}}},
+			},
+		},
 	}
 
 	for _, tc := range cases {

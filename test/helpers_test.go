@@ -161,7 +161,7 @@ func (d dirStatAsStringer) String() string {
 type srOpt func(*gwclient.SolveRequest)
 
 func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
-	sr := gwclient.SolveRequest{}
+	sr := gwclient.SolveRequest{Evaluate: true}
 	for _, opt := range opts {
 		opt(&sr)
 	}

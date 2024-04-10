@@ -280,6 +280,30 @@ type Source struct {
 	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
 	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
+
+	// Generate is the list generators to run on the source.
+	//
+	// Generators are used to generate additional sources from this source.
+	// As an example the `godmod` generator can be used to generate a go module cache from a go source.
+	// How a genator operates is dependent on the actual generator.
+	// Geneators may also cauuse modifications to the build environment.
+	//
+	// Currently only one generator is supported: "gomod"
+	Generate []*SourceGenerator `yaml:"generate,omitempty" json:"generate,omitempty"`
+}
+
+// GeneratorGomod is used to generate a go module cache from go module sources
+type GeneratorGomod struct {
+}
+
+// SourceGenerator holds the configuration for a source generator.
+// This can be used inside of a [Source] to generate additional sources from the given source.
+type SourceGenerator struct {
+	// Subpath is the path inside a source to run the generator from.
+	Subpath string `yaml:"subpath,omitempty" json:"subpath,omitempty"`
+
+	// Gomod is the go module generator.
+	Gomod *GeneratorGomod `yaml:"gomod" json:"gomod"`
 }
 
 // PackageDependencies is a list of dependencies for a package.

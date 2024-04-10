@@ -76,7 +76,7 @@ func getWorkerImage(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) 
 	opts = append(opts, dalec.ProgressGroup("Prepare worker image"))
 	return llb.Image(marinerRef, llb.WithMetaResolver(resolver), dalec.WithConstraints(opts...)).
 		Run(
-			shArgs("tdnf install -y rpm-build mariner-rpm-macros build-essential"),
+			shArgs("tdnf install -y rpm-build mariner-rpm-macros build-essential ca-certificates"),
 			defaultTdnfCacheMount(),
 			dalec.WithConstraints(opts...),
 		).
@@ -89,8 +89,8 @@ func installBuildDeps(spec *dalec.Spec, targetKey string, opts ...llb.Constraint
 		if len(deps) == 0 {
 			return in
 		}
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
 
+		opts = append(opts, dalec.ProgressGroup("Install build deps"))
 		return in.
 			Run(
 				shArgs(fmt.Sprintf("tdnf install --releasever=2.0 -y %s", strings.Join(deps, " "))),
@@ -102,12 +102,16 @@ func installBuildDeps(spec *dalec.Spec, targetKey string, opts ...llb.Constraint
 }
 
 func specToRpmLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	br, err := rpm.SpecToBuildrootLLB(spec, sOpt, targetKey, opts...)
+	base, err := getSpecWorker(sOpt.Resolver, spec, targetKey, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	br, err := rpm.SpecToBuildrootLLB(base, spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 
-	base := getWorkerImage(sOpt.Resolver, opts...).With(installBuildDeps(spec, targetKey, opts...))
-	return rpm.Build(br, base, specPath, opts...), nil
+	return rpm.Build(br, base.With(installBuildDeps(spec, targetKey, opts...)), specPath, opts...), nil
 }
