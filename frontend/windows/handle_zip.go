@@ -12,6 +12,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
@@ -63,7 +64,9 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 	})
 }
 
-func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+const gomodsName = "__gomods"
+
+func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
 	out := make(map[string]llb.State, len(spec.Sources))
 	for k, src := range spec.Sources {
 		displayRef, err := src.GetDisplayRef()
@@ -74,10 +77,20 @@ func specToSourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.Const
 		pg := dalec.ProgressGroup("Add spec source: " + k + " " + displayRef)
 		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "error creating source state for %q", k)
 		}
 
 		out[k] = st
+	}
+
+	opts = append(opts, dalec.ProgressGroup("Add gomod sources"))
+	st, err := spec.GomodDeps(sOpt, worker, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding gomod sources")
+	}
+
+	if st != nil {
+		out[gomodsName] = *st
 	}
 
 	return out, nil
@@ -108,9 +121,12 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 
 	for _, k := range sorted {
 		state := states[k]
-		src := sources[k]
 
-		if !dalec.SourceIsDir(src) {
+		// In cases where we have a generated soruce (e.g. gomods) we don't have a [dalec.Source] in the `sources` map.
+		// So we need to check for this.
+		src, ok := sources[k]
+
+		if ok && !dalec.SourceIsDir(src) {
 			files = append(files, state)
 			continue
 		}
@@ -127,7 +143,7 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 }
 
 func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
-	sources, err := specToSourcesLLB(spec, sOpt)
+	sources, err := specToSourcesLLB(worker, spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -189,6 +205,10 @@ func createBuildScript(spec *dalec.Spec) llb.State {
 
 	fmt.Fprintln(buf, "#!/usr/bin/env sh")
 	fmt.Fprintln(buf, "set -x")
+
+	if spec.HasGomods() {
+		fmt.Fprintln(buf, "export GOMODCACHE=\"$(pwd)/"+gomodsName+"\"")
+	}
 
 	for i, step := range spec.Build.Steps {
 		fmt.Fprintln(buf, "(")

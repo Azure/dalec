@@ -12,20 +12,8 @@ license: Apache 2.0
 sources:
   src:
     context: {}
-  gomodcache:
-    path: /build/gomodcache
-    image:
-      ref: mcr.microsoft.com/oss/go/microsoft/golang:1.21
-      cmd:
-        dir: /build/src
-        mounts:
-          - dest: /build/src
-            spec:
-              context: {}
-        steps:
-          - command: go mod download
-            env:
-              GOMODCACHE: /build/gomodcache
+    generate:
+      - gomod: {}
 
 dependencies:
   build:
@@ -40,7 +28,6 @@ build:
     GOPATH: /go
   steps:
     - command: |
-        export GOMODCACHE="$(pwd)/gomodcache"
         cd src
         go build -o ../frontend ./cmd/frontend
 

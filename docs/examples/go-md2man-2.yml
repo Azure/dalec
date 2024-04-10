@@ -1,6 +1,7 @@
 # syntax=ghcr.io/azure/dalec/frontend:latest
 name: go-md2man
 version: 2.0.3
+revision: "1"
 packager: Dalec Example
 vendor: Dalec Example
 license: MIT
@@ -9,27 +10,11 @@ website: https://github.com/cpuguy83/go-md2man
 
 sources:
   src:
+    generate:
+      - gomod: {}
     git:
       url: https://github.com/cpuguy83/go-md2man.git
       commit: "v2.0.3"
-  gomods: # This is required when the build environment does not allow network access. This downloads all the go modules.
-    path: /build/gomodcache # This is the path we will be extracing after running the command below.
-    image:
-      ref: mcr.microsoft.com/oss/go/microsoft/golang:1.21
-      cmd:
-        dir: /build/src
-        mounts:
-          # Mount a source (inline, under `spec`), so our command has access to it.
-          - dest: /build/src
-            spec:
-              git:
-                url: https://github.com/cpuguy83/go-md2man.git
-                commit: "v2.0.3"
-        steps:
-          - command: go mod download
-            env:
-              # This variable controls where the go modules are downloaded to.
-              GOMODCACHE: /build/gomodcache
 
 dependencies:
   build:
@@ -40,7 +25,6 @@ build:
     CGO_ENABLED: "0"
   steps:
     - command: |
-        export GOMODCACHE="$(pwd)/gomods"
         cd src
         go build -o go-md2man .
 

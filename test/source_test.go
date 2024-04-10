@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"io/fs"
 	"strings"
 	"testing"
 
@@ -220,5 +221,138 @@ func TestSourceHTTP(t *testing.T) {
 		}
 
 		return gwclient.NewResult(), nil
+	})
+}
+
+func TestSourceWithGomod(t *testing.T) {
+	t.Parallel()
+
+	// Create a very simple fake module with a limited depdenency tree just to
+	// keep the test as fast/reliable as possible.
+	const mainGo = `package main
+
+import (
+	"fmt"
+
+	"github.com/cpuguy83/tar2go"
+)
+
+func main() {
+	var i *tar2go.Index
+	fmt.Println("Print something to use the i var", i)
+}
+`
+
+	const gomod = `module testgomodsource
+
+go 1.20.0
+
+require github.com/cpuguy83/tar2go v0.3.1
+`
+
+	const gosum = `
+github.com/cpuguy83/tar2go v0.3.1 h1:DMWlaIyoh9FBWR4hyfZSOEDA7z8rmCiGF1IJIzlTlR8=
+github.com/cpuguy83/tar2go v0.3.1/go.mod h1:2Ys2/Hu+iPHQRa4DjIVJ7UAaKnDhAhNACeK3A0Rr5rM=
+`
+
+	const downgradePatch = `diff --git a/go.mod b/go.mod
+index 0c18614..8a3a0ee 100644
+--- a/go.mod
++++ b/go.mod
+@@ -2,4 +2,4 @@ module testgomodsource
+ 
+ go 1.20.0
+ 
+-require github.com/cpuguy83/tar2go v0.3.1
++require github.com/cpuguy83/tar2go v0.3.0
+diff --git a/go.sum b/go.sum
+index ea874f5..ba38f84 100644
+--- a/go.sum
++++ b/go.sum
+@@ -1,2 +1,2 @@
+-github.com/cpuguy83/tar2go v0.3.1 h1:DMWlaIyoh9FBWR4hyfZSOEDA7z8rmCiGF1IJIzlTlR8=
+-github.com/cpuguy83/tar2go v0.3.1/go.mod h1:2Ys2/Hu+iPHQRa4DjIVJ7UAaKnDhAhNACeK3A0Rr5rM=
++github.com/cpuguy83/tar2go v0.3.0 h1:SDNIJgmRrx5+6SnhjfxqeYfWhwo3/HlF0Cphqw2rewY=
++github.com/cpuguy83/tar2go v0.3.0/go.mod h1:2Ys2/Hu+iPHQRa4DjIVJ7UAaKnDhAhNACeK3A0Rr5rM=
+`
+
+	// Note: module here should be moduyle+version because this is checking the go module path on disk
+	checkModule := func(ctx context.Context, gwc gwclient.Client, module string, spec *dalec.Spec) {
+		res, err := gwc.Solve(ctx, newSolveRequest(withBuildTarget("debug/gomods"), withSpec(ctx, t, spec)))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ref, err := res.SingleRef()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
+			Path: module,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !fs.FileMode(stat.Mode).IsDir() {
+			t.Fatal("expected directory")
+		}
+	}
+
+	const srcName = "src1"
+	baseSpec := func() *dalec.Spec {
+		return &dalec.Spec{
+			Sources: map[string]dalec.Source{
+				srcName: {
+					Generate: []*dalec.SourceGenerator{
+						{
+							Gomod: &dalec.GeneratorGomod{},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"main.go": {Contents: mainGo},
+								"go.mod":  {Contents: gomod},
+								"go.sum":  {Contents: gosum},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("no patch", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.1", baseSpec())
+			return gwclient.NewResult(), nil
+		})
+	})
+
+	t.Run("with patch", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+			spec := baseSpec()
+
+			patchName := "patch"
+			spec.Sources[patchName] = dalec.Source{
+				Inline: &dalec.SourceInline{
+					File: &dalec.SourceInlineFile{
+						Contents: downgradePatch,
+					},
+				},
+			}
+
+			spec.Patches = map[string][]dalec.PatchSpec{
+				srcName: {{Source: patchName}},
+			}
+
+			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
+
+			return gwclient.NewResult(), nil
+		})
 	})
 }

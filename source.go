@@ -460,6 +460,7 @@ func (s Source) Doc(name string) (io.Reader, error) {
 
 	return b, nil
 }
+
 func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
 	for _, p := range patchNames {
 		patchState := sourceToState[p.Source]
@@ -476,14 +477,15 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 	return sourceState
 }
 
+// PatchSources returns a new map containing the patched LLB state for each source in the source map.
+// Sources that are not patched are also included in the result for convienence.
 // `sourceToState` must be a complete map from source name -> llb state for each source in the dalec spec.
 // `worker` must be an LLB state with a `patch` binary present.
-// PatchSources returns a new map containing the patched LLB state for each source in the source map.
 func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
 	// duplicate map to avoid possibly confusing behavior of mutating caller's map
 	states := DuplicateMap(sourceToState)
 	pgID := identity.NewID()
-	sorted := SortMapKeys(spec.Sources)
+	sorted := SortMapKeys(states)
 
 	for _, sourceName := range sorted {
 		sourceState := states[sourceName]
@@ -497,4 +499,33 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 	}
 
 	return states
+}
+
+func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc func(string) bool, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+	states := map[string]llb.State{}
+	for name, src := range s.Sources {
+		if !filterFunc(name) {
+			continue
+		}
+
+		st, err := src.AsState(name, sOpt, opts...)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get source state for %q", name)
+		}
+
+		states[name] = st
+		for _, p := range s.Patches[name] {
+			src, ok := s.Sources[p.Source]
+			if !ok {
+				return nil, errors.Errorf("patch source %q not found", p.Source)
+			}
+
+			states[p.Source], err = src.AsState(p.Source, sOpt, opts...)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to get patch source state for %q", p.Source)
+			}
+		}
+	}
+
+	return PatchSources(worker, s, states, opts...), nil
 }

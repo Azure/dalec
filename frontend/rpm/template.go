@@ -7,10 +7,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"text/template"
 
 	"github.com/Azure/dalec"
 )
+
+const gomodsName = "__gomods"
 
 var specTmpl = template.Must(template.New("spec").Parse(strings.TrimSpace(`
 Summary: {{.Description}}
@@ -169,6 +172,11 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 		}
 		fmt.Fprintf(b, "Source%d: %s\n", idx, ref)
 	}
+
+	if w.Spec.HasGomods() {
+		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", len(keys), gomodsName)
+	}
+
 	return b, nil
 }
 
@@ -198,8 +206,17 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	// Sort keys for consistent output
 	keys := dalec.SortMapKeys(w.Spec.Sources)
 
+	prepareGomods := sync.OnceFunc(func() {
+		if !w.Spec.HasGomods() {
+			return
+		}
+		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", gomodsName)
+		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
+	})
+
 	for _, name := range keys {
 		src := w.Spec.Sources[name]
+
 		err := func(name string, src dalec.Source) error {
 			if patches[name] {
 				// This source is a patch so we don't need to set anything up
@@ -219,6 +236,8 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			for _, patch := range w.Spec.Patches[name] {
 				fmt.Fprintf(b, "patch -d %q -p%d -s < \"%%{_sourcedir}/%s\"\n", name, *patch.Strip, patch.Source)
 			}
+
+			prepareGomods()
 			return nil
 		}(name, src)
 		if err != nil {
@@ -251,6 +270,10 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	fmt.Fprintf(b, "%%build\n")
 
 	fmt.Fprintln(b, "set -e")
+
+	if w.Spec.HasGomods() {
+		fmt.Fprintln(b, "export GOMODCACHE=\"$(pwd)/"+gomodsName+"\"")
+	}
 
 	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
