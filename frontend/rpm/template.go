@@ -153,11 +153,11 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 	for idx, name := range keys {
 		src := w.Spec.Sources[name]
 		ref := name
-		_, isDir, err := src.AsState(name, w.sOpts)
+		st, err := src.AsState(name, w.sOpts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get state of src: %s", err)
 		}
-
+		isDir := src.IsDir(st, w.sOpts)
 		if isDir {
 			ref += ".tar.gz"
 		}
@@ -222,19 +222,15 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		src := w.Spec.Sources[name]
 
 		err := func(name string, src dalec.Source) error {
-			_, isDir, err := src.AsState(name, w.sOpts)
+			st, err := src.AsState(name, w.sOpts)
 			if err != nil {
 				return fmt.Errorf("failed to get state of src: %s", err)
 			}
-			if patches[name] && !isDir {
+			isDir := src.IsDir(st, w.sOpts)
+			if patches[name] {
 				// This source is a patch so we don't need to set anything up
 				return nil
-			} else if patches[name] && isDir {
-				// fmt.Fprintf(b, "rm \"%%{_sourcedir}/%s.tar.gz\"\n", name) # Fails on this
-				// TODO: apply our add all of these to be applied?
-				return nil
 			}
-
 			if !isDir {
 				fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", name)
 				return nil

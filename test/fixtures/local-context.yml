@@ -1,6 +1,4 @@
-# syntax=local/dalec/frontend 
-
-#ghcr.io/azure/dalec/frontend:latest
+# syntax=ghcr.io/azure/dalec/frontend:latest
 
 name: dalec-test-fixture-local-context
 description: A test fixture for checking local context sources
@@ -29,7 +27,6 @@ sources:
       - go.sum
   src5:
     context: {}
-    path: "./go.mod"
     includes:
       - go.*
     excludes:
@@ -37,7 +34,10 @@ sources:
   src6:
     context: {}
     path: "./docs/examples/kubernetes-patch.yml"
-
+  src7:
+    context: {}
+    includes:
+      - ./files.go
 build:
   steps:
     - command: |
@@ -61,7 +61,7 @@ build:
         [ -d "./src4/cmd" ]
 
         # Now with mixed include/exclude
-        [ -f "./src5/go.mod" ]
+        [ -f "./src5" ]
         [ "$(ls -A ./src5 | wc -l)" -eq 1 ]
 
 changelog:

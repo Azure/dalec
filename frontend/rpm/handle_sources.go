@@ -113,11 +113,11 @@ func Dalec2SourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		}
 
 		pg := dalec.ProgressGroup("Add spec source: " + k + " " + s)
-		st, isDir, err := src.AsState(k, sOpt, append(opts, pg)...)
+		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, err
 		}
-
+		isDir := src.IsDir(st, sOpt)
 		if isDir {
 			out = append(out, tar(st, k+".tar.gz", append(opts, pg)...))
 		} else {

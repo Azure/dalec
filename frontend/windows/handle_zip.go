@@ -75,7 +75,7 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		}
 
 		pg := dalec.ProgressGroup("Add spec source: " + k + " " + displayRef)
-		st, _, err := src.AsState(k, sOpt, append(opts, pg)...)
+		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error creating source state for %q", k)
 		}

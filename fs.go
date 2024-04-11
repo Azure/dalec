@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/fs"
 	"path"
-	"strings"
 	"sync"
 
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -134,23 +133,6 @@ func (st *StateRefFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	}
 
 	return entries, nil
-}
-
-func (st *StateRefFS) IsDir(name string) (bool, error) {
-	ref, err := st.Ref()
-	if err != nil {
-		return false, err
-	}
-	_, err = ref.ReadDir(st.ctx, gwclient.ReadDirRequest{
-		Path: name,
-	})
-	if err != nil {
-		if strings.Contains(err.Error(), "not a directory") {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, err
 }
 
 type stateRefFile struct {
