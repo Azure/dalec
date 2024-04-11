@@ -251,11 +251,22 @@ func (m *BuildMux) lookupTarget(ctx context.Context, target string) (matchedPatt
 		return target, m.defaultH, nil
 	}
 
-	for k, h := range m.handlers {
+	var candidates []string
+	for k := range m.handlers {
+		// for prefix matching, we should skip anything that doesn't have a target defined
 		if strings.HasPrefix(target, k+"/") {
-			bklog.G(ctx).WithField("prefix", k).WithField("matching request", target).Info("Using prefix match for target")
-			return k, &h, nil
+			candidates = append(candidates, k)
 		}
+	}
+
+	if len(candidates) > 0 {
+		// Sort uses a lexicographic sort, so the longest prefix will be last
+		// We want to match the longest prefix, so we need the last element
+		slices.Sort(candidates)
+		k := candidates[len(candidates)-1]
+		h := m.handlers[k]
+		bklog.G(ctx).WithField("prefix", k).WithField("matching request", target).Info("Using prefix match for target")
+		return k, &h, nil
 	}
 
 	return "", nil, handlerNotFound(target, maps.Keys(m.handlers))
