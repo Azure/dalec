@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/util/appcontext"
@@ -33,7 +34,40 @@ func main() {
 			return nil, fmt.Errorf("no artifact state provided to signer")
 		}
 
-		def, err := artifacts.Marshal(ctx)
+		base, ok := inputs["context"]
+		if !ok {
+			return nil, fmt.Errorf("no base signing image provided")
+		}
+
+		base = base.File(llb.Mkfile("/config.json", 0o600, []byte(`
+{
+  "clientId": "12f74099-0b7a-4e7b-8b7f-c1e0747fadc8",
+  "gatewayApi": "https://api.esrp.microsoft.com",
+  "requestSigningCert": {
+    "subject": "esrp-prss",
+    "vaultName": "upstreamci-ado"
+  },
+  "driEmail": [
+    "pengelbert@microsoft.com"
+  ],
+  "signingOperations": [
+    {
+      "keyCode": "CP-450778-Pgp",
+      "operationSetCode": "LinuxSign",
+      "parameters": [],
+      "toolName": "sign",
+      "toolVersion": 1
+    }
+  ],
+  "hashType": "sha256"
+}
+`)))
+
+		output := base.Run(llb.Args([]string{
+			"az", "xsign", "sign-file", "--file-name", "/artifacts/RPMS/x86_64/*", "--config-file", "/config.json",
+		})).AddMount("/artifacts", artifacts)
+
+		def, err := output.Marshal(ctx)
 		if err != nil {
 			return nil, err
 		}
