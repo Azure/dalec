@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1.6
 
+FROM scratch as creds
+
 FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/oss/go/microsoft/golang:1.21@sha256:f5fc8bf2873d2fa538b2d87e6e8f9bc6d05a3c419a840147b25f6386855192e9 AS signer-builder
 WORKDIR /build
 COPY . .
@@ -26,6 +28,7 @@ EOF
 
 FROM az-base as final
 COPY --from=signer-builder /signer /signer
+COPY --from=creds .azure /root/.azure
 LABEL moby.buildkit.frontend.network.none="true"
 LABEL moby.buildkit.frontend.caps="moby.buildkit.frontend.inputs,moby.buildkit.frontend.subrequests,moby.buildkit.frontend.contexts"
 ENTRYPOINT ["/signer"]
