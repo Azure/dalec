@@ -39,41 +39,45 @@ func main() {
 			return nil, fmt.Errorf("no base signing image provided")
 		}
 
-		base = base.File(llb.Mkfile("/script.sh", 0o700, []byte(`
+		base = base.File(llb.Mkfile("/script.sh", 0o777, []byte(`
+			#!/usr/bin/env bash
 			set -exu
 			KEYVAULT_NAME="temp-azcu-signing-kv"
-			az login --use-device-code
 			export AZURE_CLIENT_SECRET=$(az keyvault secret show --name esrp-token --vault-name $KEYVAULT_NAME --query value -o tsv)
 			export AZURE_CLIENT_ID=$(az keyvault secret show --name esrp-sp-id --vault-name $KEYVAULT_NAME --query value -o tsv)
 			export ESRP_KEYCODE=$(az keyvault secret show --name esrp-keycode-test --vault-name $KEYVAULT_NAME --query value -o tsv)
 			export AZURE_TENANT_ID=$(az keyvault secret show --name esrp-sp-tenant --vault-name $KEYVAULT_NAME --query value -o tsv)
 			az login --service-principal -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" --allow-no-subscriptions
-			az xsign sign-file --file-name /artifacts/RPMS/x86_64/* --config-file /config.json`)))
+			az xsign sign-file --file-name /artifacts/RPMS/x86_64/* --config-file /config.json
+			`)))
 		base = base.File(llb.Mkfile("/config.json", 0o600, []byte(`
 {
-  "clientId": "12f74099-0b7a-4e7b-8b7f-c1e0747fadc8",
-  "gatewayApi": "https://api.esrp.microsoft.com",
-  "requestSigningCert": {
-    "subject": "esrp-prss",
-    "vaultName": "upstreamci-ado"
-  },
-  "driEmail": [
-    "pengelbert@microsoft.com"
-  ],
-  "signingOperations": [
-    {
-      "keyCode": "CP-450778-Pgp",
-      "operationSetCode": "LinuxSign",
-      "parameters": [],
-      "toolName": "sign",
-      "toolVersion": 1
-    }
-  ],
-  "hashType": "sha256"
+    "clientId": "f7eef2fc-cc8d-48f3-adfd-b97960fdb1dd",
+    "gatewayApi": "https://api.esrp.microsoft.com",
+    "requestSigningCert": {
+      "subject": "esrp-prss",
+      "vaultName": "temp-azcu-signing-kv"
+    },
+    "driEmail": ["pengelbert@microsoft.com"],
+    "signingOperations": [
+      {
+        "keyCode": "CP-467215",
+        "operationSetCode": "NotaryCoseSign",
+        "parameters": [
+            {
+              "parameterName": "CoseFlags",
+              "parameterValue": "chainunprotected"
+            }
+          ],
+        "toolName": "sign",
+        "toolVersion": "1.0"
+      }
+    ],
+    "hashType": "sha256"
 }
 `)))
 
-		output := base.Run(llb.Args([]string{"/script.sh"})).AddMount("/artifacts", artifacts)
+		output := base.Run(llb.Args([]string{"bash", "/script.sh"})).AddMount("/artifacts", artifacts)
 
 		def, err := output.Marshal(ctx)
 		if err != nil {
