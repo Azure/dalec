@@ -1,4 +1,7 @@
-# Intro
+---
+title: Introduction
+slug: /
+---
 
 Dalec is a tool for producing container images by first building packages
 targeting the linux distribution used by the container image.
@@ -21,7 +24,7 @@ for creating a package that is just a collection of dependencies.
 
 ### Example
 
-In this examnple wee'll build a virtual package that just installs other packages as dependencies.
+In this example we'll build a virtual package that just installs other packages as dependencies.
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
@@ -81,7 +84,7 @@ targets:
 You can also set other image settings like entrypoint/cmd, environment
 variables, working directory, labels, and more.
 For now, the best place to find what all is available to set is to look at the
-[code](../spec.go).
+[code](https://github.com/Azure/dalec/blob/main/spec.go).
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
@@ -124,7 +127,7 @@ To do this we'll need a few things:
 Here we'll pull from a github repo.
 It will use the `go-md2man` repo and build the `go-md2man` from the v2.0.3 tag in the repo.
 
-*Note*: See the full example from [examples/go-md2man.yml](examples/go-md2man-1.yml)
+*Note*: See the full example from [examples/go-md2man.yml](https://github.com/Azure/dalec/blob/main/docs/examples/go-md2man-1.yml)
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
@@ -188,7 +191,7 @@ list of sources.  We'll accomplish this by add a source which will run `go mod
 download` in a docker image with the `src` source mounted and then extract the
 go modules from the resulting filesystem.
 
-*Note*: See the full example from [examples/go-md2man.yml](examples/go-md2man-2.yml)
+*Note*: See the full example from [examples/go-md2man.yml](https://github.com/Azure/dalec/blob/main/docs/examples/go-md2man-2.yml)
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest

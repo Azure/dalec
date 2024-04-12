@@ -1,6 +1,8 @@
-# Editor Support
+---
+title: Editor Support
+---
 
-There is a [json schema file](spec.schema.json) which can be used in coms ecases to integrate with your editor.
+There is a [json schema file](https://github.com/Azure/dalec/blob/main/docs/spec.schema.json) which can be used to integrate with your editor.
 This will help validate your yaml files and provide intellisense for the spec.
 
 ## VSCode
