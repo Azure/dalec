@@ -81,7 +81,7 @@ func TestBuildMux(t *testing.T) {
 	}
 	expectedSubrouteACount++
 
-	// Could should not have changed from above
+	// Count should not have changed from above
 	if count := realCount(); count != 2 {
 		t.Errorf("expected real handler to be called twice, got %d", count)
 	}
