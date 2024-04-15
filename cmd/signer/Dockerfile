@@ -19,6 +19,7 @@ WORKDIR /root
 COPY ./tmp/xsignextension-0.46-py3-none-any.whl .
 ARG XSIGNEXTENSION_VERSION=0.46
 RUN <<EOF
+tdnf install -y gettext
 az config set extension.use_dynamic_install=yes_without_prompt
 az extension add \
   -s xsignextension-${XSIGNEXTENSION_VERSION}-py3-none-any.whl \
@@ -28,7 +29,6 @@ EOF
 
 FROM az-base as final
 COPY --from=signer-builder /signer /signer
-COPY --from=creds .azure /root/.azure
 LABEL moby.buildkit.frontend.network.none="true"
 LABEL moby.buildkit.frontend.caps="moby.buildkit.frontend.inputs,moby.buildkit.frontend.subrequests,moby.buildkit.frontend.contexts"
 ENTRYPOINT ["/signer"]
