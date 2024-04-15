@@ -1,0 +1,55 @@
+# syntax=local/dalec/frontend:latest
+# @syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-test-fixture-patch-git-source
+description: A test fixture for checking http sources
+website: https://www.github.com/Azure/dalec
+version: v1.28.0
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+
+sources:
+  src:
+    git:
+      url: https://github.com/kubernetes/kubernetes.git
+      commit: "v1.28.0"
+      keepGitDir: true
+  patch_120129:
+    path: ./docs/examples/patching/120129.patch
+    context:
+      name: context
+  patch_120134:
+    http:
+      url: https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/120134.patch
+
+dependencies:
+  build:
+    git: []
+
+patches:
+  src:
+    - source: patch_120129
+    - source: patch_120134
+
+# Not clean way to try to test patches applied to source - changing base to be able to interact within container
+artifacts:
+  binaries:
+    src/pkg/volume/util/subpath/subpath_windows.go: {}
+    src/staging/src/k8s.io/mount-utils/mount_windows.go: {}
+
+tests:
+  - name: package files
+    files:
+      /usr/bin/subpath_windows.go:
+         contains:
+           - 'cmd := exec.Command(\"powershell\"'
+      /usr/bin/mount_windows.go:
+         contains:
+           - 'Get-Disk -Number \$env:source'
+targets:
+    mariner2:
+        image:
+            base: mcr.microsoft.com/cbl-mariner/base/core:2.0

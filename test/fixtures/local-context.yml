@@ -33,7 +33,7 @@ sources:
       - go.sum
   src6:
     context: {}
-    path: "./docs/examples/kubernetes-patch.yml"
+    path: "./docs/examples/patching/kubernetes-patch.yml"
   src7:
     context: {}
     includes:
