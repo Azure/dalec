@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path"
@@ -19,6 +20,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/tonistiigi/fsutil"
 )
 
 func TestSourceGitSSH(t *testing.T) {
@@ -770,10 +772,48 @@ func stubListener(t *testing.T) net.Addr {
 	return l.Addr()
 }
 
+type FakeFS struct {
+	entries []fs.DirEntry
+}
+
+type fakeRefEntry struct {
+	name string
+	dir  bool
+}
+
+func (fk *fakeRefEntry) Name() string {
+	return fk.name
+}
+
+func (fk *fakeRefEntry) IsDir() bool {
+	return fk.dir
+}
+
+func (fk *fakeRefEntry) Type() fs.FileMode {
+	return fs.FileMode(0)
+}
+
+func (fk *fakeRefEntry) Info() (fs.FileInfo, error) {
+	info := &fsutil.StatInfo{}
+	return info, nil
+}
+
+func (st *FakeFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	return st.entries, nil
+}
+
+func (st *FakeFS) Open(name string) (fs.File, error) {
+	return nil, nil
+}
+
+func NewFakeFS() *FakeFS {
+	return &FakeFS{}
+}
+
 // 1. Generates the LLB for a source using Source2LLBGetter (the function we are testing)
 // 2. Marshals the LLB to a protobuf (since we don't have access to the data in LLB directly)
 // 3. Unmarshals the protobuf to get the [pb.Op]s which is what buildkit would act on to get the actual source data during build.
-func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
+func getSourceOp(ctx context.Context, t *testing.T, src Source, fakeEntries []fakeRefEntry) []*pb.Op {
 	t.Helper()
 
 	fillDefaults(&src)
@@ -797,6 +837,16 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 	sOpt.GetContext = func(name string, opts ...llb.LocalOption) (*llb.State, error) {
 		st := llb.Local(name, opts...)
 		return &st, nil
+	}
+
+	if len(fakeEntries) != 0 {
+		sOpt.GetFS = func(st llb.State) fs.ReadDirFS {
+			fs := NewFakeFS()
+			for _, e := range fakeEntries {
+				fs.entries = append(fs.entries, &e)
+			}
+			return fs
+		}
 	}
 
 	st, err := src.AsState("test", sOpt)
