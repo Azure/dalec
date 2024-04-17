@@ -76,6 +76,10 @@ func TestMain(m *testing.M) {
 			panic(err)
 		}
 
+		if err := testEnv.Load(ctx, phonySignerRef, fixtures.PhonySigner); err != nil {
+			panic(err)
+		}
+
 		return m.Run()
 	}
 

@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	phonyRef = "dalec/integration/frontend/phony"
+	phonyRef       = "dalec/integration/frontend/phony"
+	phonySignerRef = "dalec/integration/signer/phony"
 )
 
 func startTestSpan(ctx context.Context, t *testing.T) context.Context {

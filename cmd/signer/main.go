@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
@@ -53,16 +55,39 @@ func main() {
 		bopts := c.BuildOpts().Opts
 		target := bopts["dalec.target"]
 
+		cc, ok := c.(frontend.CurrentFrontend)
+		if !ok {
+			return nil, fmt.Errorf("cast to currentFrontend failed")
+		}
+
+		basePtr, err := cc.CurrentFrontend()
+		if err != nil {
+			return nil, err
+		}
+		base := *basePtr
+
+		inputs, err := c.Inputs(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		inputId := strings.TrimPrefix(bopts["context"], "input:")
+		artifacts, ok := inputs[inputId]
+		if !ok {
+			return nil, fmt.Errorf("no artifact state provided to signer")
+		}
+
 		signOp := ""
 		params := []ParameterKV{}
 
 		switch target {
-		case "windowscross", "windows":
+		case "windowscross", "windows", "mariner2":
 			signOp = windowsSignOp
 			params = append(params, ParameterKV{
 				ParameterName:  "CoseFlags",
 				ParameterValue: "chainunprotected",
 			})
+
 		default:
 			signOp = linuxSignOp
 		}
@@ -92,20 +117,7 @@ func main() {
 			return nil, err
 		}
 
-		inputs, err := c.Inputs(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		artifacts, ok := inputs["initialstate"]
-		if !ok {
-			return nil, fmt.Errorf("no artifact state provided to signer")
-		}
-
-		base, ok := inputs["context"]
-		if !ok {
-			return nil, fmt.Errorf("no base signing image provided")
-		}
+		findPattern := bopts["find.pattern"]
 
 		// In order for this signing image to work, we need
 		base = base.File(llb.Mkfile("/script.sh", 0o777, []byte(`
@@ -120,12 +132,16 @@ func main() {
 			envsubst < /config_template.json > /config.json
 
 			az login --service-principal -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" --allow-no-subscriptions
-			az xsign sign-file --file-name /artifacts/RPMS/x86_64/* --config-file /config.json
+			readarray -d '' artifacts < <(find /artifacts -type f ${FIND_PATTERN:+-name "$FIND_PATTERN"} -print0)
+			for f in "${artifacts[@]}"; do
+				az xsign sign-file --file-name "$f" --config-file /config.json
+			done
 			`)))
 
 		base = base.File(llb.Mkfile("/config_template.json", 0o600, configBytes))
 
 		output := base.Run(llb.Args([]string{"bash", "/script.sh"}),
+			llb.AddEnv("FIND_PATTERN", findPattern),
 			llb.AddSecret("/run/secrets/AZURE_CLIENT_ID", llb.SecretID("AZURE_CLIENT_ID")),
 			llb.AddSecret("/run/secrets/KEYVAULT_NAME", llb.SecretID("KEYVAULT_NAME")),
 			llb.AddSecret("/run/secrets/AZURE_CLIENT_SECRET", llb.SecretID("AZURE_CLIENT_SECRET")),

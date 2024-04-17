@@ -411,12 +411,7 @@ type Target struct {
 // PackageConfig encapsulates the configuration for artifact targets
 type PackageConfig struct {
 	// Signer is the configuration to use for signing packages
-	Signer *Signer `yaml:"signer,omitempty" json:"signer,omitempty"`
-}
-
-// Signer encapsulates the configuration for an image that performs package signing
-type Signer struct {
-	Image *SourceDockerImage `yaml:"image,omitempty" json:"image,omitempty"`
+	Signer *Frontend `yaml:"signer,omitempty" json:"signer,omitempty"`
 }
 
 // TestSpec is used to execute tests against a container with the package installed in it.

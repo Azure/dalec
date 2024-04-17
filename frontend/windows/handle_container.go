@@ -54,6 +54,15 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, fmt.Errorf("unable to build binary %w", err)
 		}
 
+		if t, ok := spec.Targets[targetKey]; ok && frontend.HasSigner(&t) {
+			signed, err := frontend.ForwardToSigner(ctx, client, platform, t.PackageConfig.Signer, bin, "*.exe")
+			if err != nil {
+				return nil, nil, err
+			}
+
+			bin = signed
+		}
+
 		baseImgName := getBaseOutputImage(spec, targetKey, defaultBaseImage)
 		baseImage := llb.Image(baseImgName, llb.Platform(targetPlatform))
 

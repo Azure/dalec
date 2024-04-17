@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
@@ -9,7 +10,9 @@ import (
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -115,4 +118,56 @@ func toDockerfile(ctx context.Context, bctx llb.State, dt []byte, spec *dalec.So
 func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOpt) (*llb.Definition, error) {
 	st := llb.Scratch().File(llb.Mkfile(dockerui.DefaultDockerfileName, 0600, dt), opts...)
 	return st.Marshal(ctx)
+}
+
+func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, cfg *dalec.Frontend, s llb.State, filePattern string) (llb.State, error) {
+	const (
+		sourceKey  = "source"
+		contextKey = "context"
+		inputKey   = "input"
+
+		gatewayFrontend = "gateway.v0"
+	)
+
+	opts := client.BuildOpts().Opts
+	id := identity.NewID()
+
+	req, err := newSolveRequest(toFrontend(cfg))
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	if req.FrontendInputs == nil {
+		req.FrontendInputs = make(map[string]*pb.Definition)
+	}
+
+	stateDef, err := s.Marshal(ctx)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	req.FrontendOpt[contextKey] = compound(inputKey, id)
+	req.FrontendInputs[id] = stateDef.ToPB()
+	req.FrontendOpt["dalec.target"] = opts["dalec.target"]
+	req.FrontendOpt["find.pattern"] = filePattern
+
+	res, err := client.Solve(ctx, req)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	return ref.ToState()
+}
+
+func compound(k, v string) string {
+	return fmt.Sprintf("%s:%s", k, v)
+}
+
+func HasSigner(t *dalec.Target) bool {
+	return t != nil && t.PackageConfig != nil && t.PackageConfig.Signer != nil && t.PackageConfig.Signer.Image != ""
 }

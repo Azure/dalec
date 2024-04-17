@@ -2,7 +2,6 @@ package mariner2
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -11,10 +10,7 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/rpm"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/identity"
-	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -37,91 +33,6 @@ func tdnfCacheMountWithPrefix(prefix string) llb.RunOption {
 	return llb.AddMount(filepath.Join(prefix, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheName, llb.CacheMountLocked))
 }
 
-func hasSigner(t *dalec.Target) bool {
-	return t != nil && t.PackageConfig != nil && t.PackageConfig.Signer != nil && t.PackageConfig.Signer.Image != nil
-}
-
-func compound(k, v string) string {
-	return fmt.Sprintf("%s:%s", k, v)
-}
-
-func forwardToSigner(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, cfg *dalec.Signer, s llb.State) (llb.State, error) {
-	const (
-		sourceKey               = "source"
-		contextKey              = "context"
-		targetKey               = "target"
-		inputKey                = "input"
-		resolveModeKey          = "image.resolvemode"
-		containerImageConfigKey = "containerimage.config"
-		inputMetadataKey        = "input-metadata"
-
-		gatewayFrontend = "gateway.v0"
-	)
-
-	opts := client.BuildOpts().Opts
-	signer := llb.Image(cfg.Image.Ref)
-	id := identity.NewID()
-
-	req := gwclient.SolveRequest{
-		Frontend:       gatewayFrontend,
-		FrontendOpt:    make(map[string]string),
-		FrontendInputs: make(map[string]*pb.Definition),
-	}
-
-	_, _, b, err := client.ResolveImageConfig(ctx, cfg.Image.Ref, sourceresolver.Opt{
-		Platform: platform,
-		ImageOpt: &sourceresolver.ResolveImageOpt{
-			ResolveMode: opts[resolveModeKey],
-		},
-	})
-
-	withConfig, err := signer.WithImageConfig(b)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	signerDef, err := withConfig.Marshal(ctx)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-	signerPB := signerDef.ToPB()
-
-	req.FrontendOpt[compound(contextKey, id)] = compound(inputKey, id)
-	req.FrontendInputs[id] = signerPB
-	req.FrontendOpt[sourceKey] = id
-	req.FrontendOpt[compound(contextKey, initialState)] = compound(inputKey, initialState)
-	req.FrontendOpt[targetKey] = "check"
-	req.FrontendInputs[contextKey] = signerPB
-
-	meta := map[string][]byte{
-		containerImageConfigKey: b,
-	}
-	metaDt, err := json.Marshal(meta)
-	if err != nil {
-		return llb.Scratch(), fmt.Errorf("error marshaling local frontend metadata: %w", err)
-	}
-	req.FrontendOpt[compound(inputMetadataKey, id)] = string(metaDt)
-
-	stateDef, err := s.Marshal(ctx)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	req.FrontendInputs[initialState] = stateDef.ToPB()
-
-	res, err := client.Solve(ctx, req)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	ref, err := res.SingleRef()
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return ref.ToState()
-}
-
 func handleRPM(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		if err := rpm.ValidateSpec(spec); err != nil {
@@ -140,8 +51,8 @@ func handleRPM(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		}
 
 		t := spec.Targets[targetKey]
-		if hasSigner(&t) {
-			signed, err := forwardToSigner(ctx, client, platform, t.PackageConfig.Signer, st)
+		if frontend.HasSigner(&t) {
+			signed, err := frontend.ForwardToSigner(ctx, client, platform, t.PackageConfig.Signer, st, "*.rpm")
 			if err != nil {
 				return nil, nil, err
 			}
