@@ -16,20 +16,7 @@ import (
 )
 
 var _ fs.DirEntry = &stateRefDirEntry{}
-var _ fs.ReadDirFS = new(StateRefFS)
-
-// type FS interface {
-// 	// Open opens the named file.
-// 	//
-// 	// When Open returns an error, it should be of type *PathError
-// 	// with the Op field set to "open", the Path field set to name,
-// 	// and the Err field describing the problem.
-// 	//
-// 	// Open should reject attempts to open names that do not satisfy
-// 	// ValidPath(name), returning a *PathError with Err set to
-// 	// ErrInvalid or ErrNotExist.
-// 	Open(name string) (File, error)
-// }
+var _ fs.ReadDirFS = &StateRefFS{}
 
 type StateRefFS struct {
 	s       llb.State
@@ -154,7 +141,6 @@ func (s *stateRefFile) Read(b []byte) (int, error) {
 		return 0, io.EOF
 	}
 
-	// Could cache to avoid making read requests more than once
 	segmentContents, err := s.ref.ReadFile(s.ctx, gwclient.ReadRequest{
 		Filename: s.path,
 		Range:    &gwclient.FileRange{Offset: int(s.offset), Length: len(b)},
@@ -181,9 +167,11 @@ func (s *stateRefFile) Stat() (fs.FileInfo, error) {
 	return info, nil
 }
 
-// TODO: handle malformed path and other error conditions
-// according to conventions
 func (st *StateRefFS) Open(name string) (fs.File, error) {
+	if !fs.ValidPath(name) {
+		return nil, fs.ErrInvalid
+	}
+
 	ref, err := st.Ref()
 	if err != nil {
 		return nil, err
@@ -193,7 +181,7 @@ func (st *StateRefFS) Open(name string) (fs.File, error) {
 		Path: name,
 	})
 	if err != nil {
-		return nil, err
+		return nil, &fs.PathError{Err: err, Op: "open", Path: name}
 	}
 
 	f := &stateRefFile{

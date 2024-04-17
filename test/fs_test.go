@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,13 +17,29 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
+func TestStateWrapper_OpenInvalidPath(t *testing.T) {
+	st := llb.Scratch().File(llb.Mkfile("/bar", 0644, []byte("hello world")))
+	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs := dalec.NewStateRefFS(st, context.Background(), gwc)
+
+		// cannot prefix path with "/", per go path conventions
+		_, err := rfs.Open("/bar")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		assert.True(t, errors.Is(err, fs.ErrInvalid))
+		return rfs.Res()
+	})
+}
+
 func TestStateWrapper_Open(t *testing.T) {
 	st := llb.Scratch().
 		File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		fs := dalec.NewStateRefFS(st, context.Background(), gwc)
-		f, err := fs.Open("/foo")
+		f, err := fs.Open("foo")
 		assert.Nil(t, err)
 
 		b := make([]byte, 11)
@@ -38,7 +55,7 @@ func TestStateWrapper_Stat(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0755, []byte("contents")))
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		rfs := dalec.NewStateRefFS(st, context.Background(), gwc)
-		f, err := rfs.Open("/foo")
+		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
 		info, err := f.Stat()
@@ -318,7 +335,7 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 		rfs := dalec.NewStateRefFS(st, ctx, c)
-		f, err := rfs.Open("/foo")
+		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
 		// read 10 bytes
@@ -368,7 +385,7 @@ func TestStateWrapper_ReadAll(t *testing.T) {
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 		rfs := dalec.NewStateRefFS(st, ctx, c)
-		f, err := rfs.Open("/file")
+		f, err := rfs.Open("file")
 		assert.Nil(t, err)
 
 		contents, err := io.ReadAll(f)
