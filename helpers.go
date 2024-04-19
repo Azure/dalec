@@ -3,6 +3,7 @@ package dalec
 import (
 	"encoding/json"
 	"path"
+	"slices"
 	"sort"
 	"sync/atomic"
 
@@ -279,14 +280,25 @@ func (s *Spec) GetBuildDeps(targetKey string) []string {
 		}
 	}
 
-	var out []string
-	for p := range deps.Build {
-		out = append(out, p)
+	return SortMapKeys(deps.Build)
+}
+
+func (s *Spec) GetTestDeps(targetKey string) []string {
+	var deps *PackageDependencies
+	if t, ok := s.Targets[targetKey]; ok {
+		deps = t.Dependencies
 	}
 
-	sort.Strings(out)
-	return out
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
 
+	out := slices.Clone(deps.Test)
+	slices.Sort(out)
+	return out
 }
 
 func (s *Spec) GetSymlinks(target string) map[string]SymlinkTarget {

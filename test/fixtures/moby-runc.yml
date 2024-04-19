@@ -34,9 +34,10 @@ targets: # Distro specific build requirements
         pkgconfig:
         tar:
       runtime:
-        /bin/sh:
         libseccomp:
           - ">= 2.3"
+      test:
+        - /bin/sh
     tests:
       - name: mariner rpm manifest files
         files:
