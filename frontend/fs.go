@@ -1,4 +1,4 @@
-package dalec
+package frontend
 
 import (
 	"context"
