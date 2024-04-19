@@ -17,6 +17,35 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
+func TestStateWrapper_ReadAt(t *testing.T) {
+	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, []byte("hello world")))
+
+	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs := dalec.NewStateRefFS(st, ctx, gwc)
+		f, err := rfs.Open("foo")
+		assert.Nil(t, err)
+
+		r, ok := f.(io.ReaderAt)
+		assert.True(t, ok)
+
+		b := make([]byte, 11)
+		n, err := r.ReadAt(b, 0)
+		assert.Nil(t, err)
+		assert.Equal(t, n, 11)
+
+		b = make([]byte, 1)
+		n, err = r.ReadAt(b, 11)
+		assert.Equal(t, err, io.EOF)
+		assert.Equal(t, n, 0)
+
+		n, err = r.ReadAt(b, -1)
+		assert.Equal(t, err, &fs.PathError{Op: "read", Path: "foo", Err: fs.ErrInvalid})
+		assert.Equal(t, n, 0)
+
+		return rfs.Res()
+	})
+}
+
 func TestStateWrapper_OpenInvalidPath(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/bar", 0644, []byte("hello world")))
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
@@ -44,8 +73,13 @@ func TestStateWrapper_Open(t *testing.T) {
 
 		b := make([]byte, 11)
 		n, err := f.Read(b)
-		assert.Equal(t, err, io.EOF)
+		assert.Nil(t, err)
 		assert.Equal(t, n, 11)
+
+		b = make([]byte, 1)
+		n, err = f.Read(b)
+		assert.Equal(t, err, io.EOF)
+		assert.Equal(t, n, 0)
 
 		return fs.Res()
 	})
@@ -240,8 +274,6 @@ func TestStateWrapper_Walk(t *testing.T) {
 			assert.Equal(t, expect.isDir, info.IsDir())
 
 			if !d.IsDir() { // file
-				fmt.Println("opening ", path)
-				fmt.Println(d.Name())
 				f, err := rfs.Open(path)
 				assert.Nil(t, err)
 
@@ -250,7 +282,6 @@ func TestStateWrapper_Walk(t *testing.T) {
 					return err
 				}
 				assert.Equal(t, contents, expect.contents)
-				fmt.Println(contents)
 			}
 
 			return nil

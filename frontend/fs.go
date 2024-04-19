@@ -17,6 +17,7 @@ import (
 
 var _ fs.DirEntry = &stateRefDirEntry{}
 var _ fs.ReadDirFS = &StateRefFS{}
+var _ io.ReaderAt = &stateRefFile{}
 
 type StateRefFS struct {
 	s         llb.State
@@ -136,26 +137,39 @@ func (s *stateRefFile) Close() error {
 	return nil
 }
 
-func (s *stateRefFile) Read(b []byte) (int, error) {
-	if s.eof {
+func (s *stateRefFile) ReadAt(b []byte, off int64) (int, error) {
+	if off < 0 {
+		return 0, &fs.PathError{Op: "read", Path: s.path, Err: fs.ErrInvalid}
+	}
+
+	if off >= s.stat.Size_ {
 		return 0, io.EOF
 	}
 
 	segmentContents, err := s.ref.ReadFile(s.ctx, gwclient.ReadRequest{
 		Filename: s.path,
-		Range:    &gwclient.FileRange{Offset: int(s.offset), Length: len(b)},
+		Range:    &gwclient.FileRange{Offset: int(off), Length: len(b)},
 	})
 	if err != nil {
 		return 0, err
 	}
 
-	s.offset += int64(len(segmentContents))
-	if s.offset >= s.stat.Size_ {
-		s.eof = true
+	n := copy(b, segmentContents)
+
+	// ReaderAt is supposed to return a descriptive error when the number of bytes read is less than
+	// the length of the input buffer
+	if n < len(b) {
 		err = io.EOF
 	}
 
-	n := copy(b, segmentContents)
+	return n, err
+}
+
+// invariant: s.offset is the offset of the next byte to be read
+func (s *stateRefFile) Read(b []byte) (int, error) {
+	n, err := s.ReadAt(b, s.offset)
+	s.offset += int64(n)
+
 	return n, err
 }
 
