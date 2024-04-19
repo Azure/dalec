@@ -1,15 +1,14 @@
 package test
 
 import (
-	"bytes"
 	"context"
-	"slices"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
 // TestHandlerTargetForwarding tests that targets are forwarded to the correct frontend.
@@ -21,113 +20,174 @@ func TestSignerForwarding(t *testing.T) {
 		testEnv.RunTest(ctx, t, f)
 	}
 
-	t.Run("list targets", func(t *testing.T) {
+	t.Run("test mariner2 signing", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			// Make sure phony is not in the list of targets since it shouldn't be registered in the base frontend.
-			ls := listTargets(ctx, t, gwc, &dalec.Spec{
+			spec := dalec.Spec{
+				Name:        "foo",
+				Version:     "v0.0.1",
+				Description: "foo bar baz",
+				Website:     "https://foo.bar.baz",
+				Revision:    "1",
 				Targets: map[string]dalec.Target{
-					// Note: This is not setting the frontend image, so it should use the default frontend.
-					"phony": {},
+					"mariner2": {
+						PackageConfig: &dalec.PackageConfig{
+							Signer: &dalec.Frontend{
+								Image: phonySignerRef,
+							},
+						},
+					},
 				},
-			})
-
-			checkTargetExists(t, ls, "debug/resolve")
-			if slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
-				return strings.Contains(tgt.Name, "phony")
-			}) {
-				t.Fatal("found phony target")
+				Sources: map[string]dalec.Source{
+					"foo": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
+							},
+						},
+					},
+				},
+				Build: dalec.ArtifactBuild{
+					Steps: []dalec.BuildStep{
+						{
+							Command: "/bin/true",
+						},
+					},
+				},
+				Artifacts: dalec.Artifacts{
+					Binaries: map[string]dalec.ArtifactConfig{
+						"foo": {},
+					},
+				},
 			}
 
-			// Now make sure the forwarded target works.
-			spec := &dalec.Spec{
-				Targets: map[string]dalec.Target{
-					"phony": {
-						Frontend: &dalec.Frontend{
-							Image: phonyRef,
-						},
-					},
-				}}
-
-			// Make sure phony is in the list of targets since it should be registered in the forwarded frontend.
-			ls = listTargets(ctx, t, gwc, spec)
-			checkTargetExists(t, ls, "debug/resolve")
-			checkTargetExists(t, ls, "phony/check")
-			checkTargetExists(t, ls, "phony/debug/resolve")
-			return gwclient.NewResult(), nil
-		})
-	})
-
-	t.Run("execute target", func(t *testing.T) {
-		t.Parallel()
-		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			spec := &dalec.Spec{
-				Targets: map[string]dalec.Target{
-					"phony": {
-						Frontend: &dalec.Frontend{
-							Image: phonyRef,
-						},
-					},
-				}}
-
-			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("phony/check"))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget("mariner2/rpm"))
 			res, err := gwc.Solve(ctx, sr)
 			if err != nil {
 				t.Fatal(err)
 			}
-			dt := readFile(ctx, t, "hello", res)
-			expect := []byte("phony hello")
-			if !bytes.Equal(dt, expect) {
-				t.Fatalf("expected %q, got %q", expect, string(dt))
+
+			tgt := readFile(ctx, t, "/target", res)
+			cfg := readFile(ctx, t, "/config.json", res)
+
+			if string(tgt) != "mariner2" {
+				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
 			}
 
-			// In this case we want to make sure that any targets that are registered by the frontend are namespaced by our target name prefix.
-			// This is to ensure that the frontend is not overwriting any other targets.
-			// Technically I suppose the target in the user-supplied spec could technically interfere with the base frontend, but that's not really a concern.
-			// e.g. if a user-supplied target was called "debug" it could overwrite the "debug/resolve" target in the base frontend.
-
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("debug/resolve"))
-			res, err = gwc.Solve(ctx, sr)
-			if err != nil {
-				return nil, err
+			if !strings.Contains(string(cfg), "LinuxSign") {
+				t.Fatal(fmt.Errorf("configuration incorrect"))
 			}
 
-			// The builtin debug/resolve target adds the resolved spec to /spec.yml, so check that its there.
-			statFile(ctx, t, "spec.yml", res)
-
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("phony/debug/resolve"))
-			res, err = gwc.Solve(ctx, sr)
-			if err != nil {
-				return nil, err
-			}
-
-			// The phony/debug/resolve target creates a file with the contents "phony resolve".
-			// Check that its there to ensure we got the expected target.
-			checkFile(ctx, t, "resolve", res, []byte("phony resolve"))
 			return gwclient.NewResult(), nil
 		})
 	})
 
-	t.Run("target not found", func(t *testing.T) {
+	t.Run("test windows signing", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			spec := &dalec.Spec{
+			spec := fillMetadata("foo", &dalec.Spec{
 				Targets: map[string]dalec.Target{
-					"phony": {
-						Frontend: &dalec.Frontend{
-							Image: phonyRef,
+					"windowscross": {
+						PackageConfig: &dalec.PackageConfig{
+							Signer: &dalec.Frontend{
+								Image: phonySignerRef,
+							},
 						},
 					},
 				},
-			}
-			sr := newSolveRequest(withBuildTarget("phony/does-not-exist"), withSpec(ctx, t, spec))
+				Sources: map[string]dalec.Source{
+					"foo": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
+							},
+						},
+					},
+				},
+				Build: dalec.ArtifactBuild{
+					Steps: []dalec.BuildStep{
+						{
+							Command: "/bin/true",
+						},
+					},
+				},
+				Artifacts: dalec.Artifacts{
+					Binaries: map[string]dalec.ArtifactConfig{
+						"foo": {},
+					},
+				},
+			})
 
-			_, err := gwc.Solve(ctx, sr)
-			expect := "no such handler for target"
-			if err == nil || !strings.Contains(err.Error(), expect) {
-				t.Fatalf("expected error %q, got %v", expect, err)
+			zipperSpec := fillMetadata("bar", &dalec.Spec{
+				Dependencies: &dalec.PackageDependencies{
+					Runtime: map[string][]string{
+						"unzip": {},
+					},
+				},
+			})
+
+			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
+			zipper := reqToState(ctx, gwc, sr, t)
+
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"))
+			st := reqToState(ctx, gwc, sr, t)
+
+			st = zipper.Run(llb.Args([]string{"bash", "-c", `for f in ./*.zip; do unzip "$f"; done`}), llb.Dir("/tmp/mnt")).
+				AddMount("/tmp/mnt", st)
+
+			def, err := st.Marshal(ctx)
+			if err != nil {
+				t.Fatal(err)
 			}
+
+			res, err := gwc.Solve(ctx, gwclient.SolveRequest{
+				Definition: def.ToPB(),
+			})
+
+			tgt := readFile(ctx, t, "/target", res)
+			cfg := readFile(ctx, t, "/config.json", res)
+
+			if string(tgt) != "windowscross" {
+				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
+			}
+
+			if !strings.Contains(string(cfg), "NotaryCoseSign") {
+				t.Fatal(fmt.Errorf("configuration incorrect"))
+			}
+
 			return gwclient.NewResult(), nil
 		})
 	})
+}
+
+func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {
+	res, err := gwc.Solve(ctx, sr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := ref.ToState()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return st
+}
+
+func fillMetadata(fakename string, s *dalec.Spec) *dalec.Spec {
+	s.Name = "bar"
+	s.Version = "v0.0.1"
+	s.Description = "foo bar baz"
+	s.Website = "https://foo.bar.baz"
+	s.Revision = "1"
+	s.License = "MIT"
+	s.Vendor = "nothing"
+	s.Packager = "Bill Spummins"
+
+	return s
 }

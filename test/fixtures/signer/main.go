@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
@@ -93,14 +95,23 @@ func main() {
 			HashType: "sha256",
 		}
 
-		_, ok := inputs["initialstate"]
+		cc, ok := c.(frontend.CurrentFrontend)
 		if !ok {
-			return nil, fmt.Errorf("no artifact state provided to signer")
+			return nil, fmt.Errorf("cast to currentFrontend failed")
 		}
 
-		_, ok = inputs["context"]
+		basePtr, err := cc.CurrentFrontend()
+		if err != nil || basePtr == nil {
+			if err == nil {
+				err = fmt.Errorf("base frontend ptr was nil")
+			}
+			return nil, err
+		}
+
+		inputId := strings.TrimPrefix(bopts["context"], "input:")
+		_, ok = inputs[inputId]
 		if !ok {
-			return nil, fmt.Errorf("no base signing image provided")
+			return nil, fmt.Errorf("no artifact state provided to signer")
 		}
 
 		configBytes, err := json.Marshal(&config)

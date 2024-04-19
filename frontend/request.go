@@ -137,9 +137,28 @@ func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocis
 		return llb.Scratch(), err
 	}
 
-	if req.FrontendInputs == nil {
-		req.FrontendInputs = make(map[string]*pb.Definition)
+	for k, v := range opts {
+		if k == "source" || k == "cmdline" {
+			continue
+		}
+		req.FrontendOpt[k] = v
 	}
+
+	inputs, err := client.Inputs(ctx)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	m := make(map[string]*pb.Definition)
+
+	for k, st := range inputs {
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+		m[k] = def.ToPB()
+	}
+	req.FrontendInputs = m
 
 	stateDef, err := s.Marshal(ctx)
 	if err != nil {
