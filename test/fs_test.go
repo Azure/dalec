@@ -20,7 +20,7 @@ import (
 func TestStateWrapper_OpenInvalidPath(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/bar", 0644, []byte("hello world")))
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, context.Background(), gwc)
+		rfs := frontend.NewStateRefFS(st, context.Background(), gwc)
 
 		// cannot prefix path with "/", per go path conventions
 		_, err := rfs.Open("/bar")
@@ -38,7 +38,7 @@ func TestStateWrapper_Open(t *testing.T) {
 		File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		fs := dalec.NewStateRefFS(st, context.Background(), gwc)
+		fs := frontend.NewStateRefFS(st, context.Background(), gwc)
 		f, err := fs.Open("foo")
 		assert.Nil(t, err)
 
@@ -54,7 +54,7 @@ func TestStateWrapper_Open(t *testing.T) {
 func TestStateWrapper_Stat(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0755, []byte("contents")))
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, context.Background(), gwc)
+		rfs := frontend.NewStateRefFS(st, context.Background(), gwc)
 		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
@@ -93,7 +93,7 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 	}
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, ctx, c)
+		rfs := frontend.NewStateRefFS(st, ctx, c)
 		root := "/bar"
 		entries, err := rfs.ReadDir(root)
 		assert.Nil(t, err)
@@ -127,7 +127,7 @@ func TestStateWrapper_ReadDir_Context(t *testing.T) {
 		st, err := sOpt.GetContext(contextName, dalec.LocalIncludeExcludeMerge(include, []string{}))
 		assert.NoError(t, err)
 
-		rfs := dalec.NewStateRefFS(*st, ctx, c)
+		rfs := frontend.NewStateRefFS(*st, ctx, c)
 		root := "/"
 		p := path.Join(root, sourcePath)
 		pathDir := path.Dir(p)
@@ -220,7 +220,7 @@ func TestStateWrapper_Walk(t *testing.T) {
 	}
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, context.Background(), gwc)
+		rfs := frontend.NewStateRefFS(st, context.Background(), gwc)
 		err := fs.WalkDir(rfs, "/", func(path string, d fs.DirEntry, err error) error {
 			if path == "/" {
 				return nil
@@ -271,7 +271,7 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, contents))
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, ctx, c)
+		rfs := frontend.NewStateRefFS(st, ctx, c)
 		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
@@ -321,7 +321,7 @@ func TestStateWrapper_ReadAll(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/file", 0644, b))
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, ctx, c)
+		rfs := frontend.NewStateRefFS(st, ctx, c)
 		f, err := rfs.Open("file")
 		assert.Nil(t, err)
 

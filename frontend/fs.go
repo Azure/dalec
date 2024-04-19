@@ -19,13 +19,13 @@ var _ fs.DirEntry = &stateRefDirEntry{}
 var _ fs.ReadDirFS = &StateRefFS{}
 
 type StateRefFS struct {
-	s       llb.State
-	ctx     context.Context
-	opts    []llb.ConstraintsOpt
-	client  gwclient.Client
-	res     *gwclient.Result
-	o       sync.Once
-	initErr error
+	s         llb.State
+	ctx       context.Context
+	opts      []llb.ConstraintsOpt
+	client    gwclient.Client
+	clientRes *gwclient.Result
+	o         sync.Once
+	initErr   error
 }
 
 func NewStateRefFS(s llb.State, ctx context.Context, client gwclient.Client) *StateRefFS {
@@ -55,14 +55,14 @@ func (fs *StateRefFS) fetchRef() (*gwclient.Result, error) {
 func (fs *StateRefFS) Res() (*gwclient.Result, error) {
 	fs.o.Do(func() {
 		res, err := fs.fetchRef()
-		fs.res = res
+		fs.clientRes = res
 		fs.initErr = err
 	})
 
-	return fs.res, fs.initErr
+	return fs.clientRes, fs.initErr
 }
 
-func (fs *StateRefFS) Ref() (gwclient.Reference, error) {
+func (fs *StateRefFS) ref() (gwclient.Reference, error) {
 	res, err := fs.Res()
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (s *stateRefDirEntry) Info() (fs.FileInfo, error) {
 }
 
 func (st *StateRefFS) ReadDir(name string) ([]fs.DirEntry, error) {
-	ref, err := st.Ref()
+	ref, err := st.ref()
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (st *StateRefFS) Open(name string) (fs.File, error) {
 		return nil, fs.ErrInvalid
 	}
 
-	ref, err := st.Ref()
+	ref, err := st.ref()
 	if err != nil {
 		return nil, err
 	}
