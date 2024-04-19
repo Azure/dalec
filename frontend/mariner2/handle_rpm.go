@@ -99,16 +99,21 @@ func installBuildDeps(spec *dalec.Spec, targetKey string, opts ...llb.Constraint
 		if len(deps) == 0 {
 			return in
 		}
-
 		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-		return in.
-			Run(
-				shArgs(fmt.Sprintf("tdnf install --releasever=2.0 -y %s", strings.Join(deps, " "))),
-				defaultTdnfCacheMount(),
-				dalec.WithConstraints(opts...),
-			).
-			Root()
+		return in.Run(
+			installPackgesRunOpts("/", deps, false),
+			defaultTdnfCacheMount(),
+			dalec.WithConstraints(opts...),
+		).Root()
 	}
+}
+
+func installPackgesRunOpts(root string, packages []string, cleanup bool) llb.RunOption {
+	cmd := fmt.Sprintf("set -e; tdnf install --installroot=%q --releasever=2.0 -y %s", root, strings.Join(packages, " "))
+	if cleanup {
+		cmd += fmt.Sprintf("; rm -rf %q", filepath.Join(root, "/var/lib/rpm"))
+	}
+	return shArgs(cmd)
 }
 
 func specToRpmLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {

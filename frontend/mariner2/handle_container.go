@@ -32,7 +32,8 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, fmt.Errorf("error creating rpm: %w", err)
 		}
 
-		st, err := specToContainerLLB(spec, targetKey, getWorkerImage(client, pg), rpmDir, sOpt, pg)
+		worker := getWorkerImage(client, pg)
+		st, err := specToContainerLLB(spec, targetKey, worker, rpmDir, sOpt, pg)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -60,7 +61,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		if err := frontend.RunTests(ctx, client, spec, ref, targetKey); err != nil {
+		if err := frontend.RunTests(ctx, client, spec, ref, installTestDeps(worker, spec, targetKey, pg), targetKey); err != nil {
 			return nil, nil, err
 		}
 
@@ -190,4 +191,21 @@ type runOptionFunc func(*llb.ExecInfo)
 
 func (f runOptionFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
+}
+
+func installTestDeps(worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(in llb.State) llb.State {
+		deps := spec.GetTestDeps(targetKey)
+		if len(deps) == 0 {
+			return in
+		}
+		opts = append(opts, dalec.ProgressGroup("Install test deps"))
+
+		const workPath = "/tmp/rootfs"
+		return worker.Run(
+			installPackgesRunOpts(workPath, deps, true),
+			tdnfCacheMountWithPrefix(workPath),
+			dalec.WithConstraints(opts...),
+		).AddMount(workPath, in)
+	}
 }

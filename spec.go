@@ -322,6 +322,9 @@ type PackageDependencies struct {
 	Recommends map[string][]string `yaml:"recommends,omitempty" json:"recommends,omitempty"`
 
 	// Test lists any extra packages required for running tests
+	// These packages are only installed for tests which have steps that require
+	// running a command in the built container.
+	// See [TestSpec] for more information.
 	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
 }
 

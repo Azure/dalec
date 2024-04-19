@@ -17,7 +17,7 @@ import (
 )
 
 // Run tests runs the tests defined in the spec against the given target container.
-func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref gwclient.Reference, target string) error {
+func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref gwclient.Reference, withTestDeps llb.StateOption, target string) error {
 	tests := spec.Tests
 
 	t, ok := spec.Targets[target]
@@ -45,6 +45,8 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		stdios map[int]llb.State
 	}
 
+	ctrWithDeps := ctr.With(withTestDeps)
+
 	runs := make([]testPair, 0, len(tests))
 	for _, test := range tests {
 		base := ctr
@@ -67,6 +69,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 
 		opts = append(opts, pg)
 		if len(test.Steps) > 0 {
+			exec := ctrWithDeps
 			var worker llb.State
 			var needsStdioMount bool
 			ios := map[int]llb.State{}
@@ -117,9 +120,9 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 
 				var est llb.ExecState
 				if i == 0 {
-					est = base.Run(stepOpts...)
+					est = exec.Run(stepOpts...)
 				} else {
-					est = worker.Run(stepOpts...)
+					est = exec.Run(stepOpts...)
 				}
 				if needsStdioMount {
 					ioSt = est.AddMount(filepath.Join("/tmp", id), ioSt)
