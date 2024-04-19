@@ -182,7 +182,7 @@ func TestSourceHTTP(t *testing.T) {
 		dgst := digest.Canonical.FromBytes(nil)
 		src.HTTP.Digest = dgst
 
-		ops := getSourceOp(ctx, t, src)
+		ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 		op := ops[0].GetSource()
 
 		if len(op.Attrs) != 2 {

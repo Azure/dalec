@@ -61,7 +61,7 @@ build:
         [ -d "./src4/cmd" ]
 
         # Now with mixed include/exclude
-        [ -f "./src5" ]
+        [ -f "./src5/go.mod" ]
         [ "$(ls -A ./src5 | wc -l)" -eq 1 ]
 
 changelog:

@@ -200,7 +200,7 @@ func HandleRename(s *Source, name string, sOpt SourceOpts) llb.StateOption {
 	}
 	noRename := func(st llb.State) llb.State { return st }
 
-	if s.Context != nil {
+	if s.Context != nil && !isRoot(s.Path) {
 		return rename
 	}
 
@@ -342,24 +342,21 @@ func (s *Source) IsDir(srcState llb.State, sOpt SourceOpts) bool {
 	return SourceIsDir(*s, srcState, sOpt)
 }
 
-func contextSourceIsDir(srcState llb.State, sOpt SourceOpts) bool {
-	srcFS := sOpt.GetFS(srcState)
-	entries, err := srcFS.ReadDir("/")
-	if err != nil {
-		panic(err)
-	}
-	if len(entries) == 1 {
-		return entries[0].IsDir()
-	} else if len(entries) == 0 {
-		panic("shouldn't be the case") // Maybe this could raise a warning instead
-	}
-	return true
-}
-
 func SourceIsDir(src Source, srcState llb.State, sOpt SourceOpts) bool {
 	switch {
 	case src.Context != nil:
-		return contextSourceIsDir(srcState, sOpt)
+		if !isRoot(src.Path) {
+			srcFS := sOpt.GetFS(srcState)
+			entries, err := srcFS.ReadDir("/")
+			if err != nil {
+				panic(err)
+			}
+			if len(entries) == 1 {
+				return entries[0].IsDir()
+			}
+			return true
+		}
+		return true
 	case src.DockerImage != nil,
 		src.Git != nil,
 		src.Build != nil:
