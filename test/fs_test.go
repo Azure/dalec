@@ -21,7 +21,7 @@ func TestStateWrapper_ReadAt(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
 	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, ctx, gwc)
+		rfs := frontend.NewStateRefFS(st, ctx, gwc)
 		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
