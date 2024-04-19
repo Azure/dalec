@@ -26,7 +26,7 @@ func handleDepsOnly(ctx context.Context, client gwclient.Client) (*gwclient.Resu
 		if err != nil {
 			return nil, nil, err
 		}
-		st, err := specToContainerLLB(spec, targetKey, baseImg, rpmDir, sOpt, pg)
+		st, err := specToContainerLLB(ctx, spec, targetKey, baseImg, rpmDir, sOpt, pg)
 		if err != nil {
 			return nil, nil, err
 		}

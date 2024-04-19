@@ -11,6 +11,7 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/util/bklog"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -33,7 +34,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		}
 
 		worker := getWorkerImage(client, pg)
-		st, err := specToContainerLLB(spec, targetKey, worker, rpmDir, sOpt, pg)
+		st, err := specToContainerLLB(ctx, spec, targetKey, worker, rpmDir, sOpt, pg)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -69,7 +70,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 	})
 }
 
-func specToContainerLLB(spec *dalec.Spec, target string, builderImg llb.State, rpmDir llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specToContainerLLB(ctx context.Context, spec *dalec.Spec, target string, builderImg llb.State, rpmDir llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
@@ -126,7 +127,13 @@ rm -rf ` + rpmdbDir + `
 
 	installer := llb.Scratch().File(llb.Mkfile("install.sh", 0o755, []byte(installCmd)), opts...)
 
-	baseImg := llb.Image(frontend.GetBaseOutputImage(spec, target, marinerDistrolessRef), llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
+	baseImg := llb.Scratch()
+
+	baseRef := frontend.GetBaseOutputImage(spec, target, "")
+	if baseRef != "" {
+		bklog.G(ctx).WithField("baseRef", baseRef).Debugf("Using custom base image rootfs")
+		baseImg = llb.Image(baseRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
+	}
 	worker := builderImg.
 		Run(
 			shArgs("/tmp/install.sh"),
