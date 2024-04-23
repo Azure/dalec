@@ -57,7 +57,7 @@ func BuildImageConfig(ctx context.Context, client gwclient.Client, spec *dalec.S
 	}
 
 	cfg := img.Config
-	if err := dalec.MergeImageConfig(&cfg, mergeSpecImage(spec, targetKey)); err != nil {
+	if err := dalec.MergeImageConfig(&cfg, MergeSpecImage(spec, targetKey)); err != nil {
 		return nil, err
 	}
 
@@ -73,7 +73,7 @@ func GetBaseOutputImage(spec *dalec.Spec, target, defaultBase string) string {
 	return i.Base
 }
 
-func mergeSpecImage(spec *dalec.Spec, targetKey string) *dalec.ImageConfig {
+func MergeSpecImage(spec *dalec.Spec, targetKey string) *dalec.ImageConfig {
 	var cfg dalec.ImageConfig
 
 	if spec.Image != nil {
