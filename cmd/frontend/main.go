@@ -4,16 +4,15 @@ import (
 	_ "embed"
 	"os"
 
+	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/azlinux"
+	"github.com/Azure/dalec/frontend/debug"
+	"github.com/Azure/dalec/frontend/windows"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/bklog"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/grpclog"
-
-	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/debug"
-	"github.com/Azure/dalec/frontend/mariner2"
-	"github.com/Azure/dalec/frontend/windows"
 )
 
 const (
@@ -32,7 +31,7 @@ func main() {
 
 	if err := grpcclient.RunFromEnvironment(ctx, mux.Handler(
 		// copy/paster's beware: [frontend.WithTargetForwardingHandler] should not be set except for the root dalec frontend.
-		frontend.WithBuiltinHandler(mariner2.DefaultTargetKey, mariner2.Handle),
+		frontend.WithBuiltinHandler(azlinux.Mariner2TargetKey, azlinux.NewMariner2Handler()),
 		frontend.WithBuiltinHandler(windows.DefaultTargetKey, windows.Handle),
 		frontend.WithTargetForwardingHandler,
 	)); err != nil {
