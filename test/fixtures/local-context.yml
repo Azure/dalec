@@ -64,6 +64,12 @@ build:
         [ -f "./src5/go.mod" ]
         [ "$(ls -A ./src5 | wc -l)" -eq 1 ]
 
+        # With path and default context
+        [ -f "./src6" ]
+
+        # Without path and default context
+        [ -f "./src7/files.go" ]
+
 changelog:
   -
     date: 2023-10-10

@@ -1,5 +1,4 @@
-# syntax=local/dalec/frontend:latest
-# @syntax=ghcr.io/azure/dalec/frontend:latest
+# syntax=ghcr.io/azure/dalec/frontend:latest
 
 name: dalec-test-fixture-patch-git-source
 description: A test fixture for checking http sources
