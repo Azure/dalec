@@ -72,12 +72,12 @@ func installBuildDeps(w worker, spec *dalec.Spec, targetKey string, opts ...llb.
 		}
 		opts = append(opts, dalec.ProgressGroup("Install build deps"))
 
-		return in.Run(w.Install("/", deps, false), dalec.WithConstraints(opts...)).Root()
+		return in.Run(w.Install(deps, installWithConstraints(opts)), dalec.WithConstraints(opts...)).Root()
 	}
 }
 
 func specToRpmLLB(w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	base := w.Base(client, opts...).With(installBuildDeps(w, spec, targetKey))
+	base := w.Base(client, opts...).With(installBuildDeps(w, spec, targetKey, opts...))
 	br, err := rpm.SpecToBuildrootLLB(base, spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err

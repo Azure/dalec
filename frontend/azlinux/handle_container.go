@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
@@ -85,7 +84,19 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			if err := frontend.RunTests(ctx, client, spec, ref, targetKey); err != nil {
+			withTestDeps := func(in llb.State) llb.State {
+				deps := spec.GetTestDeps(targetKey)
+				if len(deps) == 0 {
+					return in
+				}
+				return w.Base(client, pg).Run(
+					w.Install(spec.GetTestDeps(targetKey), atRoot("/tmp/rootfs")),
+					pg,
+					dalec.ProgressGroup("Install test dependencies"),
+				).AddMount("/tmp/rootfs", in)
+			}
+
+			if err := frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey); err != nil {
 				return nil, nil, err
 			}
 
@@ -147,23 +158,6 @@ func specToContainerLLB(w worker, client gwclient.Client, spec *dalec.Spec, targ
 
 	builderImg := w.Base(client, opts...)
 
-	// TODO: This is mariner specific and should probably be moved out of this
-	// package.
-	mfstDir := filepath.Join(workPath, "var/lib/rpmmanifest")
-	mfst1 := filepath.Join(mfstDir, "container-manifest-1")
-	mfst2 := filepath.Join(mfstDir, "container-manifest-2")
-	rpmdbDir := filepath.Join(workPath, "var/lib/rpm")
-
-	chrootedPaths := []string{
-		filepath.Join(workPath, "/usr/local/bin"),
-		filepath.Join(workPath, "/usr/local/sbin"),
-		filepath.Join(workPath, "/usr/bin"),
-		filepath.Join(workPath, "/usr/sbin"),
-		filepath.Join(workPath, "/bin"),
-		filepath.Join(workPath, "/sbin"),
-	}
-	chrootedPathEnv := strings.Join(chrootedPaths, ":")
-
 	rootfs := llb.Scratch()
 	if ref := frontend.GetBaseOutputImage(spec, target, ""); ref != "" {
 		rootfs = llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
@@ -177,34 +171,11 @@ func specToContainerLLB(w worker, client gwclient.Client, spec *dalec.Spec, targ
 		}
 
 		rootfs = builderImg.Run(
-			w.Install(workPath, updated, true),
+			w.Install(updated, atRoot(workPath), noGPGCheck, withManifests, installWithConstraints(opts)),
 			llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
 			dalec.WithConstraints(opts...),
 		).AddMount(workPath, rootfs)
 	}
-
-	manifestCmd := `
-#!/usr/bin/env sh
-
-# If the rpm command is in the rootfs then we don't need to do anything
-# If not then this is a distroless image and we need to generate manifests of the installed rpms and cleanup the rpmdb.
-
-PATH="` + chrootedPathEnv + `" command -v rpm && exit 0
-
-set -e
-mkdir -p ` + mfstDir + `
-rpm --dbpath=` + rpmdbDir + ` -qa > ` + mfst1 + `
-rpm --dbpath=` + rpmdbDir + ` -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{INSTALLTIME}\t%{BUILDTIME}\t%{VENDOR}\t(none)\t%{SIZE}\t%{ARCH}\t%{EPOCHNUM}\t%{SOURCERPM}\n" > ` + mfst2 + `
-rm -rf ` + rpmdbDir + `
-`
-
-	manifestSh := llb.Scratch().File(llb.Mkfile("manifest.sh", 0o755, []byte(manifestCmd)), opts...)
-	rootfs = builderImg.
-		Run(
-			shArgs("/tmp/manifest.sh"),
-			llb.AddMount("/tmp/manifest.sh", manifestSh, llb.SourcePath("manifest.sh")),
-			dalec.WithConstraints(opts...),
-		).AddMount(workPath, rootfs)
 
 	if post := getImagePostInstall(spec, target); post != nil && len(post.Symlinks) > 0 {
 		rootfs = builderImg.

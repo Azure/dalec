@@ -32,6 +32,7 @@ func main() {
 	if err := grpcclient.RunFromEnvironment(ctx, mux.Handler(
 		// copy/paster's beware: [frontend.WithTargetForwardingHandler] should not be set except for the root dalec frontend.
 		frontend.WithBuiltinHandler(azlinux.Mariner2TargetKey, azlinux.NewMariner2Handler()),
+		frontend.WithBuiltinHandler(azlinux.AzLinux3TargetKey, azlinux.NewAzlinux3Handler()),
 		frontend.WithBuiltinHandler(windows.DefaultTargetKey, windows.Handle),
 		frontend.WithTargetForwardingHandler,
 	)); err != nil {

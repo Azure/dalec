@@ -19,7 +19,7 @@ const (
 
 type worker interface {
 	Base(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State
-	Install(root string, pkgs []string, skipGPG bool) llb.RunOption
+	Install(pkgs []string, opts ...installOpt) llb.RunOption
 	DefaultImageConfig(context.Context, gwclient.Client) (*dalec.DockerImageSpec, error)
 }
 
