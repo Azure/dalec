@@ -46,10 +46,8 @@ func buildBaseFrontend(ctx context.Context, c gwclient.Client) (*gwclient.Result
 
 	defPB := def.ToPB()
 	return c.Solve(ctx, gwclient.SolveRequest{
-		Frontend: "dockerfile.v0",
-		FrontendOpt: map[string]string{
-			"build-arg:GOFLAGS": "\"-gcflags=all=-N -l\"",
-		},
+		Frontend:    "dockerfile.v0",
+		FrontendOpt: map[string]string{},
 		FrontendInputs: map[string]*pb.Definition{
 			dockerui.DefaultLocalNameContext:    defPB,
 			dockerui.DefaultLocalNameDockerfile: dockerfileDef.ToPB(),
