@@ -358,6 +358,17 @@
 			"type": "object",
 			"description": "ImageConfig is the configuration for the output image."
 		},
+		"PackageConfig": {
+			"properties": {
+				"signer": {
+					"$ref": "#/$defs/Frontend",
+					"description": "Signer is the configuration to use for signing packages"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "PackageConfig encapsulates the configuration for artifact targets"
+		},
 		"PackageDependencies": {
 			"properties": {
 				"build": {
@@ -858,6 +869,10 @@
 					},
 					"type": "array",
 					"description": "Tests are the list of tests to run which are specific to the target.\nTests are appended to the list of tests in the main [Spec]"
+				},
+				"package_config": {
+					"$ref": "#/$defs/PackageConfig",
+					"description": "PackageConfig is the configuration to use for artifact targets, such as\nrpms, debs, or zip files containing Windows binaries"
 				}
 			},
 			"additionalProperties": false,
