@@ -10,7 +10,6 @@ import (
 	"github.com/moby/buildkit/frontend/dockerfile/parser"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -130,7 +129,6 @@ func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocis
 	)
 
 	opts := client.BuildOpts().Opts
-	id := identity.NewID()
 
 	req, err := newSolveRequest(toFrontend(cfg))
 	if err != nil {
@@ -165,8 +163,8 @@ func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocis
 		return llb.Scratch(), err
 	}
 
-	req.FrontendOpt[contextKey] = compound(inputKey, id)
-	req.FrontendInputs[id] = stateDef.ToPB()
+	req.FrontendOpt[contextKey] = compound(inputKey, contextKey)
+	req.FrontendInputs[contextKey] = stateDef.ToPB()
 	req.FrontendOpt["dalec.target"] = opts["dalec.target"]
 	req.FrontendOpt["find.pattern"] = filePattern
 
