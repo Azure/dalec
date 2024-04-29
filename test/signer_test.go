@@ -143,6 +143,9 @@ func TestSignerForwarding(t *testing.T) {
 			res, err := gwc.Solve(ctx, gwclient.SolveRequest{
 				Definition: def.ToPB(),
 			})
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			tgt := readFile(ctx, t, "/target", res)
 			cfg := readFile(ctx, t, "/config.json", res)

@@ -124,8 +124,6 @@ func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocis
 		sourceKey  = "source"
 		contextKey = "context"
 		inputKey   = "input"
-
-		gatewayFrontend = "gateway.v0"
 	)
 
 	opts := client.BuildOpts().Opts

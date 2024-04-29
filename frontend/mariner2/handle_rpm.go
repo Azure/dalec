@@ -17,8 +17,6 @@ import (
 const (
 	marinerRef = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
 
-	initialState = "initialstate"
-
 	tdnfCacheDir  = "/var/cache/tdnf"
 	tdnfCacheName = "mariner2-tdnf-cache"
 )
