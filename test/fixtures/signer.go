@@ -25,7 +25,7 @@ func PhonySigner(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, er
 
 	st := llb.Image("golang:1.21", llb.WithMetaResolver(gwc)).
 		Run(
-			llb.Args([]string{"go", "build", "-gcflags=all=-N -l", "-o=/build/out", "./test/fixtures/signer"}),
+			llb.Args([]string{"go", "build", "-o=/build/out", "./test/fixtures/signer"}),
 			llb.AddEnv("CGO_ENABLED", "0"),
 			goModCache,
 			goBuildCache,
