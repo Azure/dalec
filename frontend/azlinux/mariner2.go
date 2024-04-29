@@ -3,9 +3,7 @@ package azlinux
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
@@ -29,24 +27,15 @@ type mariner2 struct{}
 
 func (w mariner2) Base(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State {
 	return llb.Image(mariner2Ref, llb.WithMetaResolver(resolver), dalec.WithConstraints(opts...)).Run(
-		w.Install("/", []string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, false),
+		w.Install([]string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, installWithConstraints(opts)),
+		dalec.WithConstraints(opts...),
 	).Root()
 }
 
-func (w mariner2) Install(root string, pkgs []string, skipGPG bool) llb.RunOption {
-	if root == "" {
-		root = "/"
-	}
-
-	var gpgCheckFl string
-	if skipGPG {
-		gpgCheckFl = "--nogpgcheck"
-	}
-
-	cmdArgs := fmt.Sprintf("set -x; tdnf install -y %s --setopt=reposdir=/etc/yum.repos.d --installroot=%s --releasever=2.0 %s", gpgCheckFl, root, strings.Join(pkgs, " "))
-	cmd := shArgs(cmdArgs)
-
-	return dalec.WithRunOptions(cmd, w.tdnfCacheMount(root))
+func (w mariner2) Install(pkgs []string, opts ...installOpt) llb.RunOption {
+	var cfg installConfig
+	setInstallOptions(&cfg, opts)
+	return dalec.WithRunOptions(tdnfInstall(&cfg, "2.0", pkgs), w.tdnfCacheMount(cfg.root))
 }
 
 func (mariner2) DefaultImageConfig(ctx context.Context, client gwclient.Client) (*dalec.DockerImageSpec, error) {

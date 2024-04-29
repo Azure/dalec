@@ -15,42 +15,47 @@ version: ${VERSION}
 revision: ${REVISION}
 vendor: Moby
 
+x-azl: &azl
+  image:
+    entrypoint: runc
+    cmd: --help
+  dependencies:
+    build:
+      libseccomp-devel:
+      libtool-ltdl-devel:
+      which:
+      gcc:
+      git:
+      golang:
+      go-md2man:
+      libtool:
+      make:
+      pkgconfig:
+      tar:
+    runtime:
+      libseccomp:
+        - ">= 2.3"
+    test:
+      - /bin/sh
+  tests:
+    - name: mariner rpm manifest files
+      files:
+        /var/lib/rpmmanifest/container-manifest-1:
+          contains:
+            - "moby-runc-${VERSION}-"
+            - "libseccomp-"
+        /var/lib/rpmmanifest/container-manifest-2:
+          contains:
+            - "moby-runc-${VERSION}-"
+            - "libseccomp-"
+        /var/lib/rpm:
+          not_exist: true
+
 targets: # Distro specific build requirements
+  azlinux3:
+    <<: *azl
   mariner2:
-    image:
-      entrypoint: runc
-      cmd: --help
-    dependencies:
-      build:
-        libseccomp-devel:
-        libtool-ltdl-devel:
-        which:
-        gcc:
-        git:
-        golang:
-        go-md2man:
-        libtool:
-        make:
-        pkgconfig:
-        tar:
-      runtime:
-        libseccomp:
-          - ">= 2.3"
-      test:
-        - /bin/sh
-    tests:
-      - name: mariner rpm manifest files
-        files:
-          /var/lib/rpmmanifest/container-manifest-1:
-            contains:
-              - "moby-runc-${VERSION}-"
-              - "libseccomp-"
-          /var/lib/rpmmanifest/container-manifest-2:
-            contains:
-              - "moby-runc-${VERSION}-"
-              - "libseccomp-"
-          /var/lib/rpm:
-            not_exist: true
+    <<: *azl
 
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0

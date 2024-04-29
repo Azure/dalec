@@ -19,6 +19,13 @@ func TestMariner2(t *testing.T) {
 	testLinuxDistro(ctx, t, "mariner2/container", "mariner2/rpm")
 }
 
+func TestAzlinux3(t *testing.T) {
+	t.Parallel()
+
+	ctx := startTestSpan(baseCtx, t)
+	testLinuxDistro(ctx, t, "azlinux3/container", "azlinux3/rpm")
+}
+
 func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, signTarget string) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
