@@ -24,7 +24,7 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			pg := dalec.ProgressGroup("Build mariner2 container: " + spec.Name)
+			pg := dalec.ProgressGroup("Building " + targetKey + " container: " + spec.Name)
 
 			rpmDir, err := specToRpmLLB(w, client, spec, sOpt, targetKey, pg)
 			if err != nil {
@@ -53,30 +53,9 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			var img *dalec.DockerImageSpec
-			if base := frontend.GetBaseOutputImage(spec, targetKey, ""); base != "" {
-				_, _, dt, err := client.ResolveImageConfig(ctx, base, sourceresolver.Opt{})
-				if err != nil {
-					return nil, nil, errors.Wrap(err, "error resolving base image config")
-				}
-				var cfg dalec.DockerImageSpec
-				if err := json.Unmarshal(dt, &cfg); err != nil {
-					return nil, nil, errors.Wrap(err, "error unmarshalling base image config")
-				}
-				img = &cfg
-			} else {
-				img, err = w.DefaultImageConfig(ctx, client)
-				if err != nil {
-					return nil, nil, errors.Wrap(err, "could not get default image config")
-				}
-			}
-
-			// TODO: DNM: This is not merging the image config from the spec.
-			specImg := frontend.MergeSpecImage(spec, targetKey)
-
-			err = dalec.MergeImageConfig(&img.Config, specImg)
+			img, err := resolveBaseConfig(ctx, w, client, platform, spec, targetKey)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, errors.Wrap(err, "could not resolve base image config")
 			}
 
 			ref, err := res.SingleRef()
@@ -159,7 +138,7 @@ func specToContainerLLB(w worker, client gwclient.Client, spec *dalec.Spec, targ
 	builderImg := w.Base(client, opts...)
 
 	rootfs := llb.Scratch()
-	if ref := frontend.GetBaseOutputImage(spec, target, ""); ref != "" {
+	if ref := dalec.GetBaseOutputImage(spec, target); ref != "" {
 		rootfs = llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	}
 
@@ -224,4 +203,32 @@ type runOptionFunc func(*llb.ExecInfo)
 
 func (f runOptionFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
+}
+
+func resolveBaseConfig(ctx context.Context, w worker, resolver llb.ImageMetaResolver, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (*dalec.DockerImageSpec, error) {
+	var img *dalec.DockerImageSpec
+
+	if ref := dalec.GetBaseOutputImage(spec, targetKey); ref != "" {
+		_, _, dt, err := resolver.ResolveImageConfig(ctx, ref, sourceresolver.Opt{Platform: platform})
+		if err != nil {
+			return nil, errors.Wrap(err, "error resolving base image config")
+		}
+
+		var i dalec.DockerImageSpec
+		if err := json.Unmarshal(dt, &i); err != nil {
+			return nil, errors.Wrap(err, "error unmarshalling base image config")
+		}
+		img = &i
+	} else {
+		var err error
+		img, err = w.DefaultImageConfig(ctx, resolver, platform)
+		if err != nil {
+			return nil, errors.Wrap(err, "error resolving default image config")
+		}
+	}
+
+	if err := dalec.BuildImageConfig(spec, targetKey, img); err != nil {
+		return nil, err
+	}
+	return img, nil
 }

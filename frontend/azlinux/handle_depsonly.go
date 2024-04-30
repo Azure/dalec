@@ -2,16 +2,13 @@ package azlinux
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/pkg/errors"
 )
 
 func handleDepsOnly(w worker) gwclient.BuildFunc {
@@ -51,22 +48,9 @@ func handleDepsOnly(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			var img *dalec.DockerImageSpec
-			if base := frontend.GetBaseOutputImage(spec, targetKey, ""); base != "" {
-				_, _, dt, err := client.ResolveImageConfig(ctx, base, sourceresolver.Opt{})
-				if err != nil {
-					return nil, nil, errors.Wrap(err, "error resolving base image config")
-				}
-				var cfg dalec.DockerImageSpec
-				if err := json.Unmarshal(dt, &cfg); err != nil {
-					return nil, nil, errors.Wrap(err, "error unmarshalling base image config")
-				}
-				img = &cfg
-			} else {
-				img, err = w.DefaultImageConfig(ctx, client)
-				if err != nil {
-					return nil, nil, errors.Wrap(err, "could not get default image config")
-				}
+			img, err := resolveBaseConfig(ctx, w, client, platform, spec, targetKey)
+			if err != nil {
+				return nil, nil, err
 			}
 
 			ref, err := res.SingleRef()

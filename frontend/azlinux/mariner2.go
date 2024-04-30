@@ -9,6 +9,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 const (
@@ -38,8 +39,10 @@ func (w mariner2) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 	return dalec.WithRunOptions(tdnfInstall(&cfg, "2.0", pkgs), w.tdnfCacheMount(cfg.root))
 }
 
-func (mariner2) DefaultImageConfig(ctx context.Context, client gwclient.Client) (*dalec.DockerImageSpec, error) {
-	_, _, dt, err := client.ResolveImageConfig(ctx, mariner2DistrolessRef, sourceresolver.Opt{})
+func (mariner2) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {
+	_, _, dt, err := resolver.ResolveImageConfig(ctx, mariner2DistrolessRef, sourceresolver.Opt{
+		Platform: platform,
+	})
 	if err != nil {
 		return nil, err
 	}
