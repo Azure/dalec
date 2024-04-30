@@ -22,6 +22,7 @@ For all source types, you can specify the following top-level configuration:
 - `path`: The path to extract from the source type
 - `includes`: A list of glob patterns to include from the source
 - `excludes`: A list of glob patterns to exclude from the source
+- `generate`: See [Generators](#Generators)
 
 The below example uses a [`context`](#build-context) source type.
 The root of the source is the `path/in/source` directory.
@@ -287,6 +288,37 @@ You can also specify a `target` which is the name of the build stage to execute.
 Build args can be specified as well as `args` which is a map of key value pairs.
 
 Build sources are considered to be "directory" sources.
+
+## Generators
+
+Generators are used to generate a source from another source.
+Currently the only generator supported is `gomod`.
+
+### Gomod
+
+The `gomod` generator manages a single go module cache for all sources that
+specify it in the spec. It is expected that the build dependencies include a
+go toolchain suitable for fetching go module dependencies.
+
+Adding a gomod generator to 1 or more sources causes the following to occur automatically:
+
+1. Fetch all go module dependencies for *all* sources in the spec that specifiy the generator
+2. Keeps a single go module cache directory for all go module deps.
+3. Adds the go module cache directory a source which gets included in source packages like a normal source.
+4. Adds the `GOMODCACHE` environment variable to the build environment.
+
+```yaml
+sources:
+  md2man:
+    git:
+        url: https://github.com/cpuguy83/go-md2man.git
+        commit: v2.1.0
+    generate:
+        subpath: "" # path inside the source to use as the root for the generator
+        gomod: {} # Generates a go module cache to cache dependencies
+```
+
+`gomod` currently does not have any options but may in the future.
 
 ## Advanced Source Configurations
 
