@@ -1,10 +1,10 @@
 # Signing Packages
 
 Packages can be automatically signed using Dalec. To do this, you will
-need to provide a signing frontend. There is an
-[example](test/signer/main.go) in the test code. Once that signing image
-has been built and tagged, the following can be added to the spec to trigger
-the signing operation:
+need to provide a signing frontend. There is an example in the test
+code `test/signer/main.go`. Once that signing image has been built and
+tagged, the following can be added to the spec to trigger the signing
+operation:
 
 ```yaml
 targets: # Distro specific build requirements
