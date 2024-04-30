@@ -559,7 +559,7 @@ func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc f
 			continue
 		}
 
-		st, _, err := src.AsState(name, sOpt, opts...)
+		st, err := src.AsState(name, sOpt, opts...)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get source state for %q", name)
 		}
@@ -571,7 +571,7 @@ func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc f
 				return nil, errors.Errorf("patch source %q not found", p.Source)
 			}
 
-			states[p.Source], _, err = src.AsState(p.Source, sOpt, opts...)
+			states[p.Source], err = src.AsState(p.Source, sOpt, opts...)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to get patch source state for %q", p.Source)
 			}
