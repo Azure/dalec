@@ -95,12 +95,12 @@ func main() {
 			HashType: "sha256",
 		}
 
-		cc, ok := c.(frontend.CurrentFrontend)
+		curFrontend, ok := c.(frontend.CurrentFrontend)
 		if !ok {
 			return nil, fmt.Errorf("cast to currentFrontend failed")
 		}
 
-		basePtr, err := cc.CurrentFrontend()
+		basePtr, err := curFrontend.CurrentFrontend()
 		if err != nil || basePtr == nil {
 			if err == nil {
 				err = fmt.Errorf("base frontend ptr was nil")
