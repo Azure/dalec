@@ -50,7 +50,7 @@ func handleRPM(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 
 		t := spec.Targets[targetKey]
 		if frontend.HasSigner(&t) {
-			signed, err := frontend.ForwardToSigner(ctx, client, platform, t.PackageConfig.Signer, st, "*.rpm")
+			signed, err := frontend.ForwardToSigner(ctx, client, platform, t.PackageConfig.Signer, st)
 			if err != nil {
 				return nil, nil, err
 			}
