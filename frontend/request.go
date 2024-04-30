@@ -119,7 +119,7 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
-func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, cfg *dalec.Frontend, s llb.State, filePattern string) (llb.State, error) {
+func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, cfg *dalec.Frontend, s llb.State) (llb.State, error) {
 	const (
 		sourceKey  = "source"
 		contextKey = "context"
@@ -164,7 +164,6 @@ func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocis
 	req.FrontendOpt[contextKey] = compound(inputKey, contextKey)
 	req.FrontendInputs[contextKey] = stateDef.ToPB()
 	req.FrontendOpt["dalec.target"] = opts["dalec.target"]
-	req.FrontendOpt["find.pattern"] = filePattern
 
 	res, err := client.Solve(ctx, req)
 	if err != nil {

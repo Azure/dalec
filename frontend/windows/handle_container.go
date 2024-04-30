@@ -55,7 +55,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		}
 
 		if t, ok := spec.Targets[targetKey]; ok && frontend.HasSigner(&t) {
-			signed, err := frontend.ForwardToSigner(ctx, client, platform, t.PackageConfig.Signer, bin, "*.exe")
+			signed, err := frontend.ForwardToSigner(ctx, client, platform, t.PackageConfig.Signer, bin)
 			if err != nil {
 				return nil, nil, err
 			}
