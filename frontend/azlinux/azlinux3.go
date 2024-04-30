@@ -9,6 +9,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 const (
@@ -38,8 +39,8 @@ func (w azlinux3) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 	return dalec.WithRunOptions(tdnfInstall(&cfg, "3.0", pkgs), w.tdnfCacheMount(cfg.root))
 }
 
-func (azlinux3) DefaultImageConfig(ctx context.Context, client gwclient.Client) (*dalec.DockerImageSpec, error) {
-	_, _, dt, err := client.ResolveImageConfig(ctx, azlinux3DistrolessRef, sourceresolver.Opt{})
+func (azlinux3) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {
+	_, _, dt, err := resolver.ResolveImageConfig(ctx, azlinux3DistrolessRef, sourceresolver.Opt{Platform: platform})
 	if err != nil {
 		return nil, err
 	}

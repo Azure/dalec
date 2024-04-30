@@ -11,6 +11,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 const (
@@ -20,7 +21,7 @@ const (
 type worker interface {
 	Base(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State
 	Install(pkgs []string, opts ...installOpt) llb.RunOption
-	DefaultImageConfig(context.Context, gwclient.Client) (*dalec.DockerImageSpec, error)
+	DefaultImageConfig(context.Context, llb.ImageMetaResolver, *ocispecs.Platform) (*dalec.DockerImageSpec, error)
 }
 
 func newHandler(w worker) gwclient.BuildFunc {

@@ -2,15 +2,18 @@ package windows
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"runtime"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -82,16 +85,29 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		base := frontend.GetBaseOutputImage(spec, targetKey, defaultBaseImage)
+		imgRef := dalec.GetBaseOutputImage(spec, targetKey)
+		if imgRef == "" {
+			imgRef = defaultBaseImage
+		}
 
-		img, err := frontend.BuildImageConfig(ctx, client, spec, targetKey, base, frontend.WithPlatform(targetPlatform))
+		_, _, dt, err := client.ResolveImageConfig(ctx, imgRef, sourceresolver.Opt{
+			Platform: &targetPlatform,
+		})
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, errors.Wrap(err, "could not resolve base image config")
+		}
+
+		var img dalec.DockerImageSpec
+		if err := json.Unmarshal(dt, &img); err != nil {
+			return nil, nil, errors.Wrap(err, "error unmarshalling base image config")
+		}
+
+		if err := dalec.BuildImageConfig(spec, targetKey, &img); err != nil {
+			return nil, nil, errors.Wrap(err, "error creating image config")
 		}
 
 		ref, err := res.SingleRef()
-
-		return ref, img, err
+		return ref, &img, err
 	})
 }
 
