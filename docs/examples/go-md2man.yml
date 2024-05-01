@@ -1,12 +1,18 @@
 # syntax=ghcr.io/azure/dalec/frontend:latest
+args:
+  GO_MD2MAN_COMMIT: v2.0.3
+  REVISION: 1
+  VERSION: 2.0.3
+
 name: go-md2man
-version: 2.0.3
-revision: "1"
+version: ${VERSION}
+revision: ${REVISION}
 packager: Dalec Example
 vendor: Dalec Example
 license: MIT
 description: A tool to convert markdown into man pages (roff).
 website: https://github.com/cpuguy83/go-md2man
+
 
 sources:
   src:
@@ -14,7 +20,7 @@ sources:
       - gomod: {}
     git:
       url: https://github.com/cpuguy83/go-md2man.git
-      commit: "v2.0.3"
+      commit: "${GO_MD2MAN_COMMIT}"
 
 dependencies:
   build:

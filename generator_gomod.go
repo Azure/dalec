@@ -62,6 +62,9 @@ func (s *Spec) gomodSources() map[string]Source {
 // If there are no sources with a gomod generator, this will return a nil state.
 func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.ConstraintsOpt) (*llb.State, error) {
 	sources := s.gomodSources()
+	if len(sources) == 0 {
+		return nil, nil
+	}
 
 	deps := llb.Scratch()
 

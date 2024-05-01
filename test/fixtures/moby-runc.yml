@@ -57,6 +57,23 @@ targets: # Distro specific build requirements
     <<: *azl
   mariner2:
     <<: *azl
+  jammy:
+    image:
+    dependencies:
+      build:
+        libseccomp-dev:
+        gcc:
+        go-md2man:
+        git:
+        tar:
+        make:
+        golang:
+        libtool:
+        libltdl-dev:
+      runtime:
+        libseccomp2:
+          version:
+            - ">= 2.3"
 
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
@@ -94,7 +111,6 @@ tests:
     files:
       /usr/bin/runc:
         permissions: 0755
-      /usr/share/man/man8/runc-create.8.gz:
   - name: version reporting
     steps:
       - command: runc --version
@@ -104,3 +120,10 @@ tests:
             - "libseccomp: "
         stderr:
           empty: true
+  - name: manpages
+    files:
+      /usr/share/man/man8/runc-create.8.gz:
+
+image:
+  entrypoint: runc
+  cmd: --help
