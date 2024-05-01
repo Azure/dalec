@@ -224,12 +224,9 @@ func TestSourceHTTP(t *testing.T) {
 	})
 }
 
-func TestSourceWithGomod(t *testing.T) {
-	t.Parallel()
-
-	// Create a very simple fake module with a limited depdenency tree just to
-	// keep the test as fast/reliable as possible.
-	const mainGo = `package main
+// Create a very simple fake module with a limited depdenency tree just to
+// keep the test as fast/reliable as possible.
+const gomodFixtureMain = `package main
 
 import (
 	"fmt"
@@ -243,26 +240,29 @@ func main() {
 }
 `
 
-	const gomod = `module testgomodsource
+const gomodFixtureMod = `module testgomodsource
 
-go 1.20.0
+go 1.20
 
 require github.com/cpuguy83/tar2go v0.3.1
 `
 
-	const gosum = `
+const gomodFixtureSum = `
 github.com/cpuguy83/tar2go v0.3.1 h1:DMWlaIyoh9FBWR4hyfZSOEDA7z8rmCiGF1IJIzlTlR8=
 github.com/cpuguy83/tar2go v0.3.1/go.mod h1:2Ys2/Hu+iPHQRa4DjIVJ7UAaKnDhAhNACeK3A0Rr5rM=
 `
+
+func TestSourceWithGomod(t *testing.T) {
+	t.Parallel()
 
 	const downgradePatch = `diff --git a/go.mod b/go.mod
 index 0c18614..8a3a0ee 100644
 --- a/go.mod
 +++ b/go.mod
 @@ -2,4 +2,4 @@ module testgomodsource
- 
- go 1.20.0
- 
+
+ go 1.20
+
 -require github.com/cpuguy83/tar2go v0.3.1
 +require github.com/cpuguy83/tar2go v0.3.0
 diff --git a/go.sum b/go.sum
@@ -313,9 +313,9 @@ index ea874f5..ba38f84 100644
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
 							Files: map[string]*dalec.SourceInlineFile{
-								"main.go": {Contents: mainGo},
-								"go.mod":  {Contents: gomod},
-								"go.sum":  {Contents: gosum},
+								"main.go": {Contents: gomodFixtureMain},
+								"go.mod":  {Contents: gomodFixtureMod},
+								"go.sum":  {Contents: gomodFixtureSum},
 							},
 						},
 					},

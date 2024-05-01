@@ -21,11 +21,7 @@ const (
 	workerImgRef    = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
 	outputDir       = "/tmp/output"
 	buildScriptName = "_build.sh"
-)
-
-var (
-	varCacheAptMount = dalec.WithMountedAptCache("/var/cache/apt", "dalec-windows-var-cache-apt")
-	varLibAptMount   = dalec.WithMountedAptCache("/var/lib/apt", "dalec-windows-var-lib-apt")
+	aptCachePrefix  = "jammy-windowscross"
 )
 
 func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -53,9 +49,6 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		}
 
 		st := getZipLLB(worker, spec.Name, bin)
-		if err != nil {
-			return nil, nil, err
-		}
 
 		def, err := st.Marshal(ctx)
 		if err != nil {
@@ -116,8 +109,7 @@ func installBuildDeps(deps []string) llb.StateOption {
 
 		return s.Run(
 			shArgs("apt-get update && apt-get install -y "+strings.Join(sorted, " ")),
-			varCacheAptMount,
-			varLibAptMount,
+			dalec.WithMountedAptCache(aptCachePrefix),
 		).Root()
 	}
 }
@@ -152,6 +144,8 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 }
 
 func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
+	worker = worker.With(installBuildDeps(spec.GetBuildDeps(targetKey)))
+
 	sources, err := specToSourcesLLB(worker, spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
@@ -161,9 +155,8 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts, ta
 	buildScript := createBuildScript(spec)
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
-	work := worker.With(installBuildDeps(spec.GetBuildDeps(targetKey)))
 
-	artifacts := work.Run(
+	artifacts := worker.Run(
 		shArgs(script.String()),
 		llb.Dir("/build"),
 		withSourcesMounted("/build", patched, spec.Sources),
@@ -200,8 +193,7 @@ func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
 	return llb.Image(workerImgRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
 		Run(
 			shArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip"),
-			varCacheAptMount,
-			varLibAptMount,
+			dalec.WithMountedAptCache(aptCachePrefix),
 		).Root()
 }
 
