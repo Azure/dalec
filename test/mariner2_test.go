@@ -322,13 +322,9 @@ echo "$BAR" > bar.txt
 				Description: "foo bar baz",
 				Website:     "https://foo.bar.baz",
 				Revision:    "1",
-				Targets: map[string]dalec.Target{
-					"mariner2": {
-						PackageConfig: &dalec.PackageConfig{
-							Signer: &dalec.Frontend{
-								Image: phonySignerRef,
-							},
-						},
+				PackageConfig: &dalec.PackageConfig{
+					Signer: &dalec.Frontend{
+						Image: phonySignerRef,
 					},
 				},
 				Sources: map[string]dalec.Source{
