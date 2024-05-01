@@ -802,6 +802,10 @@
 					"$ref": "#/$defs/PackageDependencies",
 					"description": "Dependencies are the different dependencies that need to be specified in the package.\nDependencies are overwritten if specified in the target map for the requested distro."
 				},
+				"package_config": {
+					"$ref": "#/$defs/PackageConfig",
+					"description": "PackageConfig is the configuration to use for artifact targets, such as\nrpms, debs, or zip files containing Windows binaries"
+				},
 				"image": {
 					"$ref": "#/$defs/ImageConfig",
 					"description": "Image is the image configuration when the target output is a container image.\nThis is overwritten if specified in the target map for the requested distro."
