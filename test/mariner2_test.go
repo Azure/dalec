@@ -16,10 +16,10 @@ func TestMariner2(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, "mariner2/container")
+	testLinuxDistro(ctx, t, "mariner2/container", "mariner2/rpm")
 }
 
-func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string) {
+func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, signTarget string) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -312,7 +312,7 @@ echo "$BAR" > bar.txt
 		testEnv.RunTest(ctx, t, f)
 	}
 
-	t.Run("test mariner2 signing", func(t *testing.T) {
+	t.Run("test signing", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
 			Name:        "foo",
@@ -348,7 +348,7 @@ echo "$BAR" > bar.txt
 			},
 		}
 
-		runTest(t, distroSigningTest(t, &spec, "mariner2/rpm"))
+		runTest(t, distroSigningTest(t, &spec, signTarget))
 	})
 }
 
