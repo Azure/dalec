@@ -61,7 +61,7 @@ variable "RUNC_REVISION" {
     default = "1"
 }
 
-target "runc" {
+target "runc-azlinux" {
     name = "runc-${distro}-${replace(tgt, "/", "-")}"
     dockerfile = "test/fixtures/moby-runc.yml"
     args = {
@@ -75,20 +75,43 @@ target "runc" {
         distro = ["mariner2", "azlinux3"]
         tgt = ["rpm", "container", "rpm/spec"]
     }
-    target = "${distro}/${tgt}"
+    target = "mariner2/${tgt}"
     // only tag the container target
-    tags = tgt == "container" ? ["runc:${distro}"] : []
+    tags = tgt == "container" ? ["runc:mariner2"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
 
-    cache-from = ["type=gha,scope=dalec/runc/${distro}/${tgt}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/${distro}/${tgt},mode=max"] : []
+    cache-from = ["type=gha,scope=dalec/runc/mariner2/${tgt}"]
+    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/mariner2/${tgt},mode=max"] : []
+}
+
+target "runc-jammy" {
+    name = "runc-jammy-${replace(tgt, "/", "-")}"
+    dockerfile = "test/fixtures/moby-runc.yml"
+    args = {
+        "RUNC_COMMIT" = RUNC_COMMIT
+        "VERSION" = RUNC_VERSION
+        "REVISION" = RUNC_REVISION
+        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
+    }
+    matrix = {
+        tgt = ["deb/control", "deb/debroot", "deb", "container", "deb/sources"]
+    }
+    target = "jammy/${tgt}"
+    // only tag the container target
+    tags = tgt == "container" ? ["runc:jammy"] : []
+    // only output non-container targets to the fs
+    output = tgt != "container" ? ["_output"] : []
+
+    cache-from = ["type=gha,scope=dalec/runc/jammy/${tgt}"]
+    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/jammy/${tgt},mode=max"] : []
 }
 
 target "runc-test" {
     name = "runc-test-${distro}"
     matrix = {
-        distro =["mariner2", "azlinux3"]
+        distro =["mariner2", "azlinux3", "jammy"]
     }
     contexts = {
         "dalec-runc-img" = "target:runc-${distro}-container"
