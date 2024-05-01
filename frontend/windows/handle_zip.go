@@ -43,8 +43,8 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
 		}
 
-		if t, ok := spec.Targets[targetKey]; ok && frontend.HasSigner(&t) {
-			signed, err := frontend.ForwardToSigner(ctx, client, platform, t.PackageConfig.Signer, bin)
+		if signer, ok := spec.GetSigner(targetKey); ok {
+			signed, err := frontend.ForwardToSigner(ctx, client, platform, signer, bin)
 			if err != nil {
 				return nil, nil, err
 			}

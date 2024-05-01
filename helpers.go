@@ -312,3 +312,21 @@ func (s *Spec) GetSymlinks(target string) map[string]SymlinkTarget {
 
 	return lm
 }
+
+func (s *Spec) GetSigner(targetKey string) (*Frontend, bool) {
+	if s.Targets != nil {
+		if t, ok := s.Targets[targetKey]; ok && hasValidSigner(t.PackageConfig) {
+			return t.PackageConfig.Signer, true
+		}
+	}
+
+	if hasValidSigner(s.PackageConfig) {
+		return s.PackageConfig.Signer, true
+	}
+
+	return nil, false
+}
+
+func hasValidSigner(pc *PackageConfig) bool {
+	return pc != nil && pc.Signer != nil && pc.Signer.Image != ""
+}
