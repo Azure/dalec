@@ -428,10 +428,10 @@ func TestTemplate_Requires(t *testing.T) {
 				},
 				"c-lib-multiple-constraints": {
 					Version: []string{
-					"< 2.0",
-					">= 1.0",
+						"< 2.0",
+						">= 1.0",
+					},
 				},
-			},
 			},
 			Runtime: map[string]dalec.PackageConstraints{
 				"a-no-constraints": {},
@@ -440,8 +440,8 @@ func TestTemplate_Requires(t *testing.T) {
 				},
 				"c-multiple-constraints": {
 					Version: []string{
-					"< 2.0",
-					">= 1.0",
+						"< 2.0",
+						">= 1.0",
 					},
 				},
 			},

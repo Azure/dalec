@@ -1,0 +1,13 @@
+Source: {{.Name}}
+{{if .Packager }}Maintainer: {{.Packager}}{{end}}
+{{if .Website}}Homepage: {{.Website}}{{end}}
+{{ .BuildDeps }}
+
+Package: {{.Name}}
+Architecture: {{.Architecture}}
+Section: -
+{{.AllRuntimeDeps -}}
+{{.Replaces -}}
+{{.Conflicts -}}
+{{.Provides -}}
+{{if .Description}}Description: {{.Description}}{{end}}
