@@ -71,7 +71,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			Packager:    "Dalec",
 			Description: "Should not have internet access during build",
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{"curl": {}},
+				Build: map[string][]string{"curl": {}},
 			},
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{

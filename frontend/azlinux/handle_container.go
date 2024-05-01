@@ -130,14 +130,14 @@ func readRPMs(ctx context.Context, client gwclient.Client, st llb.State) ([]stri
 	return out, nil
 }
 
-func specToContainerLLB(w worker, client gwclient.Client, spec *dalec.Spec, target string, rpmDir llb.State, files []string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specToContainerLLB(w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, rpmDir llb.State, files []string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
 	builderImg := w.Base(client, opts...)
 
 	rootfs := llb.Scratch()
-	if ref := dalec.GetBaseOutputImage(spec, target); ref != "" {
+	if ref := dalec.GetBaseOutputImage(spec, targetKey); ref != "" {
 		rootfs = llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	}
 

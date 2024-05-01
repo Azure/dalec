@@ -117,6 +117,6 @@ func tdnfInstall(cfg *installConfig, relVer string, pkgs []string) llb.RunOption
 		cmdArgs += "; " + manifestPath
 	}
 
-	runOpts = append(runOpts, shArgs(cmdArgs))
+	runOpts = append(runOpts, dalec.ShArgs(cmdArgs))
 	return dalec.WithRunOptions(runOpts...)
 }
