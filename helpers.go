@@ -385,3 +385,15 @@ func (s *Spec) GetSigner(targetKey string) (*PackageSigner, bool) {
 func hasValidSigner(pc *PackageConfig) bool {
 	return pc != nil && pc.Signer != nil && pc.Signer.Image != ""
 }
+
+// SortMapValues is like [maps.Values], but the list is sorted based on the map key
+func SortedMapValues[T any](m map[string]T) []T {
+	keys := SortMapKeys(m)
+
+	out := make([]T, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, m[k])
+	}
+
+	return out
+}

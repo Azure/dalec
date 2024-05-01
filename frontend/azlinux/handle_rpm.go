@@ -52,10 +52,6 @@ func handleRPM(w worker) gwclient.BuildFunc {
 	}
 }
 
-func shArgs(cmd string) llb.RunOption {
-	return llb.Args([]string{"sh", "-c", cmd})
-}
-
 func installBuildDeps(w worker, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		deps := spec.GetBuildDeps(targetKey)
