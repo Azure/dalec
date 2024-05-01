@@ -82,6 +82,9 @@ type Spec struct {
 	// Dependencies are the different dependencies that need to be specified in the package.
 	// Dependencies are overwritten if specified in the target map for the requested distro.
 	Dependencies *PackageDependencies `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+	// PackageConfig is the configuration to use for artifact targets, such as
+	// rpms, debs, or zip files containing Windows binaries
+	PackageConfig *PackageConfig `yaml:"package_config,omitempty" json:"package_config,omitempty"`
 	// Image is the image configuration when the target output is a container image.
 	// This is overwritten if specified in the target map for the requested distro.
 	Image *ImageConfig `yaml:"image,omitempty" json:"image,omitempty"`

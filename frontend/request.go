@@ -181,7 +181,3 @@ func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocis
 func compound(k, v string) string {
 	return fmt.Sprintf("%s:%s", k, v)
 }
-
-func HasSigner(t *dalec.Target) bool {
-	return t != nil && t.PackageConfig != nil && t.PackageConfig.Signer != nil && t.PackageConfig.Signer.Image != ""
-}
