@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -315,60 +314,41 @@ echo "$BAR" > bar.txt
 
 	t.Run("test mariner2 signing", func(t *testing.T) {
 		t.Parallel()
-		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			spec := dalec.Spec{
-				Name:        "foo",
-				Version:     "v0.0.1",
-				Description: "foo bar baz",
-				Website:     "https://foo.bar.baz",
-				Revision:    "1",
-				PackageConfig: &dalec.PackageConfig{
-					Signer: &dalec.Frontend{
-						Image: phonySignerRef,
-					},
+		spec := dalec.Spec{
+			Name:        "foo",
+			Version:     "v0.0.1",
+			Description: "foo bar baz",
+			Website:     "https://foo.bar.baz",
+			Revision:    "1",
+			PackageConfig: &dalec.PackageConfig{
+				Signer: &dalec.Frontend{
+					Image: phonySignerRef,
 				},
-				Sources: map[string]dalec.Source{
-					"foo": {
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
-							},
+			},
+			Sources: map[string]dalec.Source{
+				"foo": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
 						},
 					},
 				},
-				Build: dalec.ArtifactBuild{
-					Steps: []dalec.BuildStep{
-						{
-							Command: "/bin/true",
-						},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{
+						Command: "/bin/true",
 					},
 				},
-				Artifacts: dalec.Artifacts{
-					Binaries: map[string]dalec.ArtifactConfig{
-						"foo": {},
-					},
+			},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"foo": {},
 				},
-			}
+			},
+		}
 
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget("mariner2/rpm"))
-			res, err := gwc.Solve(ctx, sr)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			tgt := readFile(ctx, t, "/target", res)
-			cfg := readFile(ctx, t, "/config.json", res)
-
-			if string(tgt) != "mariner2" {
-				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-			}
-
-			if !strings.Contains(string(cfg), "linux") {
-				t.Fatal(fmt.Errorf("configuration incorrect"))
-			}
-
-			return gwclient.NewResult(), nil
-		})
+		runTest(t, distroSigningTest(t, &spec, "mariner2/rpm"))
 	})
 }
 
