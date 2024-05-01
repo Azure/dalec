@@ -30,7 +30,7 @@ func TestSourceBuild(t *testing.T) {
 		t.Errorf("expected identifier %q, got %q", xID, id)
 	}
 
-	// To reuse code, let's craft an equivelant SourceDockerImage with cmd's
+	// To reuse code, let's craft an equivalent SourceDockerImage with cmd's
 	// We'll use that to validate the ops we got from the build source with [checkCmd]
 	srcDI := SourceDockerImage{
 		Ref: xID,
@@ -53,7 +53,7 @@ func TestSourceBuild(t *testing.T) {
 			src := src
 			src.Path = "subdir"
 
-			// for build soruce, we expect to have a copy operation as the last op
+			// for build source, we expect to have a copy operation as the last op
 			ops := getSourceOp(ctx, t, src)
 
 			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{rootMount}, {rootMount, expectMount{dest: "subdir"}}})
@@ -65,7 +65,7 @@ func TestSourceBuild(t *testing.T) {
 			src.Includes = []string{"foo", "bar"}
 			src.Excludes = []string{"baz"}
 
-			// for build soruce, we expect to have a copy operation as the last op
+			// for build source, we expect to have a copy operation as the last op
 			ops := getSourceOp(ctx, t, src)
 			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{noMountCheck, noMountCheck})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)

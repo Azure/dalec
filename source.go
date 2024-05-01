@@ -175,10 +175,6 @@ type SourceOpts struct {
 	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
 }
 
-func shArgs(cmd string) llb.RunOption {
-	return llb.Args([]string{"sh", "-c", cmd})
-}
-
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	st, err := getSource(*s, name, sOpt, opts...)
 	if err != nil {
@@ -514,7 +510,7 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 		sourceState = worker.Run(
 			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(p.Source)),
 			llb.Dir("src"),
-			shArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
+			ShArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
 			WithConstraints(opts...),
 		).AddMount("/src", sourceState)
 	}
@@ -573,4 +569,46 @@ func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc f
 	}
 
 	return PatchSources(worker, s, states, opts...), nil
+}
+
+// Tar creates a tar+gz from the provided state and puts it in the provided dest.
+// The provided work state is used to perform the necessary operations to produce the tarball and requires the tar and gzip binaries.
+func Tar(work llb.State, src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
+	// Put the output tar in a consistent location regardless of `dest`
+	// This way if `dest` changes we don't have to rebuild the tarball, which can be expensive.
+	outBase := "/tmp/out"
+	out := filepath.Join(outBase, filepath.Dir(dest))
+	worker := work.Run(
+		llb.AddMount("/src", src, llb.Readonly),
+		ShArgs("tar -C /src -cvzf /tmp/st ."),
+		WithConstraints(opts...),
+	).
+		Run(
+			llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + out + " && mv /tmp/st " + filepath.Join(out, filepath.Base(dest))}),
+			WithConstraints(opts...),
+		)
+
+	return worker.AddMount(outBase, llb.Scratch())
+}
+
+func DefaultTarWorker(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State {
+	return llb.Image("busybox:latest", llb.WithMetaResolver(resolver), withConstraints(opts))
+}
+
+// Sources gets all the source LLB states from the spec.
+func Sources(spec *Spec, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+	states := make(map[string]llb.State, len(spec.Sources))
+
+	for k, src := range spec.Sources {
+		pg := ProgressGroup("Prepare source: " + k)
+		opts := append(opts, pg)
+
+		st, err := src.AsState(k, sOpt, opts...)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not get source state for source: %s", k)
+		}
+
+		states[k] = st
+	}
+	return states, nil
 }
