@@ -336,6 +336,62 @@ echo "$BAR" > bar.txt
 			return gwclient.NewResult(), nil
 		})
 	})
+
+	t.Run("go module", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-build-with-gomod",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing container target",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Generate: []*dalec.SourceGenerator{
+						{
+							Gomod: &dalec.GeneratorGomod{},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"main.go": {Contents: gomodFixtureMain},
+								"go.mod":  {Contents: gomodFixtureMod},
+								"go.sum":  {Contents: gomodFixtureSum},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string][]string{
+					// TODO: This works at least for now, but is distro specific and
+					// could break on new distros (though that is still unlikely).
+					"golang": {},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{Command: "[ -d \"${GOMODCACHE}/github.com/cpuguy83/tar2go@v0.3.1\" ]"},
+					{Command: "[ -d ./src ]"},
+					{Command: "[ -f ./src/main.go ]"},
+					{Command: "[ -f ./src/go.mod ]"},
+					{Command: "[ -f ./src/go.sum ]"},
+					{Command: "cd ./src && go build"},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			return client.Solve(ctx, req)
+		})
+	})
 }
 
 func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {

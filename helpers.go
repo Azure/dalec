@@ -54,17 +54,32 @@ func (f runOptionFunc) SetRunOption(i *llb.ExecInfo) {
 	f(i)
 }
 
-func WithRemovedDockerCleanFile() llb.RunOption {
+// WithMountedAptCache gives an [llb.RunOption] that mounts the apt cache directories.
+// It uses the given namePrefix as the prefix for the cache keys.
+// namePrefix should be distinct per distro version.
+func WithMountedAptCache(namePrefix string) llb.RunOption {
 	return runOptionFunc(func(ei *llb.ExecInfo) {
-		llb.AddMount("/etc/apt/apt.conf.d/docker-clean", llb.Scratch())
-	})
-}
+		// This is in the "official" docker image for ubuntu/debian.
+		// This file prevents us from actually caching anything.
+		// To resolve that we delete the file.
+		ei.State = ei.State.File(
+			llb.Rm("/etc/apt/apt.conf.d/docker-clean", llb.WithAllowNotFound(true)),
+			constraintsOptFunc(func(c *llb.Constraints) {
+				*c = ei.Constraints
+			}),
+		)
 
-func WithMountedAptCache(dst, cacheName string) llb.RunOption {
-	return runOptionFunc(func(ei *llb.ExecInfo) {
-		WithRemovedDockerCleanFile().SetRunOption(ei)
-		llb.AddMount(dst, llb.Scratch(), llb.AsPersistentCacheDir(cacheName, llb.CacheMountLocked)).
-			SetRunOption(ei)
+		llb.AddMount(
+			"/var/cache/apt",
+			llb.Scratch(),
+			llb.AsPersistentCacheDir(namePrefix+"dalec-var-cache-apt", llb.CacheMountLocked),
+		).SetRunOption(ei)
+
+		llb.AddMount(
+			"/var/lib/apt",
+			llb.Scratch(),
+			llb.AsPersistentCacheDir(namePrefix+"dalec-var-lib-apt", llb.CacheMountLocked),
+		).SetRunOption(ei)
 	})
 }
 
@@ -215,16 +230,16 @@ func CacheDirsToRunOpt(mounts map[string]CacheDirConfig, distroKey, archKey stri
 		opts = append(opts, llb.AddMount(p, llb.Scratch(), llb.AsPersistentCacheDir(key, mode)))
 	}
 
-	return runOptFunc(func(ei *llb.ExecInfo) {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
 		for _, opt := range opts {
 			opt.SetRunOption(ei)
 		}
 	})
 }
 
-type runOptFunc func(*llb.ExecInfo)
+type RunOptFunc func(*llb.ExecInfo)
 
-func (f runOptFunc) SetRunOption(ei *llb.ExecInfo) {
+func (f RunOptFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
 }
 
