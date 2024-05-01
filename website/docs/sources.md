@@ -302,7 +302,7 @@ go toolchain suitable for fetching go module dependencies.
 
 Adding a gomod generator to 1 or more sources causes the following to occur automatically:
 
-1. Fetch all go module dependencies for *all* sources in the spec that specifiy the generator
+1. Fetch all go module dependencies for *all* sources in the spec that specify the generator
 2. Keeps a single go module cache directory for all go module deps.
 3. Adds the go module cache directory a source which gets included in source packages like a normal source.
 4. Adds the `GOMODCACHE` environment variable to the build environment.
