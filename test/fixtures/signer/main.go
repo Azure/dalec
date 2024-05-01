@@ -18,33 +18,6 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-const (
-	linuxSignOp   = "LinuxSign"
-	windowsSignOp = "NotaryCoseSign"
-)
-
-type Config struct {
-	ClientId           string             `json:"clientId"`
-	GatewayAPI         string             `json:"gatewayApi"`
-	RequestSigningCert map[string]string  `json:"requestSigningCert"`
-	DRIEmail           []string           `json:"driEmail"`
-	SigningOperations  []SigningOperation `json:"signingOperations"`
-	HashType           string             `json:"hashType"`
-}
-
-type SigningOperation struct {
-	KeyCode          string        `json:"keyCode"`
-	OperationSetCode string        `json:"operationSetCode"`
-	Parameters       []ParameterKV `json:"parameters"`
-	ToolName         string        `json:"toolName"`
-	ToolVersion      string        `json:"toolVersion"`
-}
-
-type ParameterKV struct {
-	ParameterName  string `json:"parameterName"`
-	ParameterValue string `json:"parameterValue"`
-}
-
 func main() {
 	bklog.L.Logger.SetOutput(os.Stderr)
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(bklog.L.WriterLevel(logrus.InfoLevel), bklog.L.WriterLevel(logrus.WarnLevel), bklog.L.WriterLevel(logrus.ErrorLevel), 1))
@@ -60,39 +33,17 @@ func main() {
 			return nil, err
 		}
 
-		signOp := ""
-		params := []ParameterKV{}
+		type config struct {
+			OS string
+		}
+
+		cfg := config{}
 
 		switch target {
 		case "windowscross", "windows":
-			signOp = windowsSignOp
-			params = append(params, ParameterKV{
-				ParameterName:  "CoseFlags",
-				ParameterValue: "chainunprotected",
-			})
-
+			cfg.OS = "windows"
 		default:
-			signOp = linuxSignOp
-		}
-
-		config := Config{
-			ClientId:   "${AZURE_CLIENT_ID}",
-			GatewayAPI: "https://api.esrp.microsoft.com",
-			RequestSigningCert: map[string]string{
-				"subject":   "esrp-prss",
-				"vaultName": "${KEYVAULT_NAME}",
-			},
-			DRIEmail: []string{"${BUILDER_EMAIL}"},
-			SigningOperations: []SigningOperation{
-				{
-					KeyCode:          "${ESRP_KEYCODE}",
-					OperationSetCode: signOp,
-					Parameters:       params,
-					ToolName:         "sign",
-					ToolVersion:      "1.0",
-				},
-			},
-			HashType: "sha256",
+			cfg.OS = "linux"
 		}
 
 		curFrontend, ok := c.(frontend.CurrentFrontend)
@@ -114,7 +65,7 @@ func main() {
 			return nil, fmt.Errorf("no artifact state provided to signer")
 		}
 
-		configBytes, err := json.Marshal(&config)
+		configBytes, err := json.Marshal(&cfg)
 		if err != nil {
 			return nil, err
 		}
