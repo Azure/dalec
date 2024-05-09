@@ -63,14 +63,14 @@
 						"type": "string"
 					},
 					"type": "array",
-					"description": "ConfigDirectories is a list of directories the RPM should under %{_sysconfigdir}\t."
+					"description": "ConfigDirectories is a list of directories the RPM should place under %{_sysconfigdir}\t."
 				},
 				"sharedStateDirectories": {
 					"items": {
 						"type": "string"
 					},
 					"type": "array",
-					"description": "SharedStateDirectories is a list of directories the RPM should under %{%_sharedstatedir}\t."
+					"description": "SharedStateDirectories is a list of directories the RPM should place under %{%_sharedstatedir}\t."
 				}
 			},
 			"additionalProperties": false,
