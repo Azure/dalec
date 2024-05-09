@@ -127,7 +127,12 @@ type Artifacts struct {
 	Binaries map[string]ArtifactConfig `yaml:"binaries,omitempty" json:"binaries,omitempty"`
 	// Manpages is the list of manpages to include in the package.
 	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
+	// ConfigDirectories is a list of directories the RPM should under %{_sysconfigdir}	.
+	ConfigDirectories []string `yaml:"configDirectories,omitempty" json:"configDirectories,omitempty"`
+	// SharedStateDirectories is a list of directories the RPM should under %{%_sharedstatedir}	.
+	SharedStateDirectories []string `yaml:"sharedStateDirectories,omitempty" json:"sharedStateDirectories,omitempty"`
 	// TODO: other types of artifacts (systtemd units, libexec, configs, etc)
+
 }
 
 // ArtifactConfig is the configuration for a given artifact type.
