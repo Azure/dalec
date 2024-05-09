@@ -326,6 +326,17 @@ func (w *specWrapper) Install() fmt.Stringer {
 		copyArtifact(`%{buildroot}/%{_mandir}`, p, cfg)
 	}
 
+	sort.Strings(w.Spec.Artifacts.ConfigDirectories)
+	for _, p := range w.Spec.Artifacts.ConfigDirectories {
+		dir := filepath.Join(`%{buildroot}/%{_sysconfdir}`, p)
+		fmt.Fprintln(b, "mkdir -p", dir)
+	}
+
+	sort.Strings(w.Spec.Artifacts.SharedStateDirectories)
+	for _, p := range w.Spec.Artifacts.SharedStateDirectories {
+		dir := filepath.Join(`%{buildroot}/%{_sharedstatedir}`, p)
+		fmt.Fprintln(b, "mkdir -p", dir)
+	}
 	return b
 }
 
@@ -346,6 +357,18 @@ func (w *specWrapper) Files() fmt.Stringer {
 
 	if len(w.Spec.Artifacts.Manpages) > 0 {
 		fmt.Fprintln(b, `%{_mandir}/*/*`)
+	}
+
+	sort.Strings(w.Spec.Artifacts.ConfigDirectories)
+	for _, p := range w.Spec.Artifacts.ConfigDirectories {
+		dir := strings.Join([]string{`%dir`, filepath.Join(`%{_sysconfdir}`, p)}, " ")
+		fmt.Fprintln(b, dir)
+	}
+
+	sort.Strings(w.Spec.Artifacts.SharedStateDirectories)
+	for _, p := range w.Spec.Artifacts.SharedStateDirectories {
+		dir := strings.Join([]string{`%dir`, filepath.Join(`%{_sharedstatedir}`, p)}, " ")
+		fmt.Fprintln(b, dir)
 	}
 	return b
 }

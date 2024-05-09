@@ -57,6 +57,20 @@
 					},
 					"type": "object",
 					"description": "Manpages is the list of manpages to include in the package."
+				},
+				"configDirectories": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "ConfigDirectories is a list of directories the RPM should under %{_sysconfigdir}\t."
+				},
+				"sharedStateDirectories": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "SharedStateDirectories is a list of directories the RPM should under %{%_sharedstatedir}\t."
 				}
 			},
 			"additionalProperties": false,
