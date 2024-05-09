@@ -127,12 +127,25 @@ type Artifacts struct {
 	Binaries map[string]ArtifactConfig `yaml:"binaries,omitempty" json:"binaries,omitempty"`
 	// Manpages is the list of manpages to include in the package.
 	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
-	// ConfigDirectories is a list of directories the RPM should place under %{_sysconfigdir}	.
-	ConfigDirectories []string `yaml:"configDirectories,omitempty" json:"configDirectories,omitempty"`
-	// SharedStateDirectories is a list of directories the RPM should place under %{%_sharedstatedir}	.
-	SharedStateDirectories []string `yaml:"sharedStateDirectories,omitempty" json:"sharedStateDirectories,omitempty"`
+	// Directories is a list of various directories that should be created by the RPM.
+	Directories *CreateArtifactDirectories `yaml:"createDirectories,omitempty" json:"createDirectories,omitempty"`
 	// TODO: other types of artifacts (systtemd units, libexec, configs, etc)
+}
 
+// CreateArtifactDirectories describes various directories that should be created on install.
+// CreateArtifactDirectories represents different directory paths that are common to RPM systems.
+type CreateArtifactDirectories struct {
+	// Config is a list of directories the RPM should place under %{_sysconfigdir} (i.e. /etc)
+	Config map[string]ArtifactDirConfig
+	// State is a list of directories the RPM should place under %{%_sharedstatedir} (i.e. /var/lib).
+	State map[string]ArtifactDirConfig
+}
+
+// ArtifactDirConfig contains information about the directory to be created
+type ArtifactDirConfig struct {
+	// Mode is used to set the file permission bits of the final created directory to the specified mode.
+	// Mode is the octal permissions to set on the dir.
+	Mode fs.FileMode `yaml:"mode,omitempty" json:"mode,omitempty"`
 }
 
 // ArtifactConfig is the configuration for a given artifact type.

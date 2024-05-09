@@ -326,16 +326,28 @@ func (w *specWrapper) Install() fmt.Stringer {
 		copyArtifact(`%{buildroot}/%{_mandir}`, p, cfg)
 	}
 
-	sort.Strings(w.Spec.Artifacts.ConfigDirectories)
-	for _, p := range w.Spec.Artifacts.ConfigDirectories {
-		dir := filepath.Join(`%{buildroot}/%{_sysconfdir}`, p)
-		fmt.Fprintln(b, "mkdir -p", dir)
+	createArtifactDir := func(root, p string, cfg dalec.ArtifactDirConfig) {
+		dir := filepath.Join(root, p)
+		mkdirCmd := "mkdir"
+		perms := cfg.Mode.Perm()
+		if perms != 0 {
+			mkdirCmd += fmt.Sprintf(" -m %o", cfg.Mode)
+		}
+		fmt.Fprintf(b, "%s -p %q\n", mkdirCmd, dir)
 	}
 
-	sort.Strings(w.Spec.Artifacts.SharedStateDirectories)
-	for _, p := range w.Spec.Artifacts.SharedStateDirectories {
-		dir := filepath.Join(`%{buildroot}/%{_sharedstatedir}`, p)
-		fmt.Fprintln(b, "mkdir -p", dir)
+	if w.Spec.Artifacts.Directories != nil {
+		configKeys := dalec.SortMapKeys(w.Spec.Artifacts.Directories.Config)
+		for _, p := range configKeys {
+			cfg := w.Spec.Artifacts.Directories.Config[p]
+			createArtifactDir(`%{buildroot}/%{_sysconfdir}`, p, cfg)
+		}
+
+		stateKeys := dalec.SortMapKeys(w.Spec.Artifacts.Directories.State)
+		for _, p := range stateKeys {
+			cfg := w.Spec.Artifacts.Directories.State[p]
+			createArtifactDir(`%{buildroot}/%{_sharedstatedir}`, p, cfg)
+		}
 	}
 	return b
 }
@@ -359,17 +371,20 @@ func (w *specWrapper) Files() fmt.Stringer {
 		fmt.Fprintln(b, `%{_mandir}/*/*`)
 	}
 
-	sort.Strings(w.Spec.Artifacts.ConfigDirectories)
-	for _, p := range w.Spec.Artifacts.ConfigDirectories {
-		dir := strings.Join([]string{`%dir`, filepath.Join(`%{_sysconfdir}`, p)}, " ")
-		fmt.Fprintln(b, dir)
+	if w.Spec.Artifacts.Directories != nil {
+		configKeys := dalec.SortMapKeys(w.Spec.Artifacts.Directories.Config)
+		for _, p := range configKeys {
+			dir := strings.Join([]string{`%dir`, filepath.Join(`%{_sysconfdir}`, p)}, " ")
+			fmt.Fprintln(b, dir)
+		}
+
+		stateKeys := dalec.SortMapKeys(w.Spec.Artifacts.Directories.State)
+		for _, p := range stateKeys {
+			dir := strings.Join([]string{`%dir`, filepath.Join(`%{_sharedstatedir}`, p)}, " ")
+			fmt.Fprintln(b, dir)
+		}
 	}
 
-	sort.Strings(w.Spec.Artifacts.SharedStateDirectories)
-	for _, p := range w.Spec.Artifacts.SharedStateDirectories {
-		dir := strings.Join([]string{`%dir`, filepath.Join(`%{_sharedstatedir}`, p)}, " ")
-		fmt.Fprintln(b, dir)
-	}
 	return b
 }
 

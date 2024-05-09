@@ -42,6 +42,17 @@
 			"type": "object",
 			"description": "ArtifactConfig is the configuration for a given artifact type."
 		},
+		"ArtifactDirConfig": {
+			"properties": {
+				"mode": {
+					"type": "integer",
+					"description": "Mode is used to set the file permission bits of the final created directory to the specified mode.\nMode is the octal permissions to set on the dir."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "ArtifactDirConfig contains information about the directory to be created"
+		},
 		"Artifacts": {
 			"properties": {
 				"binaries": {
@@ -58,19 +69,9 @@
 					"type": "object",
 					"description": "Manpages is the list of manpages to include in the package."
 				},
-				"configDirectories": {
-					"items": {
-						"type": "string"
-					},
-					"type": "array",
-					"description": "ConfigDirectories is a list of directories the RPM should place under %{_sysconfigdir}\t."
-				},
-				"sharedStateDirectories": {
-					"items": {
-						"type": "string"
-					},
-					"type": "array",
-					"description": "SharedStateDirectories is a list of directories the RPM should place under %{%_sharedstatedir}\t."
+				"createDirectories": {
+					"$ref": "#/$defs/CreateArtifactDirectories",
+					"description": "Directories is a list of various directories that should be created by the RPM."
 				}
 			},
 			"additionalProperties": false,
@@ -237,6 +238,31 @@
 				"steps"
 			],
 			"description": "Command is used to execute a command to generate a source from a docker image."
+		},
+		"CreateArtifactDirectories": {
+			"properties": {
+				"Config": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactDirConfig"
+					},
+					"type": "object",
+					"description": "Config is a list of directories the RPM should place under %{_sysconfigdir} (i.e. /etc)"
+				},
+				"State": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactDirConfig"
+					},
+					"type": "object",
+					"description": "State is a list of directories the RPM should place under %{%_sharedstatedir} (i.e. /var/lib)."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"Config",
+				"State"
+			],
+			"description": "CreateArtifactDirectories describes various directories that should be created on install."
 		},
 		"FileCheckOutput": {
 			"properties": {
