@@ -349,6 +349,12 @@ func (w *specWrapper) Install() fmt.Stringer {
 			createArtifactDir(`%{buildroot}/%{_sharedstatedir}`, p, cfg)
 		}
 	}
+
+	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
+	for _, c := range configKeys {
+		cfg := w.Spec.Artifacts.ConfigFiles[c]
+		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, cfg.ArtifactConfig)
+	}
 	return b
 }
 
@@ -383,6 +389,18 @@ func (w *specWrapper) Files() fmt.Stringer {
 			dir := strings.Join([]string{`%dir`, filepath.Join(`%{_sharedstatedir}`, p)}, " ")
 			fmt.Fprintln(b, dir)
 		}
+	}
+
+	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
+	for _, c := range configKeys {
+		cfg := w.Spec.Artifacts.ConfigFiles[c]
+		directive := `%config%`
+		if !cfg.ReplaceOnUpdate {
+			directive = `%config(noreplace)`
+		}
+		fullPath := filepath.Join(`%{_sysconfdir}`, cfg.SubPath, filepath.Base(c))
+		fullDirective := strings.Join([]string{directive, fullPath}, " ")
+		fmt.Fprintln(b, fullDirective)
 	}
 
 	return b

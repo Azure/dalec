@@ -129,7 +129,9 @@ type Artifacts struct {
 	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
 	// Directories is a list of various directories that should be created by the RPM.
 	Directories *CreateArtifactDirectories `yaml:"createDirectories,omitempty" json:"createDirectories,omitempty"`
-	// TODO: other types of artifacts (systtemd units, libexec, configs, etc)
+	// ConfigFiles is a list of files that should be marked as config files in the RPM.
+	ConfigFiles map[string]ArtifactConfigFileConfig `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
+	// TODO: other types of artifacts (systtemd units, libexec, etc)
 }
 
 // CreateArtifactDirectories describes various directories that should be created on install.
@@ -161,12 +163,25 @@ type ArtifactConfig struct {
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 }
 
+// ArtifactConfigFileConfig is the configuration give for Artifact Config Files.
+// This is used to customize the settings for a config entry in the resulting artifact.
+type ArtifactConfigFileConfig struct {
+	ArtifactConfig
+	ReplaceOnUpdate bool `yaml:"replace,omitempty" json:"replace,omitempty"`
+}
+
 // IsEmpty is used to determine if there are any artifacts to include in the package.
 func (a *Artifacts) IsEmpty() bool {
 	if len(a.Binaries) > 0 {
 		return false
 	}
 	if len(a.Manpages) > 0 {
+		return false
+	}
+	if a.Directories != nil && (len(a.Directories.Config) > 0 || len(a.Directories.State) > 0) {
+		return false
+	}
+	if len(a.ConfigFiles) > 0 {
 		return false
 	}
 	return true

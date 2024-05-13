@@ -392,7 +392,7 @@ echo "$BAR" > bar.txt
 	t.Run("test directory creation", func(t *testing.T) {
 		t.Parallel()
 		spec := &dalec.Spec{
-			Name:        "test-no-internet-access",
+			Name:        "test-directory-creation",
 			Version:     "v0.0.1",
 			Revision:    "1",
 			License:     "MIT",
@@ -452,6 +452,72 @@ echo "$BAR" > bar.txt
 			}
 			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755); err != nil {
 				return nil, err
+			}
+			return gwclient.NewResult(), nil
+		})
+	})
+
+	t.Run("test config files handled", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "test-config-files-work",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Should Create Specified Directories",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: map[string][]string{"curl": {}},
+			},
+			Sources: map[string]dalec.Source{
+				"src1": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"src2": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=goodbye",
+							Permissions: 0o700,
+						},
+					},
+				},
+			},
+			Build: dalec.ArtifactBuild{},
+			Artifacts: dalec.Artifacts{
+				ConfigFiles: map[string]dalec.ArtifactConfigFileConfig{
+					"src1": {},
+					"src2": {
+						ArtifactConfig: dalec.ArtifactConfig{
+							SubPath: "sysconfig",
+						},
+						ReplaceOnUpdate: false,
+					},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Config Files Should Be Created in correct place",
+					Files: map[string]dalec.FileCheckOutput{
+						"/etc/src1":           {},
+						"/etc/sysconfig/src2": {},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			_, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build package with config files %w", err)
 			}
 			return gwclient.NewResult(), nil
 		})
