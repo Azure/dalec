@@ -58,13 +58,15 @@ To print a list of available build targets:
 
 ```console
 $ BUILDX_EXPERIMENTAL=1 docker build --print=targets -f test/fixtures/moby-runc.yml .
+debug/gomods                 Outputs all the gomodule dependencies for the spec
 debug/resolve                Outputs the resolved dalec spec file with build args applied.
-mariner2                     Alias for target mariner2/container
-mariner2/container (default) Builds a container with the RPM installed.
+debug/sources                Outputs all sources from a dalec spec file.
+mariner2/container (default) Builds a container image for mariner2.
+mariner2/container/depsonly  Builds a container image with only the runtime dependencies installed.
 mariner2/rpm                 Builds an rpm and src.rpm for mariner2.
-mariner2/rpm/buildroot       Outputs an rpm buildroot suitable for passing to rpmbuild.
-mariner2/rpm/sources         Outputs all the sources specified in the spec file.
-mariner2/rpm/spec            Outputs the generated RPM spec file
+mariner2/rpm/debug/buildroot Outputs an rpm buildroot suitable for passing to rpmbuild.
+mariner2/rpm/debug/sources   Outputs all the sources specified in the spec file in the format given to rpmbuild.
+mariner2/rpm/debug/spec      Outputs the generated RPM spec file
 ```
 
 
