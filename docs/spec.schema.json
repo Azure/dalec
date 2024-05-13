@@ -246,14 +246,14 @@
 						"$ref": "#/$defs/ArtifactDirConfig"
 					},
 					"type": "object",
-					"description": "Config is a list of directories the RPM should place under %{_sysconfigdir} (i.e. /etc)"
+					"description": "Config is a list of directories the RPM should place under the system config directory (i.e. /etc)"
 				},
 				"State": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactDirConfig"
 					},
 					"type": "object",
-					"description": "State is a list of directories the RPM should place under %{%_sharedstatedir} (i.e. /var/lib)."
+					"description": "State is a list of directories the RPM should place under the common directory for shared state and libs (i.e. /var/lib)."
 				}
 			},
 			"additionalProperties": false,

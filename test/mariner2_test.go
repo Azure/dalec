@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -332,7 +333,6 @@ echo "$BAR" > bar.txt
 
 		runTest(t, distroSigningTest(t, &spec, signTarget))
 	})
-
 	t.Run("go module", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
@@ -388,4 +388,86 @@ echo "$BAR" > bar.txt
 			return client.Solve(ctx, req)
 		})
 	})
+
+	t.Run("test directory creation", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "test-no-internet-access",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Should Create Specified Directories",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: map[string][]string{"curl": {}},
+			},
+			Sources: map[string]dalec.Source{
+				"src1": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o700,
+						},
+					},
+				},
+			},
+			Build: dalec.ArtifactBuild{},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src1": {},
+				},
+				Directories: &dalec.CreateArtifactDirectories{
+					Config: map[string]dalec.ArtifactDirConfig{
+						"test": {},
+						"testWithPerms": {
+							Mode: 0o700,
+						},
+					},
+					State: map[string]dalec.ArtifactDirConfig{
+						"one/with/slashes": {},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			res, err := client.Solve(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
+
+			if err := validatePathAndPermissions(ctx, ref, "/etc/test", 0o755); err != nil {
+				return nil, err
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithPerms", 0o700); err != nil {
+				return nil, err
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755); err != nil {
+				return nil, err
+			}
+			return gwclient.NewResult(), nil
+		})
+	})
+}
+
+func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expected os.FileMode) error {
+	stat, err := ref.StatFile(ctx, gwclient.StatRequest{Path: path})
+	if err != nil {
+		return err
+	}
+
+	got := os.FileMode(stat.Mode).Perm()
+
+	if expected != got {
+		return fmt.Errorf("expected permissions %v to equal expected %v", got, expected)
+	}
+	return nil
 }
