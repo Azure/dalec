@@ -4,24 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/cpuguy83/dockercfg"
-	"github.com/cpuguy83/go-docker"
-	"github.com/cpuguy83/go-docker/buildkitopt"
-	"github.com/cpuguy83/go-docker/container"
-	"github.com/cpuguy83/go-docker/transport"
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
@@ -33,9 +26,6 @@ type BuildxEnv struct {
 
 	mu     sync.Mutex
 	client *client.Client
-
-	ctr    *container.Container
-	docker *docker.Client
 
 	supportedOnce sync.Once
 	supportedErr  error
@@ -104,18 +94,9 @@ func (b *BuildxEnv) supportsDialStdio(ctx context.Context) (bool, error) {
 	return minor >= 13, nil
 }
 
-var errDialStdioNotSupportedErr = errors.New("buildx dial-stdio not supported")
+var errDialStdioNotSupported = errors.New("buildx dial-stdio not supported")
 
-func (b *BuildxEnv) dialStdio(ctx context.Context) (bool, error) {
-	ok, err := b.supportsDialStdio(ctx)
-	if err != nil {
-		return false, fmt.Errorf("%w: %w", errDialStdioNotSupportedErr, err)
-	}
-
-	if !ok {
-		return false, nil
-	}
-
+func (b *BuildxEnv) dialStdio(ctx context.Context) error {
 	c, err := client.New(ctx, "", client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 		args := []string{"buildx", "dial-stdio", "--progress=plain"}
 		if b.builder != "" {
@@ -171,15 +152,14 @@ func (b *BuildxEnv) dialStdio(ctx context.Context) (bool, error) {
 	}))
 
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	b.client = c
-	return true, nil
+	return nil
 }
 
 // bootstrap is ultimately responsible for creating a buildkit client.
-// It looks like the buildx config on the client (typically in $HOME/.docker/buildx) to determine how to connect to the configured buildkit.
 func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 	if b.client != nil {
 		return nil
@@ -208,141 +188,16 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 		}
 	}()
 
-	ok, err := b.dialStdio(ctx)
-	if err != nil && !errors.Is(err, errDialStdioNotSupportedErr) {
-		return err
-	}
-
-	if ok {
-		return nil
-	}
-
-	// Fallback for older versions of buildx
-	p, err := dockercfg.ConfigPath()
+	ok, err := b.supportsDialStdio(ctx)
 	if err != nil {
-		return pkgerrors.WithStack(err)
+		return fmt.Errorf("%w: %w", errDialStdioNotSupported, err)
 	}
 
-	if out, err := exec.Command("docker", "buildx", "inspect", "--bootstrap", b.builder).CombinedOutput(); err != nil {
-		return pkgerrors.Wrapf(err, "failed to bootstrap builder: %s", out)
+	if !ok {
+		return errDialStdioNotSupported
 	}
 
-	configBase := filepath.Join(filepath.Dir(p), "buildx")
-
-	// builder is empty, so we need to check what the currently configured buildx builder is.
-	// This is stored int he buildx config in (typically) $HOME/.docker/buildx (the `dockercfg` lib determines where this actually is).
-	if b.builder == "" {
-		dt, err := os.ReadFile(filepath.Join(configBase, "current"))
-		if err != nil {
-			return pkgerrors.Wrap(err, "failed to read current builder")
-		}
-
-		type ref struct {
-			Name string
-			Key  string
-		}
-		var r ref
-		if err := json.Unmarshal(dt, &r); err != nil {
-			return err
-		}
-
-		if r.Name == "" {
-			// This is the "default" buildx instance, aka dockerd's built-in buildkit.
-			var tr transport.Doer
-			if r.Key != "" {
-				tr, err = transport.FromConnectionString(r.Key)
-				if err != nil {
-					return pkgerrors.Wrap(err, r.Key)
-				}
-			} else {
-				tr, err = transport.DefaultTransport()
-				if err != nil {
-					return pkgerrors.WithStack(err)
-				}
-			}
-
-			b.client, err = client.New(ctx, "", buildkitopt.FromDocker(tr)...)
-			return err
-		}
-
-		b.builder = r.Name
-	}
-
-	dt, err := os.ReadFile(filepath.Join(configBase, "instances", b.builder))
-	if err != nil {
-		return pkgerrors.Wrap(err, "failed to read buildx instance config")
-	}
-
-	var cfg buildxConfig
-	if err := json.Unmarshal(dt, &cfg); err != nil {
-		return pkgerrors.Wrap(err, "failed to unmarshal buildx config")
-	}
-
-	if cfg.Driver != "docker-container" {
-		return pkgerrors.Errorf("unsupported buildx driver: %s", cfg.Driver)
-	}
-
-	if len(cfg.Nodes) == 0 {
-		return pkgerrors.Errorf("no buildx nodes configured")
-	}
-
-	// On a typical client this would be a single node, but there could be multiple registered with he same builder name.
-	// We'll just try them all until we find one that works.
-	var errs []error
-	for _, n := range cfg.Nodes {
-		tr, err := transport.FromConnectionString(n.Endpoint)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", n.Endpoint, err))
-			continue
-		}
-
-		dc := docker.NewClient(docker.WithTransport(tr))
-		ctr := dc.ContainerService().NewContainer(ctx, "buildx_buildkit_"+n.Name)
-
-		conn1, conn2 := net.Pipe()
-		ep, err := ctr.Exec(ctx, container.WithExecCmd("buildctl", "dial-stdio"), func(cfg *container.ExecConfig) {
-			cfg.Stdin = conn1
-			cfg.Stdout = conn1
-			cfg.Stderr = conn1
-		})
-		if err != nil {
-			conn1.Close()
-			conn2.Close()
-			errs = append(errs, fmt.Errorf("%s: %w", n.Endpoint, err))
-			continue
-		}
-
-		if err := ep.Start(ctx); err != nil {
-			conn1.Close()
-			conn2.Close()
-			errs = append(errs, fmt.Errorf("%s: %w", n.Endpoint, err))
-			continue
-		}
-
-		c, err := client.New(ctx, "", client.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-			return conn2, nil
-		}))
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", n.Endpoint, err))
-			continue
-		}
-
-		b.client = c
-		b.ctr = ctr
-		b.docker = dc
-		return nil
-	}
-
-	// Could not create a buildkit client, return all errors.
-	return errors.Join(errs...)
-}
-
-type buildxConfig struct {
-	Driver string
-	Nodes  []struct {
-		Name     string
-		Endpoint string
-	}
+	return b.dialStdio(ctx)
 }
 
 func (b *BuildxEnv) Buildkit(ctx context.Context) (*client.Client, error) {
