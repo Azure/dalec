@@ -1,14 +1,19 @@
 package testenv
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -18,10 +23,9 @@ import (
 	"github.com/cpuguy83/go-docker/container"
 	"github.com/cpuguy83/go-docker/transport"
 	"github.com/moby/buildkit/client"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	pkgerrors "github.com/pkg/errors"
-
-	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
 type BuildxEnv struct {
@@ -57,6 +61,123 @@ func (b *BuildxEnv) Load(ctx context.Context, id string, f gwclient.BuildFunc) e
 	return nil
 }
 
+func (b *BuildxEnv) version(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "buildx", "version")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", pkgerrors.Wrap(err, string(out))
+	}
+
+	fields := strings.Fields(string(out))
+
+	if len(fields) != 3 {
+		return "", errors.New("could not determine buildx version")
+	}
+
+	ver, _, _ := strings.Cut(strings.TrimPrefix(fields[1], "v"), "-")
+	if strings.Count(ver, ".") < 2 {
+		return "", fmt.Errorf("unexpected version format: %s", ver)
+	}
+	return ver, nil
+}
+
+func (b *BuildxEnv) supportsDialStdio(ctx context.Context) (bool, error) {
+	ver, err := b.version(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	majorStr, other, _ := strings.Cut(ver, ".")
+	major, err := strconv.Atoi(majorStr)
+	if err != nil {
+		return false, pkgerrors.Wrapf(err, "could not parse major version number: %s", ver)
+	}
+	if major > 0 {
+		return true, nil
+	}
+
+	minorStr, _, _ := strings.Cut(other, ".")
+	minor, err := strconv.Atoi(minorStr)
+	if err != nil {
+		return false, pkgerrors.Wrapf(err, "could not parse major version number: %s", ver)
+	}
+	return minor >= 13, nil
+}
+
+var errDialStdioNotSupportedErr = errors.New("buildx dial-stdio not supported")
+
+func (b *BuildxEnv) dialStdio(ctx context.Context) (bool, error) {
+	ok, err := b.supportsDialStdio(ctx)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", errDialStdioNotSupportedErr, err)
+	}
+
+	if !ok {
+		return false, nil
+	}
+
+	c, err := client.New(ctx, "", client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+		args := []string{"buildx", "dial-stdio", "--progress=plain"}
+		if b.builder != "" {
+			args = append(args, "--builder="+b.builder)
+		}
+
+		cmd := exec.CommandContext(ctx, "docker", args...)
+		cmd.Env = os.Environ()
+
+		c1, c2 := net.Pipe()
+		cmd.Stdin = c1
+		cmd.Stdout = c1
+
+		// Use a pipe to check when the connection is actually complete
+		// Also write all of stderr to an error buffer so we can have more details
+		// in the error message when the command fails.
+		r, w := io.Pipe()
+		errBuf := bytes.NewBuffer(nil)
+		ww := io.MultiWriter(w, errBuf)
+		cmd.Stderr = ww
+
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+
+		go func() {
+			err := cmd.Wait()
+			c1.Close()
+			// pkgerrors.Wrap will return nil if err is nil, otherwise it will give
+			// us a wrapped error with the buffered stderr fromt he command.
+			w.CloseWithError(pkgerrors.Wrapf(err, "%s", errBuf))
+		}()
+
+		defer r.Close()
+
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			txt := strings.ToLower(scanner.Text())
+
+			if strings.HasPrefix(txt, "#1 dialing builder") && strings.HasSuffix(txt, "done") {
+				go func() {
+					// Continue draining stderr so the process does not get blocked
+					_, _ = io.Copy(io.Discard, r)
+				}()
+				break
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, err
+		}
+
+		return c2, nil
+	}))
+
+	if err != nil {
+		return false, err
+	}
+
+	b.client = c
+	return true, nil
+}
+
 // bootstrap is ultimately responsible for creating a buildkit client.
 // It looks like the buildx config on the client (typically in $HOME/.docker/buildx) to determine how to connect to the configured buildkit.
 func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
@@ -72,7 +193,7 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 		b.supportedOnce.Do(func() {
 			info, err := b.client.Info(ctx)
 			if err != nil {
-				b.supportedErr = err
+				b.supportedErr = pkgerrors.WithStack(err)
 				return
 			}
 
@@ -87,9 +208,19 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 		}
 	}()
 
+	ok, err := b.dialStdio(ctx)
+	if err != nil && !errors.Is(err, errDialStdioNotSupportedErr) {
+		return err
+	}
+
+	if ok {
+		return nil
+	}
+
+	// Fallback for older versions of buildx
 	p, err := dockercfg.ConfigPath()
 	if err != nil {
-		return err
+		return pkgerrors.WithStack(err)
 	}
 
 	if out, err := exec.Command("docker", "buildx", "inspect", "--bootstrap", b.builder).CombinedOutput(); err != nil {
@@ -121,12 +252,12 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 			if r.Key != "" {
 				tr, err = transport.FromConnectionString(r.Key)
 				if err != nil {
-					return err
+					return pkgerrors.Wrap(err, r.Key)
 				}
 			} else {
 				tr, err = transport.DefaultTransport()
 				if err != nil {
-					return err
+					return pkgerrors.WithStack(err)
 				}
 			}
 
@@ -252,7 +383,7 @@ func withResolveLocal(so *client.SolveOpt) {
 func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildFunc) {
 	c, err := b.Buildkit(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%+v", err)
 	}
 
 	ch, done := displaySolveStatus(ctx, t)
