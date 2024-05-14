@@ -21,6 +21,18 @@ func TestWindows(t *testing.T) {
 }
 
 func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
+	// Windows is only supported on amd64 (ie there is no arm64 windows image currently)
+	// This allows the test to run on arm64 machines.
+	// I looked at having a good way to skip the test on non-amd64 and it all ends up
+	// being a bit janky and error prone.
+	// I'd rather just let the test run since it will work when we set an explicit platform
+	withAmd64Platform := func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
+		sr.FrontendOpt["platform"] = "windows/amd64"
+	}
+
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -42,7 +54,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -74,7 +86,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
 			sr.Evaluate = true
 
 			_, err := gwc.Solve(ctx, sr)
@@ -209,7 +221,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
 			sr.Evaluate = true
 			res, err := gwc.Solve(ctx, sr)
 			if err != nil {
@@ -301,7 +313,7 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
+			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"), withAmd64Platform)
 			zipper := reqToState(ctx, gwc, sr, t)
 
 			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"))
@@ -388,7 +400,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec), withAmd64Platform)
 			return client.Solve(ctx, req)
 		})
 	})

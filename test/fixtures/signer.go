@@ -23,7 +23,8 @@ func PhonySigner(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, er
 		return nil, err
 	}
 
-	st := llb.Image("golang:1.21", llb.WithMetaResolver(gwc)).
+	p := llb.Platform(dc.BuildPlatforms[0])
+	st := llb.Image("golang:1.21", llb.WithMetaResolver(gwc), p).
 		Run(
 			llb.Args([]string{"go", "build", "-o=/build/out", "./test/fixtures/signer"}),
 			llb.AddEnv("CGO_ENABLED", "0"),

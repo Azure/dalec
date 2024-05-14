@@ -148,7 +148,7 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts, ta
 
 	sources, err := specToSourcesLLB(worker, spec, sOpt)
 	if err != nil {
-		return llb.Scratch(), err
+		return llb.Scratch(), errors.Wrap(err, "could not generate sources")
 	}
 
 	patched := dalec.PatchSources(worker, spec, sources)

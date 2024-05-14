@@ -20,7 +20,11 @@ const (
 
 var (
 	defaultPlatform = ocispecs.Platform{
-		OS:           outputKey,
+		OS: outputKey,
+		// NOTE: Windows is (currently) only supported on amd64.
+		// Making this use runtime.GOARCH so that builds are more explicitly and not suprising.
+		// If/when Windows is supported on another platform (ie arm64) this will work as expected.
+		// Until then, if someone really wants to build an amd64 image from arm64 they'll need to set the platform explicitly in the build request.
 		Architecture: runtime.GOARCH,
 	}
 )
