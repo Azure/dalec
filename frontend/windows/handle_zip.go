@@ -34,18 +34,9 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
 		worker := workerImg(sOpt, pg)
 
-		bin, err := buildBinaries(spec, worker, sOpt, targetKey)
+		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
-		}
-
-		if signer, ok := spec.GetSigner(targetKey); ok {
-			signed, err := frontend.ForwardToSigner(ctx, client, platform, signer, bin)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			bin = signed
 		}
 
 		st := getZipLLB(worker, spec.Name, bin)
@@ -143,7 +134,7 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 	return dalec.WithRunOptions(ordered...)
 }
 
-func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
+func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
 	worker = worker.With(installBuildDeps(spec.GetBuildDeps(targetKey)))
 
 	sources, err := specToSourcesLLB(worker, spec, sOpt)
@@ -156,7 +147,7 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts, ta
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
 
-	artifacts := worker.Run(
+	st := worker.Run(
 		shArgs(script.String()),
 		llb.Dir("/build"),
 		withSourcesMounted("/build", patched, spec.Sources),
@@ -164,7 +155,16 @@ func buildBinaries(spec *dalec.Spec, worker llb.State, sOpt dalec.SourceOpts, ta
 		llb.Network(llb.NetModeNone),
 	).AddMount(outputDir, llb.Scratch())
 
-	return artifacts, nil
+	if signer, ok := spec.GetSigner(targetKey); ok {
+		signed, err := frontend.ForwardToSigner(ctx, client, signer, st)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		st = signed
+	}
+
+	return st, nil
 }
 
 func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {

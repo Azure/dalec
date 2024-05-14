@@ -11,7 +11,6 @@ import (
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -119,7 +118,7 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
-func ForwardToSigner(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, cfg *dalec.Frontend, s llb.State) (llb.State, error) {
+func ForwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.Frontend, s llb.State) (llb.State, error) {
 	const (
 		sourceKey  = "source"
 		contextKey = "context"

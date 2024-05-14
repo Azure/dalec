@@ -26,17 +26,9 @@ func handleRPM(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := specToRpmLLB(w, client, spec, sOpt, targetKey, pg)
+			st, err := specToRpmLLB(ctx, w, client, spec, sOpt, targetKey, pg)
 			if err != nil {
 				return nil, nil, err
-			}
-
-			if signer, ok := spec.GetSigner(targetKey); ok {
-				signed, err := frontend.ForwardToSigner(ctx, client, platform, signer, st)
-				if err != nil {
-					return nil, nil, err
-				}
-				st = signed
 			}
 
 			def, err := st.Marshal(ctx, pg)
@@ -76,12 +68,22 @@ func installBuildDeps(w worker, spec *dalec.Spec, targetKey string, opts ...llb.
 	}
 }
 
-func specToRpmLLB(w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	base := w.Base(client, opts...).With(installBuildDeps(w, spec, targetKey, opts...))
 	br, err := rpm.SpecToBuildrootLLB(base, spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
-	return rpm.Build(br, base, specPath, opts...), nil
+	st := rpm.Build(br, base, specPath, opts...)
+
+	if signer, ok := spec.GetSigner(targetKey); ok {
+		signed, err := frontend.ForwardToSigner(ctx, client, signer, st)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+		st = signed
+	}
+
+	return st, nil
 }
