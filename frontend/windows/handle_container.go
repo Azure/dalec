@@ -52,18 +52,9 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
 		worker := workerImg(sOpt, pg)
 
-		bin, err := buildBinaries(spec, worker, sOpt, targetKey)
+		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to build binary %w", err)
-		}
-
-		if signer, ok := spec.GetSigner(targetKey); ok {
-			signed, err := frontend.ForwardToSigner(ctx, client, platform, signer, bin)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			bin = signed
 		}
 
 		baseImgName := getBaseOutputImage(spec, targetKey, defaultBaseImage)
