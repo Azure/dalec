@@ -42,24 +42,6 @@
 			"type": "object",
 			"description": "ArtifactConfig is the configuration for a given artifact type."
 		},
-		"ArtifactConfigFileConfig": {
-			"properties": {
-				"subpath": {
-					"type": "string",
-					"description": "Subpath is the subpath to use in the package for the artifact type.\n\nAs an example, binaries are typically placed in /usr/bin when installed.\nIf you want to nest them in a subdirectory, you can specify it here."
-				},
-				"name": {
-					"type": "string",
-					"description": "Name is file or dir name to use for the artifact in the package.\nIf empty, the file or dir name from the produced artifact will be used."
-				},
-				"replace": {
-					"type": "boolean"
-				}
-			},
-			"additionalProperties": false,
-			"type": "object",
-			"description": "ArtifactConfigFileConfig is the configuration give for Artifact Config Files."
-		},
 		"ArtifactDirConfig": {
 			"properties": {
 				"mode": {
@@ -89,14 +71,14 @@
 				},
 				"createDirectories": {
 					"$ref": "#/$defs/CreateArtifactDirectories",
-					"description": "Directories is a list of various directories that should be created by the RPM."
+					"description": "Directories is a list of various directories that should be created by the package."
 				},
 				"configFiles": {
 					"additionalProperties": {
-						"$ref": "#/$defs/ArtifactConfigFileConfig"
+						"$ref": "#/$defs/ArtifactConfig"
 					},
 					"type": "object",
-					"description": "ConfigFiles is a list of files that should be marked as config files in the RPM."
+					"description": "ConfigFiles is a list of files that should be marked as config files in the package."
 				}
 			},
 			"additionalProperties": false,

@@ -491,13 +491,10 @@ echo "$BAR" > bar.txt
 			},
 			Build: dalec.ArtifactBuild{},
 			Artifacts: dalec.Artifacts{
-				ConfigFiles: map[string]dalec.ArtifactConfigFileConfig{
+				ConfigFiles: map[string]dalec.ArtifactConfig{
 					"src1": {},
 					"src2": {
-						ArtifactConfig: dalec.ArtifactConfig{
-							SubPath: "sysconfig",
-						},
-						ReplaceOnUpdate: false,
+						SubPath: "sysconfig",
 					},
 				},
 			},

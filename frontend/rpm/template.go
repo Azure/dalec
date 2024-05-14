@@ -353,7 +353,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
-		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, cfg.ArtifactConfig)
+		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, cfg)
 	}
 	return b
 }
@@ -394,12 +394,8 @@ func (w *specWrapper) Files() fmt.Stringer {
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
-		directive := `%config%`
-		if !cfg.ReplaceOnUpdate {
-			directive = `%config(noreplace)`
-		}
 		fullPath := filepath.Join(`%{_sysconfdir}`, cfg.SubPath, filepath.Base(c))
-		fullDirective := strings.Join([]string{directive, fullPath}, " ")
+		fullDirective := strings.Join([]string{`%config(noreplace)`, fullPath}, " ")
 		fmt.Fprintln(b, fullDirective)
 	}
 
