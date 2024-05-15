@@ -79,6 +79,13 @@
 					},
 					"type": "object",
 					"description": "ConfigFiles is a list of files that should be marked as config files in the package."
+				},
+				"services": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ServiceConfig"
+					},
+					"type": "object",
+					"description": "TODO: other types of artifacts (systtemd units, libexec, etc)"
 				}
 			},
 			"additionalProperties": false,
@@ -491,6 +498,26 @@
 			"additionalProperties": false,
 			"type": "object",
 			"description": "PostInstall is the post install configuration for the image."
+		},
+		"ServiceConfig": {
+			"properties": {
+				"name": {
+					"type": "string"
+				},
+				"noRestart": {
+					"type": "boolean",
+					"description": "Some services don't support restarting, in which case this should be set to true"
+				},
+				"disable": {
+					"type": "boolean"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name"
+			],
+			"description": "ServiceConfig is the configuration for a service to include in the package."
 		},
 		"Source": {
 			"properties": {
