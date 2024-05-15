@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/Azure/dalec"
+	"github.com/moby/buildkit/util/bklog"
 )
 
 const gomodsName = "__gomods"
@@ -40,6 +41,9 @@ BuildArch: noarch
 {{ .PrepareSources }}
 {{ .BuildSteps }}
 {{ .Install }}
+{{ .Post }}
+{{ .PreUn }}
+{{ .PostUn }}
 {{ .Files }}
 {{ .Changelog }}
 `)))
@@ -103,6 +107,11 @@ func (w *specWrapper) Requires() fmt.Stringer {
 	for _, name := range buildKeys {
 		constraints := deps.Build[name]
 		writeDep(b, "BuildRequires", name, constraints)
+	}
+
+	if len(w.Artifacts.Services) > 0 {
+		// We take advantage of the systemd-rpm-macros package to simplify the service file installation
+		writeDep(b, "BuildRequires", "systemd-rpm-macros", nil)
 	}
 
 	if len(deps.Build) > 0 && len(deps.Runtime) > 0 {
@@ -288,6 +297,54 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	return b
 }
 
+func (w *specWrapper) PreUn() fmt.Stringer {
+	b := &strings.Builder{}
+	b.WriteString("%preun\n")
+
+	keys := dalec.SortMapKeys(w.Spec.Artifacts.Services)
+	for _, servicePath := range keys {
+		// must include '.service' suffix
+		serviceName := filepath.Base(servicePath)
+		fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
+	}
+
+	return b
+}
+
+func (w *specWrapper) Post() fmt.Stringer {
+	b := &strings.Builder{}
+	b.WriteString("%post\n")
+
+	keys := dalec.SortMapKeys(w.Spec.Artifacts.Services)
+	for _, servicePath := range keys {
+		// must include '.service' suffix
+		serviceName := filepath.Base(servicePath)
+		fmt.Fprintf(b, "%%systemd_post %s\n", serviceName)
+	}
+
+	return b
+}
+
+func (w *specWrapper) PostUn() fmt.Stringer {
+	b := &strings.Builder{}
+	b.WriteString("%postun\n")
+	keys := dalec.SortMapKeys(w.Spec.Artifacts.Services)
+	for _, servicePath := range keys {
+		// must include '.service' suffix
+		cfg := w.Spec.Artifacts.Services[servicePath]
+		bklog.L.Infof("servicePath: %s, cfg: %v", servicePath, cfg)
+		serviceName := filepath.Base(servicePath)
+
+		if cfg.NoRestart {
+			fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
+		} else {
+			fmt.Fprintf(b, "%%systemd_postun_with_restart %s\n", serviceName)
+		}
+	}
+
+	return b
+}
+
 func (w *specWrapper) Install() fmt.Stringer {
 	b := &strings.Builder{}
 
@@ -355,6 +412,27 @@ func (w *specWrapper) Install() fmt.Stringer {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
 		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, cfg)
 	}
+	serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.Services)
+	for _, p := range serviceKeys {
+		cfg := w.Spec.Artifacts.Services[p]
+		// must include '.service' suffix in name
+		copyArtifact(`%{buildroot}/%{_unitdir}`, p, cfg.Artifact())
+
+		verb := "enable"
+		if cfg.Disable {
+			verb = "disable"
+		}
+
+		serviceName := filepath.Base(p)
+		if cfg.Name != "" {
+			serviceName = cfg.Name
+		}
+
+		presetName := strings.TrimSuffix(serviceName, ".service") + ".preset"
+		fmt.Fprintf(b, "echo '%s %s' >> %s\n", verb, serviceName, presetName)
+		copyArtifact(`%{buildroot}/%{_presetdir}`, presetName, dalec.ArtifactConfig{})
+	}
+
 	return b
 }
 
@@ -397,6 +475,16 @@ func (w *specWrapper) Files() fmt.Stringer {
 		fullPath := filepath.Join(`%{_sysconfdir}`, cfg.SubPath, filepath.Base(c))
 		fullDirective := strings.Join([]string{`%config(noreplace)`, fullPath}, " ")
 		fmt.Fprintln(b, fullDirective)
+	}
+
+	serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.Services)
+	for _, p := range serviceKeys {
+		serviceName := filepath.Base(p)
+		prefixName := strings.TrimSuffix(serviceName, ".service") + ".preset"
+		unitPath := filepath.Join(`%{_unitdir}/`, serviceName)
+		prefixPath := filepath.Join(`%{_presetdir}/`, prefixName)
+		fmt.Fprintln(b, unitPath)
+		fmt.Fprintln(b, prefixPath)
 	}
 
 	return b

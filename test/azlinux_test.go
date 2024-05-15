@@ -26,6 +26,15 @@ func TestAzlinux3(t *testing.T) {
 	testLinuxDistro(ctx, t, "azlinux3/container", "azlinux3/rpm")
 }
 
+func mustParse(t *testing.T, spec string) *dalec.Spec {
+	t.Helper()
+	s, err := dalec.LoadSpec([]byte(spec))
+	if err != nil {
+		t.Fatalf("failed to parse spec: %v", err)
+	}
+	return s
+}
+
 func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, signTarget string) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
@@ -340,6 +349,90 @@ echo "$BAR" > bar.txt
 
 		runTest(t, distroSigningTest(t, &spec, signTarget))
 	})
+
+	t.Run("systemd unit", func(t *testing.T) {
+		t.Parallel()
+		spec := mustParse(t, `
+name: dalec-test-systemd-unit
+description: "Test systemd unit"
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+license: Apache 2.0
+packager: Microsoft <support@microsoft.com>
+
+targets:
+  mariner2:
+    image:
+      base: mcr.microsoft.com/cbl-mariner/base/core:2.0
+
+dependencies:
+  build:
+    msft-golang:
+  runtime:
+    bash:
+    curl:
+    systemd:
+
+sources:
+  src:
+	dir:
+		files:
+			simple.service:
+				contents: |
+[Unit]
+Description=Phony Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/service
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+		
+
+
+build:
+    steps:
+        - command: |
+		    cd src/
+		    go build -o service main.go
+
+artifacts:
+  binaries:
+    src/service: {}
+
+  services:
+    src/simple.service:
+      # is the service enabled or disabled by default on boot
+      # this determines what goes in the sytemctl preset file
+      disable: true
+      noRestart: false
+
+`)
+
+		/*
+		   tests:
+		    - name: Check service files
+		      files:
+		         /usr/lib/systemd/system/simple.service:
+		           permissions: 0644
+		           contains:
+		           - "ExecStart=/usr/bin/service"
+		         /usr/lib/systemd/system-preset/simple.preset:
+		             permissions: 0644
+		           contains:
+		               - "enable simple.service"
+		*/
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			return client.Solve(ctx, req)
+		})
+	})
+
 	t.Run("go module", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
@@ -394,6 +487,7 @@ echo "$BAR" > bar.txt
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)
 		})
+
 	})
 
 	t.Run("test directory creation", func(t *testing.T) {

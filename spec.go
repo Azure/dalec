@@ -132,6 +132,7 @@ type Artifacts struct {
 	// ConfigFiles is a list of files that should be marked as config files in the package.
 	ConfigFiles map[string]ArtifactConfig `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
 	// TODO: other types of artifacts (systtemd units, libexec, etc)
+	Services map[string]ServiceConfig `yaml:"services,omitempty" json:"services,omitempty"`
 }
 
 // CreateArtifactDirectories describes various directories that should be created on install.
@@ -163,6 +164,23 @@ type ArtifactConfig struct {
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 }
 
+// ServiceConfig is the configuration for a service to include in the package.
+type ServiceConfig struct {
+	Name string `yaml:"name" json:"name" jsonschema:"omitempty"`
+
+	// Some services don't support restarting, in which case this should be set to true
+	NoRestart bool `yaml:"noRestart,omitempty" json:"noRestart,omitempty"`
+
+	Disable bool `yaml:"disable,omitempty" json:"disable,omitempty"`
+}
+
+func (s ServiceConfig) Artifact() ArtifactConfig {
+	return ArtifactConfig{
+		SubPath: "",
+		Name:    s.Name,
+	}
+}
+
 // IsEmpty is used to determine if there are any artifacts to include in the package.
 func (a *Artifacts) IsEmpty() bool {
 	if len(a.Binaries) > 0 {
@@ -177,6 +195,11 @@ func (a *Artifacts) IsEmpty() bool {
 	if len(a.ConfigFiles) > 0 {
 		return false
 	}
+
+	if len(a.Services) > 0 {
+		return false
+	}
+
 	return true
 }
 

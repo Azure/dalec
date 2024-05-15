@@ -1,0 +1,11 @@
+[Unit]
+Description=Phony Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/service
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
