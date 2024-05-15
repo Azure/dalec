@@ -350,37 +350,37 @@ echo "$BAR" > bar.txt
 		runTest(t, distroSigningTest(t, &spec, signTarget))
 	})
 
-	t.Run("systemd unit", func(t *testing.T) {
+	t.Run("test systemd unit", func(t *testing.T) {
 		t.Parallel()
-		spec := mustParse(t, `
-name: dalec-test-systemd-unit
-description: "Test systemd unit"
-website: https://www.github.com/Azure/dalec
-version: 0.0.1
-revision: 1
-vendor: Microsoft
-license: Apache 2.0
-packager: Microsoft <support@microsoft.com>
+		spec := &dalec.Spec{
+			Name:        "test-systemd-unit",
+			Description: "Test systemd unit",
+			Website:     "https://www.github.com/Azure/dalec",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Vendor:      "Microsoft",
+			License:     "Apache 2.0",
+			Packager:    "Microsoft <support@microsoft.com>",
+			Targets: map[string]dalec.Target{
+				"mariner2": {
+					Image: &dalec.ImageConfig{
+						Base: "mcr.microsoft.com/cbl-mariner/base/core:2.0",
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string][]string{
+					"msft-golang": {},
+				},
+			},
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
 
-targets:
-  mariner2:
-    image:
-      base: mcr.microsoft.com/cbl-mariner/base/core:2.0
-
-dependencies:
-  build:
-    msft-golang:
-  runtime:
-    bash:
-    curl:
-    systemd:
-
-sources:
-  src:
-	dir:
-		files:
-			simple.service:
-				contents: |
+							Files: map[string]*dalec.SourceInlineFile{
+								"simple.service": {
+									Contents: `,
 [Unit]
 Description=Phony Service
 After=network.target
@@ -392,27 +392,33 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-		
-
-
-build:
-    steps:
-        - command: |
-		    cd src/
-		    go build -o service main.go
-
-artifacts:
-  binaries:
-    src/service: {}
-
-  services:
-    src/simple.service:
-      # is the service enabled or disabled by default on boot
-      # this determines what goes in the sytemctl preset file
-      disable: true
-      noRestart: false
-
-`)
+`},
+							},
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Services: map[string]dalec.ServiceConfig{
+					"src/simple.service": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check service files",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/lib/systemd/system/simple.service": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
+							Permissions: 0644,
+						},
+						"/usr/lib/systemd/system-preset/simple.preset": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"enable simple.service"}},
+							Permissions: 0644,
+						},
+					},
+				},
+			},
+		}
 
 		/*
 		   tests:
@@ -427,6 +433,33 @@ artifacts:
 		           contains:
 		               - "enable simple.service"
 		*/
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			return client.Solve(ctx, req)
+		})
+
+		// Test to ensure disabling works
+		spec.Artifacts.Services["src/simple.service"] = dalec.ServiceConfig{
+			Disable: true,
+		}
+		spec.Tests = []*dalec.TestSpec{
+			{
+				Name: "Check service files",
+				Files: map[string]dalec.FileCheckOutput{
+					"/usr/lib/systemd/system/simple.service": {
+						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
+						Permissions: 0644,
+					},
+					"/usr/lib/systemd/system-preset/simple.preset": {
+						// This is the only change from the previous test, service should be
+						// disabled in preset
+						CheckOutput: dalec.CheckOutput{Contains: []string{"disable simple.service"}},
+						Permissions: 0644,
+					},
+				},
+			},
+		}
+
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)

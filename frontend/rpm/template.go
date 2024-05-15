@@ -11,7 +11,6 @@ import (
 	"text/template"
 
 	"github.com/Azure/dalec"
-	"github.com/moby/buildkit/util/bklog"
 )
 
 const gomodsName = "__gomods"
@@ -314,6 +313,7 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 func (w *specWrapper) Post() fmt.Stringer {
 	b := &strings.Builder{}
 	b.WriteString("%post\n")
+	// TODO: can inject other post install steps here in the future
 
 	keys := dalec.SortMapKeys(w.Spec.Artifacts.Services)
 	for _, servicePath := range keys {
@@ -332,7 +332,6 @@ func (w *specWrapper) PostUn() fmt.Stringer {
 	for _, servicePath := range keys {
 		// must include '.service' suffix
 		cfg := w.Spec.Artifacts.Services[servicePath]
-		bklog.L.Infof("servicePath: %s, cfg: %v", servicePath, cfg)
 		serviceName := filepath.Base(servicePath)
 
 		if cfg.NoRestart {
