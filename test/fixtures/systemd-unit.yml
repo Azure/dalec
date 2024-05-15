@@ -9,11 +9,6 @@ vendor: Microsoft
 license: Apache 2.0
 packager: Microsoft <support@microsoft.com>
 
-targets:
-  mariner2:
-    image:
-      base: mcr.microsoft.com/cbl-mariner/base/core:2.0
-
 dependencies:
   build:
     msft-golang:

@@ -11,7 +11,6 @@ license: Apache 2.0
 
 targets: # Distro specific build requirements
   mariner2:
-    base: mcr.microsoft.com/cbl-mariner/base/core:2.0
     dependencies:
 
 build:

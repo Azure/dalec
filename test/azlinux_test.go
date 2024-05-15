@@ -26,15 +26,6 @@ func TestAzlinux3(t *testing.T) {
 	testLinuxDistro(ctx, t, "azlinux3/container", "azlinux3/rpm")
 }
 
-func mustParse(t *testing.T, spec string) *dalec.Spec {
-	t.Helper()
-	s, err := dalec.LoadSpec([]byte(spec))
-	if err != nil {
-		t.Fatalf("failed to parse spec: %v", err)
-	}
-	return s
-}
-
 func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, signTarget string) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
@@ -361,18 +352,6 @@ echo "$BAR" > bar.txt
 			Vendor:      "Microsoft",
 			License:     "Apache 2.0",
 			Packager:    "Microsoft <support@microsoft.com>",
-			Targets: map[string]dalec.Target{
-				"azlinux3": {
-					Image: &dalec.ImageConfig{
-						Base: "azurelinuxpreview.azurecr.io/public/azurelinux/base/core:3.0",
-					},
-				},
-				"mariner2": {
-					Image: &dalec.ImageConfig{
-						Base: "mcr.microsoft.com/cbl-mariner/base/core:2.0",
-					},
-				},
-			},
 			Dependencies: &dalec.PackageDependencies{
 				Build: map[string][]string{
 					"msft-golang": {},
@@ -425,19 +404,6 @@ WantedBy=multi-user.target
 			},
 		}
 
-		/*
-		   tests:
-		    - name: Check service files
-		      files:
-		         /usr/lib/systemd/system/simple.service:
-		           permissions: 0644
-		           contains:
-		           - "ExecStart=/usr/bin/service"
-		         /usr/lib/systemd/system-preset/simple.preset:
-		             permissions: 0644
-		           contains:
-		               - "enable simple.service"
-		*/
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)
