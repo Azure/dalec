@@ -362,6 +362,11 @@ echo "$BAR" > bar.txt
 			License:     "Apache 2.0",
 			Packager:    "Microsoft <support@microsoft.com>",
 			Targets: map[string]dalec.Target{
+				"azlinux3": {
+					Image: &dalec.ImageConfig{
+						Base: "azurelinuxpreview.azurecr.io/public/azurelinux/base/core:3.0",
+					},
+				},
 				"mariner2": {
 					Image: &dalec.ImageConfig{
 						Base: "mcr.microsoft.com/cbl-mariner/base/core:2.0",
