@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"testing"
 	"time"
 
@@ -72,6 +73,10 @@ func TestMain(m *testing.M) {
 			// Cancel our signal handler so the normal handler takes over from here.
 			// This allows subsequent interupts to use the default behavior (exit the program)
 			done()
+
+			<-time.After(30 * time.Second)
+			fmt.Fprintln(os.Stderr, "Timeout waiting for builds to cancel after interupt")
+			os.Exit(int(syscall.SIGINT))
 		}()
 
 		defer func() {
