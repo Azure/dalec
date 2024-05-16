@@ -526,6 +526,63 @@ echo "$BAR" > bar.txt
 			return gwclient.NewResult(), nil
 		})
 	})
+
+	t.Run("docs are handled correctly", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "test-docs-handled",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Docs should be placed",
+			Sources: map[string]dalec.Source{
+				"src1": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"src2": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				DocFiles: []string{
+					"src1",
+					"src2",
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Doc files should be created in correct place",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/share/doc/test-docs-handled/src1": {},
+						"/usr/share/doc/test-docs-handled/src2": {},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			_, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build package with doc files as expected %w", err)
+			}
+			return gwclient.NewResult(), nil
+		})
+	})
 }
 
 func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expected os.FileMode) error {
