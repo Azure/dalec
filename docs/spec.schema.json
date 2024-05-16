@@ -79,6 +79,13 @@
 					},
 					"type": "object",
 					"description": "ConfigFiles is a list of files that should be marked as config files in the package."
+				},
+				"docFiles": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Docs is a list of doc files included in the package"
 				}
 			},
 			"additionalProperties": false,

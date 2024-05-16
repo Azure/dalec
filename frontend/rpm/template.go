@@ -355,6 +355,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
 		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, cfg)
 	}
+
 	return b
 }
 
@@ -396,6 +397,12 @@ func (w *specWrapper) Files() fmt.Stringer {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
 		fullPath := filepath.Join(`%{_sysconfdir}`, cfg.SubPath, filepath.Base(c))
 		fullDirective := strings.Join([]string{`%config(noreplace)`, fullPath}, " ")
+		fmt.Fprintln(b, fullDirective)
+	}
+
+	sort.Strings(w.Spec.Artifacts.DocFiles)
+	for _, d := range w.Spec.Artifacts.DocFiles {
+		fullDirective := strings.Join([]string{`%doc`, filepath.Base(d)}, " ")
 		fmt.Fprintln(b, fullDirective)
 	}
 
