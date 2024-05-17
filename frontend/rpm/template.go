@@ -356,6 +356,28 @@ func (w *specWrapper) Install() fmt.Stringer {
 		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, cfg)
 	}
 
+	docKeys := dalec.SortMapKeys(w.Spec.Artifacts.Docs)
+	for _, d := range docKeys {
+		cfg := w.Spec.Artifacts.Docs[d]
+		// if the subpath is set we need to copy this and for the
+		// files section, we need to spell out the path
+		if cfg.SubPath != "" {
+			root := filepath.Join(`%{buildroot}/%{_docdir}`, w.Name)
+			copyArtifact(root, d, cfg)
+		}
+	}
+
+	licenseKeys := dalec.SortMapKeys(w.Spec.Artifacts.Licenses)
+	for _, l := range licenseKeys {
+		cfg := w.Spec.Artifacts.Licenses[l]
+		// if the subpath is set we need to copy this and for the
+		// files section, we need to spell out the path
+		if cfg.SubPath != "" {
+			root := filepath.Join(`%{buildroot}/%{_licensedir}`, w.Name)
+			copyArtifact(root, l, cfg)
+		}
+	}
+
 	return b
 }
 
@@ -400,15 +422,26 @@ func (w *specWrapper) Files() fmt.Stringer {
 		fmt.Fprintln(b, fullDirective)
 	}
 
-	sort.Strings(w.Spec.Artifacts.DocFiles)
-	for _, d := range w.Spec.Artifacts.DocFiles {
-		fullDirective := strings.Join([]string{`%doc`, filepath.Base(d)}, " ")
+	docKeys := dalec.SortMapKeys(w.Spec.Artifacts.Docs)
+	for _, d := range docKeys {
+		cfg := w.Spec.Artifacts.Docs[d]
+		path := filepath.Base(d)
+		if cfg.SubPath != "" {
+			path = filepath.Join(`%{_docdir}`, w.Name, cfg.SubPath, filepath.Base(d))
+		}
+		fullDirective := strings.Join([]string{`%doc`, path}, " ")
 		fmt.Fprintln(b, fullDirective)
+
 	}
 
-	sort.Strings(w.Spec.Artifacts.LicenseFiles)
-	for _, l := range w.Spec.Artifacts.LicenseFiles {
-		fullDirective := strings.Join([]string{`%license`, filepath.Base(l)}, " ")
+	licenseKeys := dalec.SortMapKeys(w.Spec.Artifacts.Licenses)
+	for _, l := range licenseKeys {
+		cfg := w.Spec.Artifacts.Licenses[l]
+		path := filepath.Base(l)
+		if cfg.SubPath != "" {
+			path = filepath.Join(`%{_licensedir}`, w.Name, cfg.SubPath, filepath.Base(l))
+		}
+		fullDirective := strings.Join([]string{`%license`, path}, " ")
 		fmt.Fprintln(b, fullDirective)
 	}
 

@@ -132,9 +132,9 @@ type Artifacts struct {
 	// ConfigFiles is a list of files that should be marked as config files in the package.
 	ConfigFiles map[string]ArtifactConfig `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
 	// DocFiles is a list of doc files included in the package
-	DocFiles []string `yaml:"docFiles,omitempty" json:"docFiles,omitempty"`
+	Docs map[string]ArtifactConfig `yaml:"docs,omitempty" json:"docs,omitempty"`
 	// LicenseFiles is a list of doc files included in the package
-	LicenseFiles []string `yaml:"licenseFiles,omitempty" json:"licenseFiles,omitempty"`
+	Licenses map[string]ArtifactConfig `yaml:"licenses,omitempty" json:"licenses,omitempty"`
 	// TODO: other types of artifacts (systtemd units, libexec, etc)
 }
 
@@ -181,10 +181,10 @@ func (a *Artifacts) IsEmpty() bool {
 	if len(a.ConfigFiles) > 0 {
 		return false
 	}
-	if len(a.DocFiles) > 0 {
+	if len(a.Docs) > 0 {
 		return false
 	}
-	if len(a.LicenseFiles) > 0 {
+	if len(a.Licenses) > 0 {
 		return false
 	}
 	return true
