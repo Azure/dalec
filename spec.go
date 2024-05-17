@@ -184,6 +184,9 @@ func (a *Artifacts) IsEmpty() bool {
 	if len(a.DocFiles) > 0 {
 		return false
 	}
+	if len(a.LicenseFiles) > 0 {
+		return false
+	}
 	return true
 }
 
