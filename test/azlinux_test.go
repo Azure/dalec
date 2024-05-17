@@ -563,23 +563,37 @@ echo "$BAR" > bar.txt
 						},
 					},
 				},
+				"src4": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
 			},
 			Artifacts: dalec.Artifacts{
-				DocFiles: []string{
-					"src1",
-					"src2",
+				Docs: map[string]dalec.ArtifactConfig{
+					"src1": {},
+					"src2": {
+						SubPath: "subpath",
+					},
 				},
-				LicenseFiles: []string{
-					"src3",
+				Licenses: map[string]dalec.ArtifactConfig{
+					"src3": {},
+					"src4": {
+						SubPath: "license-subpath",
+					},
 				},
 			},
 			Tests: []*dalec.TestSpec{
 				{
 					Name: "Doc files should be created in correct place",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/share/doc/test-docs-handled/src1":      {},
-						"/usr/share/doc/test-docs-handled/src2":      {},
-						"/usr/share/licenses/test-docs-handled/src3": {},
+						"/usr/share/doc/test-docs-handled/src1":                      {},
+						"/usr/share/doc/test-docs-handled/subpath/src2":              {},
+						"/usr/share/licenses/test-docs-handled/src3":                 {},
+						"/usr/share/licenses/test-docs-handled/license-subpath/src4": {},
 					},
 				},
 			},
