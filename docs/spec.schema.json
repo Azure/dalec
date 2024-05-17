@@ -85,7 +85,14 @@
 						"type": "string"
 					},
 					"type": "array",
-					"description": "Docs is a list of doc files included in the package"
+					"description": "DocFiles is a list of doc files included in the package"
+				},
+				"licenseFiles": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "LicenseFiles is a list of doc files included in the package"
 				}
 			},
 			"additionalProperties": false,

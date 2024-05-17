@@ -131,8 +131,10 @@ type Artifacts struct {
 	Directories *CreateArtifactDirectories `yaml:"createDirectories,omitempty" json:"createDirectories,omitempty"`
 	// ConfigFiles is a list of files that should be marked as config files in the package.
 	ConfigFiles map[string]ArtifactConfig `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
-	// Docs is a list of doc files included in the package
+	// DocFiles is a list of doc files included in the package
 	DocFiles []string `yaml:"docFiles,omitempty" json:"docFiles,omitempty"`
+	// LicenseFiles is a list of doc files included in the package
+	LicenseFiles []string `yaml:"licenseFiles,omitempty" json:"licenseFiles,omitempty"`
 	// TODO: other types of artifacts (systtemd units, libexec, etc)
 }
 

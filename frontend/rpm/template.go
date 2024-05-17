@@ -406,6 +406,12 @@ func (w *specWrapper) Files() fmt.Stringer {
 		fmt.Fprintln(b, fullDirective)
 	}
 
+	sort.Strings(w.Spec.Artifacts.LicenseFiles)
+	for _, l := range w.Spec.Artifacts.LicenseFiles {
+		fullDirective := strings.Join([]string{`%license`, filepath.Base(l)}, " ")
+		fmt.Fprintln(b, fullDirective)
+	}
+
 	return b
 }
 
