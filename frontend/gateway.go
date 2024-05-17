@@ -121,7 +121,7 @@ func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOp
 			return st, nil
 		},
 		GetFS: func(st llb.State) fs.ReadDirFS {
-			return dalec.NewStateRefFS(st, ctx, c)
+			return NewStateRefFS(st, ctx, c)
 		},
 	}, nil
 }

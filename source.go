@@ -82,7 +82,7 @@ func (src *SourceInline) AsState(name string) (llb.State, error) {
 }
 
 func (src *SourceContext) AsState(includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(includes, excludes), withConstraints(opts))
+	st, err := sOpt.GetContext(src.Name, LocalIncludeExcludeMerge(includes, excludes), withConstraints(opts))
 	if err != nil {
 		return llb.Scratch(), err
 	}

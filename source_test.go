@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path"
@@ -19,6 +20,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/tonistiigi/fsutil"
 )
 
 func TestSourceGitSSH(t *testing.T) {
@@ -37,13 +39,13 @@ func TestSourceGitSSH(t *testing.T) {
 		},
 	}
 
-	ops := getSourceOp(ctx, t, src)
+	ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 	checkGitOp(t, ops, &src)
 
 	t.Run("with subdir", func(t *testing.T) {
 		src := src
 		src.Path = "subdir"
-		ops2 := getSourceOp(ctx, t, src)
+		ops2 := getSourceOp(ctx, t, src, []MockDirEntry{})
 		checkGitOp(t, ops2, &src)
 
 		// git ops require extra filtering to get the correct subdir, so we should have an extra op
@@ -58,7 +60,7 @@ func TestSourceGitSSH(t *testing.T) {
 		src := src
 		src.Includes = []string{"foo", "bar"}
 		src.Excludes = []string{"baz"}
-		ops2 := getSourceOp(ctx, t, src)
+		ops2 := getSourceOp(ctx, t, src, []MockDirEntry{})
 		checkGitOp(t, ops2, &src)
 
 		// git ops require extra filtering to get the correct subdir, so we should have an extra op
@@ -75,7 +77,7 @@ func TestSourceGitSSH(t *testing.T) {
 		src.Excludes = []string{"baz"}
 		src.Path = "subdir"
 
-		ops2 := getSourceOp(ctx, t, src)
+		ops2 := getSourceOp(ctx, t, src, []MockDirEntry{})
 		checkGitOp(t, ops2, &src)
 
 		// git ops require extra filtering to get the correct subdir, so we should have an extra op
@@ -98,13 +100,13 @@ func TestSourceGitHTTP(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	ops := getSourceOp(ctx, t, src)
+	ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 	checkGitOp(t, ops, &src)
 
 	t.Run("with subdir", func(t *testing.T) {
 		src := src
 		src.Path = "subdir"
-		ops2 := getSourceOp(ctx, t, src)
+		ops2 := getSourceOp(ctx, t, src, []MockDirEntry{})
 		checkGitOp(t, ops2, &src)
 
 		// git ops require extra filtering to get the correct subdir, so we should have an extra op
@@ -119,7 +121,7 @@ func TestSourceGitHTTP(t *testing.T) {
 		src := src
 		src.Includes = []string{"foo", "bar"}
 		src.Excludes = []string{"baz"}
-		ops2 := getSourceOp(ctx, t, src)
+		ops2 := getSourceOp(ctx, t, src, []MockDirEntry{})
 		checkGitOp(t, ops2, &src)
 
 		// git ops require extra filtering to get the correct subdir, so we should have an extra op
@@ -136,7 +138,7 @@ func TestSourceGitHTTP(t *testing.T) {
 		src.Excludes = []string{"baz"}
 		src.Path = "subdir"
 
-		ops2 := getSourceOp(ctx, t, src)
+		ops2 := getSourceOp(ctx, t, src, []MockDirEntry{})
 		checkGitOp(t, ops2, &src)
 
 		// git ops require extra filtering to get the correct subdir, so we should have an extra op
@@ -156,7 +158,7 @@ func TestSourceHTTP(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	ops := getSourceOp(ctx, t, src)
+	ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 
 	op := ops[0].GetSource()
 
@@ -180,7 +182,7 @@ func TestSourceHTTP(t *testing.T) {
 		dgst := digest.Canonical.FromBytes(nil)
 		src.HTTP.Digest = dgst
 
-		ops := getSourceOp(ctx, t, src)
+		ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 		op := ops[0].GetSource()
 
 		if len(op.Attrs) != 2 {
@@ -215,7 +217,7 @@ func TestSourceDockerImage(t *testing.T) {
 		},
 	}
 	ctx := context.Background()
-	ops := getSourceOp(ctx, t, src)
+	ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 
 	op := ops[0].GetSource()
 
@@ -274,7 +276,7 @@ func TestSourceDockerImage(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		ops := getSourceOp(ctx, t, src)
+		ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 
 		imgBaseOp := ops[0].GetSource()
 		if imgBaseOp.Identifier != xID {
@@ -292,7 +294,7 @@ func TestSourceDockerImage(t *testing.T) {
 			img.Cmd = &cmd
 			src.DockerImage = &img
 
-			ops := getSourceOp(ctx, t, src)
+			ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 			fileMountCheck := []expectMount{{dest: "/filedest", selector: "/filedest", typ: pb.MountType_BIND}}
 			checkCmd(t, ops[2:], &src, [][]expectMount{noMountCheck, fileMountCheck})
 		})
@@ -303,7 +305,7 @@ func TestSourceDockerImage(t *testing.T) {
 				src.Includes = []string{"foo", "bar"}
 				src.Excludes = []string{"baz"}
 
-				ops := getSourceOp(ctx, t, src)
+				ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 				checkCmd(t, ops[1:len(ops)-1], &src, [][]expectMount{noMountCheck, noMountCheck})
 				// When include/exclude are used, we are expecting a copy operation to be last.
 				checkFilter(t, ops[len(ops)-1].GetFile(), &src)
@@ -312,7 +314,7 @@ func TestSourceDockerImage(t *testing.T) {
 				src := src
 				src.Path = "subdir"
 
-				ops := getSourceOp(ctx, t, src)
+				ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 
 				img := ops[0].GetSource()
 				if img.Identifier != xID {
@@ -328,7 +330,7 @@ func TestSourceDockerImage(t *testing.T) {
 				src.Includes = []string{"foo", "bar"}
 				src.Excludes = []string{"baz"}
 
-				ops := getSourceOp(ctx, t, src)
+				ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 
 				img := ops[0].GetSource()
 				if img.Identifier != xID {
@@ -357,8 +359,11 @@ func TestSourceDockerImage(t *testing.T) {
 				cmd.Mounts = []SourceMount{contextMount}
 				img.Cmd = &cmd
 				src.DockerImage = &img
-
-				ops := getSourceOp(ctx, t, src)
+				// dockerImage should be a Dir
+				entries := []MockDirEntry{
+					{name: "image-fake", dir: true},
+				}
+				ops := getSourceOp(ctx, t, src, entries)
 
 				var contextOp *pb.Op
 
@@ -396,7 +401,7 @@ func TestSourceDockerImage(t *testing.T) {
 				src.DockerImage = &img
 				src.DockerImage.Cmd.Mounts = []SourceMount{imageMount}
 
-				ops := getSourceOp(ctx, t, src)
+				ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 
 				var imgOp, subImg *pb.Op
 
@@ -489,7 +494,7 @@ func TestSourceContext(t *testing.T) {
 			t.Run("subdir", func(t *testing.T) {
 				src := src
 				src.Path = "subdir"
-				ops := getSourceOp(ctx, t, src)
+				ops := getSourceOp(ctx, t, src, []MockDirEntry{{name: "fake", dir: true}})
 				checkContext(t, ops[0].GetSource(), &src)
 				// for context soruce, we expect to have a copy operation as the last op when subdir is used
 				checkFilter(t, ops[1].GetFile(), &src)
@@ -499,7 +504,7 @@ func TestSourceContext(t *testing.T) {
 				src := src
 				src.Includes = []string{"foo", "bar"}
 				src.Excludes = []string{"baz"}
-				ops := getSourceOp(ctx, t, src)
+				ops := getSourceOp(ctx, t, src, []MockDirEntry{{name: "fake", dir: true}})
 				checkContext(t, ops[0].GetSource(), &src)
 				// With include/exclude only, this should be handled with just one op.
 				if len(ops) != 1 {
@@ -512,7 +517,7 @@ func TestSourceContext(t *testing.T) {
 				src.Path = "subdir"
 				src.Includes = []string{"foo", "bar"}
 				src.Excludes = []string{"baz"}
-				ops := getSourceOp(ctx, t, src)
+				ops := getSourceOp(ctx, t, src, []MockDirEntry{{name: "fake-dir", dir: true}})
 				checkContext(t, ops[0].GetSource(), &src)
 				// for context soruce, we expect to have a copy operation as the last op when subdir is used
 
@@ -528,17 +533,17 @@ func TestSourceContext(t *testing.T) {
 		src := Source{
 			Context: &SourceContext{},
 		}
-		ops := getSourceOp(ctx, t, src)
+		ops := getSourceOp(ctx, t, src, []MockDirEntry{{dir: true, name: "test"}})
 		checkContext(t, ops[0].GetSource(), &src)
 
 		testWithFilters(t, src)
 	})
 
-	t.Run("with customn name", func(t *testing.T) {
+	t.Run("with custom name", func(t *testing.T) {
 		src := Source{
 			Context: &SourceContext{Name: "some-name"},
 		}
-		ops := getSourceOp(ctx, t, src)
+		ops := getSourceOp(ctx, t, src, []MockDirEntry{{name: "fake", dir: true}})
 		checkContext(t, ops[0].GetSource(), &src)
 		testWithFilters(t, src)
 	})
@@ -551,7 +556,7 @@ func TestSourceInlineFile(t *testing.T) {
 		f := f
 		t.Run(name, func(t *testing.T) {
 			src := Source{Inline: &SourceInline{File: f}}
-			ops := getSourceOp(ctx, t, src)
+			ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 			if len(ops) != 1 {
 				t.Fatalf("expected 1 op, got %d:\n%s", len(ops), ops)
 			}
@@ -641,12 +646,12 @@ func TestSourceInlineDir(t *testing.T) {
 		dir := dir
 		t.Run(name, func(t *testing.T) {
 			src := Source{Inline: &SourceInline{Dir: dir}}
-			ops := getSourceOp(ctx, t, src)
+			ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 			checkMkdir(t, ops[0].GetFile(), src.Inline.Dir, "/test")
 
 			t.Run("with files", func(t *testing.T) {
 				src.Inline.Dir.Files = testFiles()
-				ops := getSourceOp(ctx, t, src)
+				ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 				checkMkdir(t, ops[0].GetFile(), src.Inline.Dir, "/test")
 
 				if len(ops) != len(src.Inline.Dir.Files)+1 {
@@ -655,7 +660,7 @@ func TestSourceInlineDir(t *testing.T) {
 
 				sorted := SortMapKeys(src.Inline.Dir.Files)
 				for i, name := range sorted {
-					ops := getSourceOp(ctx, t, src)
+					ops := getSourceOp(ctx, t, src, []MockDirEntry{})
 					f := src.Inline.Dir.Files[name]
 					checkMkfile(t, ops[i+1].GetFile(), f, name)
 				}
@@ -770,10 +775,51 @@ func stubListener(t *testing.T) net.Addr {
 	return l.Addr()
 }
 
+type MockReadDirFS struct {
+	entries []fs.DirEntry
+}
+
+type MockDirEntry struct {
+	name string
+	dir  bool
+}
+
+func (fk *MockDirEntry) Name() string {
+	return fk.name
+}
+
+func (fk *MockDirEntry) IsDir() bool {
+	return fk.dir
+}
+
+func (fk *MockDirEntry) Type() fs.FileMode {
+	return fs.FileMode(0)
+}
+
+func (fk *MockDirEntry) Info() (fs.FileInfo, error) {
+	return &fsutil.StatInfo{}, nil
+}
+
+func (st *MockReadDirFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	return st.entries, nil
+}
+
+func (st *MockReadDirFS) Open(name string) (fs.File, error) {
+	panic("Open is not implemented but part of the fs.ReadDirFS Inteface")
+}
+
+func NewMockReadDirFS(entries []MockDirEntry) *MockReadDirFS {
+	m := &MockReadDirFS{}
+	for _, e := range entries {
+		m.entries = append(m.entries, &e)
+	}
+	return m
+}
+
 // 1. Generates the LLB for a source using Source2LLBGetter (the function we are testing)
 // 2. Marshals the LLB to a protobuf (since we don't have access to the data in LLB directly)
 // 3. Unmarshals the protobuf to get the [pb.Op]s which is what buildkit would act on to get the actual source data during build.
-func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
+func getSourceOp(ctx context.Context, t *testing.T, src Source, mockDirEntries []MockDirEntry) []*pb.Op {
 	t.Helper()
 
 	fillDefaults(&src)
@@ -797,6 +843,10 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 	sOpt.GetContext = func(name string, opts ...llb.LocalOption) (*llb.State, error) {
 		st := llb.Local(name, opts...)
 		return &st, nil
+	}
+
+	sOpt.GetFS = func(st llb.State) fs.ReadDirFS {
+		return NewMockReadDirFS(mockDirEntries)
 	}
 
 	st, err := src.AsState("test", sOpt)
