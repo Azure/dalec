@@ -1,5 +1,9 @@
 # Signing Packages
 
+:::note
+Available with Dalec release `v0.3.0` and later.
+:::
+
 Packages can be automatically signed using Dalec. To do this, you will
 need to provide a signing frontend. There is an example in the test
 code `test/signer/main.go`. Once that signing image has been built and
@@ -14,6 +18,14 @@ targets: # Distro specific build requirements
         image: "ref/to/signing:image"
         cmdline: "/signer"
 ```
+
+At this time, these targets can leverage package signing:
+
+- `windowscross/zip`
+- `mariner2/rpm`
+- `windowscross/container`
+
+For container targets, only the artifacts within the container get signed.
 
 This will send the artifacts (`.rpm`, `.deb`, or `.exe`) to the
 signing frontend as the build context.
