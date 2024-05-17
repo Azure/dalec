@@ -1,11 +1,10 @@
-package dalec
+package frontend
 
 import (
 	"context"
 	"io"
 	"io/fs"
 	"path"
-	"strings"
 	"sync"
 
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -17,29 +16,17 @@ import (
 )
 
 var _ fs.DirEntry = &stateRefDirEntry{}
-var _ fs.ReadDirFS = new(StateRefFS)
-
-// type FS interface {
-// 	// Open opens the named file.
-// 	//
-// 	// When Open returns an error, it should be of type *PathError
-// 	// with the Op field set to "open", the Path field set to name,
-// 	// and the Err field describing the problem.
-// 	//
-// 	// Open should reject attempts to open names that do not satisfy
-// 	// ValidPath(name), returning a *PathError with Err set to
-// 	// ErrInvalid or ErrNotExist.
-// 	Open(name string) (File, error)
-// }
+var _ fs.ReadDirFS = &StateRefFS{}
+var _ io.ReaderAt = &stateRefFile{}
 
 type StateRefFS struct {
-	s       llb.State
-	ctx     context.Context
-	opts    []llb.ConstraintsOpt
-	client  gwclient.Client
-	res     *gwclient.Result
-	o       sync.Once
-	initErr error
+	s         llb.State
+	ctx       context.Context
+	opts      []llb.ConstraintsOpt
+	client    gwclient.Client
+	clientRes *gwclient.Result
+	o         sync.Once
+	initErr   error
 }
 
 func NewStateRefFS(s llb.State, ctx context.Context, client gwclient.Client) *StateRefFS {
@@ -69,14 +56,14 @@ func (fs *StateRefFS) fetchRef() (*gwclient.Result, error) {
 func (fs *StateRefFS) Res() (*gwclient.Result, error) {
 	fs.o.Do(func() {
 		res, err := fs.fetchRef()
-		fs.res = res
+		fs.clientRes = res
 		fs.initErr = err
 	})
 
-	return fs.res, fs.initErr
+	return fs.clientRes, fs.initErr
 }
 
-func (fs *StateRefFS) Ref() (gwclient.Reference, error) {
+func (fs *StateRefFS) ref() (gwclient.Reference, error) {
 	res, err := fs.Res()
 	if err != nil {
 		return nil, err
@@ -115,7 +102,7 @@ func (s *stateRefDirEntry) Info() (fs.FileInfo, error) {
 }
 
 func (st *StateRefFS) ReadDir(name string) ([]fs.DirEntry, error) {
-	ref, err := st.Ref()
+	ref, err := st.ref()
 	if err != nil {
 		return nil, err
 	}
@@ -136,23 +123,6 @@ func (st *StateRefFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	return entries, nil
 }
 
-func (st *StateRefFS) IsDir(name string) (bool, error) {
-	ref, err := st.Ref()
-	if err != nil {
-		return false, err
-	}
-	_, err = ref.ReadDir(st.ctx, gwclient.ReadDirRequest{
-		Path: name,
-	})
-	if err != nil {
-		if strings.Contains(err.Error(), "not a directory") {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, err
-}
-
 type stateRefFile struct {
 	eof    bool   // has file been read to EOF?
 	path   string // the full path of the file from root
@@ -167,27 +137,39 @@ func (s *stateRefFile) Close() error {
 	return nil
 }
 
-func (s *stateRefFile) Read(b []byte) (int, error) {
-	if s.eof {
+func (s *stateRefFile) ReadAt(b []byte, off int64) (int, error) {
+	if off < 0 {
+		return 0, &fs.PathError{Op: "read", Path: s.path, Err: fs.ErrInvalid}
+	}
+
+	if off >= s.stat.Size_ {
 		return 0, io.EOF
 	}
 
-	// Could cache to avoid making read requests more than once
 	segmentContents, err := s.ref.ReadFile(s.ctx, gwclient.ReadRequest{
 		Filename: s.path,
-		Range:    &gwclient.FileRange{Offset: int(s.offset), Length: len(b)},
+		Range:    &gwclient.FileRange{Offset: int(off), Length: len(b)},
 	})
 	if err != nil {
 		return 0, err
 	}
 
-	s.offset += int64(len(segmentContents))
-	if s.offset >= s.stat.Size_ {
-		s.eof = true
+	n := copy(b, segmentContents)
+
+	// ReaderAt is supposed to return a descriptive error when the number of bytes read is less than
+	// the length of the input buffer
+	if n < len(b) {
 		err = io.EOF
 	}
 
-	n := copy(b, segmentContents)
+	return n, err
+}
+
+// invariant: s.offset is the offset of the next byte to be read
+func (s *stateRefFile) Read(b []byte) (int, error) {
+	n, err := s.ReadAt(b, s.offset)
+	s.offset += int64(n)
+
 	return n, err
 }
 
@@ -199,10 +181,12 @@ func (s *stateRefFile) Stat() (fs.FileInfo, error) {
 	return info, nil
 }
 
-// TODO: handle malformed path and other error conditions
-// according to conventions
 func (st *StateRefFS) Open(name string) (fs.File, error) {
-	ref, err := st.Ref()
+	if !fs.ValidPath(name) {
+		return nil, fs.ErrInvalid
+	}
+
+	ref, err := st.ref()
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +195,7 @@ func (st *StateRefFS) Open(name string) (fs.File, error) {
 		Path: name,
 	})
 	if err != nil {
-		return nil, err
+		return nil, &fs.PathError{Err: err, Op: "open", Path: name}
 	}
 
 	f := &stateRefFile{

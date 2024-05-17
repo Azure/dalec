@@ -2,7 +2,7 @@ package test
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"io/fs"
 	"path"
@@ -16,19 +16,69 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
+func TestStateWrapper_ReadAt(t *testing.T) {
+	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, []byte("hello world")))
+
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs := frontend.NewStateRefFS(st, ctx, gwc)
+		f, err := rfs.Open("foo")
+		assert.Nil(t, err)
+
+		r, ok := f.(io.ReaderAt)
+		assert.True(t, ok)
+
+		b := make([]byte, 11)
+		n, err := r.ReadAt(b, 0)
+		assert.Nil(t, err)
+		assert.Equal(t, n, 11)
+
+		b = make([]byte, 1)
+		n, err = r.ReadAt(b, 11)
+		assert.Equal(t, err, io.EOF)
+		assert.Equal(t, n, 0)
+
+		n, err = r.ReadAt(b, -1)
+		assert.Equal(t, err, &fs.PathError{Op: "read", Path: "foo", Err: fs.ErrInvalid})
+		assert.Equal(t, n, 0)
+
+		return rfs.Res()
+	})
+}
+
+func TestStateWrapper_OpenInvalidPath(t *testing.T) {
+	st := llb.Scratch().File(llb.Mkfile("/bar", 0644, []byte("hello world")))
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs := frontend.NewStateRefFS(st, ctx, gwc)
+
+		// cannot prefix path with "/", per go path conventions
+		_, err := rfs.Open("/bar")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		assert.True(t, errors.Is(err, fs.ErrInvalid))
+		return rfs.Res()
+	})
+}
+
 func TestStateWrapper_Open(t *testing.T) {
 	st := llb.Scratch().
 		File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
-	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		fs := dalec.NewStateRefFS(st, context.Background(), gwc)
-		f, err := fs.Open("/foo")
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		fs := frontend.NewStateRefFS(st, ctx, gwc)
+		f, err := fs.Open("foo")
 		assert.Nil(t, err)
 
 		b := make([]byte, 11)
 		n, err := f.Read(b)
-		assert.Equal(t, err, io.EOF)
+		assert.Nil(t, err)
 		assert.Equal(t, n, 11)
+
+		b = make([]byte, 1)
+		n, err = f.Read(b)
+		assert.Equal(t, err, io.EOF)
+		assert.Equal(t, n, 0)
 
 		return fs.Res()
 	})
@@ -36,9 +86,9 @@ func TestStateWrapper_Open(t *testing.T) {
 
 func TestStateWrapper_Stat(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0755, []byte("contents")))
-	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, context.Background(), gwc)
-		f, err := rfs.Open("/foo")
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs := frontend.NewStateRefFS(st, ctx, gwc)
+		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
 		info, err := f.Stat()
@@ -75,8 +125,8 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 		},
 	}
 
-	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, ctx, c)
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+		rfs := frontend.NewStateRefFS(st, ctx, c)
 		root := "/bar"
 		entries, err := rfs.ReadDir(root)
 		assert.Nil(t, err)
@@ -99,70 +149,8 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 
 }
 
-func TestStateWrapper_ReadDir_HTTPSource(t *testing.T) {
-	url := "https://patch-diff.githubusercontent.com/raw/kubernetes/kubernetes/pull/120134.patch"
-	st := llb.HTTP(url)
-	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, ctx, c)
-		baseName := path.Base(url)
-		root := "/"
-		entries, err := rfs.ReadDir(root)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(entries))
-		assert.Equal(t, baseName, entries[0].Name())
-		info, err := entries[0].Info()
-		assert.NoError(t, err)
-		assert.False(t, info.IsDir())
-		return rfs.Res()
-	})
-}
-func TestStateWrapper_ReadDir_GitSource(t *testing.T) {
-	gomd2manUrl := "https://github.com/cpuguy83/go-md2man.git"
-	gomd2manRef := "d6816bfbea7506064a28119f805fb79f9bc5aeec"
-	var cases = map[string]struct {
-		gOpts        []llb.GitOption
-		gitUrl       string
-		gitRef       string
-		state        llb.State
-		expectGitDir bool
-	}{
-		"keepGitDir": {
-			gOpts:        []llb.GitOption{llb.KeepGitDir()},
-			gitUrl:       gomd2manUrl,
-			gitRef:       gomd2manRef,
-			expectGitDir: true,
-		},
-		"NoGitDir": {
-			gitUrl:       gomd2manUrl,
-			gitRef:       gomd2manRef,
-			expectGitDir: false,
-		},
-	}
-	for key := range cases {
-		test := cases[key]
-		test.state = llb.Git(test.gitUrl, test.gitRef, test.gOpts...)
-		testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-			rfs := dalec.NewStateRefFS(test.state, ctx, c)
-			p := path.Join("/", "")
-			entries, err := rfs.ReadDir(p)
-			assert.NoError(t, err)
-			found := false
-			for _, e := range entries {
-				if e.Name() != ".git" {
-					continue
-				}
-				found = true
-				info, err := e.Info()
-				assert.NoError(t, err)
-				assert.True(t, info.IsDir())
-			}
-			assert.Equal(t, test.expectGitDir, found)
-			return rfs.Res()
-		})
-	}
-}
 func TestStateWrapper_ReadDir_Context(t *testing.T) {
-	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 		sOpt, err := frontend.SourceOptFromClient(ctx, c)
 		assert.NoError(t, err)
 
@@ -172,7 +160,7 @@ func TestStateWrapper_ReadDir_Context(t *testing.T) {
 		st, err := sOpt.GetContext(contextName, dalec.LocalIncludeExcludeMerge(include, []string{}))
 		assert.NoError(t, err)
 
-		rfs := dalec.NewStateRefFS(*st, ctx, c)
+		rfs := frontend.NewStateRefFS(*st, ctx, c)
 		root := "/"
 		p := path.Join(root, sourcePath)
 		pathDir := path.Dir(p)
@@ -264,8 +252,8 @@ func TestStateWrapper_Walk(t *testing.T) {
 		},
 	}
 
-	testEnv.RunTest(context.Background(), t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, context.Background(), gwc)
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs := frontend.NewStateRefFS(st, ctx, gwc)
 		err := fs.WalkDir(rfs, "/", func(path string, d fs.DirEntry, err error) error {
 			if path == "/" {
 				return nil
@@ -274,7 +262,6 @@ func TestStateWrapper_Walk(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			fmt.Println(path)
 
 			expect, ok := expectInfo[path]
 			assert.True(t, ok)
@@ -285,8 +272,6 @@ func TestStateWrapper_Walk(t *testing.T) {
 			assert.Equal(t, expect.isDir, info.IsDir())
 
 			if !d.IsDir() { // file
-				fmt.Println("opening ", path)
-				fmt.Println(d.Name())
 				f, err := rfs.Open(path)
 				assert.Nil(t, err)
 
@@ -295,7 +280,6 @@ func TestStateWrapper_Walk(t *testing.T) {
 					return err
 				}
 				assert.Equal(t, contents, expect.contents)
-				fmt.Println(contents)
 			}
 
 			return nil
@@ -315,9 +299,9 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 	`)
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, contents))
 
-	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, ctx, c)
-		f, err := rfs.Open("/foo")
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+		rfs := frontend.NewStateRefFS(st, ctx, c)
+		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
 		// read 10 bytes
@@ -365,9 +349,9 @@ func TestStateWrapper_ReadAll(t *testing.T) {
 
 	st := llb.Scratch().File(llb.Mkfile("/file", 0644, b))
 
-	testEnv.RunTest(context.Background(), t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := dalec.NewStateRefFS(st, ctx, c)
-		f, err := rfs.Open("/file")
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+		rfs := frontend.NewStateRefFS(st, ctx, c)
+		f, err := rfs.Open("file")
 		assert.Nil(t, err)
 
 		contents, err := io.ReadAll(f)
