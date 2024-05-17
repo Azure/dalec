@@ -527,7 +527,7 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	t.Run("docs are handled correctly", func(t *testing.T) {
+	t.Run("docs and licenses are handled correctly", func(t *testing.T) {
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-docs-handled",
@@ -555,19 +555,31 @@ echo "$BAR" > bar.txt
 						},
 					},
 				},
+				"src3": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
 			},
 			Artifacts: dalec.Artifacts{
 				DocFiles: []string{
 					"src1",
 					"src2",
 				},
+				LicenseFiles: []string{
+					"src3",
+				},
 			},
 			Tests: []*dalec.TestSpec{
 				{
 					Name: "Doc files should be created in correct place",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/share/doc/test-docs-handled/src1": {},
-						"/usr/share/doc/test-docs-handled/src2": {},
+						"/usr/share/doc/test-docs-handled/src1":      {},
+						"/usr/share/doc/test-docs-handled/src2":      {},
+						"/usr/share/licenses/test-docs-handled/src3": {},
 					},
 				},
 			},
