@@ -85,14 +85,14 @@
 						"$ref": "#/$defs/ArtifactConfig"
 					},
 					"type": "object",
-					"description": "DocFiles is a list of doc files included in the package"
+					"description": "Docs is a list of doc files included in the package"
 				},
 				"licenses": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactConfig"
 					},
 					"type": "object",
-					"description": "LicenseFiles is a list of doc files included in the package"
+					"description": "Licenses is a list of doc files included in the package"
 				}
 			},
 			"additionalProperties": false,
