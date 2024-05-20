@@ -19,7 +19,9 @@ func TestStateWrapper_ReadAt(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
 	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := bkfs.NewStateRefFS(st, ctx, gwc)
+		rfs, err := bkfs.FromState(ctx, st, gwc)
+		assert.Nil(t, err)
+
 		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
@@ -40,23 +42,24 @@ func TestStateWrapper_ReadAt(t *testing.T) {
 		assert.Equal(t, err, &fs.PathError{Op: "read", Path: "foo", Err: fs.ErrInvalid})
 		assert.Equal(t, n, 0)
 
-		return rfs.Res()
+		return nil, nil
 	})
 }
 
 func TestStateWrapper_OpenInvalidPath(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/bar", 0644, []byte("hello world")))
 	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := bkfs.NewStateRefFS(st, ctx, gwc)
+		rfs, err := bkfs.FromState(ctx, st, gwc)
+		assert.Nil(t, err)
 
 		// cannot prefix path with "/", per go path conventions
-		_, err := rfs.Open("/bar")
+		_, err = rfs.Open("/bar")
 		if err == nil {
 			t.Fatal("expected error")
 		}
 
 		assert.True(t, errors.Is(err, fs.ErrInvalid))
-		return rfs.Res()
+		return nil, nil
 	})
 }
 
@@ -65,7 +68,9 @@ func TestStateWrapper_Open(t *testing.T) {
 		File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
 	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		fs := bkfs.NewStateRefFS(st, ctx, gwc)
+		fs, err := bkfs.FromState(ctx, st, gwc)
+		assert.Nil(t, err)
+
 		f, err := fs.Open("foo")
 		assert.Nil(t, err)
 
@@ -79,14 +84,16 @@ func TestStateWrapper_Open(t *testing.T) {
 		assert.Equal(t, err, io.EOF)
 		assert.Equal(t, n, 0)
 
-		return fs.Res()
+		return nil, nil
 	})
 }
 
 func TestStateWrapper_Stat(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0755, []byte("contents")))
 	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := bkfs.NewStateRefFS(st, ctx, gwc)
+		rfs, err := bkfs.FromState(ctx, st, gwc)
+		assert.Nil(t, err)
+
 		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
@@ -98,7 +105,7 @@ func TestStateWrapper_Stat(t *testing.T) {
 		assert.Equal(t, info.Size(), int64(len([]byte("contents"))))
 		assert.Equal(t, info.Name(), "foo")
 
-		return rfs.Res()
+		return nil, nil
 	})
 }
 
@@ -124,8 +131,10 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 		},
 	}
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := bkfs.NewStateRefFS(st, ctx, c)
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs, err := bkfs.FromState(ctx, st, gwc)
+		assert.Nil(t, err)
+
 		root := "/bar"
 		entries, err := rfs.ReadDir(root)
 		assert.Nil(t, err)
@@ -143,7 +152,7 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 			assert.Equal(t, want.isDir, info.IsDir())
 		}
 
-		return rfs.Res()
+		return nil, nil
 	})
 
 }
@@ -218,8 +227,10 @@ func TestStateWrapper_Walk(t *testing.T) {
 	}
 
 	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-		rfs := bkfs.NewStateRefFS(st, ctx, gwc)
-		err := fs.WalkDir(rfs, "/", func(path string, d fs.DirEntry, err error) error {
+		rfs, err := bkfs.FromState(ctx, st, gwc)
+		assert.Nil(t, err)
+
+		err = fs.WalkDir(rfs, "/", func(path string, d fs.DirEntry, err error) error {
 			if path == "/" {
 				return nil
 			}
@@ -251,7 +262,7 @@ func TestStateWrapper_Walk(t *testing.T) {
 		})
 
 		assert.Nil(t, err)
-		return rfs.Res()
+		return nil, nil
 	})
 
 }
@@ -264,8 +275,10 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 	`)
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, contents))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := bkfs.NewStateRefFS(st, ctx, c)
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs, err := bkfs.FromState(ctx, st, gwc)
+		assert.Nil(t, err)
+
 		f, err := rfs.Open("foo")
 		assert.Nil(t, err)
 
@@ -314,8 +327,10 @@ func TestStateWrapper_ReadAll(t *testing.T) {
 
 	st := llb.Scratch().File(llb.Mkfile("/file", 0644, b))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
-		rfs := bkfs.NewStateRefFS(st, ctx, c)
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		rfs, err := bkfs.FromState(ctx, st, gwc)
+		assert.Nil(t, err)
+
 		f, err := rfs.Open("file")
 		assert.Nil(t, err)
 
@@ -323,6 +338,6 @@ func TestStateWrapper_ReadAll(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, contents, b)
 
-		return rfs.Res()
+		return nil, nil
 	})
 }

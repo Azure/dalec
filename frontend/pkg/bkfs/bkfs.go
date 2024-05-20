@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/fs"
 	"path"
-	"sync"
 
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/tonistiigi/fsutil/types"
@@ -20,67 +19,19 @@ var _ fs.ReadDirFS = &StateRefFS{}
 var _ io.ReaderAt = &stateRefFile{}
 
 type StateRefFS struct {
-	s         llb.State
-	ctx       context.Context
-	opts      []llb.ConstraintsOpt
-	client    gwclient.Client
-	gcRef     gwclient.Reference
-	clientRes *gwclient.Result
-	o         sync.Once
-	initErr   error
+	ctx context.Context
+	ref gwclient.Reference
 }
 
-// TODO: adapt according
 func FromRef(ctx context.Context, ref gwclient.Reference) *StateRefFS {
 	return &StateRefFS{
-		ctx:   ctx,
-		gcRef: ref,
+		ctx: ctx,
+		ref: ref,
 	}
 }
 
-func FromState(state llb.State, client gwclient.Client) *StateRefFS {
-	return &StateRefFS{
-		s:      state,
-		client: client,
-	}
-}
-
-func NewStateRefFS(s llb.State, ctx context.Context, client gwclient.Client) *StateRefFS {
-	return &StateRefFS{
-		s:      s,
-		ctx:    ctx,
-		client: client,
-	}
-}
-
-func (fs *StateRefFS) fetchRef() (*gwclient.Result, error) {
-	def, err := fs.s.Marshal(fs.ctx, fs.opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := fs.client.Solve(fs.ctx, gwclient.SolveRequest{
-		Definition: def.ToPB(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-func (fs *StateRefFS) Res() (*gwclient.Result, error) {
-	fs.o.Do(func() {
-		res, err := fs.fetchRef()
-		fs.clientRes = res
-		fs.initErr = err
-	})
-
-	return fs.clientRes, fs.initErr
-}
-
-func (fs *StateRefFS) ref() (gwclient.Reference, error) {
-	res, err := fs.Res()
+func FromState(ctx context.Context, state llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) (*StateRefFS, error) {
+	res, err := fetchRef(client, state, ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +41,23 @@ func (fs *StateRefFS) ref() (gwclient.Reference, error) {
 		return nil, err
 	}
 
-	return ref, nil
+	return FromRef(ctx, ref), nil
+}
+
+func fetchRef(client gwclient.Client, st llb.State, ctx context.Context, opts ...llb.ConstraintsOpt) (*gwclient.Result, error) {
+	def, err := st.Marshal(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Solve(ctx, gwclient.SolveRequest{
+		Definition: def.ToPB(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 type stateRefDirEntry struct {
@@ -118,12 +85,7 @@ func (s *stateRefDirEntry) Info() (fs.FileInfo, error) {
 }
 
 func (st *StateRefFS) ReadDir(name string) ([]fs.DirEntry, error) {
-	ref, err := st.ref()
-	if err != nil {
-		return nil, err
-	}
-
-	contents, err := ref.ReadDir(st.ctx, gwclient.ReadDirRequest{
+	contents, err := st.ref.ReadDir(st.ctx, gwclient.ReadDirRequest{
 		Path: name,
 	})
 	if err != nil {
@@ -202,12 +164,7 @@ func (st *StateRefFS) Open(name string) (fs.File, error) {
 		return nil, fs.ErrInvalid
 	}
 
-	ref, err := st.ref()
-	if err != nil {
-		return nil, err
-	}
-
-	stat, err := ref.StatFile(st.ctx, gwclient.StatRequest{
+	stat, err := st.ref.StatFile(st.ctx, gwclient.StatRequest{
 		Path: name,
 	})
 	if err != nil {
@@ -216,7 +173,7 @@ func (st *StateRefFS) Open(name string) (fs.File, error) {
 
 	f := &stateRefFile{
 		path:   name,
-		ref:    ref,
+		ref:    st.ref,
 		stat:   stat,
 		ctx:    st.ctx,
 		eof:    false,
