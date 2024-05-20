@@ -22,7 +22,7 @@ func TestSourceBuild(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	ops := getSourceOp(ctx, t, src, []MockDirEntry{})
+	ops := getSourceOp(ctx, t, src)
 
 	xID := "docker-image://docker.io/library/busybox:latest"
 	id := ops[0].GetSource().Identifier
@@ -54,7 +54,7 @@ func TestSourceBuild(t *testing.T) {
 			src.Path = "subdir"
 
 			// for build soruce, we expect to have a copy operation as the last op
-			ops := getSourceOp(ctx, t, src, []MockDirEntry{})
+			ops := getSourceOp(ctx, t, src)
 
 			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{rootMount}, {rootMount, expectMount{dest: "subdir"}}})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
@@ -66,7 +66,7 @@ func TestSourceBuild(t *testing.T) {
 			src.Excludes = []string{"baz"}
 
 			// for build soruce, we expect to have a copy operation as the last op
-			ops := getSourceOp(ctx, t, src, []MockDirEntry{})
+			ops := getSourceOp(ctx, t, src)
 			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{noMountCheck, noMountCheck})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 		})
@@ -78,7 +78,7 @@ func TestSourceBuild(t *testing.T) {
 			src.Excludes = []string{"baz"}
 
 			// for build source, we expect to have a copy operation as the last op
-			ops := getSourceOp(ctx, t, src, []MockDirEntry{})
+			ops := getSourceOp(ctx, t, src)
 			checkCmd(t, ops[1:len(ops)-1], &Source{DockerImage: &srcDI}, [][]expectMount{{rootMount}, {rootMount, expectMount{dest: "subdir"}}})
 			checkFilter(t, ops[len(ops)-1].GetFile(), &src)
 		})
