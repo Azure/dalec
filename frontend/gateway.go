@@ -2,7 +2,6 @@ package frontend
 
 import (
 	"context"
-	"io/fs"
 	"sync"
 	"sync/atomic"
 
@@ -119,9 +118,6 @@ func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOp
 				return nil, err
 			}
 			return st, nil
-		},
-		GetFS: func(st llb.State) fs.ReadDirFS {
-			return NewStateRefFS(st, ctx, c)
 		},
 	}, nil
 }

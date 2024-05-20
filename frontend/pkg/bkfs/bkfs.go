@@ -1,4 +1,4 @@
-package frontend
+package bkfs
 
 import (
 	"context"
@@ -24,9 +24,25 @@ type StateRefFS struct {
 	ctx       context.Context
 	opts      []llb.ConstraintsOpt
 	client    gwclient.Client
+	gcRef     gwclient.Reference
 	clientRes *gwclient.Result
 	o         sync.Once
 	initErr   error
+}
+
+// TODO: adapt according
+func FromRef(ctx context.Context, ref gwclient.Reference) *StateRefFS {
+	return &StateRefFS{
+		ctx:   ctx,
+		gcRef: ref,
+	}
+}
+
+func FromState(state llb.State, client gwclient.Client) *StateRefFS {
+	return &StateRefFS{
+		s:      state,
+		client: client,
+	}
 }
 
 func NewStateRefFS(s llb.State, ctx context.Context, client gwclient.Client) *StateRefFS {

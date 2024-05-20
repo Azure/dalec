@@ -183,7 +183,7 @@ func (f localOptionFunc) SetLocalOption(li *llb.LocalInfo) {
 	f(li)
 }
 
-func LocalIncludeExcludeMerge(includes []string, excludes []string) localOptionFunc {
+func localIncludeExcludeMerge(includes []string, excludes []string) localOptionFunc {
 	return func(li *llb.LocalInfo) {
 		if len(excludes) > 0 {
 			if li.ExcludePatterns != "" {
