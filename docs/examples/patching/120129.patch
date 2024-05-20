@@ -1,0 +1,42 @@
+From 90715527543614f730b968c6e9f306c33d4aff03 Mon Sep 17 00:00:00 2001
+From: James Sturtevant <jstur@microsoft.com>
+Date: Thu, 20 Jul 2023 17:00:29 +0000
+Subject: [PATCH] Use env varaibles for passing path
+
+The subpath could be passed a powershell subexpression which would be executed by kubelet with privilege.  Switching to pass the arguments via environment variables means the subexpression won't be evaluated.
+
+Signed-off-by: James Sturtevant <jstur@microsoft.com>
+---
+ pkg/volume/util/subpath/subpath_windows.go | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/pkg/volume/util/subpath/subpath_windows.go b/pkg/volume/util/subpath/subpath_windows.go
+index 7d40ce590fe3..bf02de632fb9 100644
+--- a/pkg/volume/util/subpath/subpath_windows.go
++++ b/pkg/volume/util/subpath/subpath_windows.go
+@@ -76,8 +76,10 @@ func getUpperPath(path string) string {
+ // Check whether a directory/file is a link type or not
+ // LinkType could be SymbolicLink, Junction, or HardLink
+ func isLinkPath(path string) (bool, error) {
+-	cmd := fmt.Sprintf("(Get-Item -LiteralPath %q).LinkType", path)
+-	output, err := exec.Command("powershell", "/c", cmd).CombinedOutput()
++	cmd := exec.Command("powershell", "/c", "$ErrorActionPreference = 'Stop'; (Get-Item -Force -LiteralPath $env:linkpath).LinkType")
++	cmd.Env = append(os.Environ(), fmt.Sprintf("linkpath=%s", path))
++	klog.V(8).Infof("Executing command: %q", cmd.String())
++	output, err := cmd.CombinedOutput()
+ 	if err != nil {
+ 		return false, err
+ 	}
+@@ -115,8 +117,10 @@ func evalSymlink(path string) (string, error) {
+ 	}
+ 	// This command will give the target path of a given symlink
+ 	// The -Force parameter will allow Get-Item to also evaluate hidden folders, like AppData.
+-	cmd := fmt.Sprintf("(Get-Item -Force -LiteralPath %q).Target", upperpath)
+-	output, err := exec.Command("powershell", "/c", cmd).CombinedOutput()
++	cmd := exec.Command("powershell", "/c", "$ErrorActionPreference = 'Stop'; (Get-Item -Force -LiteralPath $env:linkpath).Target")
++	cmd.Env = append(os.Environ(), fmt.Sprintf("linkpath=%s", upperpath))
++	klog.V(8).Infof("Executing command: %q", cmd.String())
++	output, err := cmd.CombinedOutput()
+ 	if err != nil {
+ 		return "", err
+ 	}

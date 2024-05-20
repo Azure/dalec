@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
+	"path"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
@@ -81,7 +83,7 @@ func (src *SourceInline) AsState(name string) (llb.State, error) {
 }
 
 func (src *SourceContext) AsState(includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(includes, excludes), withConstraints(opts))
+	st, err := sOpt.GetContext(src.Name, LocalIncludeExcludeMerge(includes, excludes), withConstraints(opts))
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -170,10 +172,39 @@ type SourceOpts struct {
 	Resolver   llb.ImageMetaResolver
 	Forward    ForwarderFunc
 	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
+	GetFS      func(st llb.State) fs.ReadDirFS
 }
 
 func shArgs(cmd string) llb.RunOption {
 	return llb.Args([]string{"sh", "-c", cmd})
+}
+
+func HandleRename(s *Source, name string, sOpt SourceOpts) llb.StateOption {
+	rename := func(st llb.State) llb.State {
+		stFS := sOpt.GetFS(st)
+		entries, err := stFS.ReadDir("/")
+
+		// we are not expecting an error here
+		if err != nil {
+			panic(err)
+		}
+
+		if len(entries) == 1 && !entries[0].IsDir() {
+			// we have a single file at the root of the source, we need to rename it
+			srcName := path.Join("/", entries[0].Name())
+			destName := path.Join("/", name)
+			return llb.Scratch().File(llb.Copy(st, srcName, destName))
+		}
+
+		return st
+	}
+	noRename := func(st llb.State) llb.State { return st }
+
+	if s.Context != nil && !isRoot(s.Path) {
+		return rename
+	}
+
+	return noRename
 }
 
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -181,8 +212,12 @@ func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...ll
 	if err != nil {
 		return llb.Scratch(), err
 	}
+	sourceState := st.With(getFilter(*s, forMount)).With(HandleRename(s, name, sOpt))
+	// certain sources such as source context require an extra
+	// step to rename the contents to the source name if the contents
+	// are a single file
 
-	return st.With(getFilter(*s, forMount)), nil
+	return sourceState, nil
 }
 
 func (s *Source) AsState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -224,7 +259,7 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
 		}
 
-		if !SourceIsDir(src.Spec) {
+		if !src.Spec.IsDir(srcSt, sOpts) {
 			mountOpt = append(mountOpt, llb.SourcePath(src.Dest))
 		}
 		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
@@ -303,12 +338,28 @@ func WithCreateDestPath() llb.CopyOption {
 	})
 }
 
-func SourceIsDir(src Source) bool {
+func (s *Source) IsDir(srcState llb.State, sOpt SourceOpts) bool {
+	return SourceIsDir(*s, srcState, sOpt)
+}
+
+func SourceIsDir(src Source, srcState llb.State, sOpt SourceOpts) bool {
 	switch {
+	case src.Context != nil:
+		if !isRoot(src.Path) {
+			srcFS := sOpt.GetFS(srcState)
+			entries, err := srcFS.ReadDir("/")
+			if err != nil {
+				panic(err)
+			}
+			if len(entries) == 1 {
+				return entries[0].IsDir()
+			}
+			return true
+		}
+		return true
 	case src.DockerImage != nil,
 		src.Git != nil,
-		src.Build != nil,
-		src.Context != nil:
+		src.Build != nil:
 		return true
 	case src.HTTP != nil:
 		return false

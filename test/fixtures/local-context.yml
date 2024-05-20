@@ -31,7 +31,13 @@ sources:
       - go.*
     excludes:
       - go.sum
-
+  src6:
+    context: {}
+    path: "./docs/examples/patching/kubernetes-patch.yml"
+  src7:
+    context: {}
+    includes:
+      - ./files.go
 build:
   steps:
     - command: |
@@ -41,7 +47,7 @@ build:
 
         # These should always be there.
         [ -d "./src/cmd" ]
-        [ -f "./src2/go.mod" ]
+        [ -f "./src2" ]
 
         # These should be there if include is respected.
         [ -f "./src3/go.mod" ]
@@ -57,6 +63,12 @@ build:
         # Now with mixed include/exclude
         [ -f "./src5/go.mod" ]
         [ "$(ls -A ./src5 | wc -l)" -eq 1 ]
+
+        # With path and default context
+        [ -f "./src6" ]
+
+        # Without path and default context
+        [ -f "./src7/files.go" ]
 
 changelog:
   -

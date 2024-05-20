@@ -94,14 +94,30 @@ func Dalec2SourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 
 	for _, k := range sorted {
 		src := spec.Sources[k]
-		isDir := dalec.SourceIsDir(src)
+		s := ""
+		switch {
+		case src.DockerImage != nil:
+			s = src.DockerImage.Ref
+		case src.Git != nil:
+			s = src.Git.URL
+		case src.HTTP != nil:
+			s = src.HTTP.URL
+		case src.Context != nil:
+			s = src.Context.Name
+		case src.Build != nil:
+			s = fmt.Sprintf("%v", src.Build.Source)
+		case src.Inline != nil:
+			s = "inline"
+		default:
+			return nil, fmt.Errorf("no non-nil source provided")
+		}
 
-		pg := dalec.ProgressGroup("Add spec source: " + k)
+		pg := dalec.ProgressGroup("Add spec source: " + k + " " + s)
 		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, err
 		}
-
+		isDir := src.IsDir(st, sOpt)
 		if isDir {
 			out = append(out, tar(st, k+".tar.gz", append(opts, pg)...))
 		} else {

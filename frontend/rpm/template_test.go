@@ -3,11 +3,13 @@ package rpm
 import (
 	"bufio"
 	"bytes"
+	"io/fs"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/moby/buildkit/client/llb"
 )
 
 func TestTemplateSources(t *testing.T) {
@@ -168,6 +170,12 @@ func TestTemplateSources(t *testing.T) {
 
 		s := out.String()
 
+		sOpt := dalec.SourceOpts{
+			GetFS: func(st llb.State) fs.ReadDirFS {
+				return nil
+			},
+		}
+
 		// Note: order (in the produced output) should be deterministic here regardless of map ordering (especially since maps are randomized).
 		ordered := dalec.SortMapKeys(w.Spec.Sources)
 		for i, name := range ordered {
@@ -180,7 +188,7 @@ func TestTemplateSources(t *testing.T) {
 
 			s = s[len(expectedDoc):] // trim off the doc from the output
 			suffix := "\n"
-			if dalec.SourceIsDir(src) {
+			if src.IsDir(llb.Scratch(), sOpt) {
 				suffix = ".tar.gz\n"
 			}
 
