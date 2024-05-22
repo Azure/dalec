@@ -80,13 +80,6 @@
 					"type": "object",
 					"description": "ConfigFiles is a list of files that should be marked as config files in the package."
 				},
-				"systemdUnits": {
-					"additionalProperties": {
-						"$ref": "#/$defs/SystemdUnitConfig"
-					},
-					"type": "object",
-					"description": "SystemdUnits is a list of systemd units to include in the package."
-				},
 				"docs": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactConfig"
@@ -100,6 +93,13 @@
 					},
 					"type": "object",
 					"description": "Licenses is a list of doc files included in the package"
+				},
+				"systemdUnits": {
+					"additionalProperties": {
+						"$ref": "#/$defs/SystemdUnitConfig"
+					},
+					"type": "object",
+					"description": "SystemdUnits is a list of systemd units to include in the package."
 				}
 			},
 			"additionalProperties": false,
@@ -931,22 +931,21 @@
 					"type": "boolean",
 					"description": "Enable is used to enable the systemd unit on install\nThis determines what will be written to a systemd preset file"
 				},
-				"Reload": {
-					"type": "boolean",
-					"description": "Should service be reloaded instead of restarted? (Mutually exclusive with `Restart`)"
-				},
-				"Restart": {
-					"type": "boolean",
-					"description": "Can service be restarted? (Mutually exclusive with Reload)"
+				"systemdRefreshPolicy": {
+					"type": "string",
+					"enum": [
+						"none",
+						"reload",
+						"restart"
+					],
+					"description": "On upgrade, should the service be restarted, reloaded, or neither"
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
 			"required": [
 				"name",
-				"enabled",
-				"Reload",
-				"Restart"
+				"enabled"
 			]
 		},
 		"Target": {

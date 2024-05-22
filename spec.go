@@ -141,6 +141,12 @@ type Artifacts struct {
 	// TODO: other types of artifacts (systtemd units, libexec, etc)
 }
 
+const (
+	SystemdUnitUpgradePolicyNone    = "none"
+	SystemdUnitUpgradePolicyReload  = "reload"
+	SystemdUnitUpgradePolicyRestart = "restart"
+)
+
 type SystemdUnitConfig struct {
 	// Name is the name systemd unit should be copied under.
 	// Nested paths are not supported. It is the user's responsibility
@@ -151,11 +157,8 @@ type SystemdUnitConfig struct {
 	// This determines what will be written to a systemd preset file
 	Enable bool `yaml:"enable" json:"enabled"`
 
-	// Should service be reloaded instead of restarted? (Mutually exclusive with `Restart`)
-	Reload bool
-
-	// Can service be restarted? (Mutually exclusive with Reload)
-	Restart bool
+	// On upgrade, should the service be restarted, reloaded, or neither
+	UpgradeRefreshPolicy string `yaml:"upgradeRefreshPolicy,omitempty" json:"systemdRefreshPolicy,omitempty" jsonschema:"enum=none,enum=reload,enum=restart"`
 }
 
 func (s SystemdUnitConfig) Artifact() ArtifactConfig {

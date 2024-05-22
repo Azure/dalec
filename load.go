@@ -362,6 +362,14 @@ func (s *Spec) FillDefaults() {
 			s.Patches[k][i].Strip = &strip
 		}
 	}
+
+	for p := range s.Artifacts.SystemdUnits {
+		conf := s.Artifacts.SystemdUnits[p]
+		if conf.UpgradeRefreshPolicy == "" {
+			conf.UpgradeRefreshPolicy = SystemdUnitUpgradePolicyNone
+		}
+		s.Artifacts.SystemdUnits[p] = conf
+	}
 }
 
 func (s Spec) Validate() error {
@@ -388,20 +396,6 @@ func (s Spec) Validate() error {
 				return errors.Wrapf(err, "invalid sharing mode for test %q with cache mount at path %q", t.Name, p)
 			}
 		}
-	}
-
-	for p, art := range s.Artifacts.SystemdUnits {
-		if err := art.validate(); err != nil {
-			return errors.Wrapf(err, "error validating config for systemd unit with path %s", p)
-		}
-	}
-
-	return nil
-}
-
-func (s *SystemdUnitConfig) validate() error {
-	if s.Reload && s.Restart {
-		return fmt.Errorf("cannot specify both reload and restart")
 	}
 
 	return nil

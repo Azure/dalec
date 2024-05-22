@@ -473,18 +473,21 @@ sources:
 	})
 }
 
-func TestArtifact_Validation(t *testing.T) {
+func TestArtifact_Defaults(t *testing.T) {
 	spec := &Spec{
 		Artifacts: Artifacts{
 			SystemdUnits: map[string]SystemdUnitConfig{
-				"unit.service": {
-					Restart: true,
-					Reload:  true,
-				},
+				"unit.service": {},
 			},
 		},
 	}
-	want := errors.New("error validating config for systemd unit with path unit.service: cannot specify both reload and restart")
-	err := spec.Validate()
-	assert.Equal(t, want.Error(), err.Error())
+
+	spec.FillDefaults()
+
+	wantConf := SystemdUnitConfig{
+		UpgradeRefreshPolicy: "none",
+	}
+
+	unitConf := spec.Artifacts.SystemdUnits["unit.service"]
+	assert.Equal(t, wantConf, unitConf)
 }

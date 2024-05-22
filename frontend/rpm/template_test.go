@@ -214,7 +214,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 			Artifacts: dalec.Artifacts{
 				SystemdUnits: map[string]dalec.SystemdUnitConfig{
 					"test.service": {
-						Restart: true,
+						UpgradeRefreshPolicy: dalec.SystemdUnitUpgradePolicyRestart,
 					},
 				},
 			},
@@ -232,7 +232,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 			Artifacts: dalec.Artifacts{
 				SystemdUnits: map[string]dalec.SystemdUnitConfig{
 					"test.service": {
-						Reload: true,
+						UpgradeRefreshPolicy: dalec.SystemdUnitUpgradePolicyReload,
 					},
 				},
 			},
