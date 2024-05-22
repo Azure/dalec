@@ -383,8 +383,10 @@ WantedBy=multi-user.target
 				},
 			},
 			Artifacts: dalec.Artifacts{
-				Services: map[string]dalec.ServiceConfig{
-					"src/simple.service": {},
+				SystemdUnits: map[string]dalec.SystemdUnitConfig{
+					"src/simple.service": {
+						Enable: true,
+					},
 				},
 			},
 			Tests: []*dalec.TestSpec{
@@ -395,7 +397,7 @@ WantedBy=multi-user.target
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 							Permissions: 0644,
 						},
-						"/usr/lib/systemd/system-preset/simple.preset": {
+						"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"enable simple.service"}},
 							Permissions: 0644,
 						},
@@ -409,10 +411,8 @@ WantedBy=multi-user.target
 			return client.Solve(ctx, req)
 		})
 
-		// Test to ensure disabling works
-		spec.Artifacts.Services["src/simple.service"] = dalec.ServiceConfig{
-			Disable: true,
-		}
+		// Test to ensure disabling works by default
+		spec.Artifacts.SystemdUnits["src/simple.service"] = dalec.SystemdUnitConfig{}
 		spec.Tests = []*dalec.TestSpec{
 			{
 				Name: "Check service files",
@@ -421,11 +421,99 @@ WantedBy=multi-user.target
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 						Permissions: 0644,
 					},
-					"/usr/lib/systemd/system-preset/simple.preset": {
+					"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
 						// This is the only change from the previous test, service should be
 						// disabled in preset
 						CheckOutput: dalec.CheckOutput{Contains: []string{"disable simple.service"}},
 						Permissions: 0644,
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			return client.Solve(ctx, req)
+		})
+	})
+
+	t.Run("test systemd unit multiple components", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "test-systemd-unit",
+			Description: "Test systemd unit",
+			Website:     "https://www.github.com/Azure/dalec",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Vendor:      "Microsoft",
+			License:     "Apache 2.0",
+			Packager:    "Microsoft <support@microsoft.com>",
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string][]string{
+					"msft-golang": {},
+				},
+			},
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+
+							Files: map[string]*dalec.SourceInlineFile{
+								"foo.service": {
+									Contents: `
+# simple-socket.service
+[Unit]
+Description=Foo Service
+After=network.target foo.socket
+Requires=foo.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/foo
+ExecReload=/bin/kill -HUP $MAINPID
+StandardOutput=journal
+StandardError=journal
+`},
+
+								"foo.socket": {
+									Contents: `
+[Unit]
+Description=foo socket
+PartOf=foo.service
+
+[Socket]
+ListenStream=127.0.0.1:8080
+
+[Install]
+WantedBy=sockets.target
+								`,
+								},
+							},
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				SystemdUnits: map[string]dalec.SystemdUnitConfig{
+					"src/foo.service": {},
+					"src/foo.socket": {
+						Enable: true,
+					},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check service files",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/lib/systemd/system/foo.service": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/foo"}},
+							Permissions: 0644,
+						},
+						"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"enable foo.socket",
+								"disable foo.service"}},
+							Permissions: 0644,
+						},
 					},
 				},
 			},

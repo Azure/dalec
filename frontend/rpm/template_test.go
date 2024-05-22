@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"gotest.tools/v3/assert"
 )
 
 func TestTemplateSources(t *testing.T) {
@@ -204,5 +205,59 @@ func TestTemplateSources(t *testing.T) {
 		if s != "" {
 			t.Fatalf("unexpected trailing sources: %q", s)
 		}
+	})
+}
+
+func TestTemplate_Artifacts(t *testing.T) {
+	t.Run("systemd artifacts with restart", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				SystemdUnits: map[string]dalec.SystemdUnitConfig{
+					"test.service": {
+						Restart: true,
+					},
+				},
+			},
+		}}
+
+		got := w.PostUn().String()
+		want := `%postun
+%systemd_postun_with_restart test.service
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("systemd artifacts with reload", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				SystemdUnits: map[string]dalec.SystemdUnitConfig{
+					"test.service": {
+						Reload: true,
+					},
+				},
+			},
+		}}
+
+		got := w.PostUn().String()
+		want := `%postun
+%systemd_postun_with_reload test.service
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("systemd artifacts no reload/restart", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				SystemdUnits: map[string]dalec.SystemdUnitConfig{
+					"test.service": {},
+				},
+			},
+		}}
+
+		got := w.PostUn().String()
+		want := `%postun
+%systemd_postun test.service
+`
+		assert.Equal(t, want, got)
 	})
 }

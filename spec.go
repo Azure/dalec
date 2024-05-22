@@ -4,6 +4,7 @@ package dalec
 import (
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -131,8 +132,35 @@ type Artifacts struct {
 	Directories *CreateArtifactDirectories `yaml:"createDirectories,omitempty" json:"createDirectories,omitempty"`
 	// ConfigFiles is a list of files that should be marked as config files in the package.
 	ConfigFiles map[string]ArtifactConfig `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
-	// TODO: other types of artifacts (systtemd units, libexec, etc)
-	Services map[string]ServiceConfig `yaml:"services,omitempty" json:"services,omitempty"`
+
+	// SystemdUnits is a list of systemd units to include in the package.
+	SystemdUnits map[string]SystemdUnitConfig `yaml:"systemdUnits,omitempty" json:"systemdUnits,omitempty"`
+
+	// TODO: other types of artifacts (libexec, etc)
+}
+
+type SystemdUnitConfig struct {
+	// Name is the name systemd unit should be copied under.
+	// Nested paths are not supported. It is the user's responsibility
+	// to name the service with the appropriate extension, i.e. .service, .timer, etc.
+	Name string `yaml:"name" json:"name"`
+
+	// Enable is used to enable the systemd unit on install
+	// This determines what will be written to a systemd preset file
+	Enable bool `yaml:"enable" json:"enabled"`
+
+	// Should service be reloaded instead of restarted? (Mutually exclusive with `Restart`)
+	Reload bool
+
+	// Can service be restarted? (Mutually exclusive with Reload)
+	Restart bool
+}
+
+func (s SystemdUnitConfig) Artifact() ArtifactConfig {
+	return ArtifactConfig{
+		SubPath: "",
+		Name:    s.Name,
+	}
 }
 
 // CreateArtifactDirectories describes various directories that should be created on install.
@@ -162,6 +190,13 @@ type ArtifactConfig struct {
 	// Name is file or dir name to use for the artifact in the package.
 	// If empty, the file or dir name from the produced artifact will be used.
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+}
+
+func (a *ArtifactConfig) ResolveName(path string) string {
+	if a.Name != "" {
+		return a.Name
+	}
+	return filepath.Base(path)
 }
 
 // ServiceConfig is the configuration for a service to include in the package.
@@ -196,7 +231,7 @@ func (a *Artifacts) IsEmpty() bool {
 		return false
 	}
 
-	if len(a.Services) > 0 {
+	if len(a.SystemdUnits) > 0 {
 		return false
 	}
 

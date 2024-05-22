@@ -28,7 +28,7 @@ type mariner2 struct{}
 
 func (w mariner2) Base(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State {
 	return llb.Image(mariner2Ref, llb.WithMetaResolver(resolver), dalec.WithConstraints(opts...)).Run(
-		w.Install([]string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, installWithConstraints(opts)),
+		w.Install([]string{"rpm-build", "mariner-rpm-macros", "systemd-rpm-macros", "build-essential", "ca-certificates"}, installWithConstraints(opts)),
 		dalec.WithConstraints(opts...),
 	).Root()
 }

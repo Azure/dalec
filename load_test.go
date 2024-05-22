@@ -8,6 +8,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 //go:embed test/fixtures/unmarshall/source-inline.yml
@@ -469,4 +471,20 @@ sources:
 			t.Fatal("expected error, but received none")
 		}
 	})
+}
+
+func TestArtifact_Validation(t *testing.T) {
+	spec := &Spec{
+		Artifacts: Artifacts{
+			SystemdUnits: map[string]SystemdUnitConfig{
+				"unit.service": {
+					Restart: true,
+					Reload:  true,
+				},
+			},
+		},
+	}
+	want := errors.New("error validating config for systemd unit with path unit.service: cannot specify both reload and restart")
+	err := spec.Validate()
+	assert.Equal(t, want.Error(), err.Error())
 }
