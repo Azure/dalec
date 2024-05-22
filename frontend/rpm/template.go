@@ -412,7 +412,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 	presetName := "%{name}.preset"
 	for _, p := range serviceKeys {
 		cfg := w.Spec.Artifacts.SystemdUnits[p]
-		// must include '.service' suffix in name
+		// must include systemd unit extension (.service, .socket, .timer, etc.) in name
 		copyArtifact(`%{buildroot}/%{_unitdir}`, p, cfg.Artifact())
 
 		verb := "disable"
