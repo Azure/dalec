@@ -8,8 +8,6 @@ import (
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 //go:embed test/fixtures/unmarshall/source-inline.yml
@@ -471,23 +469,4 @@ sources:
 			t.Fatal("expected error, but received none")
 		}
 	})
-}
-
-func TestArtifact_Defaults(t *testing.T) {
-	spec := &Spec{
-		Artifacts: Artifacts{
-			SystemdUnits: map[string]SystemdUnitConfig{
-				"unit.service": {},
-			},
-		},
-	}
-
-	spec.FillDefaults()
-
-	wantConf := SystemdUnitConfig{
-		UpgradeRefreshPolicy: "none",
-	}
-
-	unitConf := spec.Artifacts.SystemdUnits["unit.service"]
-	assert.Equal(t, wantConf, unitConf)
 }

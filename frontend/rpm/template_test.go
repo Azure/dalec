@@ -209,55 +209,18 @@ func TestTemplateSources(t *testing.T) {
 }
 
 func TestTemplate_Artifacts(t *testing.T) {
-	t.Run("systemd artifacts with restart", func(t *testing.T) {
-		w := &specWrapper{Spec: &dalec.Spec{
-			Artifacts: dalec.Artifacts{
-				SystemdUnits: map[string]dalec.SystemdUnitConfig{
-					"test.service": {
-						UpgradeRefreshPolicy: dalec.SystemdUnitUpgradePolicyRestart,
-					},
-				},
+
+	w := &specWrapper{Spec: &dalec.Spec{
+		Artifacts: dalec.Artifacts{
+			SystemdUnits: map[string]dalec.SystemdUnitConfig{
+				"test.service": {},
 			},
-		}}
+		},
+	}}
 
-		got := w.PostUn().String()
-		want := `%postun
-%systemd_postun_with_restart test.service
-`
-		assert.Equal(t, want, got)
-	})
-
-	t.Run("systemd artifacts with reload", func(t *testing.T) {
-		w := &specWrapper{Spec: &dalec.Spec{
-			Artifacts: dalec.Artifacts{
-				SystemdUnits: map[string]dalec.SystemdUnitConfig{
-					"test.service": {
-						UpgradeRefreshPolicy: dalec.SystemdUnitUpgradePolicyReload,
-					},
-				},
-			},
-		}}
-
-		got := w.PostUn().String()
-		want := `%postun
-%systemd_postun_with_reload test.service
-`
-		assert.Equal(t, want, got)
-	})
-
-	t.Run("systemd artifacts no reload/restart", func(t *testing.T) {
-		w := &specWrapper{Spec: &dalec.Spec{
-			Artifacts: dalec.Artifacts{
-				SystemdUnits: map[string]dalec.SystemdUnitConfig{
-					"test.service": {},
-				},
-			},
-		}}
-
-		got := w.PostUn().String()
-		want := `%postun
+	got := w.PostUn().String()
+	want := `%postun
 %systemd_postun test.service
 `
-		assert.Equal(t, want, got)
-	})
+	assert.Equal(t, want, got)
 }

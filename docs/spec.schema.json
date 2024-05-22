@@ -927,25 +927,16 @@
 					"type": "string",
 					"description": "Name is the name systemd unit should be copied under.\nNested paths are not supported. It is the user's responsibility\nto name the service with the appropriate extension, i.e. .service, .timer, etc."
 				},
-				"enabled": {
+				"enable": {
 					"type": "boolean",
 					"description": "Enable is used to enable the systemd unit on install\nThis determines what will be written to a systemd preset file"
-				},
-				"systemdRefreshPolicy": {
-					"type": "string",
-					"enum": [
-						"none",
-						"reload",
-						"restart"
-					],
-					"description": "On upgrade, should the service be restarted, reloaded, or neither"
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
 			"required": [
 				"name",
-				"enabled"
+				"enable"
 			]
 		},
 		"Target": {

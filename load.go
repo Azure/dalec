@@ -363,13 +363,6 @@ func (s *Spec) FillDefaults() {
 		}
 	}
 
-	for p := range s.Artifacts.SystemdUnits {
-		conf := s.Artifacts.SystemdUnits[p]
-		if conf.UpgradeRefreshPolicy == "" {
-			conf.UpgradeRefreshPolicy = SystemdUnitUpgradePolicyNone
-		}
-		s.Artifacts.SystemdUnits[p] = conf
-	}
 }
 
 func (s Spec) Validate() error {

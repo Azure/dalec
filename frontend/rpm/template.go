@@ -326,15 +326,7 @@ func (w *specWrapper) PostUn() fmt.Stringer {
 		cfg := w.Spec.Artifacts.SystemdUnits[servicePath]
 		a := cfg.Artifact()
 		serviceName := a.ResolveName(servicePath)
-
-		switch cfg.UpgradeRefreshPolicy {
-		case dalec.SystemdUnitUpgradePolicyRestart:
-			fmt.Fprintf(b, "%%systemd_postun_with_restart %s\n", serviceName)
-		case dalec.SystemdUnitUpgradePolicyReload:
-			fmt.Fprintf(b, "%%systemd_postun_with_reload %s\n", serviceName)
-		default:
-			fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
-		}
+		fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
 	}
 
 	return b
