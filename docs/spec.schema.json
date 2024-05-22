@@ -86,6 +86,20 @@
 					},
 					"type": "object",
 					"description": "SystemdUnits is a list of systemd units to include in the package."
+				},
+				"docs": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "Docs is a list of doc files included in the package"
+				},
+				"licenses": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "Licenses is a list of doc files included in the package"
 				}
 			},
 			"additionalProperties": false,

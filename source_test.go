@@ -357,7 +357,6 @@ func TestSourceDockerImage(t *testing.T) {
 				cmd.Mounts = []SourceMount{contextMount}
 				img.Cmd = &cmd
 				src.DockerImage = &img
-
 				ops := getSourceOp(ctx, t, src)
 
 				var contextOp *pb.Op
@@ -534,7 +533,7 @@ func TestSourceContext(t *testing.T) {
 		testWithFilters(t, src)
 	})
 
-	t.Run("with customn name", func(t *testing.T) {
+	t.Run("with custom name", func(t *testing.T) {
 		src := Source{
 			Context: &SourceContext{Name: "some-name"},
 		}

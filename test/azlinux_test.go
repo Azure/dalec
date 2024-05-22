@@ -712,6 +712,89 @@ WantedBy=sockets.target
 			return gwclient.NewResult(), nil
 		})
 	})
+
+	t.Run("docs and licenses are handled correctly", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "test-docs-handled",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Docs should be placed",
+			Sources: map[string]dalec.Source{
+				"src1": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"src2": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"src3": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"src4": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "message=hello",
+							Permissions: 0o700,
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"src1": {},
+					"src2": {
+						SubPath: "subpath",
+					},
+				},
+				Licenses: map[string]dalec.ArtifactConfig{
+					"src3": {},
+					"src4": {
+						SubPath: "license-subpath",
+					},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Doc files should be created in correct place",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/share/doc/test-docs-handled/src1":                      {},
+						"/usr/share/doc/test-docs-handled/subpath/src2":              {},
+						"/usr/share/licenses/test-docs-handled/src3":                 {},
+						"/usr/share/licenses/test-docs-handled/license-subpath/src4": {},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			_, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build package with doc files as expected %w", err)
+			}
+			return gwclient.NewResult(), nil
+		})
+	})
 }
 
 func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expected os.FileMode) error {
