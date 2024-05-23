@@ -141,12 +141,6 @@ type Artifacts struct {
 	// TODO: other types of artifacts (systtemd units, libexec, etc)
 }
 
-const (
-	SystemdUnitUpgradePolicyNone    = "none"
-	SystemdUnitUpgradePolicyReload  = "reload"
-	SystemdUnitUpgradePolicyRestart = "restart"
-)
-
 type SystemdUnitConfig struct {
 	// Name is the name systemd unit should be copied under.
 	// Nested paths are not supported. It is the user's responsibility

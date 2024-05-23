@@ -352,11 +352,6 @@ echo "$BAR" > bar.txt
 			Vendor:      "Microsoft",
 			License:     "Apache 2.0",
 			Packager:    "Microsoft <support@microsoft.com>",
-			Dependencies: &dalec.PackageDependencies{
-				Build: map[string][]string{
-					"msft-golang": {},
-				},
-			},
 			Sources: map[string]dalec.Source{
 				"src": {
 					Inline: &dalec.SourceInline{
@@ -448,11 +443,6 @@ WantedBy=multi-user.target
 			Vendor:      "Microsoft",
 			License:     "Apache 2.0",
 			Packager:    "Microsoft <support@microsoft.com>",
-			Dependencies: &dalec.PackageDependencies{
-				Build: map[string][]string{
-					"msft-golang": {},
-				},
-			},
 			Sources: map[string]dalec.Source{
 				"src": {
 					Inline: &dalec.SourceInline{
