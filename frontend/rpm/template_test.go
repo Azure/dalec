@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"gotest.tools/v3/assert"
 )
 
 func TestTemplateSources(t *testing.T) {
@@ -205,4 +206,21 @@ func TestTemplateSources(t *testing.T) {
 			t.Fatalf("unexpected trailing sources: %q", s)
 		}
 	})
+}
+
+func TestTemplate_Artifacts(t *testing.T) {
+
+	w := &specWrapper{Spec: &dalec.Spec{
+		Artifacts: dalec.Artifacts{
+			SystemdUnits: map[string]dalec.SystemdUnitConfig{
+				"test.service": {},
+			},
+		},
+	}}
+
+	got := w.PostUn().String()
+	want := `%postun
+%systemd_postun test.service
+`
+	assert.Equal(t, want, got)
 }

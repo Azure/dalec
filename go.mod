@@ -19,12 +19,13 @@ require (
 	github.com/opencontainers/image-spec v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
-	github.com/tonistiigi/fsutil v0.0.0-20240424095704-91a3fc46842c
 	github.com/stretchr/testify v1.8.4
+	github.com/tonistiigi/fsutil v0.0.0-20240424095704-91a3fc46842c
 	go.opentelemetry.io/otel v1.21.0
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
 	golang.org/x/sys v0.18.0
 	google.golang.org/grpc v1.59.0
+	gotest.tools/v3 v3.5.0
 )
 
 require (
@@ -104,5 +105,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231016165738-49dd2c1f3d0b // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gotest.tools/v3 v3.5.0 // indirect
 )

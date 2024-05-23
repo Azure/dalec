@@ -4,6 +4,7 @@ package dalec
 import (
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -135,7 +136,27 @@ type Artifacts struct {
 	Docs map[string]ArtifactConfig `yaml:"docs,omitempty" json:"docs,omitempty"`
 	// Licenses is a list of doc files included in the package
 	Licenses map[string]ArtifactConfig `yaml:"licenses,omitempty" json:"licenses,omitempty"`
+	// SystemdUnits is a list of systemd units to include in the package.
+	SystemdUnits map[string]SystemdUnitConfig `yaml:"systemdUnits,omitempty" json:"systemdUnits,omitempty"`
 	// TODO: other types of artifacts (systtemd units, libexec, etc)
+}
+
+type SystemdUnitConfig struct {
+	// Name is the name systemd unit should be copied under.
+	// Nested paths are not supported. It is the user's responsibility
+	// to name the service with the appropriate extension, i.e. .service, .timer, etc.
+	Name string `yaml:"name,omitempty" json:"name"`
+
+	// Enable is used to enable the systemd unit on install
+	// This determines what will be written to a systemd preset file
+	Enable bool `yaml:"enable,omitempty" json:"enable"`
+}
+
+func (s SystemdUnitConfig) Artifact() ArtifactConfig {
+	return ArtifactConfig{
+		SubPath: "",
+		Name:    s.Name,
+	}
 }
 
 // CreateArtifactDirectories describes various directories that should be created on install.
@@ -167,6 +188,30 @@ type ArtifactConfig struct {
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 }
 
+func (a *ArtifactConfig) ResolveName(path string) string {
+	if a.Name != "" {
+		return a.Name
+	}
+	return filepath.Base(path)
+}
+
+// ServiceConfig is the configuration for a service to include in the package.
+type ServiceConfig struct {
+	Name string `yaml:"name" json:"name" jsonschema:"omitempty"`
+
+	// Some services don't support restarting, in which case this should be set to true
+	NoRestart bool `yaml:"noRestart,omitempty" json:"noRestart,omitempty"`
+
+	Disable bool `yaml:"disable,omitempty" json:"disable,omitempty"`
+}
+
+func (s ServiceConfig) Artifact() ArtifactConfig {
+	return ArtifactConfig{
+		SubPath: "",
+		Name:    s.Name,
+	}
+}
+
 // IsEmpty is used to determine if there are any artifacts to include in the package.
 func (a *Artifacts) IsEmpty() bool {
 	if len(a.Binaries) > 0 {
@@ -181,6 +226,11 @@ func (a *Artifacts) IsEmpty() bool {
 	if len(a.ConfigFiles) > 0 {
 		return false
 	}
+
+	if len(a.SystemdUnits) > 0 {
+		return false
+	}
+
 	if len(a.Docs) > 0 {
 		return false
 	}

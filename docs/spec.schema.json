@@ -93,6 +93,13 @@
 					},
 					"type": "object",
 					"description": "Licenses is a list of doc files included in the package"
+				},
+				"systemdUnits": {
+					"additionalProperties": {
+						"$ref": "#/$defs/SystemdUnitConfig"
+					},
+					"type": "object",
+					"description": "SystemdUnits is a list of systemd units to include in the package."
 				}
 			},
 			"additionalProperties": false,
@@ -913,6 +920,24 @@
 				"path"
 			],
 			"description": "SymlinkTarget specifies the properties of a symlink"
+		},
+		"SystemdUnitConfig": {
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Name is the name systemd unit should be copied under.\nNested paths are not supported. It is the user's responsibility\nto name the service with the appropriate extension, i.e. .service, .timer, etc."
+				},
+				"enable": {
+					"type": "boolean",
+					"description": "Enable is used to enable the systemd unit on install\nThis determines what will be written to a systemd preset file"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name",
+				"enable"
+			]
 		},
 		"Target": {
 			"properties": {
