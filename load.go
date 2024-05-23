@@ -362,7 +362,6 @@ func (s *Spec) FillDefaults() {
 			s.Patches[k][i].Strip = &strip
 		}
 	}
-
 }
 
 func (s Spec) Validate() error {

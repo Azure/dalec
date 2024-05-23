@@ -579,7 +579,6 @@ WantedBy=sockets.target
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)
 		})
-
 	})
 
 	t.Run("test directory creation", func(t *testing.T) {
