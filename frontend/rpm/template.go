@@ -485,7 +485,8 @@ func (w *specWrapper) Files() fmt.Stringer {
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
-		fullPath := filepath.Join(`%{_sysconfdir}`, cfg.SubPath, filepath.Base(c))
+		// TODO: handle case where c is overridden by name
+		fullPath := filepath.Join(`%{_sysconfdir}`, cfg.SubPath, cfg.Name)
 		fullDirective := strings.Join([]string{`%config(noreplace)`, fullPath}, " ")
 		fmt.Fprintln(b, fullDirective)
 	}
