@@ -345,15 +345,11 @@ func (w *specWrapper) Install() fmt.Stringer {
 		fmt.Fprintln(b, "mkdir -p", targetDir)
 
 		var targetPath string
-		if cfg.Name != "" {
-			targetPath = filepath.Join(targetDir, cfg.Name)
+		file := resolveFileName(p, cfg)
+		if !strings.Contains(file, "*") {
+			targetPath = filepath.Join(targetDir, file)
 		} else {
-			baseName := filepath.Base(p)
-			if !strings.Contains(baseName, "*") {
-				targetPath = filepath.Join(targetDir, baseName)
-			} else {
-				targetPath = targetDir + "/"
-			}
+			targetPath = targetDir + "/"
 		}
 		fmt.Fprintln(b, "cp -r", p, targetPath)
 	}
@@ -427,23 +423,15 @@ func (w *specWrapper) Install() fmt.Stringer {
 	docKeys := dalec.SortMapKeys(w.Spec.Artifacts.Docs)
 	for _, d := range docKeys {
 		cfg := w.Spec.Artifacts.Docs[d]
-		// if the subpath is set we need to copy this and for the
-		// files section, we need to spell out the path
-		if cfg.SubPath != "" {
-			root := filepath.Join(`%{buildroot}/%{_docdir}`, w.Name)
-			copyArtifact(root, d, cfg)
-		}
+		root := filepath.Join(`%{buildroot}/%{_docdir}`, w.Name)
+		copyArtifact(root, d, cfg)
 	}
 
 	licenseKeys := dalec.SortMapKeys(w.Spec.Artifacts.Licenses)
 	for _, l := range licenseKeys {
 		cfg := w.Spec.Artifacts.Licenses[l]
-		// if the subpath is set we need to copy this and for the
-		// files section, we need to spell out the path
-		if cfg.SubPath != "" {
-			root := filepath.Join(`%{buildroot}/%{_licensedir}`, w.Name)
-			copyArtifact(root, l, cfg)
-		}
+		root := filepath.Join(`%{buildroot}/%{_licensedir}`, w.Name)
+		copyArtifact(root, l, cfg)
 	}
 
 	return b
@@ -460,7 +448,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 	binKeys := dalec.SortMapKeys(w.Spec.Artifacts.Binaries)
 	for _, p := range binKeys {
 		cfg := w.Spec.Artifacts.Binaries[p]
-		full := filepath.Join(`%{_bindir}/`, cfg.SubPath, cfg.Name)
+		full := filepath.Join(`%{_bindir}/`, cfg.SubPath, resolveFileName(p, cfg))
 		fmt.Fprintln(b, full)
 	}
 
@@ -485,8 +473,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
-		// TODO: handle case where c is overridden by name
-		fullPath := filepath.Join(`%{_sysconfdir}`, cfg.SubPath, cfg.Name)
+		fullPath := filepath.Join(`%{_sysconfdir}`, cfg.SubPath, resolveFileName(c, cfg))
 		fullDirective := strings.Join([]string{`%config(noreplace)`, fullPath}, " ")
 		fmt.Fprintln(b, fullDirective)
 	}
@@ -505,10 +492,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 	docKeys := dalec.SortMapKeys(w.Spec.Artifacts.Docs)
 	for _, d := range docKeys {
 		cfg := w.Spec.Artifacts.Docs[d]
-		path := filepath.Base(d)
-		if cfg.SubPath != "" {
-			path = filepath.Join(`%{_docdir}`, w.Name, cfg.SubPath, filepath.Base(d))
-		}
+		path := filepath.Join(`%{_docdir}`, w.Name, cfg.SubPath, resolveFileName(d, cfg))
 		fullDirective := strings.Join([]string{`%doc`, path}, " ")
 		fmt.Fprintln(b, fullDirective)
 
@@ -517,10 +501,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 	licenseKeys := dalec.SortMapKeys(w.Spec.Artifacts.Licenses)
 	for _, l := range licenseKeys {
 		cfg := w.Spec.Artifacts.Licenses[l]
-		path := filepath.Base(l)
-		if cfg.SubPath != "" {
-			path = filepath.Join(`%{_licensedir}`, w.Name, cfg.SubPath, filepath.Base(l))
-		}
+		path := filepath.Join(`%{_licensedir}`, w.Name, cfg.SubPath, resolveFileName(l, cfg))
 		fullDirective := strings.Join([]string{`%license`, path}, " ")
 		fmt.Fprintln(b, fullDirective)
 	}
@@ -537,4 +518,12 @@ func WriteSpec(spec *dalec.Spec, target string, w io.Writer) error {
 		return fmt.Errorf("error executing spec template: %w", err)
 	}
 	return nil
+}
+
+func resolveFileName(path string, cfg dalec.ArtifactConfig) string {
+	file := filepath.Base(path)
+	if cfg.Name != "" {
+		file = cfg.Name
+	}
+	return file
 }
