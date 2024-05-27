@@ -25,7 +25,7 @@ require (
 	golang.org/x/exp v0.0.0-20240318143956-a85f2c67cd81
 	golang.org/x/sys v0.18.0
 	google.golang.org/grpc v1.59.0
-	gotest.tools/v3 v3.5.0
+	gotest.tools/v3 v3.5.1
 )
 
 require (
