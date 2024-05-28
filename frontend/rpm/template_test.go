@@ -213,8 +213,10 @@ func TestTemplate_Artifacts(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Artifacts: dalec.Artifacts{
-				SystemdUnits: map[string]dalec.SystemdUnitConfig{
-					"test.service": {},
+				SystemdConfigurations: &dalec.SystemdConfiguration{
+					SystemdUnits: map[string]dalec.SystemdUnitConfig{
+						"test.service": {},
+					},
 				},
 			},
 		}}

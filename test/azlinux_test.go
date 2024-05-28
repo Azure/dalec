@@ -378,9 +378,11 @@ WantedBy=multi-user.target
 				},
 			},
 			Artifacts: dalec.Artifacts{
-				SystemdUnits: map[string]dalec.SystemdUnitConfig{
-					"src/simple.service": {
-						Enable: true,
+				SystemdConfigurations: &dalec.SystemdConfiguration{
+					SystemdUnits: map[string]dalec.SystemdUnitConfig{
+						"src/simple.service": {
+							Enable: true,
+						},
 					},
 				},
 			},
@@ -407,7 +409,11 @@ WantedBy=multi-user.target
 		})
 
 		// Test to ensure disabling works by default
-		spec.Artifacts.SystemdUnits["src/simple.service"] = dalec.SystemdUnitConfig{}
+		spec.Artifacts.SystemdConfigurations = &dalec.SystemdConfiguration{
+			SystemdUnits: map[string]dalec.SystemdUnitConfig{
+				"src/simple.service": {},
+			},
+		}
 		spec.Tests = []*dalec.TestSpec{
 			{
 				Name: "Check service files",
@@ -484,10 +490,12 @@ WantedBy=sockets.target
 				},
 			},
 			Artifacts: dalec.Artifacts{
-				SystemdUnits: map[string]dalec.SystemdUnitConfig{
-					"src/foo.service": {},
-					"src/foo.socket": {
-						Enable: true,
+				SystemdConfigurations: &dalec.SystemdConfiguration{
+					SystemdUnits: map[string]dalec.SystemdUnitConfig{
+						"src/foo.service": {},
+						"src/foo.socket": {
+							Enable: true,
+						},
 					},
 				},
 			},
