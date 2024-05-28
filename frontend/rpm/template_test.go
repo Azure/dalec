@@ -213,8 +213,8 @@ func TestTemplate_Artifacts(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Artifacts: dalec.Artifacts{
-				SystemdConfigurations: &dalec.SystemdConfiguration{
-					SystemdUnits: map[string]dalec.SystemdUnitConfig{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
 						"test.service": {},
 					},
 				},
@@ -367,8 +367,8 @@ func TestTemplate_Artifacts(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Artifacts: dalec.Artifacts{
-				SystemdConfigurations: &dalec.SystemdConfiguration{
-					SystemdDropins: map[string]dalec.SystemdDropinConfig{
+				Systemd: &dalec.SystemdConfiguration{
+					Dropins: map[string]dalec.SystemdDropinConfig{
 						"src/blah.config": {
 							Unit: "foo.service",
 						},
@@ -389,8 +389,8 @@ func TestTemplate_Artifacts(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Artifacts: dalec.Artifacts{
-				SystemdConfigurations: &dalec.SystemdConfiguration{
-					SystemdDropins: map[string]dalec.SystemdDropinConfig{
+				Systemd: &dalec.SystemdConfiguration{
+					Dropins: map[string]dalec.SystemdDropinConfig{
 						"src/blah.config": {
 							Unit: "foo.service",
 						},

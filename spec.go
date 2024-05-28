@@ -136,16 +136,16 @@ type Artifacts struct {
 	Docs map[string]ArtifactConfig `yaml:"docs,omitempty" json:"docs,omitempty"`
 	// Licenses is a list of doc files included in the package
 	Licenses map[string]ArtifactConfig `yaml:"licenses,omitempty" json:"licenses,omitempty"`
-	// SystemdConfigurations is the list of systemd units and dropin files for the package
-	SystemdConfigurations *SystemdConfiguration `yaml:"systemd,omitempty" json:"systemd,omitempty"`
-	// TODO: other types of artifacts (systtemd units, libexec, etc)
+	// Systemd is the list of systemd units and dropin files for the package
+	Systemd *SystemdConfiguration `yaml:"systemd,omitempty" json:"systemd,omitempty"`
+	// TODO: other types of artifacts (libexec, etc)
 }
 
 type SystemdConfiguration struct {
-	// SystemdUnits is a list of systemd units to include in the package.
-	SystemdUnits map[string]SystemdUnitConfig `yaml:"units,omitempty" json:"units,omitempty"`
-	// SystemdDropins is a list of systemd drop in files that should be included in the package
-	SystemdDropins map[string]SystemdDropinConfig `yaml:"dropins,omitempty" json:"dropins,omitempty`
+	// Units is a list of systemd units to include in the package.
+	Units map[string]SystemdUnitConfig `yaml:"units,omitempty" json:"units,omitempty"`
+	// Dropins is a list of systemd drop in files that should be included in the package
+	Dropins map[string]SystemdDropinConfig `yaml:"dropins,omitempty" json:"dropins,omitempty"`
 }
 
 type SystemdUnitConfig struct {
@@ -171,7 +171,7 @@ type SystemdDropinConfig struct {
 	// If empty, the file or dir name from the produced artifact will be used.
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 	// Unit is the name of the systemd unit that the dropin files should be copied under.
-	Unit string `yaml:"unit" json:"unit"`
+	Unit string `yaml:"unit" json:"unit"` // the unit named foo.service maps to the directory foo.service.d
 }
 
 func (s SystemdDropinConfig) Artifact() ArtifactConfig {
@@ -249,8 +249,8 @@ func (a *Artifacts) IsEmpty() bool {
 		return false
 	}
 
-	if a.SystemdConfigurations != nil &&
-		(len(a.SystemdConfigurations.SystemdUnits) > 0 || len(a.SystemdConfigurations.SystemdDropins) > 0) {
+	if a.Systemd != nil &&
+		(len(a.Systemd.Units) > 0 || len(a.Systemd.Dropins) > 0) {
 		return false
 	}
 

@@ -378,8 +378,8 @@ WantedBy=multi-user.target
 				},
 			},
 			Artifacts: dalec.Artifacts{
-				SystemdConfigurations: &dalec.SystemdConfiguration{
-					SystemdUnits: map[string]dalec.SystemdUnitConfig{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
 						"src/simple.service": {
 							Enable: true,
 						},
@@ -409,8 +409,8 @@ WantedBy=multi-user.target
 		})
 
 		// Test to ensure disabling works by default
-		spec.Artifacts.SystemdConfigurations = &dalec.SystemdConfiguration{
-			SystemdUnits: map[string]dalec.SystemdUnitConfig{
+		spec.Artifacts.Systemd = &dalec.SystemdConfiguration{
+			Units: map[string]dalec.SystemdUnitConfig{
 				"src/simple.service": {},
 			},
 		}
@@ -496,14 +496,14 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				},
 			},
 			Artifacts: dalec.Artifacts{
-				SystemdConfigurations: &dalec.SystemdConfiguration{
-					SystemdUnits: map[string]dalec.SystemdUnitConfig{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
 						"src/foo.service": {},
 						"src/foo.socket": {
 							Enable: true,
 						},
 					},
-					SystemdDropins: map[string]dalec.SystemdDropinConfig{
+					Dropins: map[string]dalec.SystemdDropinConfig{
 						"src/foo.conf": {
 							Unit: "foo.service",
 						},
@@ -567,8 +567,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				},
 			},
 			Artifacts: dalec.Artifacts{
-				SystemdConfigurations: &dalec.SystemdConfiguration{
-					SystemdDropins: map[string]dalec.SystemdDropinConfig{
+				Systemd: &dalec.SystemdConfiguration{
+					Dropins: map[string]dalec.SystemdDropinConfig{
 						"src/foo.conf": {
 							Unit: "foo.service",
 						},
