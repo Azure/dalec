@@ -209,18 +209,116 @@ func TestTemplateSources(t *testing.T) {
 }
 
 func TestTemplate_Artifacts(t *testing.T) {
-
-	w := &specWrapper{Spec: &dalec.Spec{
-		Artifacts: dalec.Artifacts{
-			SystemdUnits: map[string]dalec.SystemdUnitConfig{
-				"test.service": {},
+	t.Run("test systemd unit postun", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				SystemdUnits: map[string]dalec.SystemdUnitConfig{
+					"test.service": {},
+				},
 			},
-		},
-	}}
+		}}
 
-	got := w.PostUn().String()
-	want := `%postun
+		got := w.PostUn().String()
+		want := `%postun
 %systemd_postun test.service
 `
-	assert.Equal(t, want, got)
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test doc templaing using artifact config", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"README.md": {
+						SubPath: "docs",
+						Name:    "README",
+					},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%doc %{_docdir}/test-pkg/docs/README
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test doc templaing using defaults", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"README.md": {},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%doc %{_docdir}/test-pkg/README.md
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test doc templaing using defaults and longer path", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"/some/path/to/README.md": {},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%doc %{_docdir}/test-pkg/README.md
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test license templaing using defaults", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				Licenses: map[string]dalec.ArtifactConfig{
+					"LICENSE": {},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%license %{_licensedir}/test-pkg/LICENSE
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test license templaing using ArtifactConfig", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				Licenses: map[string]dalec.ArtifactConfig{
+					"LICENSE": {
+						Name:    "LICENSE.md",
+						SubPath: "licenses",
+					},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%license %{_licensedir}/test-pkg/licenses/LICENSE.md
+`
+		assert.Equal(t, want, got)
+	})
 }
