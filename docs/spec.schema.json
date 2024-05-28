@@ -96,7 +96,7 @@
 				},
 				"systemd": {
 					"$ref": "#/$defs/SystemdConfiguration",
-					"description": "SystemdConfigurations is the list of systemd units and dropin files for the package"
+					"description": "Systemd is the list of systemd units and dropin files for the package"
 				}
 			},
 			"additionalProperties": false,
@@ -925,21 +925,18 @@
 						"$ref": "#/$defs/SystemdUnitConfig"
 					},
 					"type": "object",
-					"description": "SystemdUnits is a list of systemd units to include in the package."
+					"description": "Units is a list of systemd units to include in the package."
 				},
-				"SystemdDropins": {
+				"dropins": {
 					"additionalProperties": {
 						"$ref": "#/$defs/SystemdDropinConfig"
 					},
 					"type": "object",
-					"description": "SystemdDropins is a list of systemd drop in files that should be included in the package"
+					"description": "Dropins is a list of systemd drop in files that should be included in the package"
 				}
 			},
 			"additionalProperties": false,
-			"type": "object",
-			"required": [
-				"SystemdDropins"
-			]
+			"type": "object"
 		},
 		"SystemdDropinConfig": {
 			"properties": {
