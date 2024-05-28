@@ -33,6 +33,11 @@ func newHandler(w worker) gwclient.BuildFunc {
 	})
 	mux.Add("rpm/debug", handleDebug(w), nil)
 
+	mux.Add("rpm/bin", handleBin(w), &targets.Target{
+		Name:        "rpm/bin",
+		Description: "Builds and rpm and copies out binary artifacts",
+	})
+
 	mux.Add("container", handleContainer(w), &targets.Target{
 		Name:        "container",
 		Description: "Builds a container image for",
