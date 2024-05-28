@@ -484,6 +484,12 @@ ListenStream=127.0.0.1:8080
 WantedBy=sockets.target
 								`,
 								},
+								"foo.conf": {
+									Contents: `
+[Service]
+Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+								`,
+								},
 							},
 						},
 					},
@@ -495,6 +501,11 @@ WantedBy=sockets.target
 						"src/foo.service": {},
 						"src/foo.socket": {
 							Enable: true,
+						},
+					},
+					SystemdDropins: map[string]dalec.SystemdDropinConfig{
+						"src/foo.conf": {
+							Unit: "foo.service",
 						},
 					},
 				},
@@ -510,6 +521,66 @@ WantedBy=sockets.target
 						"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"enable foo.socket",
 								"disable foo.service"}},
+							Permissions: 0644,
+						},
+						"/usr/lib/systemd/system/foo.service.d/foo.conf": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
+							Permissions: 0644,
+						},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			return client.Solve(ctx, req)
+		})
+	})
+
+	t.Run("test systemd with only config dropin", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "test-systemd-unit",
+			Description: "Test systemd unit",
+			Website:     "https://www.github.com/Azure/dalec",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Vendor:      "Microsoft",
+			License:     "Apache 2.0",
+			Packager:    "Microsoft <support@microsoft.com>",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+
+							Files: map[string]*dalec.SourceInlineFile{
+								"foo.conf": {
+									Contents: `
+[Service]
+Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+								`,
+								},
+							},
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				SystemdConfigurations: &dalec.SystemdConfiguration{
+					SystemdDropins: map[string]dalec.SystemdDropinConfig{
+						"src/foo.conf": {
+							Unit: "foo.service",
+						},
+					},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check service files",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/lib/systemd/system/foo.service.d/foo.conf": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
 					},

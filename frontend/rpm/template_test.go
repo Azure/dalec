@@ -362,4 +362,53 @@ func TestTemplate_Artifacts(t *testing.T) {
 `
 		assert.Equal(t, want, got)
 	})
+
+	t.Run("test systemd dropin templating", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				SystemdConfigurations: &dalec.SystemdConfiguration{
+					SystemdDropins: map[string]dalec.SystemdDropinConfig{
+						"src/blah.config": {
+							Unit: "foo.service",
+						},
+					},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%dir %{_unitdir}/foo.service.d
+%{_unitdir}/foo.service.d/blah.config
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test systemd dropin templating two files and mixed config", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				SystemdConfigurations: &dalec.SystemdConfiguration{
+					SystemdDropins: map[string]dalec.SystemdDropinConfig{
+						"src/blah.config": {
+							Unit: "foo.service",
+						},
+						"src/env.config": {
+							Unit: "foo.service",
+							Name: "test.conf",
+						},
+					},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%dir %{_unitdir}/foo.service.d
+%{_unitdir}/foo.service.d/blah.config
+%{_unitdir}/foo.service.d/test.conf
+`
+		assert.Equal(t, want, got)
+	})
 }
