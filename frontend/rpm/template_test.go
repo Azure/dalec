@@ -226,7 +226,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		assert.Equal(t, want, got)
 	})
 
-	t.Run("test doc templaing using artifact config", func(t *testing.T) {
+	t.Run("test doc templating using artifact config", func(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Name: "test-pkg",
@@ -247,7 +247,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		assert.Equal(t, want, got)
 	})
 
-	t.Run("test doc templaing using defaults", func(t *testing.T) {
+	t.Run("test doc templating using defaults", func(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Name: "test-pkg",
@@ -265,7 +265,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		assert.Equal(t, want, got)
 	})
 
-	t.Run("test doc templaing using defaults and longer path", func(t *testing.T) {
+	t.Run("test doc templating using defaults and longer path", func(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Name: "test-pkg",
@@ -283,7 +283,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		assert.Equal(t, want, got)
 	})
 
-	t.Run("test license templaing using defaults", func(t *testing.T) {
+	t.Run("test license templating using defaults", func(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Name: "test-pkg",
@@ -301,7 +301,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		assert.Equal(t, want, got)
 	})
 
-	t.Run("test license templaing using ArtifactConfig", func(t *testing.T) {
+	t.Run("test license templating using ArtifactConfig", func(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
 			Name: "test-pkg",
@@ -318,6 +318,45 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %license %{_licensedir}/test-pkg/licenses/LICENSE.md
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test config file templating using ArtifactConfig", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				ConfigFiles: map[string]dalec.ArtifactConfig{
+					"/src/config.env": {
+						Name:    "config",
+						SubPath: "sysconfig",
+					},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%config(noreplace) %{_sysconfdir}/sysconfig/config
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test config file templating using defaults", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				ConfigFiles: map[string]dalec.ArtifactConfig{
+					"/src/config.env": {},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%config(noreplace) %{_sysconfdir}/config.env
 `
 		assert.Equal(t, want, got)
 	})
