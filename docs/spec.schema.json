@@ -94,12 +94,9 @@
 					"type": "object",
 					"description": "Licenses is a list of doc files included in the package"
 				},
-				"systemdUnits": {
-					"additionalProperties": {
-						"$ref": "#/$defs/SystemdUnitConfig"
-					},
-					"type": "object",
-					"description": "SystemdUnits is a list of systemd units to include in the package."
+				"systemd": {
+					"$ref": "#/$defs/SystemdConfiguration",
+					"description": "SystemdConfigurations is the list of systemd units and dropin files for the package"
 				}
 			},
 			"additionalProperties": false,
@@ -920,6 +917,46 @@
 				"path"
 			],
 			"description": "SymlinkTarget specifies the properties of a symlink"
+		},
+		"SystemdConfiguration": {
+			"properties": {
+				"units": {
+					"additionalProperties": {
+						"$ref": "#/$defs/SystemdUnitConfig"
+					},
+					"type": "object",
+					"description": "SystemdUnits is a list of systemd units to include in the package."
+				},
+				"SystemdDropins": {
+					"additionalProperties": {
+						"$ref": "#/$defs/SystemdDropinConfig"
+					},
+					"type": "object",
+					"description": "SystemdDropins is a list of systemd drop in files that should be included in the package"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"SystemdDropins"
+			]
+		},
+		"SystemdDropinConfig": {
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Name is file or dir name to use for the artifact in the package.\nIf empty, the file or dir name from the produced artifact will be used."
+				},
+				"unit": {
+					"type": "string",
+					"description": "Unit is the name of the systemd unit that the dropin files should be copied under."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"unit"
+			]
 		},
 		"SystemdUnitConfig": {
 			"properties": {

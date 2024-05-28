@@ -136,9 +136,16 @@ type Artifacts struct {
 	Docs map[string]ArtifactConfig `yaml:"docs,omitempty" json:"docs,omitempty"`
 	// Licenses is a list of doc files included in the package
 	Licenses map[string]ArtifactConfig `yaml:"licenses,omitempty" json:"licenses,omitempty"`
-	// SystemdUnits is a list of systemd units to include in the package.
-	SystemdUnits map[string]SystemdUnitConfig `yaml:"systemdUnits,omitempty" json:"systemdUnits,omitempty"`
+	// SystemdConfigurations is the list of systemd units and dropin files for the package
+	SystemdConfigurations *SystemdConfiguration `yaml:"systemd,omitempty" json:"systemd,omitempty"`
 	// TODO: other types of artifacts (systtemd units, libexec, etc)
+}
+
+type SystemdConfiguration struct {
+	// SystemdUnits is a list of systemd units to include in the package.
+	SystemdUnits map[string]SystemdUnitConfig `yaml:"units,omitempty" json:"units,omitempty"`
+	// SystemdDropins is a list of systemd drop in files that should be included in the package
+	SystemdDropins map[string]SystemdDropinConfig `yaml:"dropins,omitempty" json:"dropins,omitempty`
 }
 
 type SystemdUnitConfig struct {
@@ -155,6 +162,21 @@ type SystemdUnitConfig struct {
 func (s SystemdUnitConfig) Artifact() ArtifactConfig {
 	return ArtifactConfig{
 		SubPath: "",
+		Name:    s.Name,
+	}
+}
+
+type SystemdDropinConfig struct {
+	// Name is file or dir name to use for the artifact in the package.
+	// If empty, the file or dir name from the produced artifact will be used.
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	// Unit is the name of the systemd unit that the dropin files should be copied under.
+	Unit string `yaml:"unit" json:"unit"`
+}
+
+func (s SystemdDropinConfig) Artifact() ArtifactConfig {
+	return ArtifactConfig{
+		SubPath: fmt.Sprintf("%s.d", s.Unit),
 		Name:    s.Name,
 	}
 }
@@ -227,7 +249,8 @@ func (a *Artifacts) IsEmpty() bool {
 		return false
 	}
 
-	if len(a.SystemdUnits) > 0 {
+	if a.SystemdConfigurations != nil &&
+		(len(a.SystemdConfigurations.SystemdUnits) > 0 || len(a.SystemdConfigurations.SystemdDropins) > 0) {
 		return false
 	}
 

@@ -295,10 +295,12 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 	b := &strings.Builder{}
 	b.WriteString("%preun\n")
 
-	keys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdUnits)
-	for _, servicePath := range keys {
-		serviceName := filepath.Base(servicePath)
-		fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
+	if w.Spec.Artifacts.SystemdConfigurations != nil {
+		keys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdConfigurations.SystemdUnits)
+		for _, servicePath := range keys {
+			serviceName := filepath.Base(servicePath)
+			fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
+		}
 	}
 
 	return b
@@ -309,24 +311,27 @@ func (w *specWrapper) Post() fmt.Stringer {
 	b.WriteString("%post\n")
 	// TODO: can inject other post install steps here in the future
 
-	keys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdUnits)
-	for _, servicePath := range keys {
-		unitConf := w.Spec.Artifacts.SystemdUnits[servicePath].Artifact()
-		fmt.Fprintf(b, "%%systemd_post %s\n", unitConf.ResolveName(servicePath))
+	if w.Spec.Artifacts.SystemdConfigurations != nil {
+		keys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdConfigurations.SystemdUnits)
+		for _, servicePath := range keys {
+			unitConf := w.Spec.Artifacts.SystemdConfigurations.SystemdUnits[servicePath].Artifact()
+			fmt.Fprintf(b, "%%systemd_post %s\n", unitConf.ResolveName(servicePath))
+		}
 	}
-
 	return b
 }
 
 func (w *specWrapper) PostUn() fmt.Stringer {
 	b := &strings.Builder{}
 	b.WriteString("%postun\n")
-	keys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdUnits)
-	for _, servicePath := range keys {
-		cfg := w.Spec.Artifacts.SystemdUnits[servicePath]
-		a := cfg.Artifact()
-		serviceName := a.ResolveName(servicePath)
-		fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
+	if w.Spec.Artifacts.SystemdConfigurations != nil {
+		keys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdConfigurations.SystemdUnits)
+		for _, servicePath := range keys {
+			cfg := w.Spec.Artifacts.SystemdConfigurations.SystemdUnits[servicePath]
+			a := cfg.Artifact()
+			serviceName := a.ResolveName(servicePath)
+			fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
+		}
 	}
 
 	return b
@@ -396,28 +401,36 @@ func (w *specWrapper) Install() fmt.Stringer {
 		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, cfg)
 	}
 
-	serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdUnits)
-	presetName := "%{name}.preset"
-	for _, p := range serviceKeys {
-		cfg := w.Spec.Artifacts.SystemdUnits[p]
-		// must include systemd unit extension (.service, .socket, .timer, etc.) in name
-		copyArtifact(`%{buildroot}/%{_unitdir}`, p, cfg.Artifact())
+	if w.Spec.Artifacts.SystemdConfigurations != nil {
+		serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdConfigurations.SystemdUnits)
+		presetName := "%{name}.preset"
+		for _, p := range serviceKeys {
+			cfg := w.Spec.Artifacts.SystemdConfigurations.SystemdUnits[p]
+			// must include systemd unit extension (.service, .socket, .timer, etc.) in name
+			copyArtifact(`%{buildroot}/%{_unitdir}`, p, cfg.Artifact())
 
-		verb := "disable"
-		if cfg.Enable {
-			verb = "enable"
+			verb := "disable"
+			if cfg.Enable {
+				verb = "enable"
+			}
+
+			unitName := filepath.Base(p)
+			if cfg.Name != "" {
+				unitName = cfg.Name
+			}
+
+			fmt.Fprintf(b, "echo '%s %s' >> '%s'\n", verb, unitName, presetName)
 		}
 
-		unitName := filepath.Base(p)
-		if cfg.Name != "" {
-			unitName = cfg.Name
+		if len(serviceKeys) > 0 {
+			copyArtifact(`%{buildroot}/%{_presetdir}`, presetName, dalec.ArtifactConfig{})
 		}
 
-		fmt.Fprintf(b, "echo '%s %s' >> '%s'\n", verb, unitName, presetName)
-	}
-
-	if len(serviceKeys) > 0 {
-		copyArtifact(`%{buildroot}/%{_presetdir}`, presetName, dalec.ArtifactConfig{})
+		dropinKeys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdConfigurations.SystemdDropins)
+		for _, d := range dropinKeys {
+			cfg := w.Spec.Artifacts.SystemdConfigurations.SystemdDropins[d]
+			copyArtifact(`%{buildroot}/%{_unitdir}`, d, cfg.Artifact())
+		}
 	}
 
 	docKeys := dalec.SortMapKeys(w.Spec.Artifacts.Docs)
@@ -478,17 +491,55 @@ func (w *specWrapper) Files() fmt.Stringer {
 		fmt.Fprintln(b, fullDirective)
 	}
 
-	serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdUnits)
-	for _, p := range serviceKeys {
-		serviceName := filepath.Base(p)
-		unitPath := filepath.Join(`%{_unitdir}/`, serviceName)
-		fmt.Fprintln(b, unitPath)
-	}
+	if w.Spec.Artifacts.SystemdConfigurations != nil {
+		serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdConfigurations.SystemdUnits)
+		for _, p := range serviceKeys {
+			serviceName := filepath.Base(p)
+			unitPath := filepath.Join(`%{_unitdir}/`, serviceName)
+			fmt.Fprintln(b, unitPath)
+		}
 
-	if len(serviceKeys) > 0 {
-		fmt.Fprintln(b, "%{_presetdir}/%{name}.preset")
-	}
+		if len(serviceKeys) > 0 {
+			fmt.Fprintln(b, "%{_presetdir}/%{name}.preset")
+		}
 
+		dropins := make(map[string][]string)
+
+		// process these to get a unique list of files per unit name.
+		// we need a single dir entry for the directory
+		// need a file entry for each of files
+		dropinKeys := dalec.SortMapKeys(w.Spec.Artifacts.SystemdConfigurations.SystemdDropins)
+		for _, d := range dropinKeys {
+			cfg := w.Spec.Artifacts.SystemdConfigurations.SystemdDropins[d]
+			art := cfg.Artifact()
+			files, ok := dropins[cfg.Unit]
+			if !ok {
+				files = []string{}
+			}
+			p := filepath.Join(
+				`%{_unitdir}`,
+				fmt.Sprintf("%s.d", cfg.Unit),
+				art.ResolveName(d),
+			)
+			dropins[cfg.Unit] = append(files, p)
+		}
+		dropinKeys = dalec.SortMapKeys(dropins)
+		for _, d := range dropinKeys {
+			dir := strings.Join([]string{
+				`%dir`,
+				filepath.Join(
+					`%{_unitdir}`,
+					fmt.Sprintf("%s.d", d),
+				),
+			}, " ")
+			fmt.Fprintln(b, dir)
+
+			for _, file := range dropins[d] {
+				fmt.Fprintln(b, file)
+			}
+		}
+
+	}
 	docKeys := dalec.SortMapKeys(w.Spec.Artifacts.Docs)
 	for _, d := range docKeys {
 		cfg := w.Spec.Artifacts.Docs[d]
