@@ -490,6 +490,12 @@ WantedBy=sockets.target
 Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
 								`,
 								},
+								"env.conf": {
+									Contents: `
+[Service]
+Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+								`,
+								},
 							},
 						},
 					},
@@ -506,6 +512,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					Dropins: map[string]dalec.SystemdDropinConfig{
 						"src/foo.conf": {
 							Unit: "foo.service",
+						},
+						"src/env.conf": {
+							Unit: "foo.socket",
 						},
 					},
 				},
@@ -524,6 +533,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 							Permissions: 0644,
 						},
 						"/usr/lib/systemd/system/foo.service.d/foo.conf": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
+							Permissions: 0644,
+						},
+						"/usr/lib/systemd/system/foo.socket.d/env.conf": {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
