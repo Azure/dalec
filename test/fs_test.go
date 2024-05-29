@@ -185,41 +185,41 @@ func TestStateWrapper_Walk(t *testing.T) {
 		isDir    bool
 		contents []byte
 	}{
-		"/dir": {
+		"dir": {
 			perms: fs.ModeDir | 0644,
 			isDir: true,
 		},
-		"/dir/a": {
+		"dir/a": {
 			perms: fs.ModeDir | 0644,
 			isDir: true,
 		},
-		"/dir/a/b": {
+		"dir/a/b": {
 			isDir: true,
 			perms: fs.ModeDir | 0644,
 		},
-		"/dir/a/b/ab.txt": {
+		"dir/a/b/ab.txt": {
 			isDir:    false,
 			perms:    0644,
 			contents: []byte("ab.txt contents"),
 		},
-		"/dir/c": {
+		"dir/c": {
 			isDir: true,
 			perms: fs.ModeDir | 0644,
 		},
-		"/dir/c/d": {
+		"dir/c/d": {
 			isDir: true,
 			perms: fs.ModeDir | 0644,
 		},
-		"/dir/c/d/e": {
+		"dir/c/d/e": {
 			isDir: true,
 			perms: fs.ModeDir | 0644,
 		},
-		"/dir/c/d/e/f123.txt": {
+		"dir/c/d/e/f123.txt": {
 			isDir:    false,
 			perms:    0644,
 			contents: []byte("f123.txt contents"),
 		},
-		"/h.exe": {
+		"h.exe": {
 			isDir:    false,
 			perms:    0755,
 			contents: []byte("h.exe contents"),
@@ -229,17 +229,17 @@ func TestStateWrapper_Walk(t *testing.T) {
 	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		rfs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
-
-		err = fs.WalkDir(rfs, "/", func(path string, d fs.DirEntry, err error) error {
-			if path == "/" {
-				return nil
-			}
-
+		totalCalls := 0
+		err = fs.WalkDir(rfs, ".", func(currentPath string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
 
-			expect, ok := expectInfo[path]
+			if currentPath == "." {
+				return nil
+			}
+
+			expect, ok := expectInfo[currentPath]
 			assert.True(t, ok)
 
 			info, err := d.Info()
@@ -247,8 +247,10 @@ func TestStateWrapper_Walk(t *testing.T) {
 			assert.Equal(t, expect.perms, info.Mode())
 			assert.Equal(t, expect.isDir, info.IsDir())
 
+			totalCalls += 1
+
 			if !d.IsDir() { // file
-				f, err := rfs.Open(path)
+				f, err := rfs.Open(currentPath)
 				assert.Nil(t, err)
 
 				contents, err := io.ReadAll(f)
@@ -260,7 +262,7 @@ func TestStateWrapper_Walk(t *testing.T) {
 
 			return nil
 		})
-
+		assert.Equal(t, len(expectInfo), totalCalls)
 		assert.Nil(t, err)
 		return nil, nil
 	})
