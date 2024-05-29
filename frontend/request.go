@@ -69,6 +69,22 @@ func withTarget(t string) solveRequestOpt {
 	}
 }
 
+func withBuildArgs(args map[string]string) solveRequestOpt {
+	return func(req *gwclient.SolveRequest) error {
+		if len(args) == 0 {
+			return nil
+		}
+
+		if req.FrontendOpt == nil {
+			req.FrontendOpt = make(map[string]string)
+		}
+		for k, v := range args {
+			req.FrontendOpt["build-arg:"+k] = v
+		}
+		return nil
+	}
+}
+
 func toDockerfile(ctx context.Context, bctx llb.State, dt []byte, spec *dalec.SourceBuild, opts ...llb.ConstraintsOpt) solveRequestOpt {
 	return func(req *gwclient.SolveRequest) error {
 		req.Frontend = "dockerfile.v0"
@@ -118,7 +134,7 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
-func ForwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.Frontend, s llb.State) (llb.State, error) {
+func ForwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
 	const (
 		sourceKey  = "source"
 		contextKey = "context"
@@ -127,7 +143,7 @@ func ForwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.Fro
 
 	opts := client.BuildOpts().Opts
 
-	req, err := newSolveRequest(toFrontend(cfg))
+	req, err := newSolveRequest(toFrontend(cfg.Frontend), withBuildArgs(cfg.Args))
 	if err != nil {
 		return llb.Scratch(), err
 	}

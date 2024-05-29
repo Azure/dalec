@@ -192,6 +192,8 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 	return retErr
 }
 
+var errUnknownArg = errors.New("unknown arg")
+
 func (s *Spec) SubstituteArgs(env map[string]string) error {
 	lex := shell.NewLex('\\')
 
@@ -202,7 +204,7 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	for k, v := range env {
 		if _, ok := args[k]; !ok {
 			if !knownArg(k) {
-				return fmt.Errorf("unknown arg %q", k)
+				return fmt.Errorf("%w: %q", errUnknownArg, k)
 			}
 
 			// if the build arg isn't present in args by opt-in, skip
@@ -259,11 +261,15 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 		}
 	}
 
-	for name, target := range s.Targets {
-		for _, t := range target.Tests {
-			if err := t.processBuildArgs(lex, args, path.Join(name, t.Name)); err != nil {
-				return err
-			}
+	for name, t := range s.Targets {
+		if err := t.processBuildArgs(name, lex, args); err != nil {
+			return fmt.Errorf("error processing build args for target %q: %w", name, err)
+		}
+	}
+
+	if s.PackageConfig != nil {
+		if err := s.PackageConfig.processBuildArgs(lex, args); err != nil {
+			return fmt.Errorf("could not process build args for base spec package config: %w", err)
 		}
 	}
 
@@ -494,5 +500,42 @@ func (g *SourceGenerator) Validate() error {
 		// An empty generator is invalid
 		return fmt.Errorf("no generator type specified")
 	}
+	return nil
+}
+
+func (s *PackageSigner) processBuildArgs(lex *shell.Lex, args map[string]string) error {
+	for k, v := range s.Args {
+		updated, err := lex.ProcessWordWithMap(v, args)
+		if err != nil {
+			return fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
+		}
+		s.Args[k] = updated
+	}
+	return nil
+}
+
+func (t *Target) processBuildArgs(name string, lex *shell.Lex, args map[string]string) error {
+	for _, tt := range t.Tests {
+		if err := tt.processBuildArgs(lex, args, path.Join(name, tt.Name)); err != nil {
+			return err
+		}
+	}
+
+	if t.PackageConfig != nil {
+		if err := t.PackageConfig.processBuildArgs(lex, args); err != nil {
+			return fmt.Errorf("error processing package config build args: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (cfg *PackageConfig) processBuildArgs(lex *shell.Lex, args map[string]string) error {
+	if cfg.Signer != nil {
+		if err := cfg.Signer.processBuildArgs(lex, args); err != nil {
+			return fmt.Errorf("could not process build args for signer config: %w", err)
+		}
+	}
+
 	return nil
 }

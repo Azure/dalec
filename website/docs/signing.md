@@ -11,6 +11,7 @@ tagged, the following can be added to the spec to trigger the signing
 operation:
 
 ```yaml
+name: my-package
 targets: # Distro specific build requirements
   mariner2:
     package_config:
@@ -42,3 +43,113 @@ provided as the build context.
 identical to the input `llb.State` in every way *except* that the
 desired artifacts will be signed.
 
+A signer can also be configured at the root of the spec if there is no target
+specific customization required or you are only building for one target.
+
+Example:
+
+```yaml
+name: my-package
+package_config:
+  signer:
+    image: "ref/to/signing:image"
+    cmdline: "/signer"
+```
+
+## Build Time customization
+
+Signing artifacts may require passing through build-time customizations.
+This can be done through 3 mechanisms:
+
+1. [Secrets](#secrets)
+2. [Named contexts](#named-contexts)
+3. [Build arguments](#build-arguments)
+
+With all methods of build-time customization, the signer needs to be coded
+such that it is going to consume the customizations that are passed in, as such
+all such customizations are signer specific.
+
+### Secrets
+
+Secrets are passed through from the client (such as the docker CLI or buildx).
+These secrets are always available to the signer.
+see Docker's [secrets](https://docs.docker.com/build/building/secrets/)
+documentation for more details on on how secrets can be passed into a build
+using the docker CLI.
+
+*Note*: The docker documentation is using Dockerfiles in their examples which
+are irrelevant for Dalec signing, however the CLI examples for how to pass in
+those secrets is useful.
+
+No changes to the spec yaml are required to use secrets with a signer, except
+that the signer itself needs to be setup to consume the secret(s).
+
+### Named Contexts
+
+Named contexts are passed into the build by the client. All named contexts are
+available to the signer.
+
+A named context is just like a regular
+[build context](https://docs.docker.com/build/building/context/) except that it
+is given a custom name where as the regular build context is specifically named
+`context`. In the scope of Dalec signing, the regular build context is the
+packages that Dalec is giving to the signer to sign.
+A named context can be used to provide extra data or configuration to the signer.
+
+Example usage with Docker:
+
+```console
+$ docker build --build-context my-signing-config=./signing-config-dir ...
+```
+
+Here `my-singing-config` is the name you want to give to the context which the
+signer may use to pull in the context. The `./signing-config-dir` is the data
+being given as the context, in this case a local directory. This could be a
+directory, a git ref, an HTTP url, etc. See the linked docker build context
+documentation above for more details on what can be specified.
+
+Multiple named contexts may be provided.
+
+No changes to the spec yaml are required to use named contexts with a signer,
+except that the signer itself needs to be setup to consume the named
+context(s).
+
+### Build Arguments
+
+Buid arguments are key/value pairs that can be supplied in the yaml spec which
+will be forwarded to the signer.
+
+Taking the original example above we can add build by adding an `args` with
+a string-to-string mapping like so:
+
+```yaml
+targets: # Distro specific build requirements
+  mariner2:
+    package_config:
+      signer:
+        image: "ref/to/signing:image"
+        cmdline: "/signer"
+        args:
+            SOME_KEY: SOME_VALUE
+            SOME_OTHER_KEY: SOME_OTHER_VALUE
+```
+
+The values of these arguments can also be taken from the client using variable
+substitution like in other parts of the spec.
+To use variable substituion, the args must be declared at the root of the spec:
+
+```yaml
+args:
+  SOME_SIGNING_ARG: ""
+  SOME_OTHER_SIGNING_ARG: "default_value"
+
+targets: # Distro specific build requirements
+  mariner2:
+    package_config:
+      signer:
+        image: "ref/to/signing:image"
+        cmdline: "/signer"
+        args:
+            SOME_KEY: "${SOME_SIGNING_ARG}"
+            SOME_OTHER_KEY: "${SOME_OTHER_SIGNING_ARG}"
+```

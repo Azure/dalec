@@ -276,8 +276,10 @@ echo "$BAR" > bar.txt
 				Targets: map[string]dalec.Target{
 					"windowscross": {
 						PackageConfig: &dalec.PackageConfig{
-							Signer: &dalec.Frontend{
-								Image: phonySignerRef,
+							Signer: &dalec.PackageSigner{
+								Frontend: &dalec.Frontend{
+									Image: phonySignerRef,
+								},
 							},
 						},
 					},

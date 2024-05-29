@@ -74,6 +74,19 @@ func main() {
 			File(llb.Mkfile("/target", 0o600, []byte(target))).
 			File(llb.Mkfile("/config.json", 0o600, configBytes))
 
+		// For any build-arg seen, write a file to /env/<KEY> with the contents
+		// being the value of the arg.
+		for k, v := range c.BuildOpts().Opts {
+			_, key, ok := strings.Cut(k, "build-arg:")
+			if !ok {
+				// not a build arg
+				continue
+			}
+			output = output.
+				File(llb.Mkdir("/env", 0o755)).
+				File(llb.Mkfile("/env/"+key, 0o600, []byte(v)))
+		}
+
 		def, err := output.Marshal(ctx)
 		if err != nil {
 			return nil, err
