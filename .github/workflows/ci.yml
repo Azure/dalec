@@ -91,6 +91,8 @@ jobs:
       # So we need to setup a custom builder.
       - name: Set up builder
         uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.3.0
+      - name: download deps
+        run: go mod download
       - name: Run integaration tests
         run: go test -v -json ./test | go run ./cmd/test2json2gha
       - name: dump logs
@@ -112,6 +114,8 @@ jobs:
         with:
           go-version: '1.21'
           cache: false
+      - name: download deps
+        run: go mod download
       - name: Run unit tests
         run: go test -v --test.short --json ./... | go run ./cmd/test2json2gha
 
