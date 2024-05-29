@@ -426,7 +426,7 @@
 		"PackageConfig": {
 			"properties": {
 				"signer": {
-					"$ref": "#/$defs/Frontend",
+					"$ref": "#/$defs/PackageSigner",
 					"description": "Signer is the configuration to use for signing packages"
 				}
 			},
@@ -477,6 +477,34 @@
 			"additionalProperties": false,
 			"type": "object",
 			"description": "PackageDependencies is a list of dependencies for a package."
+		},
+		"PackageSigner": {
+			"properties": {
+				"image": {
+					"type": "string",
+					"description": "Image specifies the frontend image to forward the build to.\nThis can be left unspecified *if* the original frontend has builtin support for the distro.\n\nIf the original frontend does not have builtin support for the distro, this must be specified or the build will fail.\nIf this is specified then it MUST be used.",
+					"examples": [
+						"docker.io/my/frontend:latest"
+					]
+				},
+				"cmdline": {
+					"type": "string",
+					"description": "CmdLine is the command line to use to forward the build to the frontend.\nBy default the frontend image's entrypoint/cmd is used."
+				},
+				"args": {
+					"additionalProperties": {
+						"type": "string"
+					},
+					"type": "object",
+					"description": "Args are passed along to the signer frontend as build args"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"image"
+			],
+			"description": "PackageSigner is the configuration for defining how to sign a package"
 		},
 		"PatchSpec": {
 			"properties": {

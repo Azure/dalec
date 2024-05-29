@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/dalec"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/stretchr/testify/assert"
 )
 
 func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string) func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
@@ -29,6 +30,11 @@ func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string) func(
 
 		if !strings.Contains(string(cfg), "linux") {
 			t.Fatal(fmt.Errorf("configuration incorrect"))
+		}
+
+		for k, v := range spec.PackageConfig.Signer.Args {
+			dt := readFile(ctx, t, "/env/"+k, res)
+			assert.Equal(t, v, string(dt))
 		}
 
 		return gwclient.NewResult(), nil

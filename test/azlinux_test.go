@@ -303,42 +303,60 @@ echo "$BAR" > bar.txt
 	}
 
 	t.Run("test signing", func(t *testing.T) {
-		t.Parallel()
-		spec := dalec.Spec{
-			Name:        "foo",
-			Version:     "v0.0.1",
-			Description: "foo bar baz",
-			Website:     "https://foo.bar.baz",
-			Revision:    "1",
-			PackageConfig: &dalec.PackageConfig{
-				Signer: &dalec.Frontend{
-					Image: phonySignerRef,
-				},
-			},
-			Sources: map[string]dalec.Source{
-				"foo": {
-					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
+		newSpec := func() *dalec.Spec {
+			return &dalec.Spec{
+				Name:        "foo",
+				Version:     "v0.0.1",
+				Description: "foo bar baz",
+				Website:     "https://foo.bar.baz",
+				Revision:    "1",
+				PackageConfig: &dalec.PackageConfig{
+					Signer: &dalec.PackageSigner{
+						Frontend: &dalec.Frontend{
+							Image: phonySignerRef,
 						},
 					},
 				},
-			},
-			Build: dalec.ArtifactBuild{
-				Steps: []dalec.BuildStep{
-					{
-						Command: "/bin/true",
+				Sources: map[string]dalec.Source{
+					"foo": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
+							},
+						},
 					},
 				},
-			},
-			Artifacts: dalec.Artifacts{
-				Binaries: map[string]dalec.ArtifactConfig{
-					"foo": {},
+				Build: dalec.ArtifactBuild{
+					Steps: []dalec.BuildStep{
+						{
+							Command: "/bin/true",
+						},
+					},
 				},
-			},
+				Artifacts: dalec.Artifacts{
+					Binaries: map[string]dalec.ArtifactConfig{
+						"foo": {},
+					},
+				},
+			}
 		}
 
-		runTest(t, distroSigningTest(t, &spec, signTarget))
+		t.Run("no args", func(t *testing.T) {
+			t.Parallel()
+			spec := newSpec()
+			runTest(t, distroSigningTest(t, spec, signTarget))
+		})
+
+		t.Run("with args", func(t *testing.T) {
+			t.Parallel()
+
+			spec := newSpec()
+			spec.PackageConfig.Signer.Args = map[string]string{
+				"HELLO": "world",
+				"FOO":   "bar",
+			}
+			runTest(t, distroSigningTest(t, spec, signTarget))
+		})
 	})
 
 	t.Run("test systemd unit", func(t *testing.T) {

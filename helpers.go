@@ -340,7 +340,7 @@ func (s *Spec) GetSymlinks(target string) map[string]SymlinkTarget {
 	return lm
 }
 
-func (s *Spec) GetSigner(targetKey string) (*Frontend, bool) {
+func (s *Spec) GetSigner(targetKey string) (*PackageSigner, bool) {
 	if s.Targets != nil {
 		if t, ok := s.Targets[targetKey]; ok && hasValidSigner(t.PackageConfig) {
 			return t.PackageConfig.Signer, true

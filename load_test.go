@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"testing"
+
+	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 //go:embed test/fixtures/unmarshall/source-inline.yml
@@ -469,4 +473,71 @@ sources:
 			t.Fatal("expected error, but received none")
 		}
 	})
+}
+
+func TestSpec_SubstituteBuildArgs(t *testing.T) {
+	spec := &Spec{}
+	assert.NilError(t, spec.SubstituteArgs(nil))
+
+	env := map[string]string{}
+	assert.NilError(t, spec.SubstituteArgs(env))
+
+	// some values we'll be using throughout the test
+	const (
+		foo            = "foo"
+		bar            = "bar"
+		argWithDefault = "some default value"
+		plainOleValue  = "some plain old value"
+	)
+
+	env["FOO"] = foo
+	err := spec.SubstituteArgs(env)
+	assert.ErrorIs(t, err, errUnknownArg, "args not defined in the spec should error out")
+
+	spec.Args = map[string]string{}
+
+	spec.Args["FOO"] = ""
+	assert.NilError(t, spec.SubstituteArgs(env))
+
+	pairs := map[string]string{
+		"FOO":      "$FOO",
+		"BAR":      "$BAR",
+		"WHATEVER": "$VAR_WITH_DEFAULT",
+		"REGULAR":  plainOleValue,
+	}
+	spec.PackageConfig = &PackageConfig{
+		Signer: &PackageSigner{
+			Args: maps.Clone(pairs),
+		},
+	}
+	spec.Targets = map[string]Target{
+		"t1": {}, // nil signer
+		"t2": {
+			PackageConfig: &PackageConfig{
+				Signer: &PackageSigner{
+					Args: maps.Clone(pairs),
+				},
+			},
+		},
+	}
+
+	env["BAR"] = bar
+	assert.ErrorIs(t, err, errUnknownArg, "args not defined in the spec should error out")
+
+	spec.Args["BAR"] = ""
+	spec.Args["VAR_WITH_DEFAULT"] = argWithDefault
+
+	assert.NilError(t, spec.SubstituteArgs(env))
+
+	// Base package config
+	assert.Check(t, cmp.Equal(spec.PackageConfig.Signer.Args["FOO"], foo))
+	assert.Check(t, cmp.Equal(spec.PackageConfig.Signer.Args["BAR"], bar))
+	assert.Check(t, cmp.Equal(spec.PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
+	assert.Check(t, cmp.Equal(spec.PackageConfig.Signer.Args["REGULAR"], plainOleValue))
+
+	// targets
+	assert.Check(t, cmp.Nil(spec.Targets["t1"].Frontend))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["BAR"], bar))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["REGULAR"], plainOleValue))
 }

@@ -523,10 +523,17 @@ type Target struct {
 	PackageConfig *PackageConfig `yaml:"package_config,omitempty" json:"package_config,omitempty"`
 }
 
+// PackageSigner is the configuration for defining how to sign a package
+type PackageSigner struct {
+	*Frontend `yaml:",inline" json:",inline"`
+	// Args are passed along to the signer frontend as build args
+	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
+}
+
 // PackageConfig encapsulates the configuration for artifact targets
 type PackageConfig struct {
 	// Signer is the configuration to use for signing packages
-	Signer *Frontend `yaml:"signer,omitempty" json:"signer,omitempty"`
+	Signer *PackageSigner `yaml:"signer,omitempty" json:"signer,omitempty"`
 }
 
 // TestSpec is used to execute tests against a container with the package installed in it.
