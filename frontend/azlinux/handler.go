@@ -35,7 +35,7 @@ func newHandler(w worker) gwclient.BuildFunc {
 
 	mux.Add("rpm/bin", handleBin(w), &targets.Target{
 		Name:        "rpm/bin",
-		Description: "Builds and rpm and copies out binary artifacts",
+		Description: "Builds an rpm and extracts binaries as a zip",
 	})
 
 	mux.Add("container", handleContainer(w), &targets.Target{

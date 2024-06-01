@@ -21,7 +21,7 @@ func binCopyScript(rpms []string, binaries map[string]dalec.ArtifactConfig) stri
 #!/bin/sh
 set -e
 declare -a RPMS=()
-RPM_BINDIR=$(rpm --eval '%{_bindir}')
+export RPM_BINDIR=$(rpm --eval '%{_bindir}')
 `)
 
 	for _, rpm := range rpms {
@@ -29,6 +29,7 @@ RPM_BINDIR=$(rpm --eval '%{_bindir}')
 	}
 
 	sb.WriteString("for rpm in $RPMS; do\n")
+	binaryPathList := make([]string, 0, len(binaries))
 	for path, bin := range binaries {
 		baseName := filepath.Base(path)
 		if bin.Name != "" {
@@ -36,11 +37,30 @@ RPM_BINDIR=$(rpm --eval '%{_bindir}')
 		}
 		srcPath := filepath.Join(bin.SubPath, baseName)
 
-		sb.WriteString(fmt.Sprintf("rpm2cpio /package/RPMS/$rpm | cpio -imvd $RPM_BINDIR/%s\n", srcPath))
+		// .$RPM_BINDIR will expand to the actual path of the binary relative to the archive
+		binaryPathList = append(binaryPathList, filepath.Join(".$RPM_BINDIR", srcPath))
 	}
+	sb.WriteString(fmt.Sprintf("rpm2cpio /package/RPMS/$rpm | cpio -imvd -D /extracted %s\n",
+		strings.Join(binaryPathList, ",")))
 	sb.WriteString("done\n")
 
+	sb.WriteString(
+		strings.Join([]string{
+			`ls -lrt /extracted/$RPM_BINDIR`,
+			`cp -r /extracted/$RPM_BINDIR/* /out`,
+		}, "\n"),
+	)
+	sb.WriteByte('\n')
+
 	return sb.String()
+}
+
+func zip(worker llb.State, zipName string, outputDir string, artifacts llb.State) llb.State {
+	outName := filepath.Join(outputDir, zipName+".zip")
+	return worker.Run(
+		shArgs("echo 'zipping'...; zip "+outName+" *"+"; ls -lrt"),
+		llb.Dir("/tmp/artifacts"),
+		llb.AddMount("/tmp/artifacts", artifacts)).AddMount(outputDir, llb.Scratch())
 }
 
 func handleBin(w worker) gwclient.BuildFunc {
@@ -73,9 +93,16 @@ func handleBin(w worker) gwclient.BuildFunc {
 				shArgs("/script/bin_copy.sh"),
 				llb.AddMount("/script", scriptState),
 				llb.AddMount("/package", rpmState),
-			).Root()
+				llb.AddMount("/extracted", llb.Scratch()),
+			).AddMount("/out", llb.Scratch())
 
-			def, err := st.Marshal(ctx, pg)
+			pg = dalec.ProgressGroup("Compressing artifacts: ")
+
+			zipWorker := w.Base(client, pg).Run(w.Install([]string{"zip"})).Root()
+
+			zipped := zip(zipWorker, "binaries", "/out", st)
+
+			def, err := zipped.Marshal(ctx, pg)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 			}
