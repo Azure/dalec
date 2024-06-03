@@ -6,9 +6,6 @@ toolchain go1.21.0
 
 require (
 	github.com/containerd/containerd v1.7.13
-	github.com/cpuguy83/dockercfg v0.3.1
-	github.com/cpuguy83/go-docker v0.3.0
-	github.com/cpuguy83/go-docker/buildkitopt v0.1.2
 	github.com/goccy/go-yaml v1.11.3
 	github.com/google/go-cmp v0.6.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
