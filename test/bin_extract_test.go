@@ -17,11 +17,13 @@ import (
 )
 
 func TestBinExtract_Mariner2(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testBinExtract(ctx, t, "mariner2/rpm/bin")
 }
 
 func TestBinExtract_AzLinux3(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	testBinExtract(ctx, t, "azlinux3/rpm/bin")
 }
