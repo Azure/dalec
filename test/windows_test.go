@@ -313,7 +313,7 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"), withAmd64Platform)
+			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
 			zipper := reqToState(ctx, gwc, sr, t)
 
 			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"))
@@ -407,6 +407,7 @@ echo "$BAR" > bar.txt
 }
 
 func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {
+	t.Helper()
 	res, err := gwc.Solve(ctx, sr)
 	if err != nil {
 		t.Fatal(err)
