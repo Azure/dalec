@@ -18,7 +18,7 @@ func binCopyScript(rpms []string, binaries map[string]dalec.ArtifactConfig) stri
 	var sb strings.Builder
 
 	sb.WriteString(`
-#!/bin/sh
+#!/bin/bash
 set -e
 declare -a RPMS=()
 export RPM_BINDIR=$(rpm --eval '%{_bindir}')
@@ -31,23 +31,20 @@ export RPM_BINDIR=$(rpm --eval '%{_bindir}')
 	sb.WriteString("for rpm in $RPMS; do\n")
 	binaryPathList := make([]string, 0, len(binaries))
 	for path, bin := range binaries {
-		baseName := filepath.Base(path)
-		if bin.Name != "" {
-			baseName = bin.Name
-		}
-		srcPath := filepath.Join(bin.SubPath, baseName)
-
-		// .$RPM_BINDIR will expand to the actual path of the binary relative to the archive
+		srcPath := bin.InstallPath(path)
 		binaryPathList = append(binaryPathList, filepath.Join(".$RPM_BINDIR", srcPath))
 	}
+
 	sb.WriteString(fmt.Sprintf("rpm2cpio /package/RPMS/$rpm | cpio -imvd -D /extracted %s\n",
-		strings.Join(binaryPathList, ",")))
+		strings.Join(binaryPathList, " ")))
 	sb.WriteString("done\n")
 
 	sb.WriteString(
 		strings.Join([]string{
-			`ls -lrt /extracted/$RPM_BINDIR`,
-			`cp -r /extracted/$RPM_BINDIR/* /out`,
+			`export FILES=$(find ./extracted -type f)`,
+			// if no files found then script ends, otherwise copy the files to /out.
+			`[[ -z $FILES ]] && (echo 'No binaries found to extract' && exit 1)`,
+			`cp ${FILES} /out`,
 		}, "\n"),
 	)
 	sb.WriteByte('\n')

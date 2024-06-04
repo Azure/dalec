@@ -217,6 +217,14 @@ func (a *ArtifactConfig) ResolveName(path string) string {
 	return filepath.Base(path)
 }
 
+func (a *ArtifactConfig) InstallPath(srcPath string) string {
+	name := a.ResolveName(srcPath)
+	if a.SubPath != "" {
+		return filepath.Join(a.SubPath, name)
+	}
+	return name
+}
+
 // ServiceConfig is the configuration for a service to include in the package.
 type ServiceConfig struct {
 	Name string `yaml:"name" json:"name" jsonschema:"omitempty"`

@@ -126,88 +126,144 @@ func testBinExtract(ctx context.Context, t *testing.T, buildTarget string) {
 		})
 	})
 
-	// t.Run("test bin extract multiple bin", func(t *testing.T) {
-	// 	spec := &dalec.Spec{
-	// 		Name:        "test-bin",
-	// 		Version:     "v0.0.1",
-	// 		Revision:    "1",
-	// 		License:     "MIT",
-	// 		Website:     "https://github.com/azure/dalec",
-	// 		Vendor:      "Dalec",
-	// 		Packager:    "Dalec",
-	// 		Description: "A dalec spec with multiple binary artifacts",
-	// 		Sources: map[string]dalec.Source{
-	// 			"src": {
-	// 				Inline: &dalec.SourceInline{
-	// 					Dir: &dalec.SourceInlineDir{
-	// 						Files: map[string]*dalec.SourceInlineFile{
-	// 							"phony1.sh": {
-	// 								Permissions: 0755,
-	// 								Contents:    "#!/bin/sh\necho 'phony1'\n",
-	// 							},
+	t.Run("test bin extract nested bin", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-bin",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "A dalec spec with multiple binary artifacts",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"phony2.sh": {
+									Permissions: 0755,
+									Contents:    "#!/bin/sh\necho 'phony2'\n",
+								},
+							},
+						},
+					},
+				},
+			},
 
-	// 							"phony2.sh": {
-	// 								Permissions: 0755,
-	// 								Contents:    "#!/bin/sh\necho 'phony2'\n",
-	// 							},
-	// 						},
-	// 					},
-	// 				},
-	// 			},
-	// 		},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/phony2.sh": {
+						SubPath: "nested",
+						Name:    "unphony.sh",
+					},
+				},
+			},
+		}
 
-	// 		Artifacts: dalec.Artifacts{
-	// 			Binaries: map[string]dalec.ArtifactConfig{
-	// 				"src/phony1.sh": {},
-	// 				"src/phony2.sh": {
-	// 					SubPath: "nested",
-	// 					Name:    "unphony.sh",
-	// 				},
-	// 			},
-	// 		},
-	// 	}
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			res, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build package and extract binaries %w", err)
+			}
 
-	// 	b, err := yaml.Marshal(spec)
-	// 	assert.Nil(t, err)
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
 
-	// 	fmt.Println(string(b))
+			fs := bkfs.FromRef(ctx, ref)
 
-	// 	// testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-	// 	// 	sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-	// 	// 	sr.Evaluate = true
-	// 	// 	res, err := client.Solve(ctx, sr)
-	// 	// 	if err != nil {
-	// 	// 		return nil, fmt.Errorf("unable to build package and extract binaries %w", err)
-	// 	// 	}
+			f, err := fs.Open("binaries.zip")
+			if err != nil {
+				return nil, fmt.Errorf("unable to open binaries.zip %w", err)
+			}
 
-	// 	// 	ref, err := res.SingleRef()
-	// 	// 	if err != nil {
-	// 	// 		return nil, err
-	// 	// 	}
+			want := map[string]expectFile{
+				"unphony.sh": {
+					contents:    "#!/bin/sh\necho 'phony2'\n",
+					permissions: 0755,
+				},
+			}
 
-	// 	// 	fs := bkfs.FromRef(ctx, ref)
+			assertZipContentsMatch(t, f, want)
+			return res, nil
+		})
+	})
 
-	// 	// 	f, err := fs.Open("binaries.zip")
-	// 	// 	if err != nil {
-	// 	// 		return nil, fmt.Errorf("unable to open binaries.zip %w", err)
-	// 	// 	}
+	t.Run("test bin extract multiple bin", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-bin",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "A dalec spec with multiple binary artifacts",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"phony1.sh": {
+									Permissions: 0755,
+									Contents:    "#!/bin/sh\necho 'phony1'\n",
+								},
 
-	// 	// 	want := map[string]expectFile{
-	// 	// 		"phony.sh": {
-	// 	// 			contents:    "#!/bin/sh\necho 'phony'\n",
-	// 	// 			permissions: 0755,
-	// 	// 		},
-	// 	// 		"unphony.sh": {
-	// 	// 			contents:    "#!/bin/sh\necho 'phony2'\n",
-	// 	// 			permissions: 0755,
-	// 	// 		},
-	// 	// 	}
+								"phony2.sh": {
+									Permissions: 0755,
+									Contents:    "#!/bin/sh\necho 'phony2'\n",
+								},
+							},
+						},
+					},
+				},
+			},
 
-	// 	// 	assertZipContentsMatch(t, f, want)
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/phony1.sh": {},
+					"src/phony2.sh": {},
+				},
+			},
+		}
 
-	// 	// 	return res, nil
-	// 	// })
-	// 	t.Fatal()
-	// })
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			res, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build package and extract binaries %w", err)
+			}
 
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
+
+			fs := bkfs.FromRef(ctx, ref)
+
+			f, err := fs.Open("binaries.zip")
+			if err != nil {
+				return nil, fmt.Errorf("unable to open binaries.zip %w", err)
+			}
+
+			want := map[string]expectFile{
+				"phony1.sh": {
+					contents:    "#!/bin/sh\necho 'phony1'\n",
+					permissions: 0755,
+				},
+				"phony2.sh": {
+					contents:    "#!/bin/sh\necho 'phony2'\n",
+					permissions: 0755,
+				},
+			}
+
+			assertZipContentsMatch(t, f, want)
+			return res, nil
+		})
+	})
 }
