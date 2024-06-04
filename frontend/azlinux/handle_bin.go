@@ -42,7 +42,7 @@ export RPM_BINDIR=$(rpm --eval '%{_bindir}')
 	sb.WriteString(
 		strings.Join([]string{
 			`export FILES=$(find ./extracted -type f)`,
-			`[[ -z $FILES ]] && (echo 'No binaries found to extract' && exit 1)`,
+			`[[ -z $FILES ]] && (echo 'No binaries found to extract'; exit 1)`,
 			`cp ${FILES} /out`,
 		}, "\n"),
 	)
