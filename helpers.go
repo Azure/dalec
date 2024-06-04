@@ -3,6 +3,7 @@ package dalec
 import (
 	"encoding/json"
 	"path"
+	"path/filepath"
 	"slices"
 	"sort"
 	"sync/atomic"
@@ -151,6 +152,15 @@ func DuplicateMap[K comparable, V any](m map[K]V) map[K]V {
 	}
 
 	return newM
+}
+
+func Zip(worker llb.State, zipName string, outputDir string, artifacts llb.State) llb.State {
+	outName := filepath.Join(outputDir, zipName+".zip")
+	return worker.Run(
+		shArgs("zip "+outName+" *"),
+		llb.Dir("/tmp/artifacts"),
+		llb.AddMount("/tmp/artifacts", artifacts),
+	).AddMount(outputDir, llb.Scratch())
 }
 
 // MergeAtPath merges the given states into the given destination path in the given input state.

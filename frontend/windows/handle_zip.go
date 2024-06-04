@@ -39,7 +39,7 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
 		}
 
-		st := getZipLLB(worker, spec.Name, bin)
+		st := dalec.Zip(worker, spec.Name, outputDir, bin)
 
 		def, err := st.Marshal(ctx)
 		if err != nil {
@@ -165,16 +165,6 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	}
 
 	return st, nil
-}
-
-func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {
-	outName := filepath.Join(outputDir, name+".zip")
-	zipped := worker.Run(
-		shArgs("zip "+outName+" *"),
-		llb.Dir("/tmp/artifacts"),
-		llb.AddMount("/tmp/artifacts", artifacts),
-	).AddMount(outputDir, llb.Scratch())
-	return zipped
 }
 
 func generateInvocationScript(binaries []string) *strings.Builder {

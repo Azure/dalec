@@ -42,7 +42,6 @@ export RPM_BINDIR=$(rpm --eval '%{_bindir}')
 	sb.WriteString(
 		strings.Join([]string{
 			`export FILES=$(find ./extracted -type f)`,
-			// if no files found then script ends, otherwise copy the files to /out.
 			`[[ -z $FILES ]] && (echo 'No binaries found to extract' && exit 1)`,
 			`cp ${FILES} /out`,
 		}, "\n"),
@@ -55,7 +54,7 @@ export RPM_BINDIR=$(rpm --eval '%{_bindir}')
 func zip(worker llb.State, zipName string, outputDir string, artifacts llb.State) llb.State {
 	outName := filepath.Join(outputDir, zipName+".zip")
 	return worker.Run(
-		shArgs("echo 'zipping'...; zip "+outName+" *"+"; ls -lrt"),
+		shArgs("zip "+outName+" *"),
 		llb.Dir("/tmp/artifacts"),
 		llb.AddMount("/tmp/artifacts", artifacts)).AddMount(outputDir, llb.Scratch())
 }
