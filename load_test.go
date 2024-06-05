@@ -647,9 +647,9 @@ build:
 			t.Fatal(err)
 		}
 
-		if err := spec.SubstituteArgs(map[string]string{}); err != nil {
-			t.Fatal(err)
-		}
+		err = spec.SubstituteArgs(map[string]string{})
+		assert.Nil(t, err)
+		assert.Equal(t, spec.Build.Steps[0].Env["TEST"], "test")
 	})
 
 	t.Run("build arg undeclared", func(t *testing.T) {

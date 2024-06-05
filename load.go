@@ -44,7 +44,7 @@ func tokenizeBuildArgs(lex *shell.Lex, s string) ([]string, error) {
 		return nil, err
 	}
 
-	// Dalec build args should all have the form ${arg}
+	// Dalec build arg references should all have the form ${arg}
 	// We could add a regex for `arg` if we want to be more strict
 	isBuildArg := func(word string) bool {
 		return strings.HasPrefix(word, "${") && strings.HasSuffix(word, "}")
