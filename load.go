@@ -38,12 +38,69 @@ func platformArg(key string) bool {
 
 const DefaultPatchStrip int = 1
 
+func tokenizeBuildArgs(lex *shell.Lex, s string) ([]string, error) {
+	words, err := lex.ProcessWords(s, []string{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Dalec build args should all have the form ${arg}
+	// We could add a regex for `arg` if we want to be more strict
+	isBuildArg := func(word string) bool {
+		return strings.HasPrefix(word, "${") && strings.HasSuffix(word, "}")
+	}
+
+	buildArgs := make([]string, 0, len(words))
+	for _, word := range words {
+		word = strings.TrimSpace(word)
+		if isBuildArg(word) {
+			buildArgs = append(buildArgs, word)
+		}
+	}
+
+	return buildArgs, nil
+}
+
+func expandArgs(lex *shell.Lex, s string, args map[string]string) (string, error) {
+	tokenized, err := tokenizeBuildArgs(lex, s)
+	if err != nil {
+		return "", err
+	}
+
+	buildArgName := func(buildArgWord string) (string, error) {
+		if len(buildArgWord) < 3 {
+			return "", fmt.Errorf("invalid build arg %q", buildArgWord)
+		}
+		// remove the ${ and }
+		return buildArgWord[2 : len(buildArgWord)-1], nil
+	}
+
+	for _, argWord := range tokenized {
+		name, err := buildArgName(argWord)
+		if err != nil {
+			return "", err
+		}
+
+		if _, ok := args[name]; !ok {
+			if knownArg(name) {
+				return "", fmt.Errorf("opt-in arg %q not present in args", name)
+			}
+			return "", fmt.Errorf("build arg %q not declared", name)
+		}
+	}
+
+	return lex.ProcessWordWithMap(s, args)
+}
+
 func (s *Source) substituteBuildArgs(args map[string]string) error {
 	lex := shell.NewLex('\\')
+	// force the shell lexer to skip unresolved env vars so they aren't
+	// replaced with ""
+	lex.SkipUnsetEnv = true
 
 	switch {
 	case s.DockerImage != nil:
-		updated, err := lex.ProcessWordWithMap(s.DockerImage.Ref, args)
+		updated, err := expandArgs(lex, s.DockerImage.Ref, args)
 		if err != nil {
 			return err
 		}
@@ -57,25 +114,25 @@ func (s *Source) substituteBuildArgs(args map[string]string) error {
 			}
 		}
 	case s.Git != nil:
-		updated, err := lex.ProcessWordWithMap(s.Git.URL, args)
+		updated, err := expandArgs(lex, s.Git.URL, args)
 		if err != nil {
 			return err
 		}
 		s.Git.URL = updated
 
-		updated, err = lex.ProcessWordWithMap(s.Git.Commit, args)
+		updated, err = expandArgs(lex, s.Git.Commit, args)
 		if err != nil {
 			return err
 		}
 		s.Git.Commit = updated
 	case s.HTTP != nil:
-		updated, err := lex.ProcessWordWithMap(s.HTTP.URL, args)
+		updated, err := expandArgs(lex, s.HTTP.URL, args)
 		if err != nil {
 			return err
 		}
 		s.HTTP.URL = updated
 	case s.Context != nil:
-		updated, err := lex.ProcessWordWithMap(s.Context.Name, args)
+		updated, err := expandArgs(lex, s.Context.Name, args)
 		if err != nil {
 			return err
 		}
@@ -85,13 +142,13 @@ func (s *Source) substituteBuildArgs(args map[string]string) error {
 			return err
 		}
 
-		updated, err := lex.ProcessWordWithMap(s.Build.DockerfilePath, args)
+		updated, err := expandArgs(lex, s.Build.DockerfilePath, args)
 		if err != nil {
 			return err
 		}
 		s.Build.DockerfilePath = updated
 
-		updated, err = lex.ProcessWordWithMap(s.Build.Target, args)
+		updated, err = expandArgs(lex, s.Build.Target, args)
 		if err != nil {
 			return err
 		}
@@ -205,6 +262,9 @@ var errUnknownArg = errors.New("unknown arg")
 
 func (s *Spec) SubstituteArgs(env map[string]string) error {
 	lex := shell.NewLex('\\')
+	// force the shell lexer to skip unresolved env vars so they aren't
+	// replaced with ""
+	lex.SkipUnsetEnv = true
 
 	args := make(map[string]string)
 	for k, v := range s.Args {
@@ -236,20 +296,20 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 		s.Sources[name] = src
 	}
 
-	updated, err := lex.ProcessWordWithMap(s.Version, args)
+	updated, err := expandArgs(lex, s.Version, args)
 	if err != nil {
 		return fmt.Errorf("error performing shell expansion on version: %w", err)
 	}
 	s.Version = updated
 
-	updated, err = lex.ProcessWordWithMap(s.Revision, args)
+	updated, err = expandArgs(lex, s.Revision, args)
 	if err != nil {
 		return fmt.Errorf("error performing shell expansion on revision: %w", err)
 	}
 	s.Revision = updated
 
 	for k, v := range s.Build.Env {
-		updated, err := lex.ProcessWordWithMap(v, args)
+		updated, err := expandArgs(lex, v, args)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
 		}
@@ -323,7 +383,7 @@ func stripXFields(dt []byte) ([]byte, error) {
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {
 	for k, v := range s.Env {
-		updated, err := lex.ProcessWordWithMap(v, args)
+		updated, err := expandArgs(lex, v, args)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on env var %q for step %d: %w", k, i, err)
 		}
@@ -342,7 +402,7 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 		}
 	}
 	for k, v := range c.Env {
-		updated, err := lex.ProcessWordWithMap(v, args)
+		updated, err := expandArgs(lex, v, args)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
 		}
@@ -350,7 +410,7 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 	}
 	for i, step := range c.Steps {
 		for k, v := range step.Env {
-			updated, err := lex.ProcessWordWithMap(v, args)
+			updated, err := expandArgs(lex, v, args)
 			if err != nil {
 				return fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
 			}
@@ -410,32 +470,32 @@ func (s Spec) Validate() error {
 
 func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) error {
 	for i, contains := range c.Contains {
-		updated, err := lex.ProcessWordWithMap(contains, args)
+		updated, err := expandArgs(lex, contains, args)
 		if err != nil {
 			return errors.Wrap(err, "error performing shell expansion on contains")
 		}
 		c.Contains[i] = updated
 	}
 
-	updated, err := lex.ProcessWordWithMap(c.EndsWith, args)
+	updated, err := expandArgs(lex, c.EndsWith, args)
 	if err != nil {
 		return errors.Wrap(err, "error performing shell expansion on endsWith")
 	}
 	c.EndsWith = updated
 
-	updated, err = lex.ProcessWordWithMap(c.Matches, args)
+	updated, err = expandArgs(lex, c.Matches, args)
 	if err != nil {
 		return errors.Wrap(err, "error performing shell expansion on matches")
 	}
 	c.Matches = updated
 
-	updated, err = lex.ProcessWordWithMap(c.Equals, args)
+	updated, err = expandArgs(lex, c.Equals, args)
 	if err != nil {
 		return errors.Wrap(err, "error performing shell expansion on equals")
 	}
 	c.Equals = updated
 
-	updated, err = lex.ProcessWordWithMap(c.StartsWith, args)
+	updated, err = expandArgs(lex, c.StartsWith, args)
 	if err != nil {
 		return errors.Wrap(err, "error performing shell expansion on startsWith")
 	}
@@ -450,7 +510,7 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 		}
 	}
 	for k, v := range c.Env {
-		updated, err := lex.ProcessWordWithMap(v, args)
+		updated, err := expandArgs(lex, v, args)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
 		}
@@ -459,7 +519,7 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 
 	for i, step := range c.Steps {
 		for k, v := range step.Env {
-			updated, err := lex.ProcessWordWithMap(v, args)
+			updated, err := expandArgs(lex, v, args)
 			if err != nil {
 				return fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err)
 			}
