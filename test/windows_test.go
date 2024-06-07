@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
@@ -402,6 +403,195 @@ echo "$BAR" > bar.txt
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec), withAmd64Platform)
 			return client.Solve(ctx, req)
+		})
+	})
+
+	t.Run("test bin extract single bin", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-bin",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "A dalec spec with a single binary artifact",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"phony.ps1": {
+									Permissions: 0755,
+									Contents:    "echo 'phony'\n",
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/phony.ps1": {},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget("windowscross/artifacts/bin"), withSpec(ctx, t, spec))
+			res, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build and extract binaries: %s", err.Error())
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
+
+			fs := bkfs.FromRef(ctx, ref)
+
+			want := map[string]expectFile{
+				"phony.ps1": {
+					contents:    "echo 'phony'\n",
+					permissions: 0755,
+				},
+			}
+
+			assertRootContentsMatch(t, fs, want)
+			return res, nil
+		})
+	})
+
+	t.Run("test bin extract nested bin", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-bin",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "A dalec spec with multiple binary artifacts",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"phony2.ps1": {
+									Permissions: 0755,
+									Contents:    "Write-Output 'phony2'\n",
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/phony2.ps1": {
+						SubPath: "nested",
+						Name:    "unphony.ps1",
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget("windowscross/artifacts/bin"), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			res, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build and extract binaries %w", err)
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
+
+			fs := bkfs.FromRef(ctx, ref)
+
+			want := map[string]expectFile{
+				"unphony.ps1": {
+					contents:    "Write-Output 'phony2'\n",
+					permissions: 0755,
+				},
+			}
+
+			assertRootContentsMatch(t, fs, want)
+			return res, nil
+		})
+	})
+
+	t.Run("test bin extract multiple bin", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-bin",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "A dalec spec with multiple binary artifacts",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"phony1.ps1": {
+									Permissions: 0755,
+									Contents:    "Write-Output 'phony1'\n",
+								},
+
+								"phony2.ps1": {
+									Permissions: 0755,
+									Contents:    "Write-Output 'phony2'\n",
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/phony1.ps1": {},
+					"src/phony2.ps1": {},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget("windowscross/artifacts/bin"), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			res, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build and extract binaries %w", err)
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
+
+			fs := bkfs.FromRef(ctx, ref)
+
+			want := map[string]expectFile{
+				"phony1.ps1": {
+					contents:    "Write-Output 'phony1'\n",
+					permissions: 0755,
+				},
+				"phony2.ps1": {
+					contents:    "Write-Output 'phony2'\n",
+					permissions: 0755,
+				},
+			}
+
+			assertRootContentsMatch(t, fs, want)
+			return res, nil
 		})
 	})
 }

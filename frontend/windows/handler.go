@@ -21,6 +21,11 @@ func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		Description: "Builds binaries combined into a zip file",
 	})
 
+	mux.Add("artifacts/bin", handleBin, &bktargets.Target{
+		Name:        "artifacts/bin",
+		Description: "Outputs build windows binaries",
+	})
+
 	mux.Add("container", handleContainer, &bktargets.Target{
 		Name:        "container",
 		Description: "Builds binaries and installs them into a Windows base image",
