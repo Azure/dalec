@@ -51,14 +51,6 @@ export RPM_BINDIR=$(rpm --eval '%{_bindir}')
 	return sb.String()
 }
 
-func zip(worker llb.State, zipName string, outputDir string, artifacts llb.State) llb.State {
-	outName := filepath.Join(outputDir, zipName+".zip")
-	return worker.Run(
-		shArgs("zip "+outName+" *"),
-		llb.Dir("/tmp/artifacts"),
-		llb.AddMount("/tmp/artifacts", artifacts)).AddMount(outputDir, llb.Scratch())
-}
-
 func handleBin(w worker) gwclient.BuildFunc {
 	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 		return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
@@ -92,13 +84,7 @@ func handleBin(w worker) gwclient.BuildFunc {
 				llb.AddMount("/extracted", llb.Scratch()),
 			).AddMount("/out", llb.Scratch())
 
-			pg = dalec.ProgressGroup("Compressing artifacts: ")
-
-			zipWorker := w.Base(client, pg).Run(w.Install([]string{"zip"})).Root()
-
-			zipped := zip(zipWorker, "binaries", "/out", st)
-
-			def, err := zipped.Marshal(ctx, pg)
+			def, err := st.Marshal(ctx, pg)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 			}

@@ -4,29 +4,36 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMariner2(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, "mariner2/container", "mariner2/rpm")
+	testLinuxDistro(ctx, t, "mariner2", "mariner2/rpm")
 }
 
 func TestAzlinux3(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, "azlinux3/container", "azlinux3/rpm")
+	testLinuxDistro(ctx, t, "azlinux3", "azlinux3/rpm")
 }
 
-func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, signTarget string) {
+func testLinuxDistro(ctx context.Context, t *testing.T, distro string, signTarget string) {
+	var buildTargetContainer = fmt.Sprintf("%s/container", distro)
+	var buildTargetExtractBin = fmt.Sprintf("%s/artifacts/bin", distro)
+
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -48,7 +55,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTargetContainer))
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -83,7 +90,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTargetContainer))
 			sr.Evaluate = true
 
 			_, err := gwc.Solve(ctx, sr)
@@ -285,7 +292,7 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTargetContainer))
 			sr.Evaluate = true
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {
@@ -404,7 +411,7 @@ WantedBy=multi-user.target
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(buildTargetContainer), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)
 		})
 
@@ -433,7 +440,7 @@ WantedBy=multi-user.target
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(buildTargetContainer), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)
 		})
 	})
@@ -546,7 +553,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(buildTargetContainer), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)
 		})
 	})
@@ -602,7 +609,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(buildTargetContainer), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)
 		})
 	})
@@ -658,7 +665,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(buildTargetContainer), withSpec(ctx, t, spec))
 			return client.Solve(ctx, req)
 		})
 	})
@@ -707,7 +714,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(buildTargetContainer), withSpec(ctx, t, spec))
 			res, err := client.Solve(ctx, req)
 			if err != nil {
 				return nil, err
@@ -784,7 +791,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr := newSolveRequest(withBuildTarget(buildTargetContainer), withSpec(ctx, t, spec))
 			sr.Evaluate = true
 			_, err := client.Solve(ctx, sr)
 			if err != nil {
@@ -867,13 +874,204 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr := newSolveRequest(withBuildTarget(buildTargetContainer), withSpec(ctx, t, spec))
 			sr.Evaluate = true
 			_, err := client.Solve(ctx, sr)
 			if err != nil {
 				return nil, fmt.Errorf("unable to build package with doc files as expected %w", err)
 			}
 			return gwclient.NewResult(), nil
+		})
+	})
+
+	t.Run("test bin extract single bin", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-bin",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "A dalec spec with a single binary artifact",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"phony.sh": {
+									Permissions: 0755,
+									Contents:    "#!/bin/sh\necho 'phony'\n",
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/phony.sh": {},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget(buildTargetExtractBin), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			res, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build package and extract binaries %w", err)
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
+
+			fs := bkfs.FromRef(ctx, ref)
+
+			want := map[string]expectFile{
+				"phony.sh": {
+					contents:    "#!/bin/sh\necho 'phony'\n",
+					permissions: 0755,
+				},
+			}
+
+			assertRootContentsMatch(t, fs, want)
+
+			return res, nil
+		})
+	})
+
+	t.Run("test bin extract nested bin", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-bin",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "A dalec spec with multiple binary artifacts",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"phony2.sh": {
+									Permissions: 0755,
+									Contents:    "#!/bin/sh\necho 'phony2'\n",
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/phony2.sh": {
+						SubPath: "nested",
+						Name:    "unphony.sh",
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget(buildTargetExtractBin), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			res, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build package and extract binaries %w", err)
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
+
+			fs := bkfs.FromRef(ctx, ref)
+
+			want := map[string]expectFile{
+				"unphony.sh": {
+					contents:    "#!/bin/sh\necho 'phony2'\n",
+					permissions: 0755,
+				},
+			}
+
+			assertRootContentsMatch(t, fs, want)
+			return res, nil
+		})
+	})
+
+	t.Run("test bin extract multiple bin", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-bin",
+			Version:     "v0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "A dalec spec with multiple binary artifacts",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"phony1.sh": {
+									Permissions: 0755,
+									Contents:    "#!/bin/sh\necho 'phony1'\n",
+								},
+
+								"phony2.sh": {
+									Permissions: 0755,
+									Contents:    "#!/bin/sh\necho 'phony2'\n",
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/phony1.sh": {},
+					"src/phony2.sh": {},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+			sr := newSolveRequest(withBuildTarget(buildTargetExtractBin), withSpec(ctx, t, spec))
+			sr.Evaluate = true
+			res, err := client.Solve(ctx, sr)
+			if err != nil {
+				return nil, fmt.Errorf("unable to build package and extract binaries %w", err)
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, err
+			}
+
+			fs := bkfs.FromRef(ctx, ref)
+
+			want := map[string]expectFile{
+				"phony1.sh": {
+					contents:    "#!/bin/sh\necho 'phony1'\n",
+					permissions: 0755,
+				},
+				"phony2.sh": {
+					contents:    "#!/bin/sh\necho 'phony2'\n",
+					permissions: 0755,
+				},
+			}
+
+			assertRootContentsMatch(t, fs, want)
+			return res, nil
 		})
 	})
 }
@@ -890,4 +1088,35 @@ func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, pat
 		return fmt.Errorf("expected permissions %v to equal expected %v", got, expected)
 	}
 	return nil
+}
+
+type expectFile struct {
+	contents    string
+	permissions os.FileMode
+}
+
+func assertRootContentsMatch(t *testing.T, fs fs.ReadDirFS, want map[string]expectFile) {
+	entries, err := fs.ReadDir(".")
+	if err != nil {
+		t.Fatalf("unable to read directory: %s", err.Error())
+	}
+
+	assert.Equal(t, len(want), len(entries), "number of files under root do not match")
+
+	for _, file := range entries {
+		f, err := fs.Open(file.Name())
+		assert.Nil(t, err)
+
+		contents, err := io.ReadAll(f)
+		assert.Nil(t, err, "unable to read file '%s'", file.Name())
+
+		_, ok := want[file.Name()]
+		if !ok {
+			t.Fatalf("unexpected file '%s'", file.Name())
+		}
+
+		want := want[file.Name()]
+		assert.Equal(t, want.contents, string(contents), "contents of '%s' do not match", file.Name())
+		assert.Equal(t, want.permissions, file.Type().Perm(), "permissions of '%s' do not match", file.Name())
+	}
 }

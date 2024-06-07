@@ -33,9 +33,9 @@ func newHandler(w worker) gwclient.BuildFunc {
 	})
 	mux.Add("rpm/debug", handleDebug(w), nil)
 
-	mux.Add("rpm/bin", handleBin(w), &targets.Target{
-		Name:        "rpm/bin",
-		Description: "Builds an rpm and extracts binaries as a zip",
+	mux.Add("artifacts/bin", handleBin(w), &targets.Target{
+		Name:        "artifacts/bin",
+		Description: "Extracts the binary artifacts from an AzLinux RPM",
 	})
 
 	mux.Add("container", handleContainer(w), &targets.Target{
