@@ -1046,7 +1046,6 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 			sr := newSolveRequest(withBuildTarget(buildTargetExtractBin), withSpec(ctx, t, spec))
-			sr.Evaluate = true
 			res, err := client.Solve(ctx, sr)
 			if err != nil {
 				return nil, fmt.Errorf("unable to build package and extract binaries %w", err)
