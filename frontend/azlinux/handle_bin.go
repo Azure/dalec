@@ -21,7 +21,9 @@ func binCopyScript(rpms []string, binaries map[string]dalec.ArtifactConfig) stri
 #!/bin/bash
 set -e
 declare -a RPMS=()
-export RPM_BINDIR=$(rpm --eval '%{_bindir}')
+RPM_BINDIR="$(rpm --eval '%{_bindir}')"
+RPM_BINDIR="${RPM_BINDIR#/}"
+export RPM_BINDIR
 `)
 
 	for _, rpm := range rpms {
@@ -32,7 +34,7 @@ export RPM_BINDIR=$(rpm --eval '%{_bindir}')
 	binaryPathList := make([]string, 0, len(binaries))
 	for path, bin := range binaries {
 		srcPath := bin.InstallPath(path)
-		binaryPathList = append(binaryPathList, filepath.Join(".$RPM_BINDIR", srcPath))
+		binaryPathList = append(binaryPathList, "./"+filepath.Join("${RPM_BINDIR}", srcPath))
 	}
 
 	sb.WriteString(fmt.Sprintf("rpm2cpio /package/RPMS/$rpm | cpio -imvd -D /extracted %s\n",
