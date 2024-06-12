@@ -42,6 +42,17 @@
 			"type": "object",
 			"description": "ArtifactConfig is the configuration for a given artifact type."
 		},
+		"ArtifactDirConfig": {
+			"properties": {
+				"mode": {
+					"type": "integer",
+					"description": "Mode is used to set the file permission bits of the final created directory to the specified mode.\nMode is the octal permissions to set on the dir."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "ArtifactDirConfig contains information about the directory to be created"
+		},
 		"Artifacts": {
 			"properties": {
 				"binaries": {
@@ -57,6 +68,35 @@
 					},
 					"type": "object",
 					"description": "Manpages is the list of manpages to include in the package."
+				},
+				"createDirectories": {
+					"$ref": "#/$defs/CreateArtifactDirectories",
+					"description": "Directories is a list of various directories that should be created by the package."
+				},
+				"configFiles": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "ConfigFiles is a list of files that should be marked as config files in the package."
+				},
+				"docs": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "Docs is a list of doc files included in the package"
+				},
+				"licenses": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "Licenses is a list of doc files included in the package"
+				},
+				"systemd": {
+					"$ref": "#/$defs/SystemdConfiguration",
+					"description": "Systemd is the list of systemd units and dropin files for the package"
 				}
 			},
 			"additionalProperties": false,
@@ -224,6 +264,31 @@
 			],
 			"description": "Command is used to execute a command to generate a source from a docker image."
 		},
+		"CreateArtifactDirectories": {
+			"properties": {
+				"Config": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactDirConfig"
+					},
+					"type": "object",
+					"description": "Config is a list of directories the RPM should place under the system config directory (i.e. /etc)"
+				},
+				"State": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactDirConfig"
+					},
+					"type": "object",
+					"description": "State is a list of directories the RPM should place under the common directory for shared state and libs (i.e. /var/lib)."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"Config",
+				"State"
+			],
+			"description": "CreateArtifactDirectories describes various directories that should be created on install."
+		},
 		"FileCheckOutput": {
 			"properties": {
 				"equals": {
@@ -291,6 +356,12 @@
 			],
 			"description": "Frontend encapsulates the configuration for a frontend to forward a build target to."
 		},
+		"GeneratorGomod": {
+			"properties": {},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "GeneratorGomod is used to generate a go module cache from go module sources"
+		},
 		"ImageConfig": {
 			"properties": {
 				"entrypoint": {
@@ -352,6 +423,17 @@
 			"type": "object",
 			"description": "ImageConfig is the configuration for the output image."
 		},
+		"PackageConfig": {
+			"properties": {
+				"signer": {
+					"$ref": "#/$defs/Frontend",
+					"description": "Signer is the configuration to use for signing packages"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "PackageConfig encapsulates the configuration for artifact targets"
+		},
 		"PackageDependencies": {
 			"properties": {
 				"build": {
@@ -389,7 +471,7 @@
 						"type": "string"
 					},
 					"type": "array",
-					"description": "Test lists any extra packages required for running tests"
+					"description": "Test lists any extra packages required for running tests\nThese packages are only installed for tests which have steps that require\nrunning a command in the built container.\nSee [TestSpec] for more information."
 				}
 			},
 			"additionalProperties": false,
@@ -466,6 +548,13 @@
 					},
 					"type": "array",
 					"description": "Excludes is a list of paths underneath `Path` to exclude, everything else is included"
+				},
+				"generate": {
+					"items": {
+						"$ref": "#/$defs/SourceGenerator"
+					},
+					"type": "array",
+					"description": "Generate is the list generators to run on the source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `godmod` generator can be used to generate a go module cache from a go source.\nHow a genator operates is dependent on the actual generator.\nGeneators may also cauuse modifications to the build environment.\n\nCurrently only one generator is supported: \"gomod\""
 				}
 			},
 			"additionalProperties": false,
@@ -524,6 +613,24 @@
 				"ref"
 			]
 		},
+		"SourceGenerator": {
+			"properties": {
+				"subpath": {
+					"type": "string",
+					"description": "Subpath is the path inside a source to run the generator from."
+				},
+				"gomod": {
+					"$ref": "#/$defs/GeneratorGomod",
+					"description": "Gomod is the go module generator."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"gomod"
+			],
+			"description": "SourceGenerator holds the configuration for a source generator."
+		},
 		"SourceGit": {
 			"properties": {
 				"url": {
@@ -547,7 +654,12 @@
 		"SourceHTTP": {
 			"properties": {
 				"url": {
-					"type": "string"
+					"type": "string",
+					"description": "URL is the URL to download the file from."
+				},
+				"digest": {
+					"type": "string",
+					"description": "Digest is the digest of the file to download.\nThis is used to verify the integrity of the file.\nForm: \u003calgorithm\u003e:\u003cdigest\u003e"
 				}
 			},
 			"additionalProperties": false,
@@ -555,7 +667,7 @@
 			"required": [
 				"url"
 			],
-			"description": "No longer supports `.git` URLs as git repos."
+			"description": "SourceHTTP is used to download a file from an HTTP(s) URL."
 		},
 		"SourceInline": {
 			"properties": {
@@ -755,6 +867,10 @@
 					"$ref": "#/$defs/PackageDependencies",
 					"description": "Dependencies are the different dependencies that need to be specified in the package.\nDependencies are overwritten if specified in the target map for the requested distro."
 				},
+				"package_config": {
+					"$ref": "#/$defs/PackageConfig",
+					"description": "PackageConfig is the configuration to use for artifact targets, such as\nrpms, debs, or zip files containing Windows binaries"
+				},
 				"image": {
 					"$ref": "#/$defs/ImageConfig",
 					"description": "Image is the image configuration when the target output is a container image.\nThis is overwritten if specified in the target map for the requested distro."
@@ -802,6 +918,61 @@
 			],
 			"description": "SymlinkTarget specifies the properties of a symlink"
 		},
+		"SystemdConfiguration": {
+			"properties": {
+				"units": {
+					"additionalProperties": {
+						"$ref": "#/$defs/SystemdUnitConfig"
+					},
+					"type": "object",
+					"description": "Units is a list of systemd units to include in the package."
+				},
+				"dropins": {
+					"additionalProperties": {
+						"$ref": "#/$defs/SystemdDropinConfig"
+					},
+					"type": "object",
+					"description": "Dropins is a list of systemd drop in files that should be included in the package"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object"
+		},
+		"SystemdDropinConfig": {
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Name is file or dir name to use for the artifact in the package.\nIf empty, the file or dir name from the produced artifact will be used."
+				},
+				"unit": {
+					"type": "string",
+					"description": "Unit is the name of the systemd unit that the dropin files should be copied under."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"unit"
+			]
+		},
+		"SystemdUnitConfig": {
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Name is the name systemd unit should be copied under.\nNested paths are not supported. It is the user's responsibility\nto name the service with the appropriate extension, i.e. .service, .timer, etc."
+				},
+				"enable": {
+					"type": "boolean",
+					"description": "Enable is used to enable the systemd unit on install\nThis determines what will be written to a systemd preset file"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name",
+				"enable"
+			]
+		},
 		"Target": {
 			"properties": {
 				"dependencies": {
@@ -822,6 +993,10 @@
 					},
 					"type": "array",
 					"description": "Tests are the list of tests to run which are specific to the target.\nTests are appended to the list of tests in the main [Spec]"
+				},
+				"package_config": {
+					"$ref": "#/$defs/PackageConfig",
+					"description": "PackageConfig is the configuration to use for artifact targets, such as\nrpms, debs, or zip files containing Windows binaries"
 				}
 			},
 			"additionalProperties": false,

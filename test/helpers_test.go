@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	phonyRef = "dalec/integration/frontend/phony"
+	phonyRef       = "dalec/integration/frontend/phony"
+	phonySignerRef = "dalec/integration/signer/phony"
 )
 
 func startTestSpan(ctx context.Context, t *testing.T) context.Context {
@@ -137,7 +138,12 @@ func checkTargetExists(t *testing.T, ls targets.List, name string) {
 	t.Helper()
 
 	if !containsTarget(ls, name) {
-		t.Fatalf("did not find target %q", name)
+		names := make([]string, 0, len(ls.Targets))
+		for _, tgt := range ls.Targets {
+			names = append(names, tgt.Name)
+		}
+
+		t.Fatalf("did not find target %q:\n%v", name, names)
 	}
 }
 
@@ -156,7 +162,7 @@ func (d dirStatAsStringer) String() string {
 type srOpt func(*gwclient.SolveRequest)
 
 func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
-	sr := gwclient.SolveRequest{}
+	sr := gwclient.SolveRequest{Evaluate: true}
 	for _, opt := range opts {
 		opt(&sr)
 	}

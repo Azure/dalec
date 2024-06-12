@@ -1,6 +1,7 @@
 # syntax=ghcr.io/azure/dalec/frontend:latest
 name: go-md2man
 version: 2.0.3
+revision: "1"
 packager: Dalec Example
 vendor: Dalec Example
 license: MIT

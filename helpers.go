@@ -3,6 +3,7 @@ package dalec
 import (
 	"encoding/json"
 	"path"
+	"slices"
 	"sort"
 	"sync/atomic"
 
@@ -45,6 +46,49 @@ func WithExcludes(patterns []string) llb.CopyOption {
 func WithDirContentsOnly() llb.CopyOption {
 	return copyOptionFunc(func(i *llb.CopyInfo) {
 		i.CopyDirContentsOnly = true
+	})
+}
+
+type runOptionFunc func(*llb.ExecInfo)
+
+func (f runOptionFunc) SetRunOption(i *llb.ExecInfo) {
+	f(i)
+}
+
+// WithMountedAptCache gives an [llb.RunOption] that mounts the apt cache directories.
+// It uses the given namePrefix as the prefix for the cache keys.
+// namePrefix should be distinct per distro version.
+func WithMountedAptCache(namePrefix string) llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		// This is in the "official" docker image for ubuntu/debian.
+		// This file prevents us from actually caching anything.
+		// To resolve that we delete the file.
+		ei.State = ei.State.File(
+			llb.Rm("/etc/apt/apt.conf.d/docker-clean", llb.WithAllowNotFound(true)),
+			constraintsOptFunc(func(c *llb.Constraints) {
+				*c = ei.Constraints
+			}),
+		)
+
+		llb.AddMount(
+			"/var/cache/apt",
+			llb.Scratch(),
+			llb.AsPersistentCacheDir(namePrefix+"dalec-var-cache-apt", llb.CacheMountLocked),
+		).SetRunOption(ei)
+
+		llb.AddMount(
+			"/var/lib/apt",
+			llb.Scratch(),
+			llb.AsPersistentCacheDir(namePrefix+"dalec-var-lib-apt", llb.CacheMountLocked),
+		).SetRunOption(ei)
+	})
+}
+
+func WithRunOptions(opts ...llb.RunOption) llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		for _, opt := range opts {
+			opt.SetRunOption(ei)
+		}
 	})
 }
 
@@ -187,16 +231,16 @@ func CacheDirsToRunOpt(mounts map[string]CacheDirConfig, distroKey, archKey stri
 		opts = append(opts, llb.AddMount(p, llb.Scratch(), llb.AsPersistentCacheDir(key, mode)))
 	}
 
-	return runOptFunc(func(ei *llb.ExecInfo) {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
 		for _, opt := range opts {
 			opt.SetRunOption(ei)
 		}
 	})
 }
 
-type runOptFunc func(*llb.ExecInfo)
+type RunOptFunc func(*llb.ExecInfo)
 
-func (f runOptFunc) SetRunOption(ei *llb.ExecInfo) {
+func (f RunOptFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(ei)
 }
 
@@ -213,4 +257,103 @@ func ProgressGroup(name string) llb.ConstraintsOpt {
 
 		llb.ProgressGroup(identity.NewID(), name, false).SetConstraintsOption(c)
 	})
+}
+
+func (s *Spec) GetRuntimeDeps(targetKey string) []string {
+	var deps *PackageDependencies
+	if t, ok := s.Targets[targetKey]; ok {
+		deps = t.Dependencies
+	}
+
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	var out []string
+	for p := range deps.Runtime {
+		out = append(out, p)
+	}
+
+	sort.Strings(out)
+	return out
+
+}
+
+func (s *Spec) GetBuildDeps(targetKey string) []string {
+	var deps *PackageDependencies
+	if t, ok := s.Targets[targetKey]; ok {
+		deps = t.Dependencies
+	}
+
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return SortMapKeys(deps.Build)
+}
+
+func (s *Spec) GetTestDeps(targetKey string) []string {
+	var deps *PackageDependencies
+	if t, ok := s.Targets[targetKey]; ok {
+		deps = t.Dependencies
+	}
+
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	out := slices.Clone(deps.Test)
+	slices.Sort(out)
+	return out
+}
+
+func (s *Spec) GetSymlinks(target string) map[string]SymlinkTarget {
+	lm := make(map[string]SymlinkTarget)
+
+	if s.Image != nil && s.Image.Post != nil && s.Image.Post.Symlinks != nil {
+		for k, v := range s.Image.Post.Symlinks {
+			lm[k] = v
+		}
+	}
+
+	tgt, ok := s.Targets[target]
+	if !ok {
+		return lm
+	}
+
+	if tgt.Image != nil && tgt.Image.Post != nil && tgt.Image.Post.Symlinks != nil {
+		for k, v := range tgt.Image.Post.Symlinks {
+			// target-specific values replace the ones in the spec toplevel
+			lm[k] = v
+		}
+	}
+
+	return lm
+}
+
+func (s *Spec) GetSigner(targetKey string) (*Frontend, bool) {
+	if s.Targets != nil {
+		if t, ok := s.Targets[targetKey]; ok && hasValidSigner(t.PackageConfig) {
+			return t.PackageConfig.Signer, true
+		}
+	}
+
+	if hasValidSigner(s.PackageConfig) {
+		return s.PackageConfig.Signer, true
+	}
+
+	return nil, false
+}
+
+func hasValidSigner(pc *PackageConfig) bool {
+	return pc != nil && pc.Signer != nil && pc.Signer.Image != ""
 }

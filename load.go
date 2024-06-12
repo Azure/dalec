@@ -26,6 +26,8 @@ func knownArg(key string) bool {
 		return true
 	case "DALEC_DISABLE_DIFF_MERGE":
 		return true
+	case "SOURCE_DATE_EPOCH":
+		return true
 	}
 
 	return platformArg(key)
@@ -135,6 +137,12 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 		}
 	}()
 
+	for _, g := range s.Generate {
+		if err := g.Validate(); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
+	}
+
 	if s.DockerImage != nil {
 		if s.DockerImage.Ref == "" {
 			retErr = goerrors.Join(retErr, fmt.Errorf("docker image source variant must have a ref"))
@@ -155,6 +163,9 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 		count++
 	}
 	if s.HTTP != nil {
+		if err := s.HTTP.validate(); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
 		count++
 	}
 	if s.Context != nil {
@@ -504,5 +515,14 @@ func (c *FileCheckOutput) processBuildArgs(lex *shell.Lex, args map[string]strin
 		return err
 	}
 	c.CheckOutput = check
+	return nil
+}
+
+func (g *SourceGenerator) Validate() error {
+	if g.Gomod == nil {
+		// Gomod is the only valid generator type
+		// An empty generator is invalid
+		return fmt.Errorf("no generator type specified")
+	}
 	return nil
 }

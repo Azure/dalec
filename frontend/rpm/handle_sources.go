@@ -8,8 +8,9 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
 // TarImageRef is the image used to create tarballs of sources
@@ -41,69 +42,61 @@ func tar(src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	return worker.AddMount(outBase, llb.Scratch())
 }
 
-func HandleSources(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (gwclient.Reference, *image.Image, error) {
-	sOpt, err := frontend.SourceOptFromClient(ctx, client)
-	if err != nil {
-		return nil, nil, err
-	}
+func HandleSources(wf WorkerFunc) gwclient.BuildFunc {
+	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
+			sOpt, err := frontend.SourceOptFromClient(ctx, client)
+			if err != nil {
+				return nil, nil, err
+			}
 
-	sources, err := Dalec2SourcesLLB(spec, sOpt)
-	if err != nil {
-		return nil, nil, err
-	}
+			worker, err := wf(sOpt.Resolver, spec, targetKey)
+			if err != nil {
+				return nil, nil, err
+			}
 
-	// Now we can merge sources into the desired path
-	st := dalec.MergeAtPath(llb.Scratch(), sources, "/SOURCES")
+			sources, err := Dalec2SourcesLLB(worker, spec, sOpt)
+			if err != nil {
+				return nil, nil, err
+			}
 
-	def, err := st.Marshal(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
-	}
+			// Now we can merge sources into the desired path
+			st := dalec.MergeAtPath(llb.Scratch(), sources, "/SOURCES")
 
-	res, err := client.Solve(ctx, gwclient.SolveRequest{
-		Definition: def.ToPB(),
-	})
-	if err != nil {
-		return nil, nil, err
+			def, err := st.Marshal(ctx)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+			}
+
+			res, err := client.Solve(ctx, gwclient.SolveRequest{
+				Definition: def.ToPB(),
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, nil, err
+			}
+			return ref, nil, nil
+		})
 	}
-	ref, err := res.SingleRef()
-	// Do not return a nil image, it may cause a panic
-	return ref, &image.Image{}, err
 }
 
-func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
+func Dalec2SourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
 	// Sort the map keys so that the order is consistent This shouldn't be
 	// needed when MergeOp is supported, but when it is not this will improve
 	// cache hits for callers of this function.
 	sorted := dalec.SortMapKeys(spec.Sources)
 
 	out := make([]llb.State, 0, len(spec.Sources))
+
 	for _, k := range sorted {
 		src := spec.Sources[k]
-		isDir, err := dalec.SourceIsDir(src)
-		if err != nil {
-			return nil, err
-		}
+		isDir := dalec.SourceIsDir(src)
 
-		s := ""
-		switch {
-		case src.DockerImage != nil:
-			s = src.DockerImage.Ref
-		case src.Git != nil:
-			s = src.Git.URL
-		case src.HTTP != nil:
-			s = src.HTTP.URL
-		case src.Context != nil:
-			s = src.Context.Name
-		case src.Build != nil:
-			s = fmt.Sprintf("%v", src.Build.Source)
-		case src.Inline != nil:
-			s = "inline"
-		default:
-			return nil, fmt.Errorf("no non-nil source provided")
-		}
-
-		pg := dalec.ProgressGroup("Add spec source: " + k + " " + s)
+		pg := dalec.ProgressGroup("Add spec source: " + k)
 		st, err := src.AsState(k, sOpt, append(opts, pg)...)
 		if err != nil {
 			return nil, err
@@ -114,6 +107,16 @@ func Dalec2SourcesLLB(spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.Const
 		} else {
 			out = append(out, st)
 		}
+	}
+
+	opts = append(opts, dalec.ProgressGroup("Add gomod sources"))
+	st, err := spec.GomodDeps(sOpt, worker, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding gomod sources")
+	}
+
+	if st != nil {
+		out = append(out, tar(*st, gomodsName+".tar.gz", opts...))
 	}
 
 	return out, nil

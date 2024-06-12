@@ -4,9 +4,12 @@ package dalec
 import (
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/opencontainers/go-digest"
 )
 
 // Spec is the specification for a package build.
@@ -80,6 +83,9 @@ type Spec struct {
 	// Dependencies are the different dependencies that need to be specified in the package.
 	// Dependencies are overwritten if specified in the target map for the requested distro.
 	Dependencies *PackageDependencies `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+	// PackageConfig is the configuration to use for artifact targets, such as
+	// rpms, debs, or zip files containing Windows binaries
+	PackageConfig *PackageConfig `yaml:"package_config,omitempty" json:"package_config,omitempty"`
 	// Image is the image configuration when the target output is a container image.
 	// This is overwritten if specified in the target map for the requested distro.
 	Image *ImageConfig `yaml:"image,omitempty" json:"image,omitempty"`
@@ -122,7 +128,73 @@ type Artifacts struct {
 	Binaries map[string]ArtifactConfig `yaml:"binaries,omitempty" json:"binaries,omitempty"`
 	// Manpages is the list of manpages to include in the package.
 	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
-	// TODO: other types of artifacts (systtemd units, libexec, configs, etc)
+	// Directories is a list of various directories that should be created by the package.
+	Directories *CreateArtifactDirectories `yaml:"createDirectories,omitempty" json:"createDirectories,omitempty"`
+	// ConfigFiles is a list of files that should be marked as config files in the package.
+	ConfigFiles map[string]ArtifactConfig `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
+	// Docs is a list of doc files included in the package
+	Docs map[string]ArtifactConfig `yaml:"docs,omitempty" json:"docs,omitempty"`
+	// Licenses is a list of doc files included in the package
+	Licenses map[string]ArtifactConfig `yaml:"licenses,omitempty" json:"licenses,omitempty"`
+	// Systemd is the list of systemd units and dropin files for the package
+	Systemd *SystemdConfiguration `yaml:"systemd,omitempty" json:"systemd,omitempty"`
+	// TODO: other types of artifacts (libexec, etc)
+}
+
+type SystemdConfiguration struct {
+	// Units is a list of systemd units to include in the package.
+	Units map[string]SystemdUnitConfig `yaml:"units,omitempty" json:"units,omitempty"`
+	// Dropins is a list of systemd drop in files that should be included in the package
+	Dropins map[string]SystemdDropinConfig `yaml:"dropins,omitempty" json:"dropins,omitempty"`
+}
+
+type SystemdUnitConfig struct {
+	// Name is the name systemd unit should be copied under.
+	// Nested paths are not supported. It is the user's responsibility
+	// to name the service with the appropriate extension, i.e. .service, .timer, etc.
+	Name string `yaml:"name,omitempty" json:"name"`
+
+	// Enable is used to enable the systemd unit on install
+	// This determines what will be written to a systemd preset file
+	Enable bool `yaml:"enable,omitempty" json:"enable"`
+}
+
+func (s SystemdUnitConfig) Artifact() ArtifactConfig {
+	return ArtifactConfig{
+		SubPath: "",
+		Name:    s.Name,
+	}
+}
+
+type SystemdDropinConfig struct {
+	// Name is file or dir name to use for the artifact in the package.
+	// If empty, the file or dir name from the produced artifact will be used.
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	// Unit is the name of the systemd unit that the dropin files should be copied under.
+	Unit string `yaml:"unit" json:"unit"` // the unit named foo.service maps to the directory foo.service.d
+}
+
+func (s SystemdDropinConfig) Artifact() ArtifactConfig {
+	return ArtifactConfig{
+		SubPath: fmt.Sprintf("%s.d", s.Unit),
+		Name:    s.Name,
+	}
+}
+
+// CreateArtifactDirectories describes various directories that should be created on install.
+// CreateArtifactDirectories represents different directory paths that are common to RPM systems.
+type CreateArtifactDirectories struct {
+	// Config is a list of directories the RPM should place under the system config directory (i.e. /etc)
+	Config map[string]ArtifactDirConfig
+	// State is a list of directories the RPM should place under the common directory for shared state and libs (i.e. /var/lib).
+	State map[string]ArtifactDirConfig
+}
+
+// ArtifactDirConfig contains information about the directory to be created
+type ArtifactDirConfig struct {
+	// Mode is used to set the file permission bits of the final created directory to the specified mode.
+	// Mode is the octal permissions to set on the dir.
+	Mode fs.FileMode `yaml:"mode,omitempty" json:"mode,omitempty"`
 }
 
 // ArtifactConfig is the configuration for a given artifact type.
@@ -138,12 +210,54 @@ type ArtifactConfig struct {
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 }
 
+func (a *ArtifactConfig) ResolveName(path string) string {
+	if a.Name != "" {
+		return a.Name
+	}
+	return filepath.Base(path)
+}
+
+// ServiceConfig is the configuration for a service to include in the package.
+type ServiceConfig struct {
+	Name string `yaml:"name" json:"name" jsonschema:"omitempty"`
+
+	// Some services don't support restarting, in which case this should be set to true
+	NoRestart bool `yaml:"noRestart,omitempty" json:"noRestart,omitempty"`
+
+	Disable bool `yaml:"disable,omitempty" json:"disable,omitempty"`
+}
+
+func (s ServiceConfig) Artifact() ArtifactConfig {
+	return ArtifactConfig{
+		SubPath: "",
+		Name:    s.Name,
+	}
+}
+
 // IsEmpty is used to determine if there are any artifacts to include in the package.
 func (a *Artifacts) IsEmpty() bool {
 	if len(a.Binaries) > 0 {
 		return false
 	}
 	if len(a.Manpages) > 0 {
+		return false
+	}
+	if a.Directories != nil && (len(a.Directories.Config) > 0 || len(a.Directories.State) > 0) {
+		return false
+	}
+	if len(a.ConfigFiles) > 0 {
+		return false
+	}
+
+	if a.Systemd != nil &&
+		(len(a.Systemd.Units) > 0 || len(a.Systemd.Dropins) > 0) {
+		return false
+	}
+
+	if len(a.Docs) > 0 {
+		return false
+	}
+	if len(a.Licenses) > 0 {
 		return false
 	}
 	return true
@@ -173,10 +287,14 @@ type SourceGit struct {
 	KeepGitDir bool   `yaml:"keepGitDir" json:"keepGitDir"`
 }
 
-// No longer supports `.git` URLs as git repos. That has to be done with
-// `SourceGit`
+// SourceHTTP is used to download a file from an HTTP(s) URL.
 type SourceHTTP struct {
+	// URL is the URL to download the file from.
 	URL string `yaml:"url" json:"url"`
+	// Digest is the digest of the file to download.
+	// This is used to verify the integrity of the file.
+	// Form: <algorithm>:<digest>
+	Digest digest.Digest `yaml:"digest,omitempty" json:"digest,omitempty"`
 }
 
 // SourceContext is used to generate a source from a build context. The path to
@@ -274,6 +392,30 @@ type Source struct {
 	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
 	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
+
+	// Generate is the list generators to run on the source.
+	//
+	// Generators are used to generate additional sources from this source.
+	// As an example the `godmod` generator can be used to generate a go module cache from a go source.
+	// How a genator operates is dependent on the actual generator.
+	// Geneators may also cauuse modifications to the build environment.
+	//
+	// Currently only one generator is supported: "gomod"
+	Generate []*SourceGenerator `yaml:"generate,omitempty" json:"generate,omitempty"`
+}
+
+// GeneratorGomod is used to generate a go module cache from go module sources
+type GeneratorGomod struct {
+}
+
+// SourceGenerator holds the configuration for a source generator.
+// This can be used inside of a [Source] to generate additional sources from the given source.
+type SourceGenerator struct {
+	// Subpath is the path inside a source to run the generator from.
+	Subpath string `yaml:"subpath,omitempty" json:"subpath,omitempty"`
+
+	// Gomod is the go module generator.
+	Gomod *GeneratorGomod `yaml:"gomod" json:"gomod"`
 }
 
 // PackageDependencies is a list of dependencies for a package.
@@ -289,6 +431,9 @@ type PackageDependencies struct {
 	Recommends map[string][]string `yaml:"recommends,omitempty" json:"recommends,omitempty"`
 
 	// Test lists any extra packages required for running tests
+	// These packages are only installed for tests which have steps that require
+	// running a command in the built container.
+	// See [TestSpec] for more information.
 	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
 }
 
@@ -372,6 +517,16 @@ type Target struct {
 	// Tests are the list of tests to run which are specific to the target.
 	// Tests are appended to the list of tests in the main [Spec]
 	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
+
+	// PackageConfig is the configuration to use for artifact targets, such as
+	// rpms, debs, or zip files containing Windows binaries
+	PackageConfig *PackageConfig `yaml:"package_config,omitempty" json:"package_config,omitempty"`
+}
+
+// PackageConfig encapsulates the configuration for artifact targets
+type PackageConfig struct {
+	// Signer is the configuration to use for signing packages
+	Signer *Frontend `yaml:"signer,omitempty" json:"signer,omitempty"`
 }
 
 // TestSpec is used to execute tests against a container with the package installed in it.

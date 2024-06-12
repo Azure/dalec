@@ -1,11 +1,11 @@
-FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/oss/go/microsoft/golang:1.21@sha256:f5e962fc0e36314548301b1b9380368f34dbff8f23c50d4a0f22a0be64da2552 AS go
+FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/oss/go/microsoft/golang:1.21@sha256:ac43b1ed13ad1315cffa2690fc037aebc947837d296f5245a2770e68414d282c AS go
 
 FROM go  AS frontend-build
 WORKDIR /build
 COPY . .
-ENV CGO_ENABLED=0 GOFLAGS=-trimpath
-ARG TARGETARCH TARGETOS
-ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
+ENV CGO_ENABLED=0
+ARG TARGETARCH TARGETOS GOFLAGS=-trimpath
+ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOFLAGS=${GOFLAGS}
 RUN \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \

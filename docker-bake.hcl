@@ -72,7 +72,7 @@ target "runc" {
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     matrix = {
-        distro = ["mariner2"]
+        distro = ["mariner2", "azlinux3"]
         tgt = ["rpm", "container", "rpm/spec"]
     }
     target = "${distro}/${tgt}"
@@ -88,7 +88,7 @@ target "runc" {
 target "runc-test" {
     name = "runc-test-${distro}"
     matrix = {
-        distro =["mariner2"]
+        distro =["mariner2", "azlinux3"]
     }
     contexts = {
         "dalec-runc-img" = "target:runc-${distro}-container"

@@ -2,19 +2,13 @@ package frontend
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 
 	"github.com/Azure/dalec"
-	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/exptypes"
-	"github.com/moby/buildkit/exporter/containerimage/image"
-	"github.com/moby/buildkit/frontend/dockerfile/parser"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
 )
@@ -22,6 +16,8 @@ import (
 const (
 	requestIDKey               = "requestid"
 	dalecSubrequstForwardBuild = "dalec.forward.build"
+
+	gatewayFrontend = "gateway.v0"
 )
 
 func getDockerfile(ctx context.Context, client gwclient.Client, build *dalec.SourceBuild, defPb *pb.Definition) ([]byte, error) {
@@ -72,39 +68,11 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.Forw
 			return llb.Scratch(), err
 		}
 
-		dockerfile := llb.Scratch().File(
-			llb.Mkfile("Dockerfile", 0600, dockerfileDt),
+		req, err := newSolveRequest(
+			toDockerfile(ctx, st, dockerfileDt, spec, dalec.ProgressGroup("prepare dockerfile to forward to frontend")),
+			copyForForward(ctx, client),
 		)
-		dockerfileDef, err := dockerfile.Marshal(ctx)
 		if err != nil {
-			return llb.Scratch(), err
-		}
-
-		req := gwclient.SolveRequest{
-			Frontend: "dockerfile.v0",
-			FrontendInputs: map[string]*pb.Definition{
-				dockerui.DefaultLocalNameContext: defPb,
-				"dockerfile":                     dockerfileDef.ToPB(),
-			},
-			FrontendOpt: map[string]string{},
-		}
-
-		if ref, cmdline, _, ok := parser.DetectSyntax(dockerfileDt); ok {
-			req.Frontend = "gateway.v0"
-			req.FrontendOpt["source"] = ref
-			req.FrontendOpt["cmdline"] = cmdline
-		}
-
-		if spec != nil {
-			if spec.Target != "" {
-				req.FrontendOpt["target"] = spec.Target
-			}
-			for k, v := range spec.Args {
-				req.FrontendOpt["build-arg:"+k] = v
-			}
-		}
-
-		if err := copyForForward(ctx, client, &req); err != nil {
 			return llb.Scratch(), err
 		}
 
@@ -128,60 +96,6 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func makeTargetForwarder(specT dalec.Target, bkt bktargets.Target) BuildFunc {
-	return func(ctx context.Context, client gwclient.Client, spec *dalec.Spec) (_ gwclient.Reference, _ *image.Image, retErr error) {
-		defer func() {
-			if retErr != nil {
-				retErr = errors.Wrapf(retErr, "error forwarding build to frontend %q for target %s", specT.Frontend.Image, bkt.Name)
-			}
-		}()
-
-		dt, err := yaml.Marshal(spec)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "error marshalling spec to yaml")
-		}
-
-		def, err := llb.Scratch().File(llb.Mkfile("Dockerfile", 0600, dt)).Marshal(ctx)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "error marshaling dockerfile to LLB")
-		}
-
-		req := gwclient.SolveRequest{
-			Frontend: "gateway.v0",
-			FrontendInputs: map[string]*pb.Definition{
-				"dockerfile": def.ToPB(),
-			},
-			FrontendOpt: map[string]string{
-				"source":     specT.Frontend.Image,
-				"cmdline":    specT.Frontend.CmdLine,
-				"target":     bkt.Name,
-				requestIDKey: dalecSubrequstForwardBuild,
-			},
-		}
-
-		if err := copyForForward(ctx, client, &req); err != nil {
-			return nil, nil, err
-		}
-
-		res, err := client.Solve(ctx, req)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ref, err := res.SingleRef()
-		if err != nil {
-			return nil, nil, err
-		}
-		configDt := res.Metadata[exptypes.ExporterImageConfigKey]
-		var cfg image.Image
-		if err := json.Unmarshal(configDt, &cfg); err != nil {
-			return nil, nil, err
-		}
-
-		return ref, &cfg, nil
-	}
 }
 
 func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOpts, error) {
@@ -238,51 +152,64 @@ func checkDiffMerge(client gwclient.Client) bool {
 }
 
 // copyForForward copies all the inputs and build opts from the initial request in order to forward to another frontend.
-func copyForForward(ctx context.Context, client gwclient.Client, req *gwclient.SolveRequest) error {
-	// Inputs are any additional build contexts or really any llb that the client sent along.
-	inputs, err := client.Inputs(ctx)
-	if err != nil {
-		return err
-	}
-
-	if req.FrontendInputs == nil {
-		req.FrontendInputs = make(map[string]*pb.Definition, len(inputs))
-	}
-
-	for k, v := range inputs {
-		if _, ok := req.FrontendInputs[k]; ok {
-			// Do not overwrite existing inputs
-			continue
-		}
-
-		def, err := v.Marshal(ctx)
+func copyForForward(ctx context.Context, client gwclient.Client) solveRequestOpt {
+	return func(req *gwclient.SolveRequest) error {
+		// Inputs are any additional build contexts or really any llb that the client sent along.
+		inputs, err := client.Inputs(ctx)
 		if err != nil {
-			return errors.Wrap(err, "error marshaling frontend input")
-		}
-		req.FrontendInputs[k] = def.ToPB()
-	}
-
-	opts := client.BuildOpts().Opts
-	if req.FrontendOpt == nil {
-		req.FrontendOpt = make(map[string]string, len(opts))
-	}
-
-	for k, v := range opts {
-
-		if k == "filename" || k == "dockerfilekey" || k == "target" {
-			// These are some well-known keys that the dockerfile frontend uses
-			// which we'll be overriding with our own values (as needed) in the
-			// caller.
-			// Basically there should not be a need, nor is it desirable, to forward these along.
-			continue
+			return err
 		}
 
-		if _, ok := req.FrontendOpt[k]; ok {
-			// Do not overwrite existing opts
-			continue
+		if req.FrontendInputs == nil {
+			req.FrontendInputs = make(map[string]*pb.Definition, len(inputs))
 		}
-		req.FrontendOpt[k] = v
-	}
 
-	return nil
+		for k, v := range inputs {
+			if _, ok := req.FrontendInputs[k]; ok {
+				// Do not overwrite existing inputs
+				continue
+			}
+
+			def, err := v.Marshal(ctx)
+			if err != nil {
+				return errors.Wrap(err, "error marshaling frontend input")
+			}
+			req.FrontendInputs[k] = def.ToPB()
+		}
+
+		opts := client.BuildOpts().Opts
+		if req.FrontendOpt == nil {
+			req.FrontendOpt = make(map[string]string, len(opts))
+		}
+
+		for k, v := range opts {
+
+			if k == "filename" || k == "dockerfilekey" || k == "target" {
+				// These are some well-known keys that the dockerfile frontend uses
+				// which we'll be overriding with our own values (as needed) in the
+				// caller.
+				// Basically there should not be a need, nor is it desirable, to forward these along.
+				continue
+			}
+
+			if _, ok := req.FrontendOpt[k]; ok {
+				// Do not overwrite existing opts
+				continue
+			}
+			req.FrontendOpt[k] = v
+		}
+
+		return nil
+	}
+}
+
+const keyTopLevelTarget = "dalec.target"
+
+type BuildOpstGetter interface {
+	BuildOpts() gwclient.BuildOpts
+}
+
+// GetTargetKey returns the key that should be used to select the [dalec.Target] from the [dalec.Spec]
+func GetTargetKey(client BuildOpstGetter) string {
+	return client.BuildOpts().Opts[keyTopLevelTarget]
 }

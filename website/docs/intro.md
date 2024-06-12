@@ -1,4 +1,7 @@
-# Intro
+---
+title: Introduction
+slug: /
+---
 
 Dalec is a tool for producing container images by first building packages
 targeting the linux distribution used by the container image.
@@ -21,12 +24,13 @@ for creating a package that is just a collection of dependencies.
 
 ### Example
 
-In this examnple wee'll build a virtual package that just installs other packages as dependencies.
+In this example we'll build a virtual package that just installs other packages as dependencies.
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
 name: my-package
 version: 1.0.0
+revision: "1"
 packager: Contoso
 vendor: Contoso
 license: MIT
@@ -61,6 +65,7 @@ as the base image which includes a shell and other tools.
 # syntax=ghcr.io/azure/dalec/frontend:latest
 name: my-package
 version: 1.0.0
+revision: "1"
 packager: Contoso
 vendor: Contoso
 license: MIT
@@ -81,7 +86,7 @@ targets:
 You can also set other image settings like entrypoint/cmd, environment
 variables, working directory, labels, and more.
 For now, the best place to find what all is available to set is to look at the
-[code](../spec.go).
+[code](https://github.com/Azure/dalec/blob/main/spec.go).
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
@@ -124,12 +129,13 @@ To do this we'll need a few things:
 Here we'll pull from a github repo.
 It will use the `go-md2man` repo and build the `go-md2man` from the v2.0.3 tag in the repo.
 
-*Note*: See the full example from [examples/go-md2man.yml](examples/go-md2man-1.yml)
+*Note*: See the full example from [examples/go-md2man.yml](https://github.com/Azure/dalec/blob/main/docs/examples/go-md2man-1.yml)
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
 name: go-md2man
 version: 2.0.3
+revision: "1"
 packager: Dalec Example
 vendor: Dalec Example
 license: MIT
@@ -151,7 +157,6 @@ build:
     CGO_ENABLED: "0"
   steps:
     - command: |
-        export GOMODCACHE="$(pwd)/gomods"
         cd src
         go build -o go-md2man .
 
@@ -188,12 +193,13 @@ list of sources.  We'll accomplish this by add a source which will run `go mod
 download` in a docker image with the `src` source mounted and then extract the
 go modules from the resulting filesystem.
 
-*Note*: See the full example from [examples/go-md2man.yml](examples/go-md2man-2.yml)
+*Note*: See the full example from [examples/go-md2man.yml](https://github.com/Azure/dalec/blob/main/docs/examples/go-md2man-2.yml)
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
 name: go-md2man
 version: 2.0.3
+revision: "1"
 packager: Dalec Example
 vendor: Dalec Example
 license: MIT
@@ -245,6 +251,52 @@ image:
   entrypoint: go-md2man
   cmd: --help
 ```
+
+The nice thing about this is you can see exactly what's being done to generate the go modules.
+The downside is its extremely verbose and even requires you to do things outside of the toolchain for the targeted distribution.
+The below example does something similar but in a more concise way:
+
+```yaml
+name: go-md2man
+version: 2.0.3
+revision: "1"
+packager: Dalec Example
+vendor: Dalec Example
+license: MIT
+description: A tool to convert markdown into man pages (roff).
+website: https://github.com/cpuguy83/go-md2man
+
+sources:
+  src:
+    generate:
+      - gomod: {}
+    git:
+      url: https://github.com/cpuguy83/go-md2man.git
+      commit: "v2.0.3"
+dependencies:
+  build:
+    golang:
+
+build:
+  env:
+    CGO_ENABLED: "0"
+  steps:
+    - command: |
+        cd src
+        go build -o go-md2man .
+
+artifacts:
+  binaries:
+    src/go-md2man:
+
+image:
+  entrypoint: go-md2man
+  cmd: --help
+```
+
+The above "gomod" generator takes care of fetching the module dependencies for any and all sources that have the generator set.
+The module dependencies are managed by Dalec and injected into the build sources.
+The neccessary go environment variables are set in the build environment so that the go build toolchain knows where to find the modules.
 
 Finally, we can add a test case to the spec file which helps ensure the package is assembled as expected.
 The following test will make sure `/usr/bin/go-md2man` is installed and has the expected permissions.
@@ -319,3 +371,4 @@ To re-itterate: the `x-` fields are ignored by the dalec parser and are only for
 
 * Details on editor support in [editor-support.md](editor-support.md)
 * More in-depth documentation for testing can be found in [testing.md](testing.md).
+* Explanation of sources and how to use them can be found in [sources.md](sources.md).

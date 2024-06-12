@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/exporter/containerimage/image"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerfile2llb"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
@@ -175,6 +175,27 @@ func TestSourceHTTP(t *testing.T) {
 	if op.Attrs[httpFilename] != "test" {
 		t.Errorf("expected http.filename %q, got %q", xFilename, op.Attrs[httpFilename])
 	}
+
+	t.Run("with digest", func(t *testing.T) {
+		dgst := digest.Canonical.FromBytes(nil)
+		src.HTTP.Digest = dgst
+
+		ops := getSourceOp(ctx, t, src)
+		op := ops[0].GetSource()
+
+		if len(op.Attrs) != 2 {
+			t.Errorf("expected 2 attribute, got %d", len(op.Attrs))
+		}
+
+		if op.Attrs[httpFilename] != "test" {
+			t.Errorf("expected http.filename %q, got %q", xFilename, op.Attrs[httpFilename])
+		}
+
+		const httpChecksum = "http.checksum"
+		if op.Attrs[httpChecksum] != dgst.String() {
+			t.Errorf("expected http.checksum %q, got %q", dgst.String(), op.Attrs[httpChecksum])
+		}
+	})
 }
 
 func toImageRef(ref string) string {
@@ -227,6 +248,17 @@ func TestSourceDockerImage(t *testing.T) {
 		},
 	}
 
+	fileMount := SourceMount{
+		Dest: "/filedest",
+		Spec: Source{
+			Inline: &SourceInline{
+				File: &SourceInlineFile{
+					Contents: "some file contents",
+				},
+			},
+		},
+	}
+
 	t.Run("with cmd", func(t *testing.T) {
 		src := Source{
 			DockerImage: &SourceDockerImage{
@@ -244,11 +276,26 @@ func TestSourceDockerImage(t *testing.T) {
 		ctx := context.Background()
 		ops := getSourceOp(ctx, t, src)
 
-		img := ops[0].GetSource()
-		if img.Identifier != xID {
-			t.Errorf("expected identifier %q, got %q", xID, img.Identifier)
+		imgBaseOp := ops[0].GetSource()
+		if imgBaseOp.Identifier != xID {
+			t.Errorf("expected identifier %q, got %q", xID, imgBaseOp.Identifier)
 		}
 		checkCmd(t, ops[1:], &src, [][]expectMount{noMountCheck, noMountCheck})
+
+		t.Run("with file mount", func(t *testing.T) {
+			src := src
+
+			img := *src.DockerImage
+			cmd := *img.Cmd
+			cmd.Mounts = []SourceMount{fileMount}
+
+			img.Cmd = &cmd
+			src.DockerImage = &img
+
+			ops := getSourceOp(ctx, t, src)
+			fileMountCheck := []expectMount{{dest: "/filedest", selector: "/filedest", typ: pb.MountType_BIND}}
+			checkCmd(t, ops[2:], &src, [][]expectMount{noMountCheck, fileMountCheck})
+		})
 
 		t.Run("with filters", func(t *testing.T) {
 			t.Run("include and exclude", func(t *testing.T) {
@@ -304,8 +351,12 @@ func TestSourceDockerImage(t *testing.T) {
 				contextMount.Spec.Path = "subdir"
 
 				// Add source to mounts
-				src.DockerImage.Cmd.Mounts = []SourceMount{contextMount}
+				img := *src.DockerImage
+				cmd := *img.Cmd
 
+				cmd.Mounts = []SourceMount{contextMount}
+				img.Cmd = &cmd
+				src.DockerImage = &img
 				ops := getSourceOp(ctx, t, src)
 
 				var contextOp *pb.Op
@@ -314,7 +365,7 @@ func TestSourceDockerImage(t *testing.T) {
 				// since the order of the source ops isn't always deterministic
 				// (possible buildkit marshaling bug)
 				if imageOp := findMatchingSource(ops, src); imageOp == nil {
-					t.Errorf("could not find source with identifier %q", img.Identifier)
+					t.Errorf("could not find source with identifier %q", imgBaseOp.Identifier)
 					return
 				}
 
@@ -335,13 +386,20 @@ func TestSourceDockerImage(t *testing.T) {
 				src := src
 				imageMount := imageMount
 				imageMount.Spec.Path = "/subdir"
+
+				img := *src.DockerImage
+				cmd := *img.Cmd
+
+				cmd.Mounts = []SourceMount{imageMount}
+				img.Cmd = &cmd
+				src.DockerImage = &img
 				src.DockerImage.Cmd.Mounts = []SourceMount{imageMount}
 
 				ops := getSourceOp(ctx, t, src)
 
-				var img, subImg *pb.Op
+				var imgOp, subImg *pb.Op
 
-				if img = findMatchingSource(ops, src); img == nil {
+				if imgOp = findMatchingSource(ops, src); imgOp == nil {
 					t.Errorf("could not find source with identifier %q", src.DockerImage.Ref)
 				}
 
@@ -355,10 +413,10 @@ func TestSourceDockerImage(t *testing.T) {
 					t.Fatalf("expecting single child op for %v\n", subImg.GetSource())
 				}
 
-				cmd := childOps[0]
-				checkCmd(t, []*pb.Op{cmd}, &imageMount.Spec, [][]expectMount{noMountCheck, noMountCheck})
+				cmdOp := childOps[0]
+				checkCmd(t, []*pb.Op{cmdOp}, &imageMount.Spec, [][]expectMount{noMountCheck, noMountCheck})
 
-				nextCmd1 := getChildren(cmd, ops, dMap)
+				nextCmd1 := getChildren(cmdOp, ops, dMap)
 				nextCmd2 := getChildren(nextCmd1[0], ops, dMap)
 
 				checkCmd(t, []*pb.Op{nextCmd1[0], nextCmd2[0]}, &src, [][]expectMount{{{dest: "/dst", selector: ""}}, noMountCheck})
@@ -475,7 +533,7 @@ func TestSourceContext(t *testing.T) {
 		testWithFilters(t, src)
 	})
 
-	t.Run("with customn name", func(t *testing.T) {
+	t.Run("with custom name", func(t *testing.T) {
 		src := Source{
 			Context: &SourceContext{Name: "some-name"},
 		}
@@ -728,7 +786,7 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 			// Note, we can't really test anything other than inline here because we don't have access to the actual buildkit client,
 			// so we can't extract extract the dockerfile from the input state (nor do we have any input state)
 			src := []byte(src.Build.Source.Inline.File.Contents)
-			st, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, src, dockerfile2llb.ConvertOpt{
+			st, _, _, _, err := dockerfile2llb.Dockerfile2LLB(ctx, src, dockerfile2llb.ConvertOpt{
 				MetaResolver: stubMetaResolver{},
 			})
 			return *st, err
@@ -854,8 +912,9 @@ func checkContainsMount(t *testing.T, mounts []*pb.Mount, expect expectMount) {
 }
 
 func checkCmd(t *testing.T, ops []*pb.Op, src *Source, expectMounts [][]expectMount) {
+	t.Helper()
 	if len(ops) != len(src.DockerImage.Cmd.Steps) {
-		t.Fatalf("unexpected number of ops, expected %d, got %d", len(src.DockerImage.Cmd.Steps), len(ops))
+		t.Fatalf("unexpected number of ops, expected %d, got %d\n\n%v", len(src.DockerImage.Cmd.Steps), len(ops), ops)
 	}
 	for i, step := range src.DockerImage.Cmd.Steps {
 		exec := ops[i].GetExec()
@@ -883,7 +942,6 @@ func checkCmd(t *testing.T, ops []*pb.Op, src *Source, expectMounts [][]expectMo
 		for _, expectMount := range expectMounts[i] {
 			checkContainsMount(t, exec.Mounts, expectMount)
 		}
-
 	}
 }
 
@@ -933,12 +991,12 @@ func envMapToSlice(env map[string]string) []string {
 
 type stubMetaResolver struct{}
 
-func (stubMetaResolver) ResolveImageConfig(ctx context.Context, ref string, opts llb.ResolveImageConfigOpt) (string, digest.Digest, []byte, error) {
+func (stubMetaResolver) ResolveImageConfig(ctx context.Context, ref string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
 	// Craft a dummy image config
 	// If we don't put at least 1 diffID, buildkit will treat this as `FROM scratch` (and actually litterally convert it `llb.Scratch`)
 	// This affects what ops that get marshaled.
 	// Namely it removes our `docker-image` identifier op.
-	img := image.Image{
+	img := DockerImageSpec{
 		Image: v1.Image{
 			RootFS: v1.RootFS{
 				DiffIDs: []digest.Digest{digest.FromBytes(nil)},

@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
@@ -115,7 +116,7 @@ func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts,
 		return st, nil
 	}
 
-	st, err := generateSourceFromImage(name, st, src.Cmd, sOpt, path, opts...)
+	st, err := generateSourceFromImage(st, src.Cmd, sOpt, path, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -126,8 +127,23 @@ func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts,
 func (src *SourceHTTP) AsState(name string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	httpOpts := []llb.HTTPOption{withConstraints(opts)}
 	httpOpts = append(httpOpts, llb.Filename(name))
+	if src.Digest != "" {
+		httpOpts = append(httpOpts, llb.Checksum(src.Digest))
+	}
 	st := llb.HTTP(src.URL, httpOpts...)
 	return st, nil
+}
+
+func (src *SourceHTTP) validate() error {
+	if src.URL == "" {
+		return errors.New("http source must have a URL")
+	}
+	if src.Digest != "" {
+		if err := src.Digest.Validate(); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
 }
 
 // InvalidSourceError is an error type returned when a source is invalid.
@@ -179,7 +195,7 @@ func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOp
 
 // must not be called with a nil cmd pointer
 // subPath must be a valid non-empty path
-func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if len(cmd.Steps) == 0 {
 		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
 	}
@@ -194,7 +210,7 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
 	for _, src := range cmd.Mounts {
-		srcSt, err := src.Spec.AsMount(name, sOpts, opts...)
+		srcSt, err := src.Spec.AsMount(src.Dest, sOpts, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -206,6 +222,10 @@ func generateSourceFromImage(name string, st llb.State, cmd *Command, sOpts Sour
 		if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 &&
 			!src.Spec.handlesOwnPath() {
 			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
+		}
+
+		if !SourceIsDir(src.Spec) {
+			mountOpt = append(mountOpt, llb.SourcePath(src.Dest))
 		}
 		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
 	}
@@ -283,20 +303,42 @@ func WithCreateDestPath() llb.CopyOption {
 	})
 }
 
-func SourceIsDir(src Source) (bool, error) {
+func SourceIsDir(src Source) bool {
 	switch {
 	case src.DockerImage != nil,
 		src.Git != nil,
 		src.Build != nil,
 		src.Context != nil:
-		return true, nil
+		return true
 	case src.HTTP != nil:
-		return false, nil
+		return false
 	case src.Inline != nil:
-		return src.Inline.Dir != nil, nil
+		return src.Inline.Dir != nil
 	default:
-		return false, fmt.Errorf("unsupported source type")
+		panic("unreachable")
 	}
+}
+
+func (src *Source) GetDisplayRef() (string, error) {
+	s := ""
+	switch {
+	case src.DockerImage != nil:
+		s = src.DockerImage.Ref
+	case src.Git != nil:
+		s = src.Git.URL
+	case src.HTTP != nil:
+		s = src.HTTP.URL
+	case src.Context != nil:
+		s = src.Context.Name
+	case src.Build != nil:
+		s = fmt.Sprintf("%v", src.Build.Source)
+	case src.Inline != nil:
+		s = "inline"
+	default:
+		return "", fmt.Errorf("no non-nil source provided")
+	}
+
+	return s, nil
 }
 
 // Doc returns the details of how the source was created.
@@ -435,13 +477,15 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 	return sourceState
 }
 
+// PatchSources returns a new map containing the patched LLB state for each source in the source map.
+// Sources that are not patched are also included in the result for convienence.
 // `sourceToState` must be a complete map from source name -> llb state for each source in the dalec spec.
 // `worker` must be an LLB state with a `patch` binary present.
-// PatchSources returns a new map containing the patched LLB state for each source in the source map.
 func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
 	// duplicate map to avoid possibly confusing behavior of mutating caller's map
 	states := DuplicateMap(sourceToState)
-	sorted := SortMapKeys(spec.Sources)
+	pgID := identity.NewID()
+	sorted := SortMapKeys(states)
 
 	for _, sourceName := range sorted {
 		sourceState := states[sourceName]
@@ -450,9 +494,38 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 		if !patchesExist {
 			continue
 		}
-		opts = append(opts, ProgressGroup("Patch spec source:"+sourceName))
-		states[sourceName] = patchSource(worker, sourceState, states, patches, withConstraints(opts))
+		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" ", false)
+		states[sourceName] = patchSource(worker, sourceState, states, patches, pg, withConstraints(opts))
 	}
 
 	return states
+}
+
+func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc func(string) bool, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+	states := map[string]llb.State{}
+	for name, src := range s.Sources {
+		if !filterFunc(name) {
+			continue
+		}
+
+		st, err := src.AsState(name, sOpt, opts...)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get source state for %q", name)
+		}
+
+		states[name] = st
+		for _, p := range s.Patches[name] {
+			src, ok := s.Sources[p.Source]
+			if !ok {
+				return nil, errors.Errorf("patch source %q not found", p.Source)
+			}
+
+			states[p.Source], err = src.AsState(p.Source, sOpt, opts...)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to get patch source state for %q", p.Source)
+			}
+		}
+	}
+
+	return PatchSources(worker, s, states, opts...), nil
 }

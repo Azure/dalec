@@ -17,7 +17,7 @@ You will need to add a `syntax` directive at the top of your spec file to enable
 # syntax=ghcr.io/azure/dalec/frontend:latest
 ```
 
-### Exmples:
+### Examples:
 
 You can look at the [test/fixtures](./test/fixtures) directory for examples of dalec specs.
 
@@ -58,13 +58,15 @@ To print a list of available build targets:
 
 ```console
 $ BUILDX_EXPERIMENTAL=1 docker build --print=targets -f test/fixtures/moby-runc.yml .
+debug/gomods                 Outputs all the gomodule dependencies for the spec
 debug/resolve                Outputs the resolved dalec spec file with build args applied.
-mariner2                     Alias for target mariner2/container
-mariner2/container (default) Builds a container with the RPM installed.
+debug/sources                Outputs all sources from a dalec spec file.
+mariner2/container (default) Builds a container image for mariner2.
+mariner2/container/depsonly  Builds a container image with only the runtime dependencies installed.
 mariner2/rpm                 Builds an rpm and src.rpm for mariner2.
-mariner2/rpm/buildroot       Outputs an rpm buildroot suitable for passing to rpmbuild.
-mariner2/rpm/sources         Outputs all the sources specified in the spec file.
-mariner2/rpm/spec            Outputs the generated RPM spec file
+mariner2/rpm/debug/buildroot Outputs an rpm buildroot suitable for passing to rpmbuild.
+mariner2/rpm/debug/sources   Outputs all the sources specified in the spec file in the format given to rpmbuild.
+mariner2/rpm/debug/spec      Outputs the generated RPM spec file
 ```
 
 
@@ -90,10 +92,30 @@ targets:
 # ...
 ```
 
+## Docs
+
+Docs are available at [https://azure.github.io/dalec/](https://azure.github.io/dalec/).
+
+
+### Building the docs
+
+You can view the docs locally by running:
+
+```console
+$ go -C website run .
+```
+
+This will, by default, make the docs available on `http://localhost:3000/dalec/`.
+You can customize the port with `--port <port>`.
+
+```console
+$ go -C website run . --port 3001
+```
+
 
 ## Contributing
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+This project welcomes contributions and suggestions. Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
 
@@ -107,8 +129,8 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ## Trademarks
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
+trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
