@@ -641,12 +641,12 @@ func TestSourceInlineDir(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			src := Source{Inline: &SourceInline{Dir: dir}}
 			ops := getSourceOp(ctx, t, src)
-			checkMkdir(t, ops[0].GetFile(), src.Inline.Dir, "/test")
+			checkMkdir(t, ops[0].GetFile(), src.Inline.Dir)
 
 			t.Run("with files", func(t *testing.T) {
 				src.Inline.Dir.Files = testFiles()
 				ops := getSourceOp(ctx, t, src)
-				checkMkdir(t, ops[0].GetFile(), src.Inline.Dir, "/test")
+				checkMkdir(t, ops[0].GetFile(), src.Inline.Dir)
 
 				if len(ops) != len(src.Inline.Dir.Files)+1 {
 					t.Fatalf("expected %d ops, got %d\n%s", len(src.Inline.Dir.Files)+1, len(ops), ops)
@@ -663,7 +663,7 @@ func TestSourceInlineDir(t *testing.T) {
 	}
 }
 
-func checkMkdir(t *testing.T, op *pb.FileOp, src *SourceInlineDir, name string) {
+func checkMkdir(t *testing.T, op *pb.FileOp, src *SourceInlineDir) {
 	if op == nil {
 		t.Fatal("expected dir op")
 	}
