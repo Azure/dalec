@@ -114,7 +114,7 @@ func (w *specWrapper) Requires() fmt.Stringer {
 
 	runtimeKeys := dalec.SortMapKeys(deps.Runtime)
 	for _, name := range runtimeKeys {
-		constraints := deps.Build[name]
+		constraints := deps.Runtime[name]
 		// satisifes is only for build deps, not runtime deps
 		// TODO: consider if it makes sense to support sources satisfying runtime deps
 		writeDep(b, "Requires", name, constraints)

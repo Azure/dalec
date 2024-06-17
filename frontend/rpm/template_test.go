@@ -412,3 +412,51 @@ func TestTemplate_Artifacts(t *testing.T) {
 		assert.Equal(t, want, got)
 	})
 }
+
+func TestTemplate_Requires(t *testing.T) {
+	t.Parallel()
+
+	spec := &dalec.Spec{
+		Dependencies: &dalec.PackageDependencies{
+			// note: I've prefixed these packages with a/b/c for sorting purposes
+			// Since the underlying code will sort packages this just makes it
+			// simpler to read for tests.
+			Build: map[string][]string{
+				"a-lib-no-constraints": {},
+				"b-lib-one-constraints": {
+					"< 2.0",
+				},
+				"c-lib-multiple-constraints": {
+					"< 2.0",
+					">= 1.0",
+				},
+			},
+			Runtime: map[string][]string{
+				"a-no-constraints": {},
+				"b-one-constraints": {
+					"< 2.0",
+				},
+				"c-multiple-constraints": {
+					"< 2.0",
+					">= 1.0",
+				},
+			},
+		},
+	}
+
+	w := &specWrapper{Spec: spec}
+
+	got := w.Requires().String()
+	want := `BuildRequires: a-lib-no-constraints
+BuildRequires: b-lib-one-constraints < 2.0
+BuildRequires: c-lib-multiple-constraints < 2.0
+BuildRequires: c-lib-multiple-constraints >= 1.0
+
+Requires: a-no-constraints
+Requires: b-one-constraints < 2.0
+Requires: c-multiple-constraints < 2.0
+Requires: c-multiple-constraints >= 1.0
+`
+
+	assert.Equal(t, want, got)
+}
