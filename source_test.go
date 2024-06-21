@@ -916,6 +916,7 @@ func checkCmd(t *testing.T, ops []*pb.Op, src *Source, expectMounts [][]expectMo
 	if len(ops) != len(src.DockerImage.Cmd.Steps) {
 		t.Fatalf("unexpected number of ops, expected %d, got %d\n\n%v", len(src.DockerImage.Cmd.Steps), len(ops), ops)
 	}
+
 	for i, step := range src.DockerImage.Cmd.Steps {
 		exec := ops[i].GetExec()
 		if exec == nil {
@@ -941,6 +942,10 @@ func checkCmd(t *testing.T, ops []*pb.Op, src *Source, expectMounts [][]expectMo
 
 		for _, expectMount := range expectMounts[i] {
 			checkContainsMount(t, exec.Mounts, expectMount)
+		}
+
+		if exec.Mounts[0].Input == pb.Empty {
+			t.Fatal("rootfs mount cannot be empty")
 		}
 	}
 }
