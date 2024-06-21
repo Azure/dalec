@@ -200,6 +200,13 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
 	}
 
+	if subPath == "" {
+		// TODO: We should log a warning here since extracing an entire image while also running a command is
+		// probably not what the user really wanted to do here.
+		// The buildkit client provides functionality to do this we just need to wire it in.
+		subPath = "/"
+	}
+
 	for k, v := range cmd.Env {
 		st = st.AddEnv(k, v)
 	}
