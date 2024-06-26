@@ -14,7 +14,6 @@ import (
 )
 
 const gomodsName = "__gomods"
-const containerSuffix = "/container"
 
 var specTmpl = template.Must(template.New("spec").Parse(strings.TrimSpace(`
 Summary: {{.Description}}
@@ -303,10 +302,6 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 		return b
 	}
 
-	if strings.HasSuffix(w.Target, containerSuffix) {
-		return b
-	}
-
 	b.WriteString("%preun\n")
 	keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
 	for _, servicePath := range keys {
@@ -325,10 +320,6 @@ func (w *specWrapper) Post() fmt.Stringer {
 	}
 
 	if len(w.Spec.Artifacts.Systemd.Units) == 0 {
-		return b
-	}
-
-	if strings.HasSuffix(w.Target, containerSuffix) {
 		return b
 	}
 
@@ -352,10 +343,6 @@ func (w *specWrapper) PostUn() fmt.Stringer {
 	}
 
 	if len(w.Spec.Artifacts.Systemd.Units) == 0 {
-		return b
-	}
-
-	if strings.HasSuffix(w.Target, containerSuffix) {
 		return b
 	}
 
