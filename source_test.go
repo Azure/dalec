@@ -19,6 +19,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"gotest.tools/v3/assert"
 )
 
 func TestSourceGitSSH(t *testing.T) {
@@ -320,6 +321,31 @@ func TestSourceDockerImage(t *testing.T) {
 				}
 
 				checkCmd(t, ops[1:], &src, [][]expectMount{{rootMount}, {rootMount}})
+			})
+
+			t.Run("mount beneath subpath", func(t *testing.T) {
+				src := src
+				src.Path = "subpath"
+
+				img := *src.DockerImage
+				cmd := *img.Cmd
+
+				img.Cmd = &cmd
+				src.DockerImage = &img
+
+				img.Cmd.Mounts = []SourceMount{
+					{
+						Dest: src.Path,
+						Spec: Source{
+							Inline: &SourceInline{
+								Dir: &SourceInlineDir{},
+							},
+						},
+					},
+				}
+
+				_, err := src.AsState("test", SourceOpts{})
+				assert.ErrorIs(t, err, errInvalidMountConfig)
 			})
 
 			t.Run("subpath with include-exclude", func(t *testing.T) {

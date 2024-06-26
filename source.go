@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
@@ -193,6 +194,8 @@ func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOp
 	return s.asState(name, true, sOpt, opts...)
 }
 
+var errInvalidMountConfig = errors.New("invalid mount config")
+
 // must not be called with a nil cmd pointer
 // subPath must be a valid non-empty path
 func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -217,6 +220,14 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
 	for _, src := range cmd.Mounts {
+		if src.Dest == "/" {
+			return llb.Scratch(), errors.Wrap(errInvalidMountConfig, "mount destination must not be \"/\"")
+		}
+		if subPath != "/" && filepath.HasPrefix(src.Dest, subPath) {
+			// We cannot support this as the base mount for subPath will shadow the mount being done here.
+			return llb.Scratch(), errors.Wrapf(errInvalidMountConfig, "mount destination (%s) must not be a descendent of the target source path (%s)", src.Dest, subPath)
+		}
+
 		srcSt, err := src.Spec.AsMount(src.Dest, sOpts, opts...)
 		if err != nil {
 			return llb.Scratch(), err
