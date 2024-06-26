@@ -1041,3 +1041,43 @@ func (stubMetaResolver) ResolveImageConfig(ctx context.Context, ref string, opt 
 	}
 	return ref, "", dt, nil
 }
+
+func Test_pathHasPrefix(t *testing.T) {
+	type testCase struct {
+		path   string
+		prefix string
+		expect bool
+	}
+	cases := []testCase{
+		{"/foo", "/foobar", false},
+		{"/foo", "/foo", true},
+		{"/foo/", "/foo", true},
+		{"/foo/", "/foo/", true},
+		{"//foo", "/foo", true},
+		{"//foo/", "/foo", true},
+		{"/foo/bar", "/foo", true},
+		{"/foo/bar/", "/foo", true},
+		{"/foo/bar/", "/foo/", true},
+		{"/foo/bar", "/foo/", true},
+		{"/foo/bar", "/bar", false},
+		{"/foo/bar", "/foo/bar/baz", false},
+		{"/foo/bar/baz", "/foo/bar", true},
+		{"/foo//bar", "/foo", true},
+		{"/foo//bar/", "/foo", true},
+		{"/foo//bar/", "/foo/", true},
+		{"/foo//bar/", "/foo//", true},
+	}
+
+	// Replace / char which is special for go tests with something less special.
+	forTestName := func(s string) string {
+		return strings.Replace(s, "/", "__", -1)
+	}
+
+	for _, tc := range cases {
+		name := fmt.Sprintf("path=%s,prefix=%s", forTestName(tc.path), forTestName(tc.prefix))
+		t.Run(name, func(t *testing.T) {
+			hasPrefix := pathHasPrefix(tc.path, tc.prefix)
+			assert.Equal(t, hasPrefix, tc.expect)
+		})
+	}
+}

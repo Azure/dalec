@@ -142,9 +142,15 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 		}
 
 		if s.DockerImage.Cmd != nil {
+			// If someone *really* wants to extract the entire rootfs, they need to say so explicitly.
+			// We won't fill this in for them, particularly because this is almost certainly not the user's intent.
+			if s.Path == "" {
+				retErr = goerrors.Join(retErr, errors.Errorf("source path cannot be empty"))
+			}
+
 			for _, mnt := range s.DockerImage.Cmd.Mounts {
-				if mnt.Dest == s.Path {
-					return errors.Wrap(errInvalidMountConfig, "")
+				if err := mnt.validate(s.Path); err != nil {
+					retErr = goerrors.Join(retErr, err)
 				}
 				if err := mnt.Spec.validate("docker image source with ref", "'"+s.DockerImage.Ref+"'"); err != nil {
 					retErr = goerrors.Join(retErr, err)

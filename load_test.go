@@ -236,6 +236,68 @@ func TestSourceValidation(t *testing.T) {
 				Generate: []*SourceGenerator{{Gomod: &GeneratorGomod{}}},
 			},
 		},
+		{
+			title:     "docker images with cmd source must specify a path to extract",
+			expectErr: true,
+			src: Source{
+				Path: "",
+				DockerImage: &SourceDockerImage{
+					Ref: "notexists:latest",
+					Cmd: &Command{
+						Steps: []*BuildStep{
+							{Command: ":"},
+						},
+					},
+				},
+			},
+		},
+		{
+			title:     "cmd souce mount dest must not be /",
+			expectErr: true,
+			src: Source{
+				Path: "/foo",
+				DockerImage: &SourceDockerImage{
+					Ref: "notexists:latest",
+					Cmd: &Command{
+						Steps: []*BuildStep{
+							{Command: ":"},
+						},
+						Mounts: []SourceMount{
+							{
+								Dest: "/",
+								Spec: Source{
+									Inline: &SourceInline{
+										File: &SourceInlineFile{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			title:     "cmd source mount dest must not be a descendent of the extracted source path",
+			expectErr: true,
+			src: Source{
+				Path: "/foo",
+				DockerImage: &SourceDockerImage{
+					Ref: "notexists:latest",
+					Cmd: &Command{
+						Mounts: []SourceMount{
+							{
+								Dest: "/foo",
+								Spec: Source{
+									Inline: &SourceInline{
+										File: &SourceInlineFile{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
