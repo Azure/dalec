@@ -293,14 +293,20 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 
 func (w *specWrapper) PreUn() fmt.Stringer {
 	b := &strings.Builder{}
-	b.WriteString("%preun\n")
 
-	if w.Spec.Artifacts.Systemd != nil {
-		keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
-		for _, servicePath := range keys {
-			serviceName := filepath.Base(servicePath)
-			fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
-		}
+	if w.Spec.Artifacts.Systemd == nil {
+		return b
+	}
+
+	if len(w.Spec.Artifacts.Systemd.Units) == 0 {
+		return b
+	}
+
+	b.WriteString("%preun\n")
+	keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
+	for _, servicePath := range keys {
+		serviceName := filepath.Base(servicePath)
+		fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
 	}
 
 	return b
@@ -308,30 +314,45 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 
 func (w *specWrapper) Post() fmt.Stringer {
 	b := &strings.Builder{}
+
+	if w.Spec.Artifacts.Systemd == nil {
+		return b
+	}
+
+	if len(w.Spec.Artifacts.Systemd.Units) == 0 {
+		return b
+	}
+
 	b.WriteString("%post\n")
 	// TODO: can inject other post install steps here in the future
 
-	if w.Spec.Artifacts.Systemd != nil {
-		keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
-		for _, servicePath := range keys {
-			unitConf := w.Spec.Artifacts.Systemd.Units[servicePath].Artifact()
-			fmt.Fprintf(b, "%%systemd_post %s\n", unitConf.ResolveName(servicePath))
-		}
+	keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
+	for _, servicePath := range keys {
+		unitConf := w.Spec.Artifacts.Systemd.Units[servicePath].Artifact()
+		fmt.Fprintf(b, "%%systemd_post %s\n", unitConf.ResolveName(servicePath))
 	}
+
 	return b
 }
 
 func (w *specWrapper) PostUn() fmt.Stringer {
 	b := &strings.Builder{}
+
+	if w.Spec.Artifacts.Systemd == nil {
+		return b
+	}
+
+	if len(w.Spec.Artifacts.Systemd.Units) == 0 {
+		return b
+	}
+
 	b.WriteString("%postun\n")
-	if w.Spec.Artifacts.Systemd != nil {
-		keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
-		for _, servicePath := range keys {
-			cfg := w.Spec.Artifacts.Systemd.Units[servicePath]
-			a := cfg.Artifact()
-			serviceName := a.ResolveName(servicePath)
-			fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
-		}
+	keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
+	for _, servicePath := range keys {
+		cfg := w.Spec.Artifacts.Systemd.Units[servicePath]
+		a := cfg.Artifact()
+		serviceName := a.ResolveName(servicePath)
+		fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
 	}
 
 	return b
