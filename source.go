@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
@@ -30,6 +31,7 @@ func getFilter(src Source, forMount bool, opts ...llb.ConstraintsOpt) llb.StateO
 		// if we're using a mount for these sources, the mount will handle path extraction
 		path = "/"
 	}
+
 	switch {
 	case src.HTTP != nil,
 		src.Git != nil,
@@ -196,6 +198,35 @@ func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOp
 
 var errInvalidMountConfig = errors.New("invalid mount config")
 
+func pathHasPrefix(s string, prefix string) bool {
+	if s == prefix {
+		return true
+	}
+
+	s = filepath.Clean(s)
+	prefix = filepath.Clean(prefix)
+
+	if s == prefix {
+		return true
+	}
+
+	if strings.HasPrefix(s, prefix+"/") {
+		return true
+	}
+	return false
+}
+
+func (m *SourceMount) validate(root string) error {
+	if m.Dest == "/" {
+		return errors.Wrap(errInvalidMountConfig, "mount destination must not be \"/\"")
+	}
+	if root != "/" && pathHasPrefix(m.Dest, root) {
+		// We cannot support this as the base mount for subPath will shadow the mount being done here.
+		return errors.Wrapf(errInvalidMountConfig, "mount destination (%s) must not be a descendent of the target source path (%s)", m.Dest, root)
+	}
+	return nil
+}
+
 // must not be called with a nil cmd pointer
 // subPath must be a valid non-empty path
 func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -220,12 +251,8 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
 
 	for _, src := range cmd.Mounts {
-		if src.Dest == "/" {
-			return llb.Scratch(), errors.Wrap(errInvalidMountConfig, "mount destination must not be \"/\"")
-		}
-		if subPath != "/" && filepath.HasPrefix(src.Dest, subPath) {
-			// We cannot support this as the base mount for subPath will shadow the mount being done here.
-			return llb.Scratch(), errors.Wrapf(errInvalidMountConfig, "mount destination (%s) must not be a descendent of the target source path (%s)", src.Dest, subPath)
+		if err := src.validate(subPath); err != nil {
+			return llb.Scratch(), err
 		}
 
 		srcSt, err := src.Spec.AsMount(src.Dest, sOpts, opts...)
