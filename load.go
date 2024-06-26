@@ -143,6 +143,9 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 
 		if s.DockerImage.Cmd != nil {
 			for _, mnt := range s.DockerImage.Cmd.Mounts {
+				if mnt.Dest == s.Path {
+					return errors.Wrap(errInvalidMountConfig, "")
+				}
 				if err := mnt.Spec.validate("docker image source with ref", "'"+s.DockerImage.Ref+"'"); err != nil {
 					retErr = goerrors.Join(retErr, err)
 				}
