@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"testing"
 
-	assert1 "github.com/stretchr/testify/assert"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -626,8 +625,8 @@ build:
 		err = spec.SubstituteArgs(map[string]string{
 			"test": "test",
 		})
-		assert1.Nil(t, err)
-		assert1.Equal(t, spec.Build.Steps[0].Env["TEST"], "test")
+		assert.NilError(t, err)
+		assert.Equal(t, spec.Build.Steps[0].Env["TEST"], "test")
 	})
 
 	t.Run("default value", func(t *testing.T) {
@@ -648,7 +647,7 @@ build:
 		}
 
 		err = spec.SubstituteArgs(map[string]string{})
-		assert.Nil(t, err)
+		assert.NilError(t, err)
 		assert.Equal(t, spec.Build.Steps[0].Env["TEST"], "test")
 	})
 
@@ -669,8 +668,7 @@ build:
 		}
 
 		err = spec.SubstituteArgs(map[string]string{})
-		assert1.NotNil(t, err)
-		assert1.Equal(t, err.Error(), `error performing shell expansion on build step 0: error performing shell expansion on env var "TEST" for step 0: build arg "test" not declared`)
+		assert.ErrorContains(t, err, `error performing shell expansion on build step 0: error performing shell expansion on env var "TEST" for step 0: build arg "test" not declared`)
 	})
 
 	t.Run("builtin build arg", func(t *testing.T) {
@@ -689,8 +687,7 @@ build:
 		}
 
 		err = spec.SubstituteArgs(map[string]string{})
-		assert1.NotNil(t, err)
-		assert1.Equal(t, err.Error(),
+		assert.ErrorContains(t, err,
 			`error performing shell expansion on build step 0: error performing shell expansion on env var "OS" for step 0: opt-in arg "TARGETOS" not present in args`)
 	})
 }
