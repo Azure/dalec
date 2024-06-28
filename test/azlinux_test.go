@@ -414,7 +414,7 @@ WantedBy=multi-user.target
 				Systemd: &dalec.SystemdConfiguration{
 					Units: map[string]dalec.SystemdUnitConfig{
 						"src/simple.service": {
-							Enable: true,
+							Enable: dalec.OptionTrue(),
 						},
 					},
 				},
@@ -539,7 +539,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					Units: map[string]dalec.SystemdUnitConfig{
 						"src/foo.service": {},
 						"src/foo.socket": {
-							Enable: true,
+							Enable: dalec.OptionTrue(),
 						},
 					},
 					Dropins: map[string]dalec.SystemdDropinConfig{
