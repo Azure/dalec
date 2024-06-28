@@ -38,7 +38,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		t.Parallel()
 		spec := dalec.Spec{
 			Name:        "test-build-commands-fail",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -69,7 +69,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		t.Parallel()
 		spec := dalec.Spec{
 			Name:        "test-no-internet-access",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -99,7 +99,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 	t.Run("container", func(t *testing.T) {
 		spec := dalec.Spec{
 			Name:        "test-container-build",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -417,7 +417,7 @@ func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveReque
 
 func fillMetadata(fakename string, s *dalec.Spec) *dalec.Spec {
 	s.Name = "bar"
-	s.Version = "v0.0.1"
+	s.Version = "0.0.1"
 	s.Description = "foo bar baz"
 	s.Website = "https://foo.bar.baz"
 	s.Revision = "1"
