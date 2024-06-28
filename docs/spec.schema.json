@@ -995,11 +995,7 @@
 				}
 			},
 			"additionalProperties": false,
-			"type": "object",
-			"required": [
-				"name",
-				"enable"
-			]
+			"type": "object"
 		},
 		"Target": {
 			"properties": {
