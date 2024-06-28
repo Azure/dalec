@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -17,17 +18,34 @@ func TestMariner2(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, "mariner2/container", "mariner2/rpm")
+	testLinuxDistro(ctx, t, testLinuxConfig{
+		BuildTarget: "mariner2/container",
+		SignTarget:  "mariner2/rpm",
+		LicenseDir:  "/usr/share/licenses",
+		SystemdDir:  "/usr/lib/systemd",
+	})
 }
 
 func TestAzlinux3(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, "azlinux3/container", "azlinux3/rpm")
+	testLinuxDistro(ctx, t, testLinuxConfig{
+		BuildTarget: "azlinux3/container",
+		SignTarget:  "azlinux3/rpm",
+		LicenseDir:  "/usr/share/licenses",
+		SystemdDir:  "/usr/lib/systemd",
+	})
 }
 
-func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, signTarget string) {
+type testLinuxConfig struct {
+	BuildTarget string
+	SignTarget  string
+	LicenseDir  string
+	SystemdDir  string
+}
+
+func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -49,7 +67,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -83,7 +101,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
 			sr.Evaluate = true
 
 			_, err := gwc.Solve(ctx, sr)
@@ -284,7 +302,7 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
 			sr.Evaluate = true
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {
@@ -341,7 +359,7 @@ echo "$BAR" > bar.txt
 		t.Run("no args", func(t *testing.T) {
 			t.Parallel()
 			spec := newSpec()
-			runTest(t, distroSigningTest(t, spec, signTarget))
+			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
 		})
 
 		t.Run("with args", func(t *testing.T) {
@@ -352,7 +370,7 @@ echo "$BAR" > bar.txt
 				"HELLO": "world",
 				"FOO":   "bar",
 			}
-			runTest(t, distroSigningTest(t, spec, signTarget))
+			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
 		})
 	})
 
@@ -405,11 +423,11 @@ WantedBy=multi-user.target
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/systemd/system/simple.service": {
+						filepath.Join(testConfig.SystemdDir, "system/simple.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 							Permissions: 0644,
 						},
-						"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
+						filepath.Join(testConfig.SystemdDir, "system-preset/test-systemd-unit.preset"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"enable simple.service"}},
 							Permissions: 0644,
 						},
@@ -419,7 +437,7 @@ WantedBy=multi-user.target
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 
@@ -433,11 +451,11 @@ WantedBy=multi-user.target
 			{
 				Name: "Check service files",
 				Files: map[string]dalec.FileCheckOutput{
-					"/usr/lib/systemd/system/simple.service": {
+					filepath.Join(testConfig.SystemdDir, "system/simple.service"): {
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 						Permissions: 0644,
 					},
-					"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
+					filepath.Join(testConfig.SystemdDir, "system-preset/test-systemd-unit.preset"): {
 						// This is the only change from the previous test, service should be
 						// disabled in preset
 						CheckOutput: dalec.CheckOutput{Contains: []string{"disable simple.service"}},
@@ -448,7 +466,7 @@ WantedBy=multi-user.target
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -538,20 +556,20 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/systemd/system/foo.service": {
+						filepath.Join(testConfig.SystemdDir, "system/foo.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/foo"}},
 							Permissions: 0644,
 						},
-						"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
+						filepath.Join(testConfig.SystemdDir, "system-preset/test-systemd-unit.preset"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"enable foo.socket",
 								"disable foo.service"}},
 							Permissions: 0644,
 						},
-						"/usr/lib/systemd/system/foo.service.d/foo.conf": {
+						filepath.Join(testConfig.SystemdDir, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
-						"/usr/lib/systemd/system/foo.socket.d/env.conf": {
+						filepath.Join(testConfig.SystemdDir, "system/foo.socket.d/env.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
@@ -561,7 +579,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -607,7 +625,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/systemd/system/foo.service.d/foo.conf": {
+						filepath.Join(testConfig.SystemdDir, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
@@ -617,7 +635,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -673,7 +691,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -722,7 +740,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			res := solveT(ctx, t, client, req)
 
 			ref, err := res.SingleRef()
@@ -795,7 +813,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			sr.Evaluate = true
 			solveT(ctx, t, client, sr)
 		})
@@ -864,17 +882,17 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				{
 					Name: "Doc files should be created in correct place",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/share/doc/test-docs-handled/src1":                      {},
-						"/usr/share/doc/test-docs-handled/subpath/src2":              {},
-						"/usr/share/licenses/test-docs-handled/src3":                 {},
-						"/usr/share/licenses/test-docs-handled/license-subpath/src4": {},
+						"/usr/share/doc/test-docs-handled/src1":                                        {},
+						"/usr/share/doc/test-docs-handled/subpath/src2":                                {},
+						filepath.Join(testConfig.LicenseDir, "test-docs-handled/src3"):                 {},
+						filepath.Join(testConfig.LicenseDir, "test-docs-handled/license-subpath/src4"): {},
 					},
 				},
 			},
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+			sr := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			sr.Evaluate = true
 			solveT(ctx, t, client, sr)
 		})
