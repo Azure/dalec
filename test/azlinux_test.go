@@ -303,7 +303,7 @@ echo "$BAR" > bar.txt
 		newSpec := func() *dalec.Spec {
 			return &dalec.Spec{
 				Name:        "foo",
-				Version:     "v0.0.1",
+				Version:     "0.0.1",
 				Description: "foo bar baz",
 				Website:     "https://foo.bar.baz",
 				Revision:    "1",
@@ -682,7 +682,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-directory-creation",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -746,7 +746,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-config-files-work",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -805,7 +805,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-docs-handled",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
