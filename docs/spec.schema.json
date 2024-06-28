@@ -419,7 +419,7 @@
 				},
 				"post": {
 					"$ref": "#/$defs/PostInstall",
-					"description": "Post is the post install configuration for the image.\nThis allows making additional modifications to the container rootfs after the package(s) are installed.\n\nUse this to perform actions that would otherwise require additional tooling inside the container that is not relavent to\nthe resulting container and makes a post-install script as part of the package unnecessary."
+					"description": "Post is the post install configuration for the image.\nThis allows making additional modifications to the container rootfs after the package(s) are installed.\n\nUse this to perform actions that would otherwise require additional tooling inside the container that is not relevant to\nthe resulting container and makes a post-install script as part of the package unnecessary."
 				},
 				"user": {
 					"type": "string",
@@ -441,34 +441,46 @@
 			"type": "object",
 			"description": "PackageConfig encapsulates the configuration for artifact targets"
 		},
+		"PackageConstraints": {
+			"properties": {
+				"version": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Version is a list of version constraints for the package.\nThe format of these strings is depenendent on the package manager of the target system.\nExamples:\n  [\"\u003e=1.0.0\", \"\u003c2.0.0\"]"
+				},
+				"arch": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Arch is a list of architecture constraints for the package.\nUse this to specify that a package constraint only applies to certain architectures."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"description": "PackageConstraints is used to specify complex constraints for a package dependency."
+		},
 		"PackageDependencies": {
 			"properties": {
 				"build": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Build is the list of packagese required to build the package."
 				},
 				"runtime": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Runtime is the list of packages required to install/run the package."
 				},
 				"recommends": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Recommends is the list of packages recommended to install with the generated package.\nNote: Not all package managers support this (e.g. rpm)"
@@ -826,29 +838,23 @@
 				},
 				"conflicts": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Conflicts is the list of packages that conflict with the generated package.\nThis will prevent the package from being installed if any of these packages are already installed or vice versa."
 				},
 				"replaces": {
 					"additionalProperties": {
-						"items": {
-							"type": "string"
-						},
-						"type": "array"
+						"$ref": "#/$defs/PackageConstraints"
 					},
 					"type": "object",
 					"description": "Replaces is the list of packages that are replaced by the generated package."
 				},
 				"provides": {
-					"items": {
-						"type": "string"
+					"additionalProperties": {
+						"$ref": "#/$defs/PackageConstraints"
 					},
-					"type": "array",
+					"type": "object",
 					"description": "Provides is the list of things that the generated package provides.\nThis can be used to satisfy dependencies of other packages.\nAs an example, the moby-runc package provides \"runc\", other packages could depend on \"runc\" and be satisfied by moby-runc.\nThis is an advanced use case and consideration should be taken to ensure that the package actually provides the thing it claims to provide."
 				},
 				"sources": {
@@ -856,7 +862,7 @@
 						"$ref": "#/$defs/Source"
 					},
 					"type": "object",
-					"description": "Sources is the list of sources to use to build the artifact(s).\nThe map key is the name of the source and the value is the source configuration.\nThe source configuration is used to fetch the source and filter the files to include/exclude.\nThis can be mounted into the build using the \"Mounts\" field in the StepGroup.\n\nSources can be embedded in the main spec as here or overriden in a build request."
+					"description": "Sources is the list of sources to use to build the artifact(s).\nThe map key is the name of the source and the value is the source configuration.\nThe source configuration is used to fetch the source and filter the files to include/exclude.\nThis can be mounted into the build using the \"Mounts\" field in the StepGroup.\n\nSources can be embedded in the main spec as here or overridden in a build request."
 				},
 				"patches": {
 					"additionalProperties": {
@@ -1022,7 +1028,7 @@
 				},
 				"frontend": {
 					"$ref": "#/$defs/Frontend",
-					"description": "Frontend is the frontend configuration to use for the target.\nThis is used to forward the build to a different, dalec-compatabile frontend.\nThis can be useful when testing out new distros or using a different version of the frontend for a given distro."
+					"description": "Frontend is the frontend configuration to use for the target.\nThis is used to forward the build to a different, dalec-compatible frontend.\nThis can be useful when testing out new distros or using a different version of the frontend for a given distro."
 				},
 				"tests": {
 					"items": {

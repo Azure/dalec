@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"text/template"
 
 	"github.com/Azure/dalec"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const gomodsName = "__gomods"
@@ -85,9 +86,11 @@ func (w *specWrapper) Changelog() (fmt.Stringer, error) {
 func (w *specWrapper) Provides() fmt.Stringer {
 	b := &strings.Builder{}
 
-	sort.Strings(w.Spec.Provides)
-	for _, name := range w.Spec.Provides {
-		fmt.Fprintln(b, "Provides:", name)
+	ls := maps.Keys(w.Spec.Provides)
+	slices.Sort(ls)
+
+	for _, name := range ls {
+		writeDep(b, "Provides", name, w.Spec.Replaces[name])
 	}
 	b.WriteString("\n")
 	return b
@@ -161,7 +164,6 @@ func (w *specWrapper) Requires() fmt.Stringer {
 	runtimeKeys := dalec.SortMapKeys(deps.Runtime)
 	for _, name := range runtimeKeys {
 		constraints := deps.Runtime[name]
-		// satisifes is only for build deps, not runtime deps
 		// TODO: consider if it makes sense to support sources satisfying runtime deps
 		writeDep(b, "Requires", name, constraints)
 	}
@@ -170,15 +172,27 @@ func (w *specWrapper) Requires() fmt.Stringer {
 	return b
 }
 
-func writeDep(b *strings.Builder, kind, name string, constraints []string) {
-	if len(constraints) == 0 {
-		fmt.Fprintf(b, "%s: %s\n", kind, name)
+func writeDep(b *strings.Builder, kind, name string, constraints dalec.PackageConstraints) {
+	do := func() {
+		if len(constraints.Version) == 0 {
+			fmt.Fprintf(b, "%s: %s\n", kind, name)
+			return
+		}
+
+		for _, c := range constraints.Version {
+			fmt.Fprintf(b, "%s: %s %s\n", kind, name, c)
+		}
+	}
+
+	if len(constraints.Arch) == 0 {
+		do()
 		return
 	}
 
-	sort.Strings(constraints)
-	for _, c := range constraints {
-		fmt.Fprintf(b, "%s: %s %s\n", kind, name, c)
+	for _, arch := range constraints.Arch {
+		fmt.Fprintf(b, "%%ifarch %s\n", arch)
+		do()
+		fmt.Fprintf(b, "%%endif\n")
 	}
 }
 

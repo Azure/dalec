@@ -105,7 +105,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 			Packager:    "Dalec",
 			Description: "Should not have internet access during build",
 			Dependencies: &dalec.PackageDependencies{
-				Build: map[string][]string{"curl": {}},
+				Build: map[string]dalec.PackageConstraints{"curl": {}},
 			},
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
@@ -224,7 +224,7 @@ index 0000000..5260cb1
 			},
 
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{
+				Runtime: map[string]dalec.PackageConstraints{
 					"bash":      {},
 					"coreutils": {},
 				},
@@ -770,7 +770,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				},
 			},
 			Dependencies: &dalec.PackageDependencies{
-				Build: map[string][]string{
+				Build: map[string]dalec.PackageConstraints{
 					// TODO: This works at least for now, but is distro specific and
 					// could break on new distros (though that is still unlikely).
 					"golang": {},
@@ -806,7 +806,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Packager:    "Dalec",
 			Description: "Should Create Specified Directories",
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{"curl": {}},
+				Runtime: map[string]dalec.PackageConstraints{
+					"curl": {},
+				},
 			},
 			Sources: map[string]dalec.Source{
 				"src1": {
@@ -962,7 +964,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Packager:    "Dalec",
 			Description: "Should Create Specified Directories",
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{"curl": {}},
+				Runtime: map[string]dalec.PackageConstraints{"curl": {}},
 			},
 			Sources: map[string]dalec.Source{
 				"src1": {
@@ -1101,7 +1103,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Description: "meta test",
 			License:     "MIT",
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{
+				Runtime: map[string]dalec.PackageConstraints{
 					"curl": {},
 				},
 			},

@@ -304,7 +304,7 @@ echo "$BAR" > bar.txt
 
 			zipperSpec := fillMetadata("bar", &dalec.Spec{
 				Dependencies: &dalec.PackageDependencies{
-					Runtime: map[string][]string{
+					Runtime: map[string]dalec.PackageConstraints{
 						"unzip": {},
 					},
 				},
@@ -381,7 +381,7 @@ echo "$BAR" > bar.txt
 
 			zipperSpec := fillMetadata("bar", &dalec.Spec{
 				Dependencies: &dalec.PackageDependencies{
-					Runtime: map[string][]string{
+					Runtime: map[string]dalec.PackageConstraints{
 						"unzip": {},
 					},
 				},
@@ -447,7 +447,7 @@ echo "$BAR" > bar.txt
 				},
 			},
 			Dependencies: &dalec.PackageDependencies{
-				Build: map[string][]string{
+				Build: map[string]dalec.PackageConstraints{
 					// TODO: This works at least for now, but is distro specific and
 					// could break on new distros (though that is still unlikely).
 					"golang": {},
