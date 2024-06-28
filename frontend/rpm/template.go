@@ -294,11 +294,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 func (w *specWrapper) PreUn() fmt.Stringer {
 	b := &strings.Builder{}
 
-	if w.Spec.Artifacts.Systemd == nil {
-		return b
-	}
-
-	if len(w.Spec.Artifacts.Systemd.Units) == 0 {
+	if dalec.SystemdIsEmpty(w.Artifacts.Systemd) {
 		return b
 	}
 
@@ -315,11 +311,7 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 func (w *specWrapper) Post() fmt.Stringer {
 	b := &strings.Builder{}
 
-	if w.Spec.Artifacts.Systemd == nil {
-		return b
-	}
-
-	if len(w.Spec.Artifacts.Systemd.Units) == 0 {
+	if dalec.SystemdIsEmpty(w.Artifacts.Systemd) {
 		return b
 	}
 
@@ -338,11 +330,7 @@ func (w *specWrapper) Post() fmt.Stringer {
 func (w *specWrapper) PostUn() fmt.Stringer {
 	b := &strings.Builder{}
 
-	if w.Spec.Artifacts.Systemd == nil {
-		return b
-	}
-
-	if len(w.Spec.Artifacts.Systemd.Units) == 0 {
+	if dalec.SystemdIsEmpty(w.Artifacts.Systemd) {
 		return b
 	}
 

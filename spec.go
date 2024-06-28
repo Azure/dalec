@@ -682,3 +682,15 @@ type CheckOutputError struct {
 func (c *CheckOutputError) Error() string {
 	return fmt.Sprintf("expected %q %s %q, got %q", c.Path, c.Kind, c.Expected, c.Actual)
 }
+
+func SystemdIsEmpty(s *SystemdConfiguration) bool {
+	if s == nil {
+		return true
+	}
+
+	if len(s.Units) == 0 {
+		return true
+	}
+
+	return false
+}
