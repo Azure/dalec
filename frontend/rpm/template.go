@@ -419,7 +419,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 			copyArtifact(`%{buildroot}/%{_unitdir}`, p, cfg.Artifact())
 
 			verb := "disable"
-			if cfg.Enable {
+			if dalec.OptionEquals(true, cfg.Enable) {
 				verb = "enable"
 			}
 
