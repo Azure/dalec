@@ -18,7 +18,7 @@ import (
 func TestStateWrapper_ReadAt(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
 
@@ -41,14 +41,12 @@ func TestStateWrapper_ReadAt(t *testing.T) {
 		n, err = r.ReadAt(b, -1)
 		assert.Equal(t, err, &fs.PathError{Op: "read", Path: "foo", Err: fs.ErrInvalid})
 		assert.Equal(t, n, 0)
-
-		return nil, nil
 	})
 }
 
 func TestStateWrapper_OpenInvalidPath(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/bar", 0644, []byte("hello world")))
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
 
@@ -59,7 +57,6 @@ func TestStateWrapper_OpenInvalidPath(t *testing.T) {
 		}
 
 		assert.True(t, errors.Is(err, fs.ErrInvalid))
-		return nil, nil
 	})
 }
 
@@ -67,7 +64,7 @@ func TestStateWrapper_Open(t *testing.T) {
 	st := llb.Scratch().
 		File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		fs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
 
@@ -83,14 +80,12 @@ func TestStateWrapper_Open(t *testing.T) {
 		n, err = f.Read(b)
 		assert.Equal(t, err, io.EOF)
 		assert.Equal(t, n, 0)
-
-		return nil, nil
 	})
 }
 
 func TestStateWrapper_Stat(t *testing.T) {
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0755, []byte("contents")))
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
 
@@ -104,8 +99,6 @@ func TestStateWrapper_Stat(t *testing.T) {
 		assert.Equal(t, info.Mode(), fs.FileMode(0755))
 		assert.Equal(t, info.Size(), int64(len([]byte("contents"))))
 		assert.Equal(t, info.Name(), "foo")
-
-		return nil, nil
 	})
 }
 
@@ -131,7 +124,7 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 		},
 	}
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
 
@@ -151,10 +144,7 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 			assert.Equal(t, want.perms.String(), info.Mode().String())
 			assert.Equal(t, want.isDir, info.IsDir())
 		}
-
-		return nil, nil
 	})
-
 }
 
 func TestStateWrapper_Walk(t *testing.T) {
@@ -226,7 +216,7 @@ func TestStateWrapper_Walk(t *testing.T) {
 		},
 	}
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
 		totalCalls := 0
@@ -264,7 +254,6 @@ func TestStateWrapper_Walk(t *testing.T) {
 		})
 		assert.Equal(t, len(expectInfo), totalCalls)
 		assert.Nil(t, err)
-		return nil, nil
 	})
 
 }
@@ -277,7 +266,7 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 	`)
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, contents))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
 
@@ -315,8 +304,6 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 		assert.Equal(t, n, 0)
 		assert.Equal(t, b, []byte{0x0})
 		assert.Equal(t, err, io.EOF)
-
-		return nil, nil
 	})
 }
 
@@ -329,7 +316,7 @@ func TestStateWrapper_ReadAll(t *testing.T) {
 
 	st := llb.Scratch().File(llb.Mkfile("/file", 0644, b))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, st, gwc)
 		assert.Nil(t, err)
 
@@ -339,7 +326,5 @@ func TestStateWrapper_ReadAll(t *testing.T) {
 		contents, err := io.ReadAll(f)
 		assert.Nil(t, err)
 		assert.Equal(t, contents, b)
-
-		return nil, nil
 	})
 }
