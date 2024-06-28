@@ -10,14 +10,14 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+func handleBin(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		sOpt, err := frontend.SourceOptFromClient(ctx, client)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
+		pg := dalec.ProgressGroup("Build windows container and extract binaries: " + spec.Name)
 		worker := workerImg(sOpt, pg)
 
 		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
@@ -25,9 +25,7 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
 		}
 
-		st := dalec.Zip(worker, spec.Name, outputDir, bin)
-
-		def, err := st.Marshal(ctx)
+		def, err := bin.Marshal(ctx)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 		}
