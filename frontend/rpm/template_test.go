@@ -421,24 +421,28 @@ func TestTemplate_Requires(t *testing.T) {
 			// note: I've prefixed these packages with a/b/c for sorting purposes
 			// Since the underlying code will sort packages this just makes it
 			// simpler to read for tests.
-			Build: map[string][]string{
+			Build: map[string]dalec.PackageConstraints{
 				"a-lib-no-constraints": {},
 				"b-lib-one-constraints": {
-					"< 2.0",
+					Version: []string{"< 2.0"},
 				},
 				"c-lib-multiple-constraints": {
+					Version: []string{
 					"< 2.0",
 					">= 1.0",
 				},
 			},
-			Runtime: map[string][]string{
+			},
+			Runtime: map[string]dalec.PackageConstraints{
 				"a-no-constraints": {},
 				"b-one-constraints": {
-					"< 2.0",
+					Version: []string{"< 2.0"},
 				},
 				"c-multiple-constraints": {
+					Version: []string{
 					"< 2.0",
 					">= 1.0",
+					},
 				},
 			},
 		},

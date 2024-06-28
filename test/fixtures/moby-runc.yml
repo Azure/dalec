@@ -34,7 +34,8 @@ x-azl: &azl
       tar:
     runtime:
       libseccomp:
-        - ">= 2.3"
+        version:
+          - ">= 2.3"
     test:
       - /bin/sh
   tests:
