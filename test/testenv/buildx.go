@@ -235,7 +235,9 @@ func withResolveLocal(so *client.SolveOpt) {
 	so.FrontendAttrs[pb.AttrImageResolveMode] = pb.AttrImageResolveModePreferLocal
 }
 
-func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildFunc) {
+type TestFunc func(context.Context, gwclient.Client)
+
+func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc) {
 	c, err := b.Buildkit(ctx)
 	if err != nil {
 		t.Fatalf("%+v", err)
@@ -256,7 +258,8 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f gwclient.BuildF
 			gwc = wrapWithInput(gwc, id, f)
 		}
 		b.mu.Unlock()
-		return f(ctx, gwc)
+		f(ctx, gwc)
+		return gwclient.NewResult(), nil
 	}, ch)
 	if err != nil {
 		t.Fatal(err)

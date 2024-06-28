@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/test/testenv"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
@@ -53,7 +54,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
@@ -61,7 +62,6 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 			if !errors.As(err, &xErr) {
 				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
 			}
-			return gwclient.NewResult(), nil
 		})
 	})
 
@@ -85,7 +85,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
 			sr.Evaluate = true
 
@@ -94,7 +94,6 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 			if !errors.As(err, &xErr) {
 				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
 			}
-			return gwclient.NewResult(), nil
 		})
 	})
 	t.Run("container", func(t *testing.T) {
@@ -220,17 +219,14 @@ echo "$BAR" > bar.txt
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
 			sr.Evaluate = true
-			res, err := gwc.Solve(ctx, sr)
-			if err != nil {
-				return nil, err
-			}
+			res := solveT(ctx, t, gwc, sr)
 
 			ref, err := res.SingleRef()
 			if err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
 
 			post := spec.GetImagePost("windowscross")
@@ -239,32 +235,30 @@ echo "$BAR" > bar.txt
 					Filename: srcPath,
 				})
 				if err != nil {
-					return nil, fmt.Errorf("couldn't find Windows \"symlink\" target %q: %w", srcPath, err)
+					t.Fatalf("couldn't find Windows \"symlink\" target %q: %v", srcPath, err)
 				}
 
 				b2, err := ref.ReadFile(ctx, gwclient.ReadRequest{
 					Filename: l.Path,
 				})
 				if err != nil {
-					return nil, fmt.Errorf("couldn't find Windows \"symlink\" at destination %q: %w", l.Path, err)
+					t.Fatalf("couldn't find Windows \"symlink\" at destination %q: %v", l.Path, err)
 				}
 
 				if len(b1) != len(b2) {
-					return nil, fmt.Errorf("Windows \"symlink\" not identical to target file")
+					t.Fatalf("Windows \"symlink\" not identical to target file")
 				}
 
 				for i := range b1 {
 					if b1[i] != b2[i] {
-						return nil, fmt.Errorf("Windows \"symlink\" not identical to target file")
+						t.Fatalf("Windows \"symlink\" not identical to target file")
 					}
 				}
 			}
-
-			return gwclient.NewResult(), nil
 		})
 	})
 
-	runTest := func(t *testing.T, f gwclient.BuildFunc) {
+	runTest := func(t *testing.T, f testenv.TestFunc) {
 		t.Helper()
 		ctx := startTestSpan(baseCtx, t)
 		testEnv.RunTest(ctx, t, f)
@@ -272,7 +266,7 @@ echo "$BAR" > bar.txt
 
 	t.Run("test windows signing", func(t *testing.T) {
 		t.Parallel()
-		runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := fillMetadata("foo", &dalec.Spec{
 				Targets: map[string]dalec.Target{
 					"windowscross": {
@@ -330,12 +324,9 @@ echo "$BAR" > bar.txt
 				t.Fatal(err)
 			}
 
-			res, err := gwc.Solve(ctx, gwclient.SolveRequest{
+			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
 				Definition: def.ToPB(),
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
 
 			tgt := readFile(ctx, t, "/target", res)
 			cfg := readFile(ctx, t, "/config.json", res)
@@ -347,8 +338,6 @@ echo "$BAR" > bar.txt
 			if !strings.Contains(string(cfg), "windows") {
 				t.Fatal(fmt.Errorf("configuration incorrect"))
 			}
-
-			return gwclient.NewResult(), nil
 		})
 	})
 
@@ -402,19 +391,16 @@ echo "$BAR" > bar.txt
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec), withAmd64Platform)
-			return client.Solve(ctx, req)
+			solveT(ctx, t, client, req)
 		})
 	})
 }
 
 func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {
 	t.Helper()
-	res, err := gwc.Solve(ctx, sr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	res := solveT(ctx, t, gwc, sr)
 
 	ref, err := res.SingleRef()
 	if err != nil {
