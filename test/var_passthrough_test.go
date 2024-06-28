@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/test/testenv"
 	"github.com/containerd/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
@@ -14,7 +15,7 @@ import (
 
 func getBuildPlatform(ctx context.Context, t *testing.T) *platforms.Platform {
 	buildPlatform := make(chan *platforms.Platform, 1)
-	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		defer close(buildPlatform)
 		dc, err := dockerui.NewClient(gwc)
 		if err != nil {
@@ -24,7 +25,6 @@ func getBuildPlatform(ctx context.Context, t *testing.T) *platforms.Platform {
 			t.Fatal("unexpected build platforms")
 		}
 		buildPlatform <- &dc.BuildPlatforms[0]
-		return gwclient.NewResult(), nil
 	})
 
 	p := <-buildPlatform
@@ -37,7 +37,7 @@ func getBuildPlatform(ctx context.Context, t *testing.T) *platforms.Platform {
 }
 
 func TestPassthroughVars(t *testing.T) {
-	runTest := func(t *testing.T, f gwclient.BuildFunc) {
+	runTest := func(t *testing.T, f testenv.TestFunc) {
 		t.Helper()
 		ctx := startTestSpan(baseCtx, t)
 		testEnv.RunTest(ctx, t, f)
@@ -127,27 +127,22 @@ func TestPassthroughVars(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			runTest(t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+			runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 				spec := &dalec.Spec{Args: tt.optInArgs, Build: dalec.ArtifactBuild{Env: tt.env}}
 				req := newSolveRequest(withBuildTarget("debug/resolve"), withSpec(ctx, t, spec), withPlatform(tt.targetPlatform))
-				res, err := gwc.Solve(ctx, req)
-				if err != nil {
-					return nil, err
-				}
 
+				res := solveT(ctx, t, gwc, req)
 				specBytes := readFile(ctx, t, "spec.yml", res)
 
 				var resolvedSpec dalec.Spec
-				err = yaml.Unmarshal(specBytes, &resolvedSpec)
+				err := yaml.Unmarshal(specBytes, &resolvedSpec)
 				if err != nil {
-					return nil, err
+					t.Fatal(err)
 				}
 
 				if !cmp.Equal(tt.wantEnv, resolvedSpec.Build.Env) {
 					t.Fatalf("resolved environment does not match: %v", cmp.Diff(tt.wantEnv, resolvedSpec.Build.Env))
 				}
-
-				return gwclient.NewResult(), nil
 			})
 		})
 
