@@ -111,10 +111,7 @@ func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *d
 	t.Helper()
 
 	sr := newSolveRequest(withListTargetsOnly, withSpec(ctx, t, spec))
-	res, err := gwc.Solve(ctx, sr)
-	if err != nil {
-		t.Fatalf("could not solve list targets: %v", err)
-	}
+	res := solveT(ctx, t, gwc, sr)
 
 	dt, ok := res.Metadata["result.json"]
 	if !ok {
@@ -197,4 +194,13 @@ func withListTargetsOnly(sr *gwclient.SolveRequest) {
 		sr.FrontendOpt = make(map[string]string)
 	}
 	sr.FrontendOpt["requestid"] = targets.RequestTargets
+}
+
+func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient.SolveRequest) *gwclient.Result {
+	t.Helper()
+	res, err := gwc.Solve(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/test/testenv"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 )
@@ -47,7 +48,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
@@ -55,7 +56,6 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			if !errors.As(err, &xErr) {
 				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
 			}
-			return gwclient.NewResult(), nil
 		})
 	})
 
@@ -82,7 +82,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
 			sr.Evaluate = true
 
@@ -91,7 +91,6 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			if !errors.As(err, &xErr) {
 				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
 			}
-			return gwclient.NewResult(), nil
 		})
 	})
 
@@ -275,7 +274,7 @@ echo "$BAR" > bar.txt
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			// Make sure the test framework was actually executed by the build target.
 			// This appends a test case so that is expected to fail and as such cause the build to fail.
 			spec.Tests = append(spec.Tests, &dalec.TestSpec{
@@ -289,14 +288,12 @@ echo "$BAR" > bar.txt
 			sr.Evaluate = true
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {
-				return nil, fmt.Errorf("expected test spec to run with error but got none")
+				t.Fatal("expected test spec to run with error but got none")
 			}
-
-			return gwclient.NewResult(), nil
 		})
 	})
 
-	runTest := func(t *testing.T, f gwclient.BuildFunc) {
+	runTest := func(t *testing.T, f testenv.TestFunc) {
 		t.Helper()
 		ctx := startTestSpan(baseCtx, t)
 		testEnv.RunTest(ctx, t, f)
@@ -421,9 +418,9 @@ WantedBy=multi-user.target
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+			solveT(ctx, t, client, req)
 		})
 
 		// Test to ensure disabling works by default
@@ -450,9 +447,9 @@ WantedBy=multi-user.target
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -563,9 +560,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -619,9 +616,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -675,9 +672,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -724,28 +721,24 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			res, err := client.Solve(ctx, req)
-			if err != nil {
-				return nil, err
-			}
+			res := solveT(ctx, t, client, req)
 
 			ref, err := res.SingleRef()
 			if err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
 
 			if err := validatePathAndPermissions(ctx, ref, "/etc/test", 0o755); err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
 			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithPerms", 0o700); err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
 			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755); err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
-			return gwclient.NewResult(), nil
 		})
 	})
 
@@ -801,14 +794,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
 			sr.Evaluate = true
-			_, err := client.Solve(ctx, sr)
-			if err != nil {
-				return nil, fmt.Errorf("unable to build package with config files %w", err)
-			}
-			return gwclient.NewResult(), nil
+			solveT(ctx, t, client, sr)
 		})
 	})
 
@@ -884,14 +873,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
 			sr.Evaluate = true
-			_, err := client.Solve(ctx, sr)
-			if err != nil {
-				return nil, fmt.Errorf("unable to build package with doc files as expected %w", err)
-			}
-			return gwclient.NewResult(), nil
+			solveT(ctx, t, client, sr)
 		})
 	})
 }
