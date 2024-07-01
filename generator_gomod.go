@@ -38,7 +38,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 			srcMount = llb.AddMount(workDir, srcSt)
 		}
 		return worker.Run(
-			shArgs("go mod download"),
+			ShArgs("go mod download"),
 			llb.AddEnv("GOMODCACHE", gomodCacheDir),
 			llb.Dir(workDir),
 			srcMount,

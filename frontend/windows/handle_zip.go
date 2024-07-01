@@ -60,20 +60,9 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 const gomodsName = "__gomods"
 
 func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
-	out := make(map[string]llb.State, len(spec.Sources))
-	for k, src := range spec.Sources {
-		displayRef, err := src.GetDisplayRef()
-		if err != nil {
-			return nil, err
-		}
-
-		pg := dalec.ProgressGroup("Add spec source: " + k + " " + displayRef)
-		st, err := src.AsState(k, sOpt, append(opts, pg)...)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error creating source state for %q", k)
-		}
-
-		out[k] = st
+	out, err := dalec.Sources(spec, sOpt, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error preparign spec sources")
 	}
 
 	opts = append(opts, dalec.ProgressGroup("Add gomod sources"))
@@ -99,7 +88,7 @@ func installBuildDeps(deps []string) llb.StateOption {
 		slices.Sort(sorted)
 
 		return s.Run(
-			shArgs("apt-get update && apt-get install -y "+strings.Join(sorted, " ")),
+			dalec.ShArgs("apt-get update && apt-get install -y "+strings.Join(sorted, " ")),
 			dalec.WithMountedAptCache(aptCachePrefix),
 		).Root()
 	}
@@ -148,7 +137,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	script := generateInvocationScript(binaries)
 
 	st := worker.Run(
-		shArgs(script.String()),
+		dalec.ShArgs(script.String()),
 		llb.Dir("/build"),
 		withSourcesMounted("/build", patched, spec.Sources),
 		llb.AddMount("/tmp/scripts", buildScript),
@@ -170,7 +159,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {
 	outName := filepath.Join(outputDir, name+".zip")
 	zipped := worker.Run(
-		shArgs("zip "+outName+" *"),
+		dalec.ShArgs("zip "+outName+" *"),
 		llb.Dir("/tmp/artifacts"),
 		llb.AddMount("/tmp/artifacts", artifacts),
 	).AddMount(outputDir, llb.Scratch())
@@ -192,13 +181,9 @@ func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
 	// TODO: support named context override... also this should possibly be its own image, maybe?
 	return llb.Image(workerImgRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
 		Run(
-			shArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip"),
+			dalec.ShArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip"),
 			dalec.WithMountedAptCache(aptCachePrefix),
 		).Root()
-}
-
-func shArgs(cmd string) llb.RunOption {
-	return llb.Args([]string{"sh", "-c", cmd})
 }
 
 func createBuildScript(spec *dalec.Spec) llb.State {
