@@ -11,10 +11,12 @@ import (
 
 	"github.com/Azure/dalec/test/fixtures"
 	"github.com/Azure/dalec/test/testenv"
+	"github.com/moby/buildkit/util/tracing/delegated"
+	_ "github.com/moby/buildkit/util/tracing/delegated"
 	"github.com/moby/buildkit/util/tracing/detect"
-	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/trace"
 )
 
 var (
@@ -52,10 +54,17 @@ func TestMain(m *testing.M) {
 	}
 
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	tp, err := detect.TracerProvider()
+
+	exp, err := detect.NewSpanExporter(context.Background())
 	if err != nil {
 		panic(err)
 	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithResource(detect.Resource()),
+		trace.WithBatcher(exp),
+		trace.WithBatcher(delegated.DefaultExporter),
+	)
 	otel.SetTracerProvider(tp)
 
 	testEnv = testenv.New()
@@ -66,7 +75,7 @@ func TestMain(m *testing.M) {
 
 		defer func() {
 			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-			if err := detect.Shutdown(ctx); err != nil {
+			if err := tp.Shutdown(ctx); err != nil {
 				fmt.Fprintln(os.Stderr, "error shutting down tracer:", err)
 			}
 			cancel()

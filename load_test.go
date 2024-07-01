@@ -603,3 +603,91 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["REGULAR"], plainOleValue))
 }
+
+func TestBuildArgSubst(t *testing.T) {
+	t.Run("value provided", func(t *testing.T) {
+		dt := []byte(`
+args:
+  test:
+
+build:
+  steps:
+    - command: echo $TEST
+      env: 
+        TEST: ${test}
+`)
+
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = spec.SubstituteArgs(map[string]string{
+			"test": "test",
+		})
+		assert.NilError(t, err)
+		assert.Equal(t, spec.Build.Steps[0].Env["TEST"], "test")
+	})
+
+	t.Run("default value", func(t *testing.T) {
+		dt := []byte(`
+args:
+  test: "test"
+
+build:
+  steps:
+    - command: echo $TEST
+      env: 
+        TEST: ${test}
+`)
+
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = spec.SubstituteArgs(map[string]string{})
+		assert.NilError(t, err)
+		assert.Equal(t, spec.Build.Steps[0].Env["TEST"], "test")
+	})
+
+	t.Run("build arg undeclared", func(t *testing.T) {
+		dt := []byte(`
+args:
+
+build:
+  steps:
+    - command: echo $TEST
+      env: 
+        TEST: ${test}
+`)
+
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = spec.SubstituteArgs(map[string]string{})
+		assert.ErrorContains(t, err, `error performing shell expansion on build step 0: error performing shell expansion on env var "TEST" for step 0: build arg "test" not declared`)
+	})
+
+	t.Run("builtin build arg", func(t *testing.T) {
+		dt := []byte(`
+args:
+
+build:
+  steps:
+    - command: echo '$OS'
+      env: 
+        OS: ${TARGETOS}
+`)
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = spec.SubstituteArgs(map[string]string{})
+		assert.ErrorContains(t, err,
+			`error performing shell expansion on build step 0: error performing shell expansion on env var "OS" for step 0: opt-in arg "TARGETOS" not present in args`)
+	})
+}
