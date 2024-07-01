@@ -1,0 +1,23 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-azlinux3-worker
+description: Pre-built dalec azlinux3 worker base image
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+
+dependencies:
+  runtime:
+    "rpm-build": []
+    "mariner-rpm-macros": []
+    "build-essential": []
+    "ca-certificates": []
+
+targets:
+    azlinux3:
+        image:
+            base: azurelinuxpreview.azurecr.io/public/azurelinux/base/core:3.0

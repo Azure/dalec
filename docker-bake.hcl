@@ -61,6 +61,16 @@ variable "RUNC_REVISION" {
     default = "1"
 }
 
+target "dalec-workers" {
+    name = "dalec-${distro}-worker"
+    matrix = {
+        distro = ["mariner2", "azlinux3"]
+    }
+    dockerfile = "specs/dalec-${distro}-worker.yml"
+    target = "${distro}/container"
+    tags = ["dalec-${distro}-worker:test", "ghcr.io/azure/dalec/dalec-${distro}-worker:latest"]
+}
+
 target "runc" {
     name = "runc-${distro}-${replace(tgt, "/", "-")}"
     dockerfile = "test/fixtures/moby-runc.yml"
@@ -175,7 +185,7 @@ dependencies:
     runtime:
         patch: []
         bash: []
-    EOT 
+    EOT
     args = {
         "BUILDKIT_SYNTAX" = FRONTEND_REF
     }

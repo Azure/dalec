@@ -16,7 +16,7 @@ const (
 	AzLinux3TargetKey     = "azlinux3"
 	tdnfCacheNameAzlinux3 = "azlinux3-tdnf-cache"
 
-	azlinux3Ref           = "azurelinuxpreview.azurecr.io/public/azurelinux/base/core:3.0"
+	azlinux3Ref           = "ghcr.io/azure/dalec/dalec-azlinux3-worker:latest"
 	azlinux3DistrolessRef = "azurelinuxpreview.azurecr.io/public/azurelinux/distroless/base:3.0"
 )
 
