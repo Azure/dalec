@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+
+{{ .Envs }}
+
+override_dh_auto_clean:
+	@# Stop debhelper from doing "make clean"
+
+override_dh_auto_install:
+	@# Stop debhelper from doing "make install"
+	@# Dalec will generate the right install commands
+
+override_dh_auto_build:
+	./debian/dalec/build.sh
+
+
+.PHONY: fix_file_backed_sources
+
+# Move file-backed (Dalec) sources into the correct location
+# Mainly this is needed because with the way the debian sources are setup, our file-backed sources
+# end up getting placed in a sub-directory, e.g. for source "foo", we end up with "foo/foo".
+# For the purposes of making dalec builds work across different platforms, we need to move these so it is only a file, "foo".
+fix_file_backed_sources:
+	./debian/dalec/fix_file_backed_sources.sh
+
+
+override_dh_auto_configure: fix_file_backed_sources
+	@# Stop debhelper from running auto configure, which should be part of the build steps
+
+{{ .OverridePerms }}
+
+%:
+	dh $@

@@ -39,7 +39,7 @@ type ImageConfig struct {
 	// Post is the post install configuration for the image.
 	// This allows making additional modifications to the container rootfs after the package(s) are installed.
 	//
-	// Use this to perform actions that would otherwise require additional tooling inside the container that is not relavent to
+	// Use this to perform actions that would otherwise require additional tooling inside the container that is not relevant to
 	// the resulting container and makes a post-install script as part of the package unnecessary.
 	Post *PostInstall `yaml:"post,omitempty" json:"post,omitempty"`
 
