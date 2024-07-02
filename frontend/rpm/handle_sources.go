@@ -73,7 +73,12 @@ func Dalec2SourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 	sorted := dalec.SortMapKeys(sources)
 	for _, k := range sorted {
 		st := sources[k]
-		if dalec.SourceIsDir(spec.Sources[k]) {
+
+		isDir, err := dalec.SourceIsDir(spec.Sources[k], sOpt, opts...)
+		if err != nil {
+			return nil, err
+		}
+		if isDir {
 			st = st.With(sourceTar(worker, k, withPG("Tar source: "+k)...))
 		}
 		out = append(out, st)

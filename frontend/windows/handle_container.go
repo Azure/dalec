@@ -56,7 +56,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
 		worker := workerImg(sOpt, pg)
 
-		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
+		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey, pg)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to build binary %w", err)
 		}
