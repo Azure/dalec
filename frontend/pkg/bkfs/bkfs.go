@@ -14,9 +14,11 @@ import (
 	"github.com/moby/buildkit/client/llb"
 )
 
-var _ fs.DirEntry = &stateRefDirEntry{}
-var _ fs.ReadDirFS = &StateRefFS{}
-var _ io.ReaderAt = &stateRefFile{}
+var (
+	_ fs.DirEntry  = (*stateRefDirEntry)(nil)
+	_ fs.ReadDirFS = (*StateRefFS)(nil)
+	_ io.ReaderAt  = (*stateRefFile)(nil)
+)
 
 type StateRefFS struct {
 	ctx context.Context
@@ -89,7 +91,7 @@ func (st *StateRefFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		Path: name,
 	})
 	if err != nil {
-		return nil, err
+		return nil, &fs.PathError{Op: "readdir", Path: name, Err: err}
 	}
 
 	entries := []fs.DirEntry{}
@@ -161,7 +163,7 @@ func (s *stateRefFile) Stat() (fs.FileInfo, error) {
 
 func (st *StateRefFS) Open(name string) (fs.File, error) {
 	if !fs.ValidPath(name) {
-		return nil, fs.ErrInvalid
+		return nil, &fs.PathError{Err: fs.ErrInvalid, Path: name, Op: "open"}
 	}
 
 	stat, err := st.ref.StatFile(st.ctx, gwclient.StatRequest{
