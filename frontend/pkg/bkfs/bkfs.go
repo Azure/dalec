@@ -2,6 +2,7 @@ package bkfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"io/fs"
 	"path"
@@ -18,6 +19,7 @@ var (
 	_ fs.DirEntry  = (*stateRefDirEntry)(nil)
 	_ fs.ReadDirFS = (*StateRefFS)(nil)
 	_ io.ReaderAt  = (*stateRefFile)(nil)
+	_ fs.ReadDirFS = (*nullFS)(nil)
 )
 
 type StateRefFS struct {
@@ -32,8 +34,12 @@ func FromRef(ctx context.Context, ref gwclient.Reference) *StateRefFS {
 	}
 }
 
-func FromState(ctx context.Context, state llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) (*StateRefFS, error) {
-	res, err := fetchRef(client, state, ctx, opts...)
+func FromState(ctx context.Context, state *llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) (fs.ReadDirFS, error) {
+	if state == nil {
+		return &nullFS{}, nil
+	}
+
+	res, err := fetchRef(client, *state, ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,4 +189,14 @@ func (st *StateRefFS) Open(name string) (fs.File, error) {
 	}
 
 	return f, nil
+}
+
+type nullFS struct{}
+
+func (st *nullFS) Open(name string) (fs.File, error) {
+	return nil, fmt.Errorf("nullfs: %s: %w", name, fs.ErrNotExist)
+}
+
+func (st *nullFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	return nil, fmt.Errorf("nullfs: %s: %w", name, fs.ErrNotExist)
 }
