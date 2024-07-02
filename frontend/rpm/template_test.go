@@ -181,7 +181,12 @@ func TestTemplateSources(t *testing.T) {
 
 			s = s[len(expectedDoc):] // trim off the doc from the output
 			suffix := "\n"
-			if dalec.SourceIsDir(src) {
+
+			isDir, err := dalec.SourceIsDir(src, dalec.SourceOpts{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if isDir {
 				suffix = ".tar.gz\n"
 			}
 
