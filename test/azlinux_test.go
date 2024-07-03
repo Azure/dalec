@@ -22,7 +22,13 @@ func TestMariner2(t *testing.T) {
 		BuildTarget: "mariner2/container",
 		SignTarget:  "mariner2/rpm",
 		LicenseDir:  "/usr/share/licenses",
-		SystemdDir:  "/usr/lib/systemd",
+		SystemdDir: struct {
+			Units   string
+			Targets string
+		}{
+			Units:   "/usr/lib/systemd",
+			Targets: "/etc/systemd/system",
+		},
 	})
 }
 
@@ -34,7 +40,13 @@ func TestAzlinux3(t *testing.T) {
 		BuildTarget: "azlinux3/container",
 		SignTarget:  "azlinux3/rpm",
 		LicenseDir:  "/usr/share/licenses",
-		SystemdDir:  "/usr/lib/systemd",
+		SystemdDir: struct {
+			Units   string
+			Targets string
+		}{
+			Units:   "/usr/lib/systemd",
+			Targets: "/etc/systemd/system",
+		},
 	})
 }
 
@@ -42,7 +54,10 @@ type testLinuxConfig struct {
 	BuildTarget string
 	SignTarget  string
 	LicenseDir  string
-	SystemdDir  string
+	SystemdDir  struct {
+		Units   string
+		Targets string
+	}
 }
 
 func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
@@ -430,12 +445,12 @@ WantedBy=multi-user.target
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						filepath.Join(testConfig.SystemdDir, "system/simple.service"): {
+						filepath.Join(testConfig.SystemdDir.Units, "system/simple.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 							Permissions: 0644,
 						},
 						// symlinked file in multi-user.target.wants should point to simple.service.
-						"/etc/systemd/system/multi-user.target.wants/simple.service": {
+						filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/simple.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 						},
 					},
@@ -458,11 +473,11 @@ WantedBy=multi-user.target
 			{
 				Name: "Check service files",
 				Files: map[string]dalec.FileCheckOutput{
-					filepath.Join(testConfig.SystemdDir, "system/simple.service"): {
+					filepath.Join(testConfig.SystemdDir.Units, "system/simple.service"): {
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 						Permissions: 0644,
 					},
-					"/etc/systemd/system/multi-user.target.wants/simple.service": {
+					filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/simple.service"): {
 						NotExist: true,
 					},
 				},
@@ -560,21 +575,21 @@ WantedBy=multi-user.target
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						filepath.Join(testConfig.SystemdDir, "system/foo.service"): {
+						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/foo"}},
 							Permissions: 0644,
 						},
-						"/etc/systemd/system/multi-user.target.wants/foo.service": {
+						filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/foo.service"): {
 							NotExist: true,
 						},
-						"/etc/systemd/system/sockets.target.wants/foo.socket": {
+						filepath.Join(testConfig.SystemdDir.Targets, "sockets.target.wants/foo.socket"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Description=foo socket"}},
 						},
-						filepath.Join(testConfig.SystemdDir, "system/foo.service.d/foo.conf"): {
+						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
-						filepath.Join(testConfig.SystemdDir, "system/foo.socket.d/env.conf"): {
+						filepath.Join(testConfig.SystemdDir.Units, "system/foo.socket.d/env.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
@@ -630,7 +645,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						filepath.Join(testConfig.SystemdDir, "system/foo.service.d/foo.conf"): {
+						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
