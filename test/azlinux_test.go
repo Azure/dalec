@@ -792,6 +792,18 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						},
 					},
 				},
+				"another_data_dir": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"another_nested_data_file": {
+									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
+									Permissions: 0o400,
+								},
+							},
+						},
+					},
+				},
 				"data_file": {
 					Inline: &dalec.SourceInline{
 						File: &dalec.SourceInlineFile{
@@ -829,6 +841,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o400); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o400); err != nil {
 				t.Fatal(err)
 			}
 			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o400); err != nil {
