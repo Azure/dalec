@@ -806,8 +806,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				Binaries: map[string]dalec.ArtifactConfig{
 					"bin": {},
 				},
-				DataFiles: map[string]dalec.ArtifactConfig{
-					"data_dir":  {},
+				DataDirs: map[string]dalec.ArtifactConfig{
+					"data_dir": {},
+					"another_data_dir": {
+						SubPath: "subpath",
+					},
 					"data_file": {},
 				},
 			},

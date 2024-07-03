@@ -404,10 +404,10 @@ func (w *specWrapper) Install() fmt.Stringer {
 		}
 	}
 
-	if w.Spec.Artifacts.DataFiles != nil {
-		dataFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataFiles)
+	if w.Spec.Artifacts.DataDirs != nil {
+		dataFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataDirs)
 		for _, k := range dataFileKeys {
-			df := w.Spec.Artifacts.DataFiles[k]
+			df := w.Spec.Artifacts.DataDirs[k]
 			copyArtifact(`%{buildroot}/%{_datadir}`, k, df)
 		}
 	}
@@ -500,10 +500,10 @@ func (w *specWrapper) Files() fmt.Stringer {
 		}
 	}
 
-	if w.Spec.Artifacts.DataFiles != nil {
-		dataKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataFiles)
+	if w.Spec.Artifacts.DataDirs != nil {
+		dataKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataDirs)
 		for _, k := range dataKeys {
-			df := w.Spec.Artifacts.DataFiles[k]
+			df := w.Spec.Artifacts.DataDirs[k]
 			fullPath := filepath.Join(`%{_datadir}`, df.SubPath, df.ResolveName(k))
 			fmt.Fprintln(b, fullPath)
 		}

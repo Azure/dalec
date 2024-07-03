@@ -128,8 +128,8 @@ type Artifacts struct {
 	Binaries map[string]ArtifactConfig `yaml:"binaries,omitempty" json:"binaries,omitempty"`
 	// Manpages is the list of manpages to include in the package.
 	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
-	// DataFiles is a list of read-only architecture-independent data files, to be placed in /usr/share/
-	DataFiles map[string]ArtifactConfig `yaml:"data_files,omitempty" json:"data_files,omitempty"`
+	// DataDirs is a list of read-only architecture-independent data files, to be placed in /usr/share/
+	DataDirs map[string]ArtifactConfig `yaml:"data_files,omitempty" json:"data_files,omitempty"`
 	// Directories is a list of various directories that should be created by the package.
 	Directories *CreateArtifactDirectories `yaml:"createDirectories,omitempty" json:"createDirectories,omitempty"`
 	// ConfigFiles is a list of files that should be marked as config files in the package.
@@ -247,7 +247,7 @@ func (a *Artifacts) IsEmpty() bool {
 	if a.Directories != nil && (len(a.Directories.Config) > 0 || len(a.Directories.State) > 0) {
 		return false
 	}
-	if len(a.DataFiles) > 0 {
+	if len(a.DataDirs) > 0 {
 		return false
 	}
 	if len(a.ConfigFiles) > 0 {
