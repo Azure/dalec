@@ -1,0 +1,47 @@
+#syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: test-systemd-unit
+description: Test systemd unit
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: "1"
+sources:
+  src:
+    inline:
+      dir:
+        files:
+          simple.service:
+            contents: |
+
+              [Unit]
+              Description=Phony Service
+              After=network.target
+
+              [Service]
+              Type=simple
+              ExecStart=/usr/bin/service
+              Restart=always
+
+              [Install]
+              WantedBy=multi-user.target
+
+license: Apache 2.0
+vendor: Microsoft
+packager: Microsoft <support@microsoft.com>
+artifacts:
+  systemd:
+    units:
+      src/simple.service:
+        enable: true
+
+# tests:
+# - name: Check service files
+#   steps: []
+#   files:
+#     /etc/systemd/system/multi-user.target.wants/simple.service:
+#       contains:
+#       - ExecStart=/usr/bin/service
+#     /usr/lib/systemd/system/simple.service:
+#       contains:
+#       - ExecStart=/usr/bin/service
+#       permissions: 420

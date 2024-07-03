@@ -109,6 +109,14 @@ func (w *specWrapper) Replaces() fmt.Stringer {
 func (w *specWrapper) Requires() fmt.Stringer {
 	b := &strings.Builder{}
 
+	if !w.Spec.Artifacts.Systemd.IsEmpty() {
+		// if we have systemd artifacts to install,
+		// we need to ensure that `systemd` is required
+		// for %post steps.
+		b.WriteString("%systemd_requires\n")
+		b.WriteString("%systemd_ordering\n")
+	}
+
 	deps := w.Spec.Targets[w.Target].Dependencies
 	if deps == nil {
 		deps = w.Spec.Dependencies
@@ -340,6 +348,22 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 	return b
 }
 
+func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
+	verb := "disable"
+	if cfg.Enable {
+		verb = "enable"
+	}
+
+	// should be equivalent to the systemd_post scriptlet in the rpm spec,
+	// but without the use of a .preset file
+	return fmt.Sprintf(`
+if [ $1 -eq 1 ]; then
+    # initial installation
+    systemctl %s %s
+fi
+`, verb, unitName)
+}
+
 func (w *specWrapper) Post() fmt.Stringer {
 	b := &strings.Builder{}
 
@@ -352,8 +376,11 @@ func (w *specWrapper) Post() fmt.Stringer {
 
 	keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
 	for _, servicePath := range keys {
-		unitConf := w.Spec.Artifacts.Systemd.Units[servicePath].Artifact()
-		fmt.Fprintf(b, "%%systemd_post %s\n", unitConf.ResolveName(servicePath))
+		unitConf := w.Spec.Artifacts.Systemd.Units[servicePath]
+		artifact := unitConf.Artifact()
+		b.WriteString(
+			systemdPostScript(artifact.ResolveName(servicePath), unitConf),
+		)
 	}
 
 	b.WriteString("\n")
@@ -454,27 +481,10 @@ func (w *specWrapper) Install() fmt.Stringer {
 
 	if w.Spec.Artifacts.Systemd != nil {
 		serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
-		presetName := "%{name}.preset"
 		for _, p := range serviceKeys {
 			cfg := w.Spec.Artifacts.Systemd.Units[p]
 			// must include systemd unit extension (.service, .socket, .timer, etc.) in name
 			copyArtifact(`%{buildroot}/%{_unitdir}`, p, cfg.Artifact())
-
-			verb := "disable"
-			if dalec.OptionEquals(true, cfg.Enable) {
-				verb = "enable"
-			}
-
-			unitName := filepath.Base(p)
-			if cfg.Name != "" {
-				unitName = cfg.Name
-			}
-
-			fmt.Fprintf(b, "echo '%s %s' >> '%s'\n", verb, unitName, presetName)
-		}
-
-		if len(serviceKeys) > 0 {
-			copyArtifact(`%{buildroot}/%{_presetdir}`, presetName, dalec.ArtifactConfig{})
 		}
 
 		dropinKeys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Dropins)
@@ -559,10 +569,6 @@ func (w *specWrapper) Files() fmt.Stringer {
 			serviceName := filepath.Base(p)
 			unitPath := filepath.Join(`%{_unitdir}/`, serviceName)
 			fmt.Fprintln(b, unitPath)
-		}
-
-		if len(serviceKeys) > 0 {
-			fmt.Fprintln(b, "%{_presetdir}/%{name}.preset")
 		}
 
 		dropins := make(map[string][]string)
