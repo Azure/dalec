@@ -69,7 +69,7 @@
 					"type": "object",
 					"description": "Manpages is the list of manpages to include in the package."
 				},
-				"data_files": {
+				"data_dirs": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactConfig"
 					},
