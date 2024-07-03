@@ -247,6 +247,9 @@ func (a *Artifacts) IsEmpty() bool {
 	if a.Directories != nil && (len(a.Directories.Config) > 0 || len(a.Directories.State) > 0) {
 		return false
 	}
+	if len(a.DataFiles) > 0 {
+		return false
+	}
 	if len(a.ConfigFiles) > 0 {
 		return false
 	}
