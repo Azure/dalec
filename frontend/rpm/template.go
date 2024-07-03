@@ -350,7 +350,7 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 
 func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
 	verb := "disable"
-	if cfg.Enable {
+	if dalec.OptionEquals(true, cfg.Enable) {
 		verb = "enable"
 	}
 
