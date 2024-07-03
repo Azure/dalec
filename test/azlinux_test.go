@@ -399,7 +399,7 @@ echo "$BAR" > bar.txt
 
 							Files: map[string]*dalec.SourceInlineFile{
 								"simple.service": {
-									Contents: `,
+									Contents: `
 [Unit]
 Description=Phony Service
 After=network.target
@@ -434,9 +434,9 @@ WantedBy=multi-user.target
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 							Permissions: 0644,
 						},
-						filepath.Join(testConfig.SystemdDir, "system-preset/test-systemd-unit.preset"): {
-							CheckOutput: dalec.CheckOutput{Contains: []string{"enable simple.service"}},
-							Permissions: 0644,
+						// symlinked file in multi-user.target.wants should point to simple.service.
+						"/etc/systemd/system/multi-user.target.wants/simple.service": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 						},
 					},
 				},
@@ -462,11 +462,8 @@ WantedBy=multi-user.target
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 						Permissions: 0644,
 					},
-					filepath.Join(testConfig.SystemdDir, "system-preset/test-systemd-unit.preset"): {
-						// This is the only change from the previous test, service should be
-						// disabled in preset
-						CheckOutput: dalec.CheckOutput{Contains: []string{"disable simple.service"}},
-						Permissions: 0644,
+					"/etc/systemd/system/multi-user.target.wants/simple.service": {
+						NotExist: true,
 					},
 				},
 			},
@@ -497,44 +494,44 @@ WantedBy=multi-user.target
 							Files: map[string]*dalec.SourceInlineFile{
 								"foo.service": {
 									Contents: `
-# simple-socket.service
-[Unit]
-Description=Foo Service
-After=network.target foo.socket
-Requires=foo.socket
+	# simple-socket.service
+	[Unit]
+	Description=Foo Service
+	After=network.target foo.socket
+	Requires=foo.socket
 
-[Service]
-Type=simple
-ExecStart=/usr/bin/foo
-ExecReload=/bin/kill -HUP $MAINPID
-StandardOutput=journal
-StandardError=journal
-`},
+	[Service]
+	Type=simple
+	ExecStart=/usr/bin/foo
+	ExecReload=/bin/kill -HUP $MAINPID
+	StandardOutput=journal
+	StandardError=journal
+	`},
 
 								"foo.socket": {
 									Contents: `
-[Unit]
-Description=foo socket
-PartOf=foo.service
+	[Unit]
+	Description=foo socket
+	PartOf=foo.service
 
-[Socket]
-ListenStream=127.0.0.1:8080
+	[Socket]
+	ListenStream=127.0.0.1:8080
 
-[Install]
-WantedBy=sockets.target
-								`,
+	[Install]
+	WantedBy=sockets.target
+									`,
 								},
 								"foo.conf": {
 									Contents: `
-[Service]
-Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
-								`,
+	[Service]
+	Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+									`,
 								},
 								"env.conf": {
 									Contents: `
-[Service]
-Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
-								`,
+	[Service]
+	Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+									`,
 								},
 							},
 						},
@@ -567,10 +564,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/foo"}},
 							Permissions: 0644,
 						},
-						filepath.Join(testConfig.SystemdDir, "system-preset/test-systemd-unit.preset"): {
-							CheckOutput: dalec.CheckOutput{Contains: []string{"enable foo.socket",
-								"disable foo.service"}},
-							Permissions: 0644,
+						"/etc/systemd/system/multi-user.target.wants/foo.service": {
+							NotExist: true,
+						},
+						"/etc/systemd/system/sockets.target.wants/foo.socket": {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"Description=foo socket"}},
 						},
 						filepath.Join(testConfig.SystemdDir, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},

@@ -216,6 +216,36 @@ func TestTemplateSources(t *testing.T) {
 }
 
 func TestTemplate_Artifacts(t *testing.T) {
+
+	t.Run("test systemd post", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"test1.service": {},
+						"test2.service": {
+							Enable: true,
+						},
+					},
+				},
+			},
+		}}
+
+		assert.Equal(t, w.Post().String(),
+			`%post
+
+if [ $1 -eq 1 ]; then
+    # initial installation
+    systemctl disable test1.service
+fi
+
+if [ $1 -eq 1 ]; then
+    # initial installation
+    systemctl enable test2.service
+fi
+`)
+	})
+
 	t.Run("test systemd unit postun", func(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
@@ -542,4 +572,23 @@ A helpful tool
 		}
 	}()
 	assert.Equal(t, expect, actual)
+}
+
+func TestTemplate_ImplicitRequires(t *testing.T) {
+	spec := &dalec.Spec{
+		Artifacts: dalec.Artifacts{
+			Systemd: &dalec.SystemdConfiguration{
+				Units: map[string]dalec.SystemdUnitConfig{
+					"test.service": {
+						Enable: true,
+					},
+				},
+			},
+		},
+	}
+
+	w := specWrapper{Spec: spec}
+
+	got := w.Requires().String()
+	assert.Equal(t, got, "%systemd_requires\n%systemd_ordering\n")
 }
