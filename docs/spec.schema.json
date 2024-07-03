@@ -69,6 +69,13 @@
 					"type": "object",
 					"description": "Manpages is the list of manpages to include in the package."
 				},
+				"data_dirs": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "DataDirs is a list of read-only architecture-independent data files, to be placed in /usr/share/"
+				},
 				"createDirectories": {
 					"$ref": "#/$defs/CreateArtifactDirectories",
 					"description": "Directories is a list of various directories that should be created by the package."

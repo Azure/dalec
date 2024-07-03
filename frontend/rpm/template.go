@@ -413,6 +413,14 @@ func (w *specWrapper) Install() fmt.Stringer {
 		}
 	}
 
+	if w.Spec.Artifacts.DataDirs != nil {
+		dataFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataDirs)
+		for _, k := range dataFileKeys {
+			df := w.Spec.Artifacts.DataDirs[k]
+			copyArtifact(`%{buildroot}/%{_datadir}`, k, df)
+		}
+	}
+
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
@@ -498,6 +506,15 @@ func (w *specWrapper) Files() fmt.Stringer {
 		for _, p := range stateKeys {
 			dir := strings.Join([]string{`%dir`, filepath.Join(`%{_sharedstatedir}`, p)}, " ")
 			fmt.Fprintln(b, dir)
+		}
+	}
+
+	if w.Spec.Artifacts.DataDirs != nil {
+		dataKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataDirs)
+		for _, k := range dataKeys {
+			df := w.Spec.Artifacts.DataDirs[k]
+			fullPath := filepath.Join(`%{_datadir}`, df.SubPath, df.ResolveName(k))
+			fmt.Fprintln(b, fullPath)
 		}
 	}
 

@@ -766,6 +766,98 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("test data file installation", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "test-data-file-installation",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Should install specified data files",
+			Sources: map[string]dalec.Source{
+				"bin": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"data_dir": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"nested_data_file": {
+									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
+									Permissions: 0o400,
+								},
+							},
+						},
+					},
+				},
+				"another_data_dir": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"another_nested_data_file": {
+									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
+									Permissions: 0o400,
+								},
+							},
+						},
+					},
+				},
+				"data_file": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "This is a data file which should end up at /usr/share/data_file\n",
+							Permissions: 0o400,
+						},
+					},
+				},
+			},
+			Build: dalec.ArtifactBuild{},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"bin": {},
+				},
+				DataDirs: map[string]dalec.ArtifactConfig{
+					"data_dir": {},
+					"another_data_dir": {
+						SubPath: "subpath",
+					},
+					"data_file": {},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o400); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o400); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o400); err != nil {
+				t.Fatal(err)
+			}
+		})
+	})
+
 	t.Run("test config files handled", func(t *testing.T) {
 		t.Parallel()
 		spec := &dalec.Spec{
