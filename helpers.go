@@ -2,9 +2,11 @@ package dalec
 
 import (
 	"encoding/json"
+	stderrors "errors"
 	"path"
 	"slices"
 	"sort"
+	"sync"
 	"sync/atomic"
 
 	"github.com/moby/buildkit/client/llb"
@@ -356,4 +358,56 @@ func (s *Spec) GetSigner(targetKey string) (*PackageSigner, bool) {
 
 func hasValidSigner(pc *PackageConfig) bool {
 	return pc != nil && pc.Signer != nil && pc.Signer.Image != ""
+}
+
+type ErrorList struct {
+	mu sync.Mutex
+	ls []error
+}
+
+func (e *ErrorList) Append(err error) {
+	if err == nil {
+		return
+	}
+	e.mu.Lock()
+	e.ls = append(e.ls, err)
+	e.mu.Unlock()
+}
+
+func (e *ErrorList) AppendList(l *ErrorList) {
+	e.mu.Lock()
+	e.ls = append(e.ls, l.ls...)
+	e.mu.Unlock()
+}
+
+func (e *ErrorList) Empty() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.ls) == 0
+}
+
+func AsList(err error) *ErrorList {
+	if err == nil {
+		return nil
+	}
+	return &ErrorList{ls: []error{err}}
+}
+
+func CombineErrorList(ls ...*ErrorList) *ErrorList {
+	out := &ErrorList{}
+	for _, l := range ls {
+		out.AppendList(l)
+	}
+	return out
+}
+
+func (e *ErrorList) Join() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if len(e.ls) == 0 {
+		return nil
+	}
+
+	return stderrors.Join(e.ls...)
 }
