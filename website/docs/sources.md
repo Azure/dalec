@@ -98,7 +98,7 @@ The HTTP source type is considered to be a "file" source.
 Clients provide a build context to Dalec.
 As an example, here is how the Docker client provides a build context to Dalec:
 
-```bash
+```shell
 $ docker build <some args> .
 ```
 
@@ -212,7 +212,7 @@ sources:
             include_distro_key: false # Add the target key from the target being built into the cache key
             include_arch_key: false # add the architecture of the image to run the command in into the cache key
           }
-        
+
         steps:
           - command: echo ${FOO} ${BAR}
             env: # Environment variables to set for the step

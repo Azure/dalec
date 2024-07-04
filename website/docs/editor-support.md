@@ -2,7 +2,7 @@
 title: Editor Support
 ---
 
-There is a [json schema file](https://github.com/Azure/dalec/blob/main/docs/spec.schema.json) which can be used to integrate with your editor.
+We provide a [JSON schema file](https://github.com/Azure/dalec/blob/main/docs/spec.schema.json) to integrate with your editor.
 This will help validate your yaml files and provide intellisense for the spec.
 
 ## VSCode
@@ -12,6 +12,7 @@ Follow the plugins instructions to add the schema to your workspace.
 Here are some examples of vscode workspace configs `settings.json` enabling the JSON schema:
 
 1. Schema is locally available and enable it for yml files under a single directory.
+
 ```json
 {
     "yaml.schemas": {
@@ -19,7 +20,9 @@ Here are some examples of vscode workspace configs `settings.json` enabling the 
     }
 }
 ```
-2. Schema is locally available and enable it for yml files under multiple directories.
+
+1. Schema is locally available and enable it for yml files under multiple directories.
+
 ```json
 {
     "yaml.schemas": {
@@ -30,7 +33,9 @@ Here are some examples of vscode workspace configs `settings.json` enabling the 
     }
 }
 ```
-3. Directly reference schema from GitHub repository URL.
+
+1. Directly reference schema from GitHub repository URL.
+
 ```json
 {
     "yaml.schemas": {
