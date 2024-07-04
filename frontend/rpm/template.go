@@ -16,37 +16,47 @@ import (
 
 const gomodsName = "__gomods"
 
-var specTmpl = template.Must(template.New("spec").Parse(strings.TrimSpace(`
-Summary: {{.Description}}
+var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
 Name: {{.Name}}
 Version: {{.Version}}
 Release: {{.Release}}%{?dist}
-License: {{.License}}
-URL: {{.Website}}
-Vendor: {{.Vendor}}
-Packager: {{.Packager}}
-{{- if .NoArch}}
+License: {{ .License }}
+Summary: {{ .Description }}
+{{ optionalField "URL" .Website -}}
+{{ optionalField "Vendor" .Vendor -}}
+{{ optionalField "Packager" .Packager -}}
+{{ if .NoArch }}
 BuildArch: noarch
-{{- end}}
-
-
-{{ .Sources }}
-{{ .Conflicts }}
-{{ .Provides }}
-{{ .Replaces }}
-{{ .Requires }}
+{{ end }}
+{{- .Sources -}}
+{{- .Conflicts -}}
+{{- .Provides -}}
+{{- .Replaces -}}
+{{- .Requires -}}
 
 %description
 {{.Description}}
-{{ .PrepareSources }}
-{{ .BuildSteps }}
-{{ .Install }}
-{{ .Post }}
-{{ .PreUn }}
-{{ .PostUn }}
-{{ .Files }}
-{{ .Changelog }}
+
+{{ .PrepareSources -}}
+{{ .BuildSteps -}}
+{{ .Install -}}
+{{ .Post -}}
+{{ .PreUn -}}
+{{ .PostUn -}}
+{{ .Files -}}
+{{ .Changelog -}}
 `)))
+
+func optionalField(key, value string) string {
+	if value == "" {
+		return ""
+	}
+	return key + ": " + value + "\n"
+}
+
+var tmplFuncs = map[string]any{
+	"optionalField": optionalField,
+}
 
 type specWrapper struct {
 	*dalec.Spec
@@ -71,6 +81,7 @@ func (w *specWrapper) Changelog() (fmt.Stringer, error) {
 		}
 	}
 
+	b.WriteString("\n")
 	return b, nil
 }
 
@@ -81,6 +92,7 @@ func (w *specWrapper) Provides() fmt.Stringer {
 	for _, name := range w.Spec.Provides {
 		fmt.Fprintln(b, "Provides:", name)
 	}
+	b.WriteString("\n")
 	return b
 }
 
@@ -123,6 +135,7 @@ func (w *specWrapper) Requires() fmt.Stringer {
 		writeDep(b, "Requires", name, constraints)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 
@@ -146,6 +159,7 @@ func (w *specWrapper) Conflicts() string {
 		constraints := w.Spec.Conflicts[name]
 		writeDep(b, "Conflicts", name, constraints)
 	}
+	b.WriteString("\n")
 	return b.String()
 }
 
@@ -186,6 +200,9 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", len(keys), gomodsName)
 	}
 
+	if len(keys) > 0 {
+		b.WriteString("\n")
+	}
 	return b, nil
 }
 
@@ -256,6 +273,10 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			return nil, fmt.Errorf("error preparing source %s: %w", name, err)
 		}
 	}
+
+	if len(keys) > 0 {
+		b.WriteString("\n")
+	}
 	return b, nil
 }
 
@@ -297,6 +318,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 		writeStep(b, step)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 
@@ -314,6 +336,7 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 		fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 
@@ -333,6 +356,7 @@ func (w *specWrapper) Post() fmt.Stringer {
 		fmt.Fprintf(b, "%%systemd_post %s\n", unitConf.ResolveName(servicePath))
 	}
 
+	b.WriteString("\n")
 	return b
 }
 
@@ -360,6 +384,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 
 	fmt.Fprintln(b, "%install")
 	if w.Spec.Artifacts.IsEmpty() {
+		b.WriteString("\n")
 		return b
 	}
 
@@ -473,6 +498,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		copyArtifact(root, l, cfg)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 
@@ -481,6 +507,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 
 	fmt.Fprintf(b, "%%files\n")
 	if w.Spec.Artifacts.IsEmpty() {
+		b.WriteString("\n")
 		return b
 	}
 
@@ -591,6 +618,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 		fmt.Fprintln(b, fullDirective)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 

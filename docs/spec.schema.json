@@ -933,9 +933,7 @@
 				"website",
 				"version",
 				"revision",
-				"license",
-				"vendor",
-				"packager"
+				"license"
 			],
 			"description": "Spec is the specification for a package build."
 		},

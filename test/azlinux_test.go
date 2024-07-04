@@ -331,6 +331,7 @@ echo "$BAR" > bar.txt
 				Description: "foo bar baz",
 				Website:     "https://foo.bar.baz",
 				Revision:    "1",
+				License:     "MIT",
 				PackageConfig: &dalec.PackageConfig{
 					Signer: &dalec.PackageSigner{
 						Frontend: &dalec.Frontend{

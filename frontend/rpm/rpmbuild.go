@@ -56,8 +56,8 @@ func ValidateSpec(spec *dalec.Spec) (out error) {
 	if spec.Description == "" {
 		out = errors.Join(out, fmt.Errorf("%w: description", errMissingRequiredField))
 	}
-	if spec.Website == "" {
-		out = errors.Join(out, fmt.Errorf("%w: website", errMissingRequiredField))
+	if spec.License == "" {
+		out = errors.Join(out, fmt.Errorf("%w: license", errMissingRequiredField))
 	}
 	return out
 }

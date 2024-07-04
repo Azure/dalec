@@ -70,9 +70,9 @@ type Spec struct {
 	// License is the license of the package.
 	License string `yaml:"license" json:"license"`
 	// Vendor is the vendor of the package.
-	Vendor string `yaml:"vendor" json:"vendor"`
+	Vendor string `yaml:"vendor,omitempty" json:"vendor,omitempty"`
 	// Packager is the name of the person,team,company that packaged the package.
-	Packager string `yaml:"packager" json:"packager"`
+	Packager string `yaml:"packager,omitempty" json:"packager,omitempty"`
 
 	// Artifacts is the list of artifacts to include in the package.
 	Artifacts Artifacts `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
