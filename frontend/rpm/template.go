@@ -106,16 +106,42 @@ func (w *specWrapper) Replaces() fmt.Stringer {
 	return b
 }
 
+func getSystemdRequires(cfg *dalec.SystemdConfiguration) string {
+	var requires, orderRequires string
+	if cfg.IsEmpty() {
+		return ""
+	}
+
+	enabledUnits := cfg.EnabledUnits()
+	if len(enabledUnits) > 0 {
+		// if we are enabling any units, we need to require systemd
+		// specifically for %post
+		requires += "Requires(post): systemd\n"
+		orderRequires += "OrderWithRequires(post): systemd\n"
+	}
+
+	// in any case where we have units as artifacts, we must require systemd
+	// for %preun and %postun, as we are using the rpm systemd macros
+	// in those stages which depend on systemctl
+	requires +=
+		`Requires(preun): systemd
+Requires(postun): systemd
+`
+
+	orderRequires +=
+		`OrderWithRequires(preun): systemd
+OrderWithRequires(postun): systemd
+`
+
+	return requires + orderRequires
+}
+
 func (w *specWrapper) Requires() fmt.Stringer {
 	b := &strings.Builder{}
 
-	if !w.Spec.Artifacts.Systemd.IsEmpty() {
-		// if we have systemd artifacts to install,
-		// we need to ensure that `systemd` is required
-		// for %post steps.
-		b.WriteString("%systemd_requires\n")
-		b.WriteString("%systemd_ordering\n")
-	}
+	// first write systemd requires if they exist,
+	// as these do not come from dependencies in the spec
+	b.WriteString(getSystemdRequires(w.Artifacts.Systemd))
 
 	deps := w.Spec.Targets[w.Target].Dependencies
 	if deps == nil {
@@ -349,9 +375,10 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 }
 
 func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
-	verb := "disable"
-	if dalec.OptionEquals(true, cfg.Enable) {
-		verb = "enable"
+	// if service isn't explicitly specified as enabled in the spec,
+	// then we don't need to do anything in the post script
+	if !dalec.OptionEquals(true, cfg.Enable) {
+		return ""
 	}
 
 	// should be equivalent to the systemd_post scriptlet in the rpm spec,
@@ -359,9 +386,9 @@ func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
 	return fmt.Sprintf(`
 if [ $1 -eq 1 ]; then
     # initial installation
-    systemctl %s %s
+    systemctl enable %s
 fi
-`, verb, unitName)
+`, unitName)
 }
 
 func (w *specWrapper) Post() fmt.Stringer {
@@ -371,10 +398,18 @@ func (w *specWrapper) Post() fmt.Stringer {
 		return b
 	}
 
+	enabledUnits := w.Artifacts.Systemd.EnabledUnits()
+	if len(enabledUnits) == 0 {
+		// if we have no enabled units, we don't need to do anything systemd related
+		// in the post script. In this case, we shouldn't emit '%post'
+		// as this eliminates the need for extra dependencies in the target container
+		return b
+	}
+
 	b.WriteString("%post\n")
 	// TODO: can inject other post install steps here in the future
 
-	keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
+	keys := dalec.SortMapKeys(enabledUnits)
 	for _, servicePath := range keys {
 		unitConf := w.Spec.Artifacts.Systemd.Units[servicePath]
 		artifact := unitConf.Artifact()

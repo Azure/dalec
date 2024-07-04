@@ -699,3 +699,18 @@ func (s *SystemdConfiguration) IsEmpty() bool {
 
 	return false
 }
+
+func (s *SystemdConfiguration) EnabledUnits() map[string]SystemdUnitConfig {
+	if len(s.Units) == 0 {
+		return nil
+	}
+
+	units := make(map[string]SystemdUnitConfig)
+	for path, unit := range s.Units {
+		if unit.Enable != nil && *unit.Enable {
+			units[path] = unit
+		}
+	}
+
+	return units
+}

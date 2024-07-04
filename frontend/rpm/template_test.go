@@ -236,14 +236,24 @@ func TestTemplate_Artifacts(t *testing.T) {
 
 if [ $1 -eq 1 ]; then
     # initial installation
-    systemctl disable test1.service
-fi
-
-if [ $1 -eq 1 ]; then
-    # initial installation
     systemctl enable test2.service
 fi
 `)
+	})
+
+	t.Run("test systemd post, no enabled units", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"test1.service": {},
+						"test2.service": {},
+					},
+				},
+			},
+		}}
+
+		assert.Equal(t, w.Post().String(), ``)
 	})
 
 	t.Run("test systemd unit postun", func(t *testing.T) {
@@ -590,5 +600,28 @@ func TestTemplate_ImplicitRequires(t *testing.T) {
 	w := specWrapper{Spec: spec}
 
 	got := w.Requires().String()
-	assert.Equal(t, got, "%systemd_requires\n%systemd_ordering\n")
+	assert.Equal(t, got,
+		`Requires(post): systemd
+Requires(preun): systemd
+Requires(postun): systemd
+OrderWithRequires(post): systemd
+OrderWithRequires(preun): systemd
+OrderWithRequires(postun): systemd
+`,
+	)
+
+	spec.Artifacts.Systemd.Units = map[string]dalec.SystemdUnitConfig{
+		"test.service": {
+			Enable: dalec.OptionFalse(),
+		},
+	}
+
+	got = w.Requires().String()
+	assert.Equal(t, got,
+		`Requires(preun): systemd
+Requires(postun): systemd
+OrderWithRequires(preun): systemd
+OrderWithRequires(postun): systemd
+`)
+
 }
