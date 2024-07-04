@@ -995,6 +995,42 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			solveT(ctx, t, client, sr)
 		})
 	})
+
+	t.Run("meta package", func(t *testing.T) {
+		// Ensure that packages that just install other packages give the expected output
+
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "some-meta-thing",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "meta test",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: map[string][]string{
+					"curl": {},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = ref.StatFile(ctx, gwclient.StatRequest{
+				Path: "/usr/bin/curl",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	})
 }
 
 func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expected os.FileMode) error {
