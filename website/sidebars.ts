@@ -17,10 +17,27 @@ const sidebars: SidebarsConfig = {
       label: 'Getting Started',
       items: [
         'intro',
-        'editor-support',
+        'build',
+        'build-source',
+        'virtual-packages',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Specifications',
+      items: [
+        'spec',
         'sources',
+        'targets',
         'testing',
-	'signing'
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Features',
+      items: [
+        'signing',
+        'editor-support',
       ],
     },
   ],

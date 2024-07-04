@@ -14,10 +14,9 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /usr/bin/foo:
+  - name: My Test case
+    files:
+      /usr/bin/foo:
 ```
 
 ### Check file contents
@@ -36,12 +35,11 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /etc/foo.conf:
-                contains:
-                    - foo=bar
+  - name: My Test case
+    files:
+      /etc/foo.conf:
+        contains:
+          - foo=bar
 ```
 
 
@@ -54,11 +52,10 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /etc/foo.conf:
-                starts_with: foo
+  - name: My Test case
+    files:
+      /etc/foo.conf:
+        starts_with: foo
 ```
 
 
@@ -71,11 +68,10 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /etc/foo.conf:
-                ends_with: bar
+  - name: My Test case
+    files:
+      /etc/foo.conf:
+        ends_with: bar
 ```
 
 
@@ -88,11 +84,10 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /etc/foo.conf:
-                matches: "foo=.*"
+  - name: My Test case
+    files:
+      /etc/foo.conf:
+        matches: "foo=.*"
 ```
 
 #### Check that a file does not exist
@@ -104,11 +99,10 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /some/nonexistent/path:
-                not_exist: true
+  - name: My Test case
+    files:
+      /some/nonexistent/path:
+        not_exist: true
 ```
 
 #### Check that a path is a directory
@@ -120,11 +114,10 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /some/path:
-                is_dir: true
+  - name: My Test case
+    files:
+      /some/path:
+        is_dir: true
 ```
 
 #### Check file permissions
@@ -136,11 +129,15 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /etc/foo.conf:
-                permissions: 0644
+  - name: My Test case
+    files:
+      /etc/foo.conf:
+        contains:
+          - foo=bar
+        starts_with: foo
+        ends_with: bar
+        matches: "foo=.*"
+        permissions: 0644
 ```
 
 #### Add multiple checks together
@@ -153,16 +150,15 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        files:
-            /etc/foo.conf:
-                contains:
-                    - foo=bar
-                starts_with: foo
-                ends_with: bar
-                matches: "foo=.*"
-                permissions: 0644
+  - name: My Test case
+    files:
+      /etc/foo.conf:
+        contains:
+          - foo=bar
+        starts_with: foo
+        ends_with: bar
+        matches: "foo=.*"
+        permissions: 0644
 ```
 
 
@@ -181,20 +177,17 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        steps:
-            -
-                command: echo "hello world"
-                stdout:
-                    equals:
-                        - hello world\n
-            -
-                # Note: the image used for this test would need to have a shell in it for this to work
-                command: /bin/sh -c 'echo "hello world" >&2'
-                stderr:
-                    equals:
-                        - hello world\n
+  - name: My Test case
+    steps:
+      - command: echo "hello world"
+        stdout:
+          equals:
+            - hello world\n
+      - # Note: the image used for this test would need to have a shell in it for this to work
+        command: /bin/sh -c 'echo "hello world" >&2'
+        stderr:
+          equals:
+            - hello world\n
 ```
 
 Pass in stdin to the command:
@@ -204,15 +197,13 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        steps:
-            -
-                command: cat
-                stdin: hello world
-                stdout:
-                    equals:
-                        - hello world
+  - name: My Test case
+    steps:
+      - command: cat
+        stdin: hello world
+        stdout:
+          equals:
+            - hello world
 ```
 
 #### Inject a file into the container for additional checks
@@ -225,26 +216,22 @@ name: My Package
 # ... other spec fields
 
 tests:
-    -
-        name: My Test case
-        mounts:
-            -
-                dest: /target/mount/path
-                spec:
-                    build:
-                        source:
-                            inline:
-                                file:
-                                    contents: |
-                                        FROM busybox
-                                        RUN echo hello > /hello
+  - name: My Test case
+    mounts:
+      - dest: /target/mount/path
+        spec:
+          build:
+            source:
+              inline:
+                file:
+                  contents: |
+                    FROM busybox
+                    RUN echo hello > /hello
 
-                                        FROM scratch
-                                        COPY --from=busybox /hello /hello
-        steps:
-            -
-                command: cat /path/in/container
-                stdout:
-                    equals: hello
-
+                    FROM scratch
+                    COPY --from=busybox /hello /hello
+    steps:
+      - command: cat /path/in/container
+        stdout:
+          equals: hello
 ```

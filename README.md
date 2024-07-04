@@ -1,117 +1,24 @@
 # Dalec
 
 Dalec is a project aimed at providing a declarative format for building system packages and containers from those packages.
-Dalec is still under heavy development and the spec format is not currently considered stable.
 
-Currently only support for Azure Linux (CBL-Mariner 2.0) is available but support
-for other Linux distributions and operating systems is planned and is already [pluggable]().
+Our goal is to provide a secure and reproducible way to build packages and containers, with a focus on supply chain security.
 
-## Usage
+> [!NOTE]
+> Dalec is still under heavy development and the spec format is not currently considered stable. Feedback is welcome! ❤️
 
-Dalec is currently provided as a buildkit frontend which enables you to use dalec with tools like `docker build`.
-You can find the JSON schema for the dalec spec [in docs/spec.schema.json](./docs/spec.schema.json).
+## Features
 
-You will need to add a `syntax` directive at the top of your spec file to enable the dalec frontend:
+- 🐳 No additional tools are needed except for [Docker](https://docs.docker.com/engine/install/)!
+- 🚀 Easy to use declarative configuration that provides reproducible builds
+- 📦 Build packages and/or containers for [Azure Linux](https://github.com/microsoft/azurelinux) 2 and 3 (formerly known as CBL-Mariner)
+- 🔌 Pluggable support for other operating systems
+- 🤏 Minimal image size, resulting in less vulnerabilities and smaller attack surface
+- 🪟 Support for Windows containers
+- ✍️ Support for signed packages
+- 🔐 Ensure supply chain security with build time SBOMs, and Provenance attestations
 
-```yaml
-# syntax=ghcr.io/azure/dalec/frontend:latest
-```
-
-### Examples:
-
-You can look at the [test/fixtures](./test/fixtures) directory for examples of dalec specs.
-
-Build an rpm for mariner2:
-
-```console
-$ docker build -f test/fixtures/moby-runc.yml --target mariner2/rpm --output=_output .
-<output truncated>
-```
-
-With this command you should have a _output/RPMS/\<arch>, _output/RPMS/noarch, and _output/SRPMS directories with the built RPM and SRPM files.
-
-Build a container for mariner2:
-
-```console
-$ docker build -f test/fixtures/moby-runc.yml --target mariner2/container -t test-runc-container:example .
-```
-
-This container will have the rpm along with all its dependencies installed.
-The base image used for the container is determined by the target.
-For mariner2 this is `mcr.microsoft.com/cbl-mariner/distroless/base:2.0`.
-This can be customized in your yaml spec for the target.
-Example:
-
-```yaml
-targets:
-    mariner2:
-        image:
-            base: mcr.microsoft.com/cbl-mariner/base/core:2.0
-```
-
-Dalec will try to detect if the image is a "distroless" image by checking if the `rpm` binary is present.
-If it is present then dalec assumes the image is *not* distroless and installs the rpm like normal.
-When the image is distroless the rpm is installed and then the rpm database is cleaned up and
-rpm manifests are created at `/var/lib/rpmmanifest`.
-
-To print a list of available build targets:
-
-```console
-$ BUILDX_EXPERIMENTAL=1 docker build --print=targets -f test/fixtures/moby-runc.yml .
-debug/gomods                 Outputs all the gomodule dependencies for the spec
-debug/resolve                Outputs the resolved dalec spec file with build args applied.
-debug/sources                Outputs all sources from a dalec spec file.
-mariner2/container (default) Builds a container image for mariner2.
-mariner2/container/depsonly  Builds a container image with only the runtime dependencies installed.
-mariner2/rpm                 Builds an rpm and src.rpm for mariner2.
-mariner2/rpm/debug/buildroot Outputs an rpm buildroot suitable for passing to rpmbuild.
-mariner2/rpm/debug/sources   Outputs all the sources specified in the spec file in the format given to rpmbuild.
-mariner2/rpm/debug/spec      Outputs the generated RPM spec file
-```
-
-
-## Support for other OSes and Linux distributions
-
-Dalec can never hope to bake in support for every OS and Linux distribution.
-Dalec is designed to be pluggable.
-Even if the base dalec frontend does not support your distro/OS of choice, the spec format is designed to allow referencing a custom frontend.
-This way you can support other distros/OSes without having to fork dalec, wait for a new release, or even change the `syntax` directive in your spec file.
-
-Additionally, the structure of dalec is such that you can use dalec as a library to build your frontend.
-In the `frontend` package you can register your build targets with `frontend.RegisterTarget` and then use `frontend.Build` as the buildkit `BuildFunc`
-See `./cmd/frontend/main.go` for how this is used.
-
-### Example
-
-```yaml
-# ...
-targets:
-  custom_distro:
-    frontend:
-        image: <frontend image>
-# ...
-```
-
-## Docs
-
-Docs are available at [https://azure.github.io/dalec/](https://azure.github.io/dalec/).
-
-
-### Building the docs
-
-You can view the docs locally by running:
-
-```console
-$ go -C website run .
-```
-
-This will, by default, make the docs available on `http://localhost:3000/dalec/`.
-You can customize the port with `--port <port>`.
-
-```console
-$ go -C website run . --port 3001
-```
-
+👉 To get started, please see [Dalec documentation](https://azure.github.io/dalec/)!
 
 ## Contributing
 
