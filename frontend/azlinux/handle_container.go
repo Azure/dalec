@@ -25,7 +25,7 @@ func handleContainer(w worker) gwclient.BuildFunc {
 
 			pg := dalec.ProgressGroup("Building " + targetKey + " container: " + spec.Name)
 
-			rpmDir, err := specToRpmLLB(ctx, w, client, spec, sOpt, targetKey, pg)
+			rpmDir, err := specToRpmLLB(ctx, w, client, spec, sOpt, targetKey, pg, dalec.WithPlatform(platform))
 			if err != nil {
 				return nil, nil, fmt.Errorf("error creating rpm: %w", err)
 			}
@@ -35,7 +35,7 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, rpms, sOpt, pg)
+			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, rpms, sOpt, pg, dalec.WithPlatform(platform))
 			if err != nil {
 				return nil, nil, err
 			}

@@ -31,6 +31,12 @@ on:
       - go.mod
       - go.sum
 
+env:
+  # Used in tests to determine if certain tests should be skipped.
+  # Setting this ensures that they are *not* skipped and instead make sure CI
+  # is setup to be able to properly run all tests.
+  DALEC_CI: "1"
+
 permissions:
   contents: read
 
@@ -93,6 +99,8 @@ jobs:
         uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3.6.1
       - name: download deps
         run: go mod download
+      - name: Setup QEMU
+        run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
       - name: Run integaration tests
         run: go test -v -json ./test | go run ./cmd/test2json2gha
       - name: dump logs
