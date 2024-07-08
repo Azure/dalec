@@ -35,27 +35,27 @@ args:
 
 ## Metadata section
 
-Metadata section is a required section. It is used to define the metadata of the spec. This metadata includes the name, packager, vendor, license, website, and description of the spec.
+Metadata section is used to define the metadata of the spec. This metadata includes the name, packager, vendor, license, website, and description of the spec.
 
 ```yaml
 name: My-Package
-packager: Dalec Authors
-vendor: Contoso
 license: Apache-2.0
-website: https://github.com/foo/bar
 description: This is a sample package
 version: ${VERSION}
 revision: ${REVISION}
+packager: Dalec Authors
+vendor: Dalec Authors
+website: https://github.com/foo/bar
 ```
 
 - `name`: The name of the package.
-- `packager`: The packager of the package.
-- `vendor`: The vendor of the package.
 - `license`: The license of the package.
-- `website`: The website of the package.
 - `description`: The description of the package.
 - `version`: The version of the package.
 - `revision`: The revision of the package.
+- `packager`: The packager of the package. This is an optional field.
+- `vendor`: The vendor of the package. This is an optional field.
+- `website`: The website of the package. This is an optional field.
 
 :::tip
 Any field at the top-level that begins with `x-` will be ignored by Dalec. This allows for custom fields to be added to the spec. For example, `x-foo: bar`. Any other field that is not recognized by Dalec will result in a validation error.
