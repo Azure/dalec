@@ -21,7 +21,7 @@ func handleDepsOnly(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			baseImg, err := w.Base(sOpt, pg)
+			baseImg, err := w.Base(sOpt, pg, dalec.WithPlatform(platform))
 			if err != nil {
 				return nil, nil, err
 			}

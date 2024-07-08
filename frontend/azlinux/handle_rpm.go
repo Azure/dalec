@@ -26,7 +26,7 @@ func handleRPM(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := specToRpmLLB(ctx, w, client, spec, sOpt, targetKey, pg)
+			st, err := specToRpmLLB(ctx, w, client, spec, sOpt, targetKey, pg, dalec.WithPlatform(platform))
 			if err != nil {
 				return nil, nil, err
 			}

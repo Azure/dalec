@@ -17,10 +17,12 @@ import (
 )
 
 const (
-	requestIDKey               = "requestid"
-	dalecSubrequstForwardBuild = "dalec.forward.build"
+	// KeyRequestID is a key used in buildkit to performa subrequest
+	// This is exposed for convenience only.
+	KeyRequestID = "requestid"
 
-	gatewayFrontend = "gateway.v0"
+	dalecSubrequstForwardBuild = "dalec.forward.build"
+	gatewayFrontend            = "gateway.v0"
 )
 
 func getDockerfile(ctx context.Context, client gwclient.Client, build *dalec.SourceBuild, defPb *pb.Definition) ([]byte, error) {

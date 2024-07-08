@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Azure/dalec"
+	"github.com/containerd/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -19,6 +20,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
+)
+
+const (
+	// KeySubrequestHostPlatform is a dalec specific subrequest for determining the platform of the worker.
+	KeyHostPlatform = "dalec.debug.platform"
 )
 
 // BuildMux implements a buildkit BuildFunc via its Handle method. With a
@@ -108,7 +114,7 @@ func (m *BuildMux) describe() (*gwclient.Result, error) {
 }
 
 func (m *BuildMux) handleSubrequest(ctx context.Context, client gwclient.Client, opts map[string]string) (*gwclient.Result, bool, error) {
-	switch opts[requestIDKey] {
+	switch opts[KeyRequestID] {
 	case "":
 		return nil, false, nil
 	case subrequests.RequestSubrequestsDescribe:
@@ -117,11 +123,29 @@ func (m *BuildMux) handleSubrequest(ctx context.Context, client gwclient.Client,
 	case bktargets.SubrequestsTargetsDefinition.Name:
 		res, err := m.list(ctx, client, opts[keyTarget])
 		return res, true, err
+	case KeyHostPlatform:
+		res, err := m.hostPlatform()
+		return res, true, err
 	case keyTopLevelTarget:
 		return nil, false, nil
 	default:
-		return nil, false, errors.Errorf("unsupported subrequest %q", opts[requestIDKey])
+		return nil, false, errors.Errorf("unsupported subrequest %q", opts[KeyRequestID])
 	}
+}
+
+func (m *BuildMux) hostPlatform() (*gwclient.Result, error) {
+	res := gwclient.NewResult()
+
+	p := platforms.DefaultSpec()
+	dt, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+
+	res.AddMeta("result.json", dt)
+	res.AddMeta("result.txt", []byte(platforms.Format(p)))
+
+	return res, nil
 }
 
 func (m *BuildMux) loadSpec(ctx context.Context, client gwclient.Client) (*dalec.Spec, error) {
@@ -299,7 +323,7 @@ func (m *BuildMux) Handle(ctx context.Context, client gwclient.Client) (_ *gwcli
 		WithFields(logrus.Fields{
 			"handlers":  maps.Keys(m.handlers),
 			"target":    opts[keyTarget],
-			"requestid": opts[requestIDKey],
+			"requestid": opts[KeyRequestID],
 			"targetKey": GetTargetKey(client),
 		}))
 
@@ -333,7 +357,7 @@ func (m *BuildMux) Handle(ctx context.Context, client gwclient.Client) (_ *gwcli
 
 	// If this request was a request to list targets, we need to modify the response a bit
 	// Otherwise we can just return the result as is.
-	if opts[requestIDKey] == bktargets.SubrequestsTargetsDefinition.Name {
+	if opts[KeyRequestID] == bktargets.SubrequestsTargetsDefinition.Name {
 		return m.fixupListResult(matched, res)
 	}
 	return res, nil
