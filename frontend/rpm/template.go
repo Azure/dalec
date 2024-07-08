@@ -601,8 +601,9 @@ func (w *specWrapper) Files() fmt.Stringer {
 	if w.Spec.Artifacts.Systemd != nil {
 		serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
 		for _, p := range serviceKeys {
-			serviceName := filepath.Base(p)
-			unitPath := filepath.Join(`%{_unitdir}/`, serviceName)
+			cfg := w.Spec.Artifacts.Systemd.Units[p]
+			a := cfg.Artifact()
+			unitPath := filepath.Join(`%{_unitdir}/`, a.SubPath, a.ResolveName(p))
 			fmt.Fprintln(b, unitPath)
 		}
 

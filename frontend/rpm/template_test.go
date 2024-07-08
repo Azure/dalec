@@ -468,6 +468,57 @@ fi
 `
 		assert.Equal(t, want, got)
 	})
+
+	t.Run("test systemd artifact installed under a different name", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-systemd-unit",
+			Description: "Test systemd unit",
+			Website:     "https://www.github.com/Azure/dalec",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Vendor:      "Microsoft",
+			License:     "Apache 2.0",
+			Packager:    "Microsoft <support@microsoft.com>",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+
+							Files: map[string]*dalec.SourceInlineFile{
+								"simple.service": {
+									Contents: `
+Phony unit
+`},
+							},
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"src/simple.service": {
+							Enable: true,
+							Name:   "phony.service",
+						},
+					},
+				},
+			},
+		}
+		w := specWrapper{Spec: spec}
+
+		assert.Equal(t, w.Install().String(), `%install
+mkdir -p %{buildroot}/%{_unitdir}
+cp -r src/simple.service %{buildroot}/%{_unitdir}/phony.service
+
+`)
+
+		assert.Equal(t, w.Files().String(), `%files
+%{_unitdir}/phony.service
+
+`)
+	})
+
 }
 
 func TestTemplate_Requires(t *testing.T) {
