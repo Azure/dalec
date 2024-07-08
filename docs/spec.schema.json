@@ -1000,7 +1000,11 @@
 				}
 			},
 			"additionalProperties": false,
-			"type": "object"
+			"type": "object",
+			"required": [
+				"name",
+				"enable"
+			]
 		},
 		"Target": {
 			"properties": {

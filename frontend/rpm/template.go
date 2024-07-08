@@ -377,7 +377,7 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
 	// if service isn't explicitly specified as enabled in the spec,
 	// then we don't need to do anything in the post script
-	if !dalec.OptionEquals(true, cfg.Enable) {
+	if !cfg.Enable {
 		return ""
 	}
 
