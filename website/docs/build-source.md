@@ -21,12 +21,16 @@ We define the metadata of the package in the spec. This includes the name, packa
 name: go-md2man
 version: 2.0.3
 revision: "1"
-packager: Dalec Example
-vendor: Dalec Example
 license: MIT
 description: A tool to convert markdown into man pages (roff).
+packager: Dalec Example
+vendor: Dalec Example
 website: https://github.com/cpuguy83/go-md2man
 ```
+
+:::tip
+In metadata section, `packager`, `vendor` and `website` are optional fields.
+:::
 
 In the next section, we define the sources that we will be pulling from. In this case, we are pulling from a git repository.
 
