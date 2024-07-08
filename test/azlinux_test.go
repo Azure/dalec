@@ -488,6 +488,35 @@ WantedBy=multi-user.target
 			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
+
+		// Test to ensure unit can be installed under a different name
+		spec.Artifacts.Systemd = &dalec.SystemdConfiguration{
+			Units: map[string]dalec.SystemdUnitConfig{
+				"src/simple.service": {
+					Name: "phony.service",
+				},
+			},
+		}
+
+		spec.Tests = []*dalec.TestSpec{
+			{
+				Name: "Check service files",
+				Files: map[string]dalec.FileCheckOutput{
+					filepath.Join(testConfig.SystemdDir.Units, "system/phony.service"): {
+						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
+						Permissions: 0644,
+					},
+					filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/phony.service"): {
+						NotExist: true,
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
+		})
 	})
 
 	t.Run("test systemd unit multiple components", func(t *testing.T) {
