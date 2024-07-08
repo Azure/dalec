@@ -19,9 +19,9 @@ func TestTemplateSources(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if s.String() != "" {
-			t.Fatalf("unexpected sources: %s", s.String())
-		}
+		expect := ""
+		actual := s.String()
+		assert.Equal(t, actual, expect)
 	})
 
 	// Each source entry is prefixed by comments documenting how the source was generated
@@ -65,7 +65,7 @@ func TestTemplateSources(t *testing.T) {
 		}
 
 		// File sources are not (currently) compressed, so the source is the file itself
-		expected := "Source0: src1\n"
+		expected := "Source0: src1\n\n"
 		actual := s[len(expectedDoc):] // trim off the doc from the output
 		if actual != expected {
 			t.Fatalf("unexpected sources: expected %q, got: %q", expected, actual)
@@ -95,7 +95,7 @@ func TestTemplateSources(t *testing.T) {
 			t.Errorf("Expected doc:\n%q\n\n, got:\n%q\n", expectedDoc, s)
 		}
 
-		expected := "Source0: src1.tar.gz\n"
+		expected := "Source0: src1.tar.gz\n\n"
 		actual := s[len(expectedDoc):] // trim off the doc from the output
 		if actual != expected {
 			t.Fatalf("unexpected sources: expected %q, got: %q", expected, actual)
@@ -113,12 +113,14 @@ func TestTemplateSources(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			s2 := out2.String()
+			// trim last newline from the first output since that has shifted
+			s = s[:len(s)-1]
 			if !strings.HasPrefix(s2, s) {
 				t.Fatalf("expected output to start with %q, got %q", s, out2.String())
 			}
 
 			s2 = strings.TrimPrefix(out2.String(), s)
-			expected := "Source1: " + gomodsName + ".tar.gz\n"
+			expected := "Source1: " + gomodsName + ".tar.gz\n\n"
 			if s2 != expected {
 				t.Fatalf("unexpected sources: expected %q, got: %q", expected, s2)
 			}
@@ -202,7 +204,7 @@ func TestTemplateSources(t *testing.T) {
 		// Now we should have one more entry for gomods.
 		// Note there are 2 gomod sources but they should be combined into one entry.
 
-		expected := "Source5: " + gomodsName + ".tar.gz\n"
+		expected := "Source5: " + gomodsName + ".tar.gz\n\n"
 		if s != expected {
 			t.Fatalf("gomod: unexpected sources: expected %q, got: %q", expected, s)
 		}
@@ -250,6 +252,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %doc %{_docdir}/test-pkg/docs/README
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -268,6 +271,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %doc %{_docdir}/test-pkg/README.md
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -286,6 +290,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %doc %{_docdir}/test-pkg/README.md
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -304,6 +309,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %license %{_licensedir}/test-pkg/LICENSE
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -325,6 +331,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %license %{_licensedir}/test-pkg/licenses/LICENSE.md
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -346,6 +353,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %config(noreplace) %{_sysconfdir}/sysconfig/config
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -364,6 +372,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %config(noreplace) %{_sysconfdir}/config.env
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -386,6 +395,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		want := `%files
 %dir %{_unitdir}/foo.service.d
 %{_unitdir}/foo.service.d/blah.config
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -413,6 +423,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 %dir %{_unitdir}/foo.service.d
 %{_unitdir}/foo.service.d/blah.config
 %{_unitdir}/foo.service.d/test.conf
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -461,7 +472,74 @@ Requires: a-no-constraints
 Requires: b-one-constraints < 2.0
 Requires: c-multiple-constraints < 2.0
 Requires: c-multiple-constraints >= 1.0
+
 `
 
 	assert.Equal(t, want, got)
+}
+
+func TestTemplateOptionalFields(t *testing.T) {
+	spec := &dalec.Spec{
+		Name:        "testing",
+		Version:     "0.0.1",
+		Revision:    "1",
+		Description: "A helpful tool",
+		License:     "MIT",
+	}
+
+	w := &strings.Builder{}
+	err := specTmpl.Execute(w, &specWrapper{Spec: spec})
+	assert.NilError(t, err)
+
+	actual := strings.TrimSpace(w.String())
+	expect := strings.TrimSpace(`
+Name: testing
+Version: 0.0.1
+Release: 1%{?dist}
+License: MIT
+Summary: A helpful tool
+
+
+%description
+A helpful tool
+
+%install
+
+%files
+
+`)
+
+	assert.Equal(t, expect, actual)
+
+	w.Reset()
+
+	spec.Packager = "Awesome Packager"
+	err = specTmpl.Execute(w, &specWrapper{Spec: spec})
+	assert.NilError(t, err)
+
+	actual = strings.TrimSpace(w.String())
+	expect = strings.TrimSpace(`
+Name: testing
+Version: 0.0.1
+Release: 1%{?dist}
+License: MIT
+Summary: A helpful tool
+Packager: Awesome Packager
+
+
+%description
+A helpful tool
+
+%install
+
+%files
+
+`)
+
+	defer func() {
+		if t.Failed() {
+			t.Log(actual)
+		}
+	}()
+	assert.Equal(t, expect, actual)
 }
