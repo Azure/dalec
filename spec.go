@@ -154,11 +154,11 @@ type SystemdUnitConfig struct {
 	// Name is the name systemd unit should be copied under.
 	// Nested paths are not supported. It is the user's responsibility
 	// to name the service with the appropriate extension, i.e. .service, .timer, etc.
-	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	Name string `yaml:"name,omitempty" json:"name"`
 
 	// Enable is used to enable the systemd unit on install
 	// This determines what will be written to a systemd preset file
-	Enable *bool `yaml:"enable,omitempty" json:"enable,omitempty"`
+	Enable bool `yaml:"enable,omitempty" json:"enable"`
 }
 
 func (s SystemdUnitConfig) Artifact() ArtifactConfig {
@@ -707,7 +707,7 @@ func (s *SystemdConfiguration) EnabledUnits() map[string]SystemdUnitConfig {
 
 	units := make(map[string]SystemdUnitConfig)
 	for path, unit := range s.Units {
-		if unit.Enable != nil && *unit.Enable {
+		if unit.Enable {
 			units[path] = unit
 		}
 	}

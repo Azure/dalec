@@ -436,7 +436,7 @@ WantedBy=multi-user.target
 				Systemd: &dalec.SystemdConfiguration{
 					Units: map[string]dalec.SystemdUnitConfig{
 						"src/simple.service": {
-							Enable: dalec.OptionTrue(),
+							Enable: true,
 						},
 					},
 				},
@@ -558,7 +558,7 @@ WantedBy=multi-user.target
 					Units: map[string]dalec.SystemdUnitConfig{
 						"src/foo.service": {},
 						"src/foo.socket": {
-							Enable: dalec.OptionTrue(),
+							Enable: true,
 						},
 					},
 					Dropins: map[string]dalec.SystemdDropinConfig{

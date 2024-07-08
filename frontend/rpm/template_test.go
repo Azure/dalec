@@ -224,7 +224,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 					Units: map[string]dalec.SystemdUnitConfig{
 						"test1.service": {},
 						"test2.service": {
-							Enable: dalec.OptionTrue(),
+							Enable: true,
 						},
 					},
 				},
@@ -590,7 +590,7 @@ func TestTemplate_ImplicitRequires(t *testing.T) {
 			Systemd: &dalec.SystemdConfiguration{
 				Units: map[string]dalec.SystemdUnitConfig{
 					"test.service": {
-						Enable: dalec.OptionTrue(),
+						Enable: true,
 					},
 				},
 			},
@@ -612,7 +612,7 @@ OrderWithRequires(postun): systemd
 
 	spec.Artifacts.Systemd.Units = map[string]dalec.SystemdUnitConfig{
 		"test.service": {
-			Enable: dalec.OptionFalse(),
+			Enable: false,
 		},
 	}
 

@@ -397,24 +397,3 @@ func SortedMapValues[T any](m map[string]T) []T {
 
 	return out
 }
-
-// OptionTrue returns a pointer to a bool with the value true.
-func OptionTrue() *bool {
-	b := true
-	return &b
-}
-
-// OptionFalse returns a pointer to a bool with the value false.
-func OptionFalse() *bool {
-	b := false
-	return &b
-}
-
-// OptionEquals returns true if the given value is equal to the value of the given pointer.
-func OptionEquals[T comparable](v T, ptr *T) bool {
-	if ptr == nil {
-		return false
-	}
-
-	return v == *ptr
-}
