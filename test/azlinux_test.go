@@ -171,14 +171,9 @@ index 84d55c5..22b9b11 100644
 					},
 				},
 				"src2-patch2": {
-					// Another patch but put this in a dir-backed source  with the subpath specified
-					//so we can make sure the patch still applies cleanly for this case.
-					Path: "the-patch",
 					Inline: &dalec.SourceInline{
-						Dir: &dalec.SourceInlineDir{
-							Files: map[string]*dalec.SourceInlineFile{
-								"the-patch": &dalec.SourceInlineFile{
-									Contents: `
+						File: &dalec.SourceInlineFile{
+							Contents: `
 diff --git a/file2 b/file2
 new file mode 100700
 index 0000000..5260cb1
@@ -189,8 +184,7 @@ index 0000000..5260cb1
 +
 +echo "Added a new file"
 `,
-								},
-							}},
+						},
 					},
 				},
 			},

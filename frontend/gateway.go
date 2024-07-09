@@ -2,12 +2,10 @@ package frontend
 
 import (
 	"context"
-	"io/fs"
 	"sync"
 	"sync/atomic"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -120,9 +118,6 @@ func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOp
 				return nil, err
 			}
 			return st, nil
-		},
-		GetFS: func(st *llb.State, opts ...llb.ConstraintsOpt) (fs.FS, error) {
-			return bkfs.FromState(ctx, st, c, opts...)
 		},
 	}, nil
 }

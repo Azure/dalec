@@ -11,7 +11,6 @@ import (
 	"text/template"
 
 	"github.com/Azure/dalec"
-	"github.com/moby/buildkit/client/llb"
 )
 
 const gomodsName = "__gomods"
@@ -60,9 +59,7 @@ var tmplFuncs = map[string]any{
 
 type specWrapper struct {
 	*dalec.Spec
-	Target     string
-	sOpts      dalec.SourceOpts
-	contraints []llb.ConstraintsOpt
+	Target string
 }
 
 func (w *specWrapper) Changelog() (fmt.Stringer, error) {
@@ -206,10 +203,7 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 	for idx, name := range keys {
 		src := w.Spec.Sources[name]
 		ref := name
-		isDir, err := dalec.SourceIsDir(src, w.sOpts, w.contraints...)
-		if err != nil {
-			return nil, err
-		}
+		isDir := dalec.SourceIsDir(src)
 
 		if isDir {
 			ref += ".tar.gz"
@@ -283,10 +277,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 				return nil
 			}
 
-			isDir, err := dalec.SourceIsDir(src, w.sOpts, w.contraints...)
-			if err != nil {
-				return err
-			}
+			isDir := dalec.SourceIsDir(src)
 
 			if !isDir {
 				fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", name)
@@ -664,8 +655,8 @@ func (w *specWrapper) Files() fmt.Stringer {
 }
 
 // WriteSpec generates an rpm spec from the provided [dalec.Spec] and distro target and writes it to the passed in writer
-func WriteSpec(spec *dalec.Spec, target string, w io.Writer, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) error {
-	s := &specWrapper{spec, target, sOpt, opts}
+func WriteSpec(spec *dalec.Spec, target string, w io.Writer) error {
+	s := &specWrapper{spec, target}
 
 	err := specTmpl.Execute(w, s)
 	if err != nil {

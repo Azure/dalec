@@ -34,7 +34,7 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
 		worker := workerImg(sOpt, pg)
 
-		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey, pg)
+		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
 		}
@@ -94,8 +94,8 @@ func installBuildDeps(deps []string) llb.StateOption {
 	}
 }
 
-func withSourcesMounted(dst string, states map[string]llb.State, sources map[string]dalec.Source, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
-	runOpts := make([]llb.RunOption, 0, len(states))
+func withSourcesMounted(dst string, states map[string]llb.State, sources map[string]dalec.Source) llb.RunOption {
+	opts := make([]llb.RunOption, 0, len(states))
 
 	sorted := dalec.SortMapKeys(states)
 	files := []llb.State{}
@@ -107,32 +107,26 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 		// So we need to check for this.
 		src, ok := sources[k]
 
-		if ok {
-			isDir, err := dalec.SourceIsDir(src, sOpt, opts...)
-			if err != nil {
-				return nil, err
-			}
-			if !isDir {
-				files = append(files, state)
-				continue
-			}
+		if ok && !dalec.SourceIsDir(src) {
+			files = append(files, state)
+			continue
 		}
 
 		dirDst := filepath.Join(dst, k)
-		runOpts = append(runOpts, llb.AddMount(dirDst, state))
+		opts = append(opts, llb.AddMount(dirDst, state))
 	}
 
-	ordered := make([]llb.RunOption, 1, len(runOpts)+1)
+	ordered := make([]llb.RunOption, 1, len(opts)+1)
 	ordered[0] = llb.AddMount(dst, dalec.MergeAtPath(llb.Scratch(), files, "/"))
-	ordered = append(ordered, runOpts...)
+	ordered = append(ordered, opts...)
 
-	return dalec.WithRunOptions(ordered...), nil
+	return dalec.WithRunOptions(ordered...)
 }
 
-func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
 	worker = worker.With(installBuildDeps(spec.GetBuildDeps(targetKey)))
 
-	sources, err := specToSourcesLLB(worker, spec, sOpt, opts...)
+	sources, err := specToSourcesLLB(worker, spec, sOpt)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "could not generate sources")
 	}
@@ -142,18 +136,12 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
 
-	mountedSources, err := withSourcesMounted("/build", patched, spec.Sources, sOpt, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
 	st := worker.Run(
 		dalec.ShArgs(script.String()),
 		llb.Dir("/build"),
+		withSourcesMounted("/build", patched, spec.Sources),
 		llb.AddMount("/tmp/scripts", buildScript),
-		mountedSources,
 		llb.Network(llb.NetModeNone),
-		dalec.WithConstraints(opts...),
 	).AddMount(outputDir, llb.Scratch())
 
 	if signer, ok := spec.GetSigner(targetKey); ok {
