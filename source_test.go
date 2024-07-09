@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"net"
 	"os"
 	"path"
@@ -796,45 +795,6 @@ func stubListener(t *testing.T) net.Addr {
 	return l.Addr()
 }
 
-// mocks an FS for testing purposes only.
-//
-// This can't actually inspect any real state so things like subpaths can only
-// be determined for inline sources.
-type mockLLBFS struct {
-	src *Source
-	fs.File
-}
-
-func (fs *mockLLBFS) Open(p string) (fs.File, error) {
-	return fs, nil
-}
-
-func (fs *mockLLBFS) Close() error {
-	return nil
-}
-
-func (fs *mockLLBFS) Stat() (fs.FileInfo, error) {
-	return &mockFileInfo{fs.src, nil}, nil
-}
-
-type mockFileInfo struct {
-	src *Source
-	fs.FileInfo
-}
-
-func (m *mockFileInfo) IsDir() bool {
-	src := m.src
-	switch {
-	case src.HTTP != nil, src.Inline != nil && src.Inline.File != nil:
-		return false
-	case !isRoot(src.Path) && src.Inline != nil && src.Inline.Dir != nil:
-		return false
-	default:
-		// We can't detrmine this for anything else
-		return true
-	}
-}
-
 // 1. Generates the LLB for a source using Source2LLBGetter (the function we are testing)
 // 2. Marshals the LLB to a protobuf (since we don't have access to the data in LLB directly)
 // 3. Unmarshals the protobuf to get the [pb.Op]s which is what buildkit would act on to get the actual source data during build.
@@ -857,10 +817,6 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 			})
 			return *st, err
 		}
-	}
-
-	sOpt.GetFS = func(st *llb.State, opts ...llb.ConstraintsOpt) (fs.FS, error) {
-		return &mockLLBFS{&src, nil}, nil
 	}
 
 	sOpt.GetContext = func(name string, opts ...llb.LocalOption) (*llb.State, error) {

@@ -28,13 +28,6 @@ The below example uses a [`context`](#build-context) source type.
 The root of the source is the `path/in/source` directory.
 The source will include all `.txt` files within `path/in/source` except for `secret.txt`.
 
-For each source type, the source may be treated as a directory or a file, which
-changes the handling of the source.
-The `path` field is also used to determine that.
-If `path` points at a file in the source then the source is always considered a
-file regardless of source type.
-The `include` and `exclude` fields do not have any impact on this.
-
 ```yaml
 sources:
   someSource:

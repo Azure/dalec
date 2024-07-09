@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -174,7 +173,6 @@ type SourceOpts struct {
 	Resolver   llb.ImageMetaResolver
 	Forward    ForwarderFunc
 	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
-	GetFS      func(*llb.State, ...llb.ConstraintsOpt) (fs.FS, error)
 }
 
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -267,11 +265,7 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
 		}
 
-		isDir, err := SourceIsDir(src.Spec, sOpts, opts...)
-		if err != nil {
-			return llb.Scratch(), err
-		}
-		if !isDir {
+		if !SourceIsDir(src.Spec) {
 			mountOpt = append(mountOpt, llb.SourcePath(src.Dest))
 		}
 		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
@@ -350,59 +344,17 @@ func WithCreateDestPath() llb.CopyOption {
 	})
 }
 
-// Used to determine if a given source which is that has a subpath specified is pointing
-// at a dir.
-// This allows dir-type sources to actually be a file source when the subpath points to a file.
-func isDirSubpath(src Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (bool, error) {
-	// fs.FS is not supposed to attempt to open paths with a leading "/"
-	// However this is perfectly valid in the dalec spec.
-	// We need to trim the path before passing to the fs.
-	p := filepath.Clean(src.Path)
-	p = strings.TrimPrefix("/", p)
-
-	if isRoot(p) {
-		return true, nil
-	}
-	if sOpt.GetFS == nil {
-		panic("missing llb->filesystem driver -- this is a bug in dalec, please report it")
-	}
-	st, err := getSource(src, "/", sOpt, opts...)
-	if err != nil {
-		return false, err
-	}
-
-	fs, err := sOpt.GetFS(&st, opts...)
-	if err != nil {
-		return false, errors.Wrap(err, "error reading source result")
-	}
-
-	f, err := fs.Open(p)
-	if err != nil {
-		return false, errors.Wrap(err, "error opening source path")
-	}
-	defer f.Close()
-
-	stat, err := f.Stat()
-	if err != nil {
-		return false, errors.Wrap(err, "error stating source path")
-	}
-	return stat.IsDir(), nil
-}
-
-func SourceIsDir(src Source, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (bool, error) {
+func SourceIsDir(src Source) bool {
 	switch {
 	case src.DockerImage != nil,
 		src.Git != nil,
 		src.Build != nil,
 		src.Context != nil:
-		return isDirSubpath(src, sOpt, opts...)
+		return true
 	case src.HTTP != nil:
-		return false, nil
+		return false
 	case src.Inline != nil:
-		if src.Inline.Dir != nil {
-			return isDirSubpath(src, sOpt, opts...)
-		}
-		return false, nil
+		return src.Inline.Dir != nil
 	default:
 		panic("unreachable")
 	}
@@ -550,22 +502,13 @@ func (s Source) Doc(name string) (io.Reader, error) {
 	return b, nil
 }
 
-func patchSource(worker llb.State, spec *Spec, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
+func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
 	for _, p := range patchNames {
 		patchState := sourceToState[p.Source]
 		// on each iteration, mount source state to /src to run `patch`, and
 		// set the state under /src to be the source state for the next iteration
-
-		sourcePath := p.Source
-		src := spec.Sources[p.Source]
-		if !isRoot(src.Path) {
-			// In some cases this may be a dir-backed source but with a subpath that points to a file
-			// In this case we'll have an llb.State with just that file in it.
-			sourcePath = filepath.Base(src.Path)
-		}
-
 		sourceState = worker.Run(
-			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(sourcePath)),
+			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(p.Source)),
 			llb.Dir("src"),
 			ShArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
 			WithConstraints(opts...),
@@ -593,7 +536,7 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 			continue
 		}
 		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" ", false)
-		states[sourceName] = patchSource(worker, spec, sourceState, states, patches, pg, withConstraints(opts))
+		states[sourceName] = patchSource(worker, sourceState, states, patches, pg, withConstraints(opts))
 	}
 
 	return states

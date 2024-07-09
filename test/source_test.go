@@ -332,26 +332,6 @@ index ea874f5..ba38f84 100644
 			}
 
 			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
-
-			spec = baseSpec()
-			spec.Sources[patchName] = dalec.Source{
-				Path: "/patch-file-1",
-				Inline: &dalec.SourceInline{
-					Dir: &dalec.SourceInlineDir{
-						Files: map[string]*dalec.SourceInlineFile{
-							"patch-file-1": &dalec.SourceInlineFile{
-								Contents: downgradePatch,
-							},
-						},
-					},
-				},
-			}
-
-			spec.Patches = map[string][]dalec.PatchSpec{
-				srcName: {{Source: patchName}},
-			}
-
-			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
 		})
 	})
 }
