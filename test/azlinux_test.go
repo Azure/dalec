@@ -308,6 +308,11 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
+			sr.Evaluate = true
+
+			solveT(ctx, t, gwc, sr)
+
 			// Make sure the test framework was actually executed by the build target.
 			// This appends a test case so that is expected to fail and as such cause the build to fail.
 			spec.Tests = append(spec.Tests, &dalec.TestSpec{
@@ -317,7 +322,7 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
+			sr = newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
 			sr.Evaluate = true
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {
