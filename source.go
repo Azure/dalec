@@ -163,7 +163,27 @@ func (s *InvalidSourceError) Unwrap() error {
 	return s.Err
 }
 
-var sourceNamePathSeparatorError = errors.New("source name must not container path separator")
+type InvalidPatchError struct {
+	Source    string
+	PatchSpec *PatchSpec
+	Err       error
+}
+
+func (s *InvalidPatchError) Error() string {
+	return fmt.Sprintf("invalid patch for source %q, patch source: %q: %v", s.Source, s.PatchSpec.Source, s.Err)
+}
+
+func (s *InvalidPatchError) Unwrap() error {
+	return s.Err
+}
+
+var (
+	sourceNamePathSeparatorError = errors.New("source name must not contain path separator")
+	errMissingSource             = errors.New("source is missing from sources list")
+
+	errPatchRequiresSubpath = errors.New("patch source refers to a directory source without a subpath to the patch file to use")
+	errPatchFileNoSubpath   = errors.New("patch source refers to a file source but patch spec specifies a subpath")
+)
 
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 
@@ -508,7 +528,7 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 		// on each iteration, mount source state to /src to run `patch`, and
 		// set the state under /src to be the source state for the next iteration
 		sourceState = worker.Run(
-			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(p.Source)),
+			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(filepath.Join(p.Source, p.Path))),
 			llb.Dir("src"),
 			ShArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
 			WithConstraints(opts...),

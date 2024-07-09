@@ -407,6 +407,42 @@ func (s Spec) Validate() error {
 		}
 	}
 
+	var patchErr error
+	for src, patches := range s.Patches {
+		for _, patch := range patches {
+			patchSrc, ok := s.Sources[patch.Source]
+			if !ok {
+				patchErr = goerrors.Join(patchErr, &InvalidPatchError{Source: src, PatchSpec: &patch, Err: errMissingSource})
+				continue
+			}
+
+			if err := validatePatch(patch, patchSrc); err != nil {
+				patchErr = goerrors.Join(patchErr, &InvalidPatchError{Source: src, PatchSpec: &patch, Err: err})
+			}
+		}
+	}
+	if patchErr != nil {
+		return patchErr
+	}
+
+	return nil
+}
+
+func validatePatch(patch PatchSpec, patchSrc Source) error {
+	if SourceIsDir(patchSrc) {
+		// Patch sources that use directory-backed sources require a subpath in the
+		// patch spec.
+		if isRoot(patch.Path) {
+			return errPatchRequiresSubpath
+		}
+		return nil
+	}
+
+	// File backed sources with a subpath in the patch spec is invalid since it is
+	// already a file, not a directory.
+	if !isRoot(patch.Path) {
+		return errPatchFileNoSubpath
+	}
 	return nil
 }
 

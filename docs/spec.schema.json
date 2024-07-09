@@ -522,6 +522,10 @@
 				"strip": {
 					"type": "integer",
 					"description": "Strip is the number of leading path components to strip from the patch.\nThe default is 1 which is typical of a git diff."
+				},
+				"path": {
+					"type": "string",
+					"description": "Optional subpath to the patch file inside the source\nThis is only useful for directory-backed sources."
 				}
 			},
 			"additionalProperties": false,

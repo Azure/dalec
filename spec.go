@@ -107,6 +107,9 @@ type PatchSpec struct {
 	// Strip is the number of leading path components to strip from the patch.
 	// The default is 1 which is typical of a git diff.
 	Strip *int `yaml:"strip,omitempty" json:"strip,omitempty"`
+	// Optional subpath to the patch file inside the source
+	// This is only useful for directory-backed sources.
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 }
 
 // ChangelogEntry is an entry in the changelog.

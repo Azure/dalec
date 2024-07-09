@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/testenv"
+	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 )
@@ -128,6 +129,23 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 	})
 
 	t.Run("container", func(t *testing.T) {
+		const src2Patch3File = "patch3"
+		src2Patch3Content := []byte(`
+diff --git a/file3 b/file3
+new file mode 100700
+index 0000000..5260cb1
+--- /dev/null
++++ b/file3
+@@ -0,0 +1,3 @@
++#!/usr/bin/env bash
++
++echo "Added another new file"
+`)
+		src2Patch3Context := llb.Scratch().File(
+			llb.Mkfile(src2Patch3File, 0o600, src2Patch3Content),
+		)
+		src2Patch3ContextName := "patch-context"
+
 		spec := dalec.Spec{
 			Name:        "test-container-build",
 			Version:     "0.0.1",
@@ -172,8 +190,10 @@ index 84d55c5..22b9b11 100644
 				},
 				"src2-patch2": {
 					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents: `
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"the-patch": {
+									Contents: `
 diff --git a/file2 b/file2
 new file mode 100700
 index 0000000..5260cb1
@@ -184,14 +204,22 @@ index 0000000..5260cb1
 +
 +echo "Added a new file"
 `,
+								},
+							},
 						},
+					},
+				},
+				"src2-patch3": {
+					Context: &dalec.SourceContext{
+						Name: src2Patch3ContextName,
 					},
 				},
 			},
 			Patches: map[string][]dalec.PatchSpec{
 				"src2": {
 					{Source: "src2-patch1"},
-					{Source: "src2-patch2"},
+					{Source: "src2-patch2", Path: "the-patch"},
+					{Source: "src2-patch3", Path: src2Patch3File},
 				},
 			},
 
@@ -233,6 +261,17 @@ index 0000000..5260cb1
 					},
 					{
 						Command: "grep 'Added a new file' ./src2/file2",
+					},
+					{
+						// file added by patch
+						Command: "test -f ./src2/file3",
+					},
+					{
+						// file added by patch
+						Command: "test -x ./src2/file3",
+					},
+					{
+						Command: "grep 'Added another new file' ./src2/file3",
 					},
 					{
 						// Test that a multiline command works with env vars
@@ -308,7 +347,11 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
+			sr := newSolveRequest(
+				withSpec(ctx, t, &spec),
+				withBuildTarget(testConfig.BuildTarget),
+				withBuildContext(ctx, t, src2Patch3ContextName, src2Patch3Context),
+			)
 			sr.Evaluate = true
 
 			solveT(ctx, t, gwc, sr)
@@ -322,8 +365,8 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			sr = newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
-			sr.Evaluate = true
+			// update the spec in the solve reuqest
+			withSpec(ctx, t, &spec)(&sr)
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {
 				t.Fatal("expected test spec to run with error but got none")

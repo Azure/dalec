@@ -268,34 +268,28 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
 	})
 
-	for _, name := range keys {
-		src := w.Spec.Sources[name]
+	// Extract all the sources from the rpm source dir
+	for _, key := range keys {
+		if !dalec.SourceIsDir(w.Spec.Sources[key]) {
+			// This is a file, nothing to extract, but we need to put it into place
+			// in  the rpm build dir
+			fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", key)
+			continue
+		}
+		// This is a directory source so it needs to be untarred into the rpm build dir.
+		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", key)
+		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", key, key)
+	}
+	prepareGomods()
 
-		err := func(name string, src dalec.Source) error {
-			if patches[name] {
-				// This source is a patch so we don't need to set anything up
-				return nil
-			}
-
-			isDir := dalec.SourceIsDir(src)
-
-			if !isDir {
-				fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", name)
-				return nil
-			}
-
-			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", name)
-			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", name, name)
-
-			for _, patch := range w.Spec.Patches[name] {
-				fmt.Fprintf(b, "patch -d %q -p%d -s < \"%%{_sourcedir}/%s\"\n", name, *patch.Strip, patch.Source)
-			}
-
-			prepareGomods()
-			return nil
-		}(name, src)
-		if err != nil {
-			return nil, fmt.Errorf("error preparing source %s: %w", name, err)
+	// Apply patches to all sources.
+	// Note: These are applied based on the key sorting algorithm (lexicographic).
+	//  Using one patch to patch another patch is not supported, except that it may
+	//  occur if they happen to be sorted lexicographically.
+	patchKeys := dalec.SortMapKeys(w.Spec.Patches)
+	for _, key := range patchKeys {
+		for _, patch := range w.Spec.Patches[key] {
+			fmt.Fprintf(b, "patch -d %q -p%d -s --input \"%%{_builddir}/%s\"\n", key, *patch.Strip, filepath.Join(patch.Source, patch.Path))
 		}
 	}
 
