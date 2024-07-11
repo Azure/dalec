@@ -156,21 +156,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 		dalec.WithConstraints(opts...),
 	).AddMount(outputDir, llb.Scratch())
 
-	if frontend.SigningDisabled(client) {
-		return st, nil
-	}
-
-	signer := spec.GetSigner(targetKey)
-	if signer == nil {
-		return st, nil
-	}
-
-	signed, err := frontend.ForwardToSigner(ctx, client, signer, st)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return signed, nil
+	return frontend.MaybeSign(ctx, client, st, spec, targetKey)
 }
 
 func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {

@@ -135,7 +135,25 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
-func SigningDisabled(client gwclient.Client) bool {
+func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string) (llb.State, error) {
+	if signingDisabled(client) {
+		return st, nil
+	}
+
+	signer := spec.GetSigner(targetKey)
+	if signer == nil {
+		return st, nil
+	}
+
+	signed, err := forwardToSigner(ctx, client, signer, st)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	return signed, nil
+}
+
+func signingDisabled(client gwclient.Client) bool {
 	bopts := client.BuildOpts().Opts
 	v, ok := bopts["build-arg:DALEC_SKIP_SIGNING"]
 	if !ok {
@@ -150,7 +168,7 @@ func SigningDisabled(client gwclient.Client) bool {
 	return isDisabled
 }
 
-func ForwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
+func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
 	const (
 		sourceKey  = "source"
 		contextKey = "context"
