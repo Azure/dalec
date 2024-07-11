@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/moby/buildkit/client/llb"
@@ -369,6 +370,12 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 }
 
 func (s *Spec) GetSigner(targetKey string) (*PackageSigner, bool) {
+	if skipVal, ok := s.Args["DALEC_SKIP_SIGNING"]; ok {
+		if shouldSkip, err := strconv.ParseBool(skipVal); err == nil && shouldSkip {
+			return nil, false
+		}
+	}
+
 	if s.Targets != nil {
 		if t, ok := s.Targets[targetKey]; ok && hasValidSigner(t.PackageConfig) {
 			return t.PackageConfig.Signer, true
