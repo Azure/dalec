@@ -31,6 +31,10 @@ For container targets, only the artifacts within the container get signed.
 This will send the artifacts (`.rpm`, `.deb`, or `.exe`) to the
 signing frontend as the build context.
 
+Once a `signer` section has been aded to the spec, signing will be automatic.
+In order to disable signing when building specs that have a `signer` section,
+use the build arg `DALEC_SKIP_SIGNING=1`.
+
 The contract between dalec and the signing image is:
 
 1. The signing image will contain both the signing frontend, and any
