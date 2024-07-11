@@ -60,6 +60,37 @@ func (w azlinux3) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 	return dalec.WithRunOptions(tdnfInstall(&cfg, "3.0", pkgs), w.tdnfCacheMount(cfg.root))
 }
 
+func (w azlinux3) InstallWithReqs(pkgs []string, reqs [][]string, opts ...installOpt) installFunc {
+	// buildDeps := map[string][]string{}
+	// for i := range pkgs {
+	// 	buildDeps[pkgs[i]] = reqs[i]
+	// }
+
+	// // depsOnly is a simple dalec spec that only includes build dependencies and their constraints
+	// depsOnly := dalec.Spec{
+	// 	Name:        "azlinux3 build dependencies",
+	// 	Description: "Build dependencies for azlinux3",
+	// 	Version:     "0.1",
+	// 	Dependencies: &dalec.PackageDependencies{
+	// 		Build: buildDeps,
+	// 	},
+	// }
+
+	// return func(ctx context.Context, client gwclient.Client, sOpt dalec.SourceOpts) (llb.RunOption, error) {
+	// 	pg := dalec.ProgressGroup("Building container for build dependencies")
+
+	// 	// create an RPM with just the build dependencies, using our same base worker
+	// 	rpmDir, err := specToRpmLLB(ctx, w, client, &depsOnly, sOpt, "azlinux3", pg)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+
+	// 	return w.tdnfCacheMount(sOpt.Root), nil
+	// }
+
+	return nil
+}
+
 func (azlinux3) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {
 	_, _, dt, err := resolver.ResolveImageConfig(ctx, azlinux3DistrolessRef, sourceresolver.Opt{Platform: platform})
 	if err != nil {

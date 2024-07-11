@@ -20,6 +20,9 @@ type installConfig struct {
 	// this acts like installing to a chroot.
 	root string
 
+	// Additional mounts to add to the tdnf install command (useful if installing RPMS which are mounted to a local directory)
+	mounts []llb.RunOption
+
 	constraints []llb.ConstraintsOpt
 }
 
@@ -27,6 +30,12 @@ type installOpt func(*installConfig)
 
 func noGPGCheck(cfg *installConfig) {
 	cfg.noGPGCheck = true
+}
+
+func withMounts(opts ...llb.RunOption) installOpt {
+	return func(cfg *installConfig) {
+		cfg.mounts = append(cfg.mounts, opts...)
+	}
 }
 
 func withManifests(cfg *installConfig) {
@@ -118,5 +127,7 @@ func tdnfInstall(cfg *installConfig, relVer string, pkgs []string) llb.RunOption
 	}
 
 	runOpts = append(runOpts, dalec.ShArgs(cmdArgs))
+	runOpts = append(runOpts, cfg.mounts...)
+
 	return dalec.WithRunOptions(runOpts...)
 }
