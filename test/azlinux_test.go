@@ -399,10 +399,6 @@ echo "$BAR" > bar.txt
 			t.Parallel()
 
 			spec := newSpec()
-			spec.Args = map[string]string{
-				"DALEC_SKIP_SIGNING": "1",
-			}
-
 			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
 		})
 	})

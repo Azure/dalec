@@ -3,6 +3,7 @@ package frontend
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
@@ -132,6 +133,21 @@ func toDockerfile(ctx context.Context, bctx llb.State, dt []byte, spec *dalec.So
 func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOpt) (*llb.Definition, error) {
 	st := llb.Scratch().File(llb.Mkfile(dockerui.DefaultDockerfileName, 0600, dt), opts...)
 	return st.Marshal(ctx)
+}
+
+func SigningDisabled(client gwclient.Client) bool {
+	bopts := client.BuildOpts().Opts
+	v, ok := bopts["build-arg:DALEC_SKIP_SIGNING"]
+	if !ok {
+		return false
+	}
+
+	isDisabled, err := strconv.ParseBool(v)
+	if err != nil {
+		return false
+	}
+
+	return isDisabled
 }
 
 func ForwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {

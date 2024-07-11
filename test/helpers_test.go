@@ -191,6 +191,12 @@ func withPlatform(platform platforms.Platform) srOpt {
 	}
 }
 
+func withBuildArg(k, v string) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		sr.FrontendOpt["build-arg:"+k] = v
+	}
+}
+
 func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {
 	return func(sr *gwclient.SolveRequest) {
 		specToSolveRequest(ctx, t, spec, sr)
