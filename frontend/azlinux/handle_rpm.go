@@ -73,13 +73,5 @@ func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *d
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 	st := rpm.Build(br, base, specPath, opts...)
 
-	if signer, ok := spec.GetSigner(targetKey); ok {
-		signed, err := frontend.ForwardToSigner(ctx, client, signer, st)
-		if err != nil {
-			return llb.Scratch(), err
-		}
-		st = signed
-	}
-
-	return st, nil
+	return frontend.MaybeSign(ctx, client, st, spec, targetKey)
 }

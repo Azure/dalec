@@ -36,3 +36,17 @@ func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string) teste
 		}
 	}
 }
+
+func distroSkipSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string) testenv.TestFunc {
+	return func(ctx context.Context, gwc gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(buildTarget), withBuildArg("DALEC_SKIP_SIGNING", "1"))
+		res := solveT(ctx, t, gwc, sr)
+
+		if _, err := maybeReadFile(ctx, "/target", res); err == nil {
+			t.Fatalf("signer signed even though signing was disabled")
+		}
+		if _, err := maybeReadFile(ctx, "/config.json", res); err == nil {
+			t.Fatalf("signer signed even though signing was disabled")
+		}
+	}
+}

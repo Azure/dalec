@@ -394,6 +394,13 @@ echo "$BAR" > bar.txt
 			}
 			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
 		})
+
+		t.Run("with skip signing", func(t *testing.T) {
+			t.Parallel()
+
+			spec := newSpec()
+			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
+		})
 	})
 
 	t.Run("test systemd unit", func(t *testing.T) {

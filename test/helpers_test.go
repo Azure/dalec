@@ -82,6 +82,25 @@ func readFile(ctx context.Context, t *testing.T, name string, res *gwclient.Resu
 	return dt
 }
 
+func maybeReadFile(ctx context.Context, name string, res *gwclient.Result) ([]byte, error) {
+	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+		Filename: name,
+	})
+	if err != nil {
+		stat, _ := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+			Path: filepath.Dir(name),
+		})
+		return nil, fmt.Errorf("error reading file %q: %v, dir contents: \n%s", name, err, dirStatAsStringer(stat))
+	}
+
+	return dt, nil
+}
+
 func statFile(ctx context.Context, t *testing.T, name string, res *gwclient.Result) {
 	t.Helper()
 
@@ -169,6 +188,12 @@ func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
 func withPlatform(platform platforms.Platform) srOpt {
 	return func(sr *gwclient.SolveRequest) {
 		sr.FrontendOpt["platform"] = platforms.Format(platform)
+	}
+}
+
+func withBuildArg(k, v string) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		sr.FrontendOpt["build-arg:"+k] = v
 	}
 }
 
