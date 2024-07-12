@@ -16,7 +16,7 @@ const (
 	Mariner2TargetKey     = "mariner2"
 	tdnfCacheNameMariner2 = "mariner2-tdnf-cache"
 
-	mariner2Ref           = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+	mariner2Ref           = "ghcr.io/azure/dalec/dalec-mariner2-worker:latest"
 	mariner2DistrolessRef = "mcr.microsoft.com/cbl-mariner/distroless/base:2.0"
 )
 
