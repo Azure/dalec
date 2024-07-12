@@ -12,6 +12,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	"gotest.tools/v3/assert"
 )
 
 func TestWindows(t *testing.T) {
@@ -258,10 +259,10 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	runTest := func(t *testing.T, f testenv.TestFunc) {
+	runTest := func(t *testing.T, f testenv.TestFunc, opts ...testenv.TestRunnerOpt) {
 		t.Helper()
 		ctx := startTestSpan(baseCtx, t)
-		testEnv.RunTest(ctx, t, f)
+		testEnv.RunTest(ctx, t, f, opts...)
 	}
 
 	t.Run("test windows signing", func(t *testing.T) {
@@ -343,6 +344,18 @@ echo "$BAR" > bar.txt
 
 	t.Run("test skipping windows signing", func(t *testing.T) {
 		t.Parallel()
+
+		var found bool
+		handleStatus := func(status *testenv.SolveStatus) {
+
+			for _, w := range status.Warnings {
+				if strings.Contains(string(w.Short), "Signing disabled by build-arg") {
+					found = true
+					return
+				}
+			}
+		}
+
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := fillMetadata("foo", &dalec.Spec{
 				Targets: map[string]dalec.Target{
@@ -412,7 +425,8 @@ echo "$BAR" > bar.txt
 			if _, err = maybeReadFile(ctx, "/config.json", res); err == nil {
 				t.Fatalf("signing took place even though signing was disabled")
 			}
-		})
+		}, testenv.WithSolveStatusFn(handleStatus))
+		assert.Assert(t, found, "Signing disabled warning message not emitted")
 	})
 
 	t.Run("go module", func(t *testing.T) {
