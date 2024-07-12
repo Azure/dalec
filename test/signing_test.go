@@ -12,11 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string) testenv.TestFunc {
+func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string, extraSrOpts ...srOpt) testenv.TestFunc {
 	return func(ctx context.Context, gwc gwclient.Client) {
 		topTgt, _, _ := strings.Cut(buildTarget, "/")
 
-		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(buildTarget))
+		srOpts := []srOpt{
+			withSpec(ctx, t, spec),
+			withBuildTarget(buildTarget),
+		}
+		srOpts = append(srOpts, extraSrOpts...)
+
+		sr := newSolveRequest(srOpts...)
 		res := solveT(ctx, t, gwc, sr)
 
 		tgt := readFile(ctx, t, "/target", res)
@@ -30,9 +36,11 @@ func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string) teste
 			t.Fatal(fmt.Errorf("configuration incorrect"))
 		}
 
-		for k, v := range spec.PackageConfig.Signer.Args {
-			dt := readFile(ctx, t, "/env/"+k, res)
-			assert.Equal(t, v, string(dt))
+		if spec.PackageConfig != nil && spec.PackageConfig.Signer != nil {
+			for k, v := range spec.PackageConfig.Signer.Args {
+				dt := readFile(ctx, t, "/env/"+k, res)
+				assert.Equal(t, v, string(dt))
+			}
 		}
 	}
 }

@@ -303,13 +303,8 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			zipperSpec := fillMetadata("bar", &dalec.Spec{
-				Dependencies: &dalec.PackageDependencies{
-					Runtime: map[string]dalec.PackageConstraints{
-						"unzip": {},
-					},
-				},
-			})
+			tgt := readFile(ctx, t, "/target", res)
+			cfg := readFile(ctx, t, "/config.json", res)
 
 			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
 			zipper := reqToState(ctx, gwc, sr, t)
@@ -484,6 +479,46 @@ echo "$BAR" > bar.txt
 			solveT(ctx, t, client, req)
 		})
 	})
+}
+
+func removeSigningConfig(spec *dalec.Spec) {
+	if _, ok := spec.Targets["windowscross"]; ok {
+		pc := spec.Targets["windowscross"].PackageConfig
+		if pc != nil {
+			pc.Signer = nil
+		}
+	}
+
+	if spec.PackageConfig != nil {
+		spec.PackageConfig.Signer = nil
+	}
+}
+
+func prepareSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
+	zipper := getZipperState(ctx, t, gwc)
+
+	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget("windowscross/zip")}
+	srOpts = append(srOpts, extraSrOpts...)
+
+	sr := newSolveRequest(srOpts...)
+	st := reqToState(ctx, gwc, sr, t)
+	st = zipper.Run(llb.Args([]string{"bash", "-c", `for f in ./*.zip; do unzip "$f"; done`}), llb.Dir("/tmp/mnt")).
+		AddMount("/tmp/mnt", st)
+	return st
+}
+
+func getZipperState(ctx context.Context, t *testing.T, gwc gwclient.Client) llb.State {
+	zipperSpec := fillMetadata("bar", &dalec.Spec{
+		Dependencies: &dalec.PackageDependencies{
+			Runtime: map[string]dalec.PackageConstraints{
+				"unzip": {},
+			},
+		},
+	})
+
+	sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
+	zipper := reqToState(ctx, gwc, sr, t)
+	return zipper
 }
 
 func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {

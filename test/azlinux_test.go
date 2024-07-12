@@ -440,6 +440,19 @@ echo "$BAR" > bar.txt
 			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
 		})
 
+		t.Run("with signing build context", func(t *testing.T) {
+			spec := newSpec()
+			spec.PackageConfig.Signer = nil
+
+			signConfig := llb.Scratch().File(llb.Mkfile("dalec_signing_config.yml", 0o400, []byte(`
+signer:
+  image: `+phonySignerRef+`
+  cmdline: /signer
+`)))
+
+			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget, withBuildContext(ctx, t, "dalec_signing_config", signConfig)))
+		})
+
 		t.Run("with skip signing", func(t *testing.T) {
 			t.Parallel()
 
