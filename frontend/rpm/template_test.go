@@ -290,6 +290,7 @@ fi
 %doc %{_docdir}/test-pkg/docs/README
 
 `
+
 		assert.Equal(t, want, got)
 	})
 
@@ -524,24 +525,48 @@ func TestTemplate_Requires(t *testing.T) {
 			// note: I've prefixed these packages with a/b/c for sorting purposes
 			// Since the underlying code will sort packages this just makes it
 			// simpler to read for tests.
-			Build: map[string][]string{
+			Build: map[string]dalec.PackageConstraints{
 				"a-lib-no-constraints": {},
 				"b-lib-one-constraints": {
-					"< 2.0",
+					Version: []string{"< 2.0"},
 				},
 				"c-lib-multiple-constraints": {
-					"< 2.0",
-					">= 1.0",
+					Version: []string{
+						"< 2.0",
+						">= 1.0",
+					},
+				},
+				"d-lib-single-arch-constraints": {
+					Arch: []string{"arm64"},
+				},
+				"e-lib-multi-arch-constraints": {
+					Arch: []string{"amd64", "arm64"},
+				},
+				"f-lib-multi-arch-multi-version-constraints": {
+					Arch:    []string{"amd64", "arm64"},
+					Version: []string{"< 2.0", ">= 1.0"},
 				},
 			},
-			Runtime: map[string][]string{
+			Runtime: map[string]dalec.PackageConstraints{
 				"a-no-constraints": {},
 				"b-one-constraints": {
-					"< 2.0",
+					Version: []string{"< 2.0"},
 				},
 				"c-multiple-constraints": {
-					"< 2.0",
-					">= 1.0",
+					Version: []string{
+						"< 2.0",
+						">= 1.0",
+					},
+				},
+				"d-single-arch-constraints": {
+					Arch: []string{"arm64"},
+				},
+				"e-multi-arch-constraints": {
+					Arch: []string{"amd64", "arm64"},
+				},
+				"f-multi-arch-multi-version-constraints": {
+					Arch:    []string{"amd64", "arm64"},
+					Version: []string{"< 2.0", ">= 1.0"},
 				},
 			},
 		},
@@ -554,11 +579,45 @@ func TestTemplate_Requires(t *testing.T) {
 BuildRequires: b-lib-one-constraints < 2.0
 BuildRequires: c-lib-multiple-constraints < 2.0
 BuildRequires: c-lib-multiple-constraints >= 1.0
+%ifarch arm64
+BuildRequires: d-lib-single-arch-constraints
+%endif
+%ifarch amd64
+BuildRequires: e-lib-multi-arch-constraints
+%endif
+%ifarch arm64
+BuildRequires: e-lib-multi-arch-constraints
+%endif
+%ifarch amd64
+BuildRequires: f-lib-multi-arch-multi-version-constraints < 2.0
+BuildRequires: f-lib-multi-arch-multi-version-constraints >= 1.0
+%endif
+%ifarch arm64
+BuildRequires: f-lib-multi-arch-multi-version-constraints < 2.0
+BuildRequires: f-lib-multi-arch-multi-version-constraints >= 1.0
+%endif
 
 Requires: a-no-constraints
 Requires: b-one-constraints < 2.0
 Requires: c-multiple-constraints < 2.0
 Requires: c-multiple-constraints >= 1.0
+%ifarch arm64
+Requires: d-single-arch-constraints
+%endif
+%ifarch amd64
+Requires: e-multi-arch-constraints
+%endif
+%ifarch arm64
+Requires: e-multi-arch-constraints
+%endif
+%ifarch amd64
+Requires: f-multi-arch-multi-version-constraints < 2.0
+Requires: f-multi-arch-multi-version-constraints >= 1.0
+%endif
+%ifarch arm64
+Requires: f-multi-arch-multi-version-constraints < 2.0
+Requires: f-multi-arch-multi-version-constraints >= 1.0
+%endif
 
 `
 
@@ -593,7 +652,6 @@ A helpful tool
 %install
 
 %files
-
 `)
 
 	assert.Equal(t, expect, actual)

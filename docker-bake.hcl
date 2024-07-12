@@ -173,8 +173,8 @@ target "deps-only" {
     dockerfile-inline = <<EOT
 dependencies:
     runtime:
-        patch: []
-        bash: []
+        patch: {}
+        bash: {}
     EOT 
     args = {
         "BUILDKIT_SYNTAX" = FRONTEND_REF
