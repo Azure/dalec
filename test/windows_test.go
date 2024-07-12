@@ -341,6 +341,80 @@ echo "$BAR" > bar.txt
 		})
 	})
 
+	t.Run("test skipping windows signing", func(t *testing.T) {
+		t.Parallel()
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := fillMetadata("foo", &dalec.Spec{
+				Targets: map[string]dalec.Target{
+					"windowscross": {
+						PackageConfig: &dalec.PackageConfig{
+							Signer: &dalec.PackageSigner{
+								Frontend: &dalec.Frontend{
+									Image: phonySignerRef,
+								},
+							},
+						},
+					},
+				},
+				Sources: map[string]dalec.Source{
+					"foo": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
+							},
+						},
+					},
+				},
+				Build: dalec.ArtifactBuild{
+					Steps: []dalec.BuildStep{
+						{
+							Command: "/bin/true",
+						},
+					},
+				},
+				Artifacts: dalec.Artifacts{
+					Binaries: map[string]dalec.ArtifactConfig{
+						"foo": {},
+					},
+				},
+			})
+
+			zipperSpec := fillMetadata("bar", &dalec.Spec{
+				Dependencies: &dalec.PackageDependencies{
+					Runtime: map[string][]string{
+						"unzip": {},
+					},
+				},
+			})
+
+			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
+			zipper := reqToState(ctx, gwc, sr, t)
+
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"), withBuildArg("DALEC_SKIP_SIGNING", "1"))
+			st := reqToState(ctx, gwc, sr, t)
+
+			st = zipper.Run(llb.Args([]string{"bash", "-c", `for f in ./*.zip; do unzip "$f"; done`}), llb.Dir("/tmp/mnt")).
+				AddMount("/tmp/mnt", st)
+
+			def, err := st.Marshal(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
+				Definition: def.ToPB(),
+			})
+
+			if _, err := maybeReadFile(ctx, "/target", res); err == nil {
+				t.Fatalf("signing took place even though signing was disabled")
+			}
+
+			if _, err = maybeReadFile(ctx, "/config.json", res); err == nil {
+				t.Fatalf("signing took place even though signing was disabled")
+			}
+		})
+	})
+
 	t.Run("go module", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
