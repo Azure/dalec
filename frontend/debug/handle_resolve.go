@@ -36,6 +36,6 @@ func Resolve(ctx context.Context, client gwclient.Client) (*gwclient.Result, err
 			return nil, nil, err
 		}
 
-		return ref, nil, err
+		return ref, &dalec.DockerImageSpec{}, err
 	})
 }
