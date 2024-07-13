@@ -390,7 +390,7 @@ func verifySigning(ctx context.Context, t *testing.T, res *gwclient.Result) {
 func prepareSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
 	zipper := getZipperState(ctx, t, gwc)
 
-	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget("windowscross/zip")}
+	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"), withWindowsAmd64}
 	srOpts = append(srOpts, extraSrOpts...)
 
 	sr := newSolveRequest(srOpts...)
