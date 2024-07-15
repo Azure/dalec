@@ -470,7 +470,15 @@ signer:
 			spec := newSpec()
 			spec.PackageConfig.Signer = nil
 
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget, withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml")))
+			signConfig := llb.Scratch().
+				File(llb.Mkdir("/test/fixtures/signer/", 0o755, llb.WithParents(true))).
+				File(llb.Mkfile("/test/fixtures/signer/sign_config.yml", 0o400, []byte(`
+signer:
+  image: `+phonySignerRef+`
+  cmdline: /signer
+`)))
+
+			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget, withMainContext(ctx, t, signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml")))
 		})
 
 		t.Run("with skip signing", func(t *testing.T) {

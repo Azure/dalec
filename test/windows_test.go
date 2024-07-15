@@ -381,7 +381,7 @@ signer:
   cmdline: /signer
 `)))
 
-			st := prepareSigningState(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"))
+			st := prepareSigningState(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "unusual_place.yml"))
 
 			def, err := st.Marshal(ctx)
 			if err != nil {
@@ -411,7 +411,15 @@ signer:
 			spec := newSpec()
 			removeSigningConfig(spec)
 
-			st := prepareSigningState(ctx, t, gwc, spec, withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"))
+			signConfig := llb.Scratch().
+				File(llb.Mkdir("/test/fixtures/signer/", 0o755, llb.WithParents(true))).
+				File(llb.Mkfile("/test/fixtures/signer/sign_config.yml", 0o400, []byte(`
+signer:
+  image: `+phonySignerRef+`
+  cmdline: /signer
+`)))
+
+			st := prepareSigningState(ctx, t, gwc, spec, withMainContext(ctx, t, signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"))
 
 			def, err := st.Marshal(ctx)
 			if err != nil {
