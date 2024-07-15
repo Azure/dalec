@@ -265,55 +265,87 @@ echo "$BAR" > bar.txt
 		testEnv.RunTest(ctx, t, f, opts...)
 	}
 
+	newSpec := func() *dalec.Spec {
+		spec := fillMetadata("foo", &dalec.Spec{
+			Targets: map[string]dalec.Target{
+				"windowscross": {
+					PackageConfig: &dalec.PackageConfig{
+						Signer: &dalec.PackageSigner{
+							Frontend: &dalec.Frontend{
+								Image: phonySignerRef,
+							},
+						},
+					},
+				},
+			},
+			Sources: map[string]dalec.Source{
+				"foo": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
+						},
+					},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{
+						Command: "/bin/true",
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"foo": {},
+				},
+			},
+		})
+
+		return spec
+	}
+
 	t.Run("test windows signing", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := fillMetadata("foo", &dalec.Spec{
-				Targets: map[string]dalec.Target{
-					"windowscross": {
-						PackageConfig: &dalec.PackageConfig{
-							Signer: &dalec.PackageSigner{
-								Frontend: &dalec.Frontend{
-									Image: phonySignerRef,
-								},
-							},
-						},
-					},
-				},
-				Sources: map[string]dalec.Source{
-					"foo": {
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
-							},
-						},
-					},
-				},
-				Build: dalec.ArtifactBuild{
-					Steps: []dalec.BuildStep{
-						{
-							Command: "/bin/true",
-						},
-					},
-				},
-				Artifacts: dalec.Artifacts{
-					Binaries: map[string]dalec.ArtifactConfig{
-						"foo": {},
-					},
-				},
+			spec := newSpec()
+
+			st := prepareSigningState(ctx, t, gwc, spec)
+
+			def, err := st.Marshal(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
+				Definition: def.ToPB(),
 			})
 
 			tgt := readFile(ctx, t, "/target", res)
 			cfg := readFile(ctx, t, "/config.json", res)
 
-			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
-			zipper := reqToState(ctx, gwc, sr, t)
+			if string(tgt) != "windowscross" {
+				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
+			}
 
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"))
-			st := reqToState(ctx, gwc, sr, t)
+			if !strings.Contains(string(cfg), "windows") {
+				t.Fatal(fmt.Errorf("configuration incorrect"))
+			}
+		})
+	})
 
-			st = zipper.Run(llb.Args([]string{"bash", "-c", `for f in ./*.zip; do unzip "$f"; done`}), llb.Dir("/tmp/mnt")).
-				AddMount("/tmp/mnt", st)
+	t.Run("test signing with build context", func(t *testing.T) {
+		t.Parallel()
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := newSpec()
+			removeSigningConfig(spec)
+
+			signConfig := llb.Scratch().File(llb.Mkfile("dalec_signing_config.yml", 0o400, []byte(`
+signer:
+  image: `+phonySignerRef+`
+  cmdline: /signer
+`)))
+
+			st := prepareSigningState(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig))
 
 			def, err := st.Marshal(ctx)
 			if err != nil {
@@ -352,57 +384,8 @@ echo "$BAR" > bar.txt
 		}
 
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := fillMetadata("foo", &dalec.Spec{
-				Targets: map[string]dalec.Target{
-					"windowscross": {
-						PackageConfig: &dalec.PackageConfig{
-							Signer: &dalec.PackageSigner{
-								Frontend: &dalec.Frontend{
-									Image: phonySignerRef,
-								},
-							},
-						},
-					},
-				},
-				Sources: map[string]dalec.Source{
-					"foo": {
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
-							},
-						},
-					},
-				},
-				Build: dalec.ArtifactBuild{
-					Steps: []dalec.BuildStep{
-						{
-							Command: "/bin/true",
-						},
-					},
-				},
-				Artifacts: dalec.Artifacts{
-					Binaries: map[string]dalec.ArtifactConfig{
-						"foo": {},
-					},
-				},
-			})
-
-			zipperSpec := fillMetadata("bar", &dalec.Spec{
-				Dependencies: &dalec.PackageDependencies{
-					Runtime: map[string]dalec.PackageConstraints{
-						"unzip": {},
-					},
-				},
-			})
-
-			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
-			zipper := reqToState(ctx, gwc, sr, t)
-
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"), withBuildArg("DALEC_SKIP_SIGNING", "1"))
-			st := reqToState(ctx, gwc, sr, t)
-
-			st = zipper.Run(llb.Args([]string{"bash", "-c", `for f in ./*.zip; do unzip "$f"; done`}), llb.Dir("/tmp/mnt")).
-				AddMount("/tmp/mnt", st)
+			spec := newSpec()
+			st := prepareSigningState(ctx, t, gwc, spec, withBuildArg("DALEC_SKIP_SIGNING", "1"))
 
 			def, err := st.Marshal(ctx)
 			if err != nil {
@@ -539,7 +522,7 @@ func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveReque
 }
 
 func fillMetadata(fakename string, s *dalec.Spec) *dalec.Spec {
-	s.Name = "bar"
+	s.Name = fakename
 	s.Version = "0.0.1"
 	s.Description = "foo bar baz"
 	s.Website = "https://foo.bar.baz"
