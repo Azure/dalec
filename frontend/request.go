@@ -16,6 +16,9 @@ import (
 )
 
 const keySkipSigningArg = "DALEC_SKIP_SIGNING"
+const (
+	dalecSigningContext = "dalec_signing_config"
+)
 
 type solveRequestOpt func(*gwclient.SolveRequest) error
 
@@ -137,15 +140,74 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
+func tryGetNamedContextSigning(ctx context.Context, client gwclient.Client) (*dalec.PackageSigner, error) {
+	bopts := client.BuildOpts().Opts
+	if _, ok := bopts["context:"+dalecSigningContext]; !ok {
+		return nil, nil
+	}
+
+	dc, err := dockerui.NewClient(client)
+	if err != nil {
+		return nil, err
+	}
+
+	signConfigState, _, err := dc.NamedContext(ctx, dalecSigningContext, dockerui.ContextOpt{})
+	if err != nil {
+		return nil, err
+	}
+
+	scDef, err := signConfigState.Marshal(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Solve(ctx, gwclient.SolveRequest{
+		Definition: scDef.ToPB(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+		Filename: "dalec_signing_config.yml",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var pc dalec.PackageConfig
+	if err := yaml.Unmarshal(dt, &pc); err != nil {
+		return nil, err
+	}
+
+	return pc.Signer, nil
+}
+
 func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string) (llb.State, error) {
 	if signingDisabled(client) {
 		Warn(ctx, client, st, "Signing disabled by build-arg "+keySkipSigningArg)
 		return st, nil
 	}
 
-	signer := spec.GetSigner(targetKey)
+	signer, err := tryGetNamedContextSigning(ctx, client)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
 	if signer == nil {
-		return st, nil
+		// fall back to siging config provided in spec
+		specSigner := spec.GetSigner(targetKey)
+		if specSigner == nil {
+			// i.e. there's no signing config. not in the build context, not in the spec.
+			return st, nil
+		}
+
+		signer = specSigner
 	}
 
 	signed, err := forwardToSigner(ctx, client, signer, st)
