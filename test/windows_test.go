@@ -381,7 +381,7 @@ signer:
   cmdline: /signer
 `)))
 
-			st := prepareSigningState(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/sign_config.yml"))
+			st := prepareSigningState(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"))
 
 			def, err := st.Marshal(ctx)
 			if err != nil {

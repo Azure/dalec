@@ -470,7 +470,7 @@ signer:
 			spec := newSpec()
 			spec.PackageConfig.Signer = nil
 
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget, withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/sign_config.yml")))
+			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget, withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml")))
 		})
 
 		t.Run("with skip signing", func(t *testing.T) {
