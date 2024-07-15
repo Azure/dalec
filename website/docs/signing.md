@@ -7,7 +7,22 @@ Available with Dalec release `v0.3.0` and later.
 Packages can be automatically signed using Dalec. To do this, you will
 need to provide a signing frontend. There is an example in the test
 code `test/signer/main.go`. Once that signing image has been built and
-tagged, the following can be added to the spec to trigger the signing
+tagged, you need to tell dalec which signing image to use. You can do this
+in a few different ways:
+
+1. Provide the signing config in the spec, under
+   `targets.[target].package_config.signer` or `.package_config.signer`
+1. Provide a build context with the exact name `dalec_signing_config` which
+   points to a directory containing a file with the exact name
+   `dalec_signing_config.yml`
+1. Provide a build context as above, but with a custom path for the config, by
+   using the build arg `DALEC_SIGNING_CONFIG_PATH`. This path will be relative
+   to the root of the build context.
+1. Provide a custom path for the config on your local filesystem, by using the
+   build arg `DALEC_SIGNING_CONFIG_PATH`. This path can be absolute, or
+   relative to the context location from the `docker build` invocation.
+
+In most cases, you will add it to the spec directly to trigger the signing
 operation:
 
 ```yaml
