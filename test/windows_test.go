@@ -369,6 +369,72 @@ signer:
 		})
 	})
 
+	t.Run("test signing with path arg and build context", func(t *testing.T) {
+		t.Parallel()
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := newSpec()
+			removeSigningConfig(spec)
+
+			signConfig := llb.Scratch().File(llb.Mkfile("/unusual_place.yml", 0o400, []byte(`
+signer:
+  image: `+phonySignerRef+`
+  cmdline: /signer
+`)))
+
+			st := prepareSigningState(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/sign_config.yml"))
+
+			def, err := st.Marshal(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
+				Definition: def.ToPB(),
+			})
+
+			tgt := readFile(ctx, t, "/target", res)
+			cfg := readFile(ctx, t, "/config.json", res)
+
+			if string(tgt) != "windowscross" {
+				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
+			}
+
+			if !strings.Contains(string(cfg), "windows") {
+				t.Fatal(fmt.Errorf("configuration incorrect"))
+			}
+		})
+	})
+
+	t.Run("test signing with no build context and with path arg", func(t *testing.T) {
+		t.Parallel()
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := newSpec()
+			removeSigningConfig(spec)
+
+			st := prepareSigningState(ctx, t, gwc, spec, withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"))
+
+			def, err := st.Marshal(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
+				Definition: def.ToPB(),
+			})
+
+			tgt := readFile(ctx, t, "/target", res)
+			cfg := readFile(ctx, t, "/config.json", res)
+
+			if string(tgt) != "windowscross" {
+				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
+			}
+
+			if !strings.Contains(string(cfg), "windows") {
+				t.Fatal(fmt.Errorf("configuration incorrect"))
+			}
+		})
+	})
+
 	t.Run("test skipping windows signing", func(t *testing.T) {
 		t.Parallel()
 

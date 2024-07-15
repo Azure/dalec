@@ -453,6 +453,26 @@ signer:
 			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget, withBuildContext(ctx, t, "dalec_signing_config", signConfig)))
 		})
 
+		t.Run("with build arg and build context", func(t *testing.T) {
+			spec := newSpec()
+			spec.PackageConfig.Signer = nil
+
+			signConfig := llb.Scratch().File(llb.Mkfile("/unusual_place.yml", 0o400, []byte(`
+signer:
+  image: `+phonySignerRef+`
+  cmdline: /signer
+`)))
+
+			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget, withBuildContext(ctx, t, "dalec_signing_config", signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml")))
+		})
+
+		t.Run("with no build context and config path build arg", func(t *testing.T) {
+			spec := newSpec()
+			spec.PackageConfig.Signer = nil
+
+			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget, withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/sign_config.yml")))
+		})
+
 		t.Run("with skip signing", func(t *testing.T) {
 			t.Parallel()
 

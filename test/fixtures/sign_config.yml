@@ -1,0 +1,3 @@
+signer:
+  image: dalec/integration/signer/phony
+  cmdline: /signer
