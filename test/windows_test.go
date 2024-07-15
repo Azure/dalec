@@ -267,17 +267,6 @@ echo "$BAR" > bar.txt
 
 	newSpec := func() *dalec.Spec {
 		spec := fillMetadata("foo", &dalec.Spec{
-			Targets: map[string]dalec.Target{
-				"windowscross": {
-					PackageConfig: &dalec.PackageConfig{
-						Signer: &dalec.PackageSigner{
-							Frontend: &dalec.Frontend{
-								Image: phonySignerRef,
-							},
-						},
-					},
-				},
-			},
 			Sources: map[string]dalec.Source{
 				"foo": {
 					Inline: &dalec.SourceInline{
@@ -308,28 +297,19 @@ echo "$BAR" > bar.txt
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := newSpec()
-
-			st := prepareSigningState(ctx, t, gwc, spec)
-
-			def, err := st.Marshal(ctx)
-			if err != nil {
-				t.Fatal(err)
+			spec.Targets = map[string]dalec.Target{
+				"windowscross": {
+					PackageConfig: &dalec.PackageConfig{
+						Signer: &dalec.PackageSigner{
+							Frontend: &dalec.Frontend{
+								Image: phonySignerRef,
+							},
+						},
+					},
+				},
 			}
 
-			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-
-			tgt := readFile(ctx, t, "/target", res)
-			cfg := readFile(ctx, t, "/config.json", res)
-
-			if string(tgt) != "windowscross" {
-				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-			}
-
-			if !strings.Contains(string(cfg), "windows") {
-				t.Fatal(fmt.Errorf("configuration incorrect"))
-			}
+			runBuild(ctx, t, gwc, spec)
 		})
 	})
 
@@ -337,7 +317,6 @@ echo "$BAR" > bar.txt
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := newSpec()
-			removeSigningConfig(spec)
 
 			signConfig := llb.Scratch().File(llb.Mkfile("dalec_signing_config.yml", 0o400, []byte(`
 signer:
@@ -345,27 +324,7 @@ signer:
   cmdline: /signer
 `)))
 
-			st := prepareSigningState(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig))
-
-			def, err := st.Marshal(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-
-			tgt := readFile(ctx, t, "/target", res)
-			cfg := readFile(ctx, t, "/config.json", res)
-
-			if string(tgt) != "windowscross" {
-				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-			}
-
-			if !strings.Contains(string(cfg), "windows") {
-				t.Fatal(fmt.Errorf("configuration incorrect"))
-			}
+			runBuild(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig))
 		})
 	})
 
@@ -373,7 +332,6 @@ signer:
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := newSpec()
-			removeSigningConfig(spec)
 
 			signConfig := llb.Scratch().File(llb.Mkfile("/unusual_place.yml", 0o400, []byte(`
 signer:
@@ -381,27 +339,7 @@ signer:
   cmdline: /signer
 `)))
 
-			st := prepareSigningState(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "unusual_place.yml"))
-
-			def, err := st.Marshal(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-
-			tgt := readFile(ctx, t, "/target", res)
-			cfg := readFile(ctx, t, "/config.json", res)
-
-			if string(tgt) != "windowscross" {
-				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-			}
-
-			if !strings.Contains(string(cfg), "windows") {
-				t.Fatal(fmt.Errorf("configuration incorrect"))
-			}
+			runBuild(ctx, t, gwc, spec, withBuildContext(ctx, t, "dalec_signing_config", signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "unusual_place.yml"))
 		})
 	})
 
@@ -409,7 +347,6 @@ signer:
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := newSpec()
-			removeSigningConfig(spec)
 
 			signConfig := llb.Scratch().
 				File(llb.Mkdir("/test/fixtures/signer/", 0o755, llb.WithParents(true))).
@@ -419,27 +356,7 @@ signer:
   cmdline: /signer
 `)))
 
-			st := prepareSigningState(ctx, t, gwc, spec, withMainContext(ctx, t, signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"))
-
-			def, err := st.Marshal(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-
-			tgt := readFile(ctx, t, "/target", res)
-			cfg := readFile(ctx, t, "/config.json", res)
-
-			if string(tgt) != "windowscross" {
-				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-			}
-
-			if !strings.Contains(string(cfg), "windows") {
-				t.Fatal(fmt.Errorf("configuration incorrect"))
-			}
+			runBuild(ctx, t, gwc, spec, withMainContext(ctx, t, signConfig), withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"))
 		})
 	})
 
@@ -538,16 +455,31 @@ signer:
 	})
 }
 
-func removeSigningConfig(spec *dalec.Spec) {
-	if _, ok := spec.Targets["windowscross"]; ok {
-		pc := spec.Targets["windowscross"].PackageConfig
-		if pc != nil {
-			pc.Signer = nil
-		}
+func runBuild(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, srOpts ...srOpt) {
+	st := prepareSigningState(ctx, t, gwc, spec, srOpts...)
+
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if spec.PackageConfig != nil {
-		spec.PackageConfig.Signer = nil
+	res := solveT(ctx, t, gwc, gwclient.SolveRequest{
+		Definition: def.ToPB(),
+	})
+
+	verifySigning(ctx, t, res)
+}
+
+func verifySigning(ctx context.Context, t *testing.T, res *gwclient.Result) {
+	tgt := readFile(ctx, t, "/target", res)
+	cfg := readFile(ctx, t, "/config.json", res)
+
+	if string(tgt) != "windowscross" {
+		t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
+	}
+
+	if !strings.Contains(string(cfg), "windows") {
+		t.Fatal(fmt.Errorf("configuration incorrect"))
 	}
 }
 
