@@ -19,6 +19,7 @@ import (
 const keySkipSigningArg = "DALEC_SKIP_SIGNING"
 const (
 	dalecSigningContext = "dalec_signing_config"
+	defaultConfigPath   = "/dalec_signing_config.yml"
 )
 
 type solveRequestOpt func(*gwclient.SolveRequest) error
@@ -195,7 +196,8 @@ func tryGetNamedContextSigning(ctx context.Context, client gwclient.Client, conf
 		Filename: configPath,
 	})
 	if err != nil {
-		if !customSignCtxPresent {
+		if !customSignCtxPresent && configPath == defaultConfigPath {
+			// no custom context was provided, nor was a config path provided
 			return nil, nil
 		}
 
@@ -243,7 +245,6 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 }
 
 func getSignConfigPath(client gwclient.Client) string {
-	const defaultConfigPath = "/dalec_signing_config.yml"
 	configPath := defaultConfigPath
 
 	userConfigPath := getUserSignConfigPath(client)
