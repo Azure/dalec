@@ -52,24 +52,42 @@ func handleRPM(w worker) gwclient.BuildFunc {
 	}
 }
 
-func installBuildDeps(w worker, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return func(in llb.State) llb.State {
-		deps := spec.GetBuildDeps(targetKey)
-		if len(deps) == 0 {
-			return in
-		}
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-
-		return in.Run(w.Install(deps, installWithConstraints(opts)), dalec.WithConstraints(opts...)).Root()
+func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	deps := spec.GetBuildDeps(targetKey)
+	if len(deps) == 0 {
+		return func(in llb.State) llb.State { return in }, nil
 	}
+
+	sOpt, err := frontend.SourceOptFromClient(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	opts = append(opts, dalec.ProgressGroup("Install build deps"))
+
+	// TODO: does InstallWithReqs need to return another func() if the arguments to the func
+	// are immediately resolved at every call site?
+	rOpt, err := w.InstallWithReqs(deps, installWithConstraints(opts))(ctx, client, sOpt)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(in llb.State) llb.State {
+		return in.Run(rOpt, dalec.WithConstraints(opts...)).Root()
+	}, nil
 }
 
 func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	base, err := w.Base(sOpt, opts...)
-	base = base.With(installBuildDeps(w, spec, targetKey, opts...))
 	if err != nil {
 		return llb.Scratch(), err
 	}
+
+	installOpt, err := installBuildDeps(ctx, w, client, spec, targetKey, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	base = base.With(installOpt)
 
 	br, err := rpm.SpecToBuildrootLLB(base, spec, sOpt, targetKey, opts...)
 	if err != nil {

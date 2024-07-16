@@ -1115,6 +1115,47 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("pinned build dependencies", func(t *testing.T) {
+		// Ensure that packages that just install other packages give the expected output
+
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "some-meta-thing",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "meta test",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					"curl": {
+						// should pin to = 7.84.x
+						Version: []string{"> 7.83", "< 7.86"},
+					},
+				},
+			},
+
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{
+						Command: `[[ $(curl --version | head -n1 | awk '{{ print $2 }}') =~ 7\.84\.* ]]`,
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
+			_, err := res.SingleRef()
+
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	})
+
 	t.Run("custom worker", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)

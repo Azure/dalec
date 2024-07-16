@@ -51,50 +51,8 @@ func (w mariner2) Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.S
 	).Root(), nil
 }
 
-func (w mariner2) InstallWithReqs(pkgs []string, reqs [][]string, opts ...installOpt) installFunc {
-	buildDeps := map[string][]string{}
-	for i := range pkgs {
-		buildDeps[pkgs[i]] = reqs[i]
-	}
-
-	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
-	depsOnly := dalec.Spec{
-		Name:        "mariner2 build dependencies",
-		Description: "Build dependencies for mariner2",
-		Version:     "0.1",
-		Dependencies: &dalec.PackageDependencies{
-			Build: buildDeps,
-		},
-	}
-
-	return func(ctx context.Context, client gwclient.Client, sOpt dalec.SourceOpts) (llb.RunOption, error) {
-		pg := dalec.ProgressGroup("Building container for build dependencies")
-
-		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := specToRpmLLB(ctx, w, client, &depsOnly, sOpt, "mariner2", pg)
-		if err != nil {
-			return nil, err
-		}
-
-		// read the built RPMs (there should be a single one)
-		rpms, err := readRPMs(ctx, client, rpmDir)
-		if err != nil {
-			return nil, err
-		}
-
-		var opts []llb.ConstraintsOpt
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-
-		rpmMountDir := "/tmp/rpms"
-		fullRPMPaths := make([]string, 0, len(rpms))
-		for _, rpm := range rpms {
-			fullRPMPaths = append(fullRPMPaths, filepath.Join(rpmMountDir, rpm))
-		}
-
-		// install the RPM into the worker itself, using the same base worker
-		return w.Install(fullRPMPaths, noGPGCheck, installWithConstraints(opts),
-			withMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")))), nil
-	}
+func (w mariner2) InstallWithReqs(deps map[string]dalec.PackageConstraints, opts ...installOpt) installFunc {
+	return installWithReqs(w, deps, opts...)
 }
 
 func (w mariner2) Install(pkgs []string, opts ...installOpt) llb.RunOption {

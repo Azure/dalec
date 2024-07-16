@@ -128,7 +128,8 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 }
 
 func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
-	worker = worker.With(installBuildDeps(spec.GetBuildDeps(targetKey)))
+	deps := maps.Keys(spec.GetBuildDeps(targetKey))
+	worker = worker.With(installBuildDeps(deps))
 
 	sources, err := specToSourcesLLB(worker, spec, sOpt)
 	if err != nil {

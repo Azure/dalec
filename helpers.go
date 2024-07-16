@@ -285,7 +285,7 @@ func (s *Spec) GetRuntimeDeps(targetKey string) []string {
 
 }
 
-func (s *Spec) GetBuildDeps(targetKey string) []string {
+func (s *Spec) GetBuildDeps(targetKey string) map[string]PackageConstraints {
 	var deps *PackageDependencies
 	if t, ok := s.Targets[targetKey]; ok {
 		deps = t.Dependencies
@@ -298,7 +298,7 @@ func (s *Spec) GetBuildDeps(targetKey string) []string {
 		}
 	}
 
-	return SortMapKeys(deps.Build)
+	return deps.Build
 }
 
 func (s *Spec) GetTestDeps(targetKey string) []string {
