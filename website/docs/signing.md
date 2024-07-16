@@ -12,15 +12,18 @@ in a few different ways:
 
 1. Provide the signing config in the spec, under
    `targets.[target].package_config.signer` or `.package_config.signer`
-1. Provide a build context with the exact name `dalec_signing_config` which
-   points to a directory containing a file with the exact name
-   `dalec_signing_config.yml`
-1. Provide a build context as above, but with a custom path for the config, by
-   using the build arg `DALEC_SIGNING_CONFIG_PATH`. This path will be relative
-   to the root of the build context.
-1. Provide a custom path for the config on your local filesystem, by using the
-   build arg `DALEC_SIGNING_CONFIG_PATH`. This path can be absolute, or
-   relative to the context location from the `docker build` invocation.
+1. Provide the signing config via the `DALEC_SIGNING_CONFIG_PATH` build arg.
+   Otherwise, the signing config will be sought in the spec.
+1. The path name will be sough in the main (local) context, unless the build
+   arg `DALEC_SIGNING_CONFIG_CONTEXT_NAME` is provided, in which case the dalec
+   will seek the config in the context with the provided name *and at the
+   provided path*.
+
+Please note the order of precedence of the above-mentioned build args:
+1. Configs provided via a build context (whether local or custom) will always
+   take precedence over configs provided in the spec.
+1. The `DALEC_SKIP_SIGNING` build-arg takes precedence over all. If it is
+   truthy, no signing will take place.
 
 In most cases, you will add it to the spec directly to trigger the signing
 operation:
