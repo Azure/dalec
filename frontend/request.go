@@ -3,7 +3,6 @@ package frontend
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strconv"
 
 	"github.com/Azure/dalec"
@@ -17,10 +16,6 @@ import (
 )
 
 const keySkipSigningArg = "DALEC_SKIP_SIGNING"
-const (
-	dalecSigningContext = "dalec_signing_config"
-	defaultConfigPath   = "/dalec_signing_config.yml"
-)
 
 type solveRequestOpt func(*gwclient.SolveRequest) error
 
@@ -142,38 +137,17 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
-func signingContextPresent(bopts map[string]string) bool {
-	_, ok := bopts["context:"+dalecSigningContext]
-	return ok
-}
+func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cfgPath string, sOpt dalec.SourceOpts) (*dalec.PackageSigner, error) {
+	configCtxName := dockerui.DefaultLocalNameContext
+	if cn := getSignConfigCtxName(client); cn != "" {
+		configCtxName = cn
+	}
 
-func tryGetNamedContextSigning(ctx context.Context, client gwclient.Client, configPath string) (*dalec.PackageSigner, error) {
-	bopts := client.BuildOpts().Opts
-
-	dc, err := dockerui.NewClient(client)
+	sc := dalec.SourceContext{Name: configCtxName}
+	signConfigState, err := sc.AsState([]string{cfgPath}, nil, sOpt)
 	if err != nil {
 		return nil, err
 	}
-
-	customSignCtxPresent := signingContextPresent(bopts)
-
-	var (
-		sc *llb.State
-	)
-
-	if customSignCtxPresent {
-		sc, _, err = dc.NamedContext(ctx, dalecSigningContext, dockerui.ContextOpt{})
-	} else {
-		sc, err = dc.MainContext(ctx)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// When the main context is used, we don't want to solve with the full
-	// context and its dockerifle
-	dst := llb.Scratch().File(llb.Mkdir(filepath.Dir(configPath), 0o755, llb.WithParents(true)))
-	signConfigState := dst.File(llb.Copy(*sc, configPath, configPath))
 
 	scDef, err := signConfigState.Marshal(ctx)
 	if err != nil {
@@ -193,14 +167,9 @@ func tryGetNamedContextSigning(ctx context.Context, client gwclient.Client, conf
 	}
 
 	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
-		Filename: configPath,
+		Filename: cfgPath,
 	})
 	if err != nil {
-		if !customSignCtxPresent && configPath == defaultConfigPath {
-			// no custom context was provided, nor was a config path provided
-			return nil, nil
-		}
-
 		return nil, err
 	}
 
@@ -212,46 +181,29 @@ func tryGetNamedContextSigning(ctx context.Context, client gwclient.Client, conf
 	return pc.Signer, nil
 }
 
-func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string) (llb.State, error) {
+func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string, sOpt dalec.SourceOpts) (llb.State, error) {
 	if signingDisabled(client) {
 		Warn(ctx, client, st, "Signing disabled by build-arg "+keySkipSigningArg)
 		return st, nil
 	}
 
-	configPath := getSignConfigPath(client)
-
-	signer, err := tryGetNamedContextSigning(ctx, client, configPath)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	if signer == nil {
-		// fall back to siging config provided in spec
-		specSigner := spec.GetSigner(targetKey)
-		if specSigner == nil {
+	switch cfgPath := getUserSignConfigPath(client); cfgPath {
+	case "": // no custom path provided, check the spec
+		cfg := spec.GetSigner(targetKey)
+		if cfg == nil {
 			// i.e. there's no signing config. not in the build context, not in the spec.
 			return st, nil
 		}
 
-		signer = specSigner
+		return forwardToSigner(ctx, client, cfg, st)
+	default: // no custom path provided, check the spec
+		cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, sOpt)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		return forwardToSigner(ctx, client, cfg, st)
 	}
-
-	signed, err := forwardToSigner(ctx, client, signer, st)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return signed, nil
-}
-
-func getSignConfigPath(client gwclient.Client) string {
-	configPath := defaultConfigPath
-
-	userConfigPath := getUserSignConfigPath(client)
-	if userConfigPath != "" {
-		configPath = userConfigPath
-	}
-	return configPath
 }
 
 func signingDisabled(client gwclient.Client) bool {
@@ -270,13 +222,11 @@ func signingDisabled(client gwclient.Client) bool {
 }
 
 func getUserSignConfigPath(client gwclient.Client) string {
-	bopts := client.BuildOpts().Opts
-	v, ok := bopts["build-arg:DALEC_SIGNING_CONFIG_PATH"]
-	if !ok {
-		return ""
-	}
+	return client.BuildOpts().Opts["build-arg:DALEC_SIGNING_CONFIG_PATH"]
+}
 
-	return v
+func getSignConfigCtxName(client gwclient.Client) string {
+	return client.BuildOpts().Opts["build-arg:DALEC_SIGNING_CONFIG_CONTEXT_NAME"]
 }
 
 func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
