@@ -15,7 +15,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const keySkipSigningArg = "DALEC_SKIP_SIGNING"
+const (
+	keySkipSigningArg                     = "DALEC_SKIP_SIGNING"
+	buildArgDalecSigningConfigPath        = "DALEC_SIGNING_CONFIG_PATH"
+	buildArgDalecSigningConfigContextName = "DALEC_SIGNING_CONFIG_CONTEXT_NAME"
+)
 
 type solveRequestOpt func(*gwclient.SolveRequest) error
 
@@ -222,11 +226,11 @@ func signingDisabled(client gwclient.Client) bool {
 }
 
 func getUserSignConfigPath(client gwclient.Client) string {
-	return client.BuildOpts().Opts["build-arg:DALEC_SIGNING_CONFIG_PATH"]
+	return client.BuildOpts().Opts["build-arg:"+buildArgDalecSigningConfigPath]
 }
 
 func getSignConfigCtxName(client gwclient.Client) string {
-	return client.BuildOpts().Opts["build-arg:DALEC_SIGNING_CONFIG_CONTEXT_NAME"]
+	return client.BuildOpts().Opts["build-arg:"+buildArgDalecSigningConfigContextName]
 }
 
 func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
