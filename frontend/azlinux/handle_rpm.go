@@ -65,7 +65,12 @@ func installBuildDeps(w worker, spec *dalec.Spec, targetKey string, opts ...llb.
 }
 
 func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	base := w.Base(client, opts...).With(installBuildDeps(w, spec, targetKey, opts...))
+	base, err := w.Base(sOpt, opts...)
+	base = base.With(installBuildDeps(w, spec, targetKey, opts...))
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
 	br, err := rpm.SpecToBuildrootLLB(base, spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err

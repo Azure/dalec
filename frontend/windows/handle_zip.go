@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	workerImgRef    = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
-	outputDir       = "/tmp/output"
-	buildScriptName = "_build.sh"
-	aptCachePrefix  = "jammy-windowscross"
+	workerImgRef                  = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
+	WindowscrossWorkerContextName = "dalec-windowscross-worker"
+	outputDir                     = "/tmp/output"
+	buildScriptName               = "_build.sh"
+	aptCachePrefix                = "jammy-windowscross"
 )
 
 func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -32,7 +33,10 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		}
 
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
-		worker := workerImg(sOpt, pg)
+		worker, err := workerImg(sOpt, pg)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
 		if err != nil {
@@ -168,13 +172,29 @@ func generateInvocationScript(binaries []string) *strings.Builder {
 	return script
 }
 
-func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
-	// TODO: support named context override... also this should possibly be its own image, maybe?
+func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	base, err := sOpt.GetContext(workerImgRef, dalec.WithConstraints(opts...))
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	if base != nil {
+		return *base, nil
+	}
+
+	base, err = sOpt.GetContext(WindowscrossWorkerContextName, dalec.WithConstraints(opts...))
+	if err != nil {
+		return llb.Scratch(), nil
+	}
+	if base != nil {
+		return *base, nil
+	}
+
 	return llb.Image(workerImgRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
 		Run(
 			dalec.ShArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip"),
 			dalec.WithMountedAptCache(aptCachePrefix),
-		).Root()
+		).Root(), nil
 }
 
 func createBuildScript(spec *dalec.Spec) llb.State {

@@ -66,13 +66,13 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 		t.Run("root config", func(t *testing.T) {
 			t.Parallel()
 			spec := newSigningSpec()
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
+			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package))
 		})
 
 		t.Run("with target config", func(t *testing.T) {
 			t.Parallel()
 			spec := newSigningSpec()
-			first, _, _ := strings.Cut(testConfig.SignTarget, "/")
+			first, _, _ := strings.Cut(testConfig.Target.Package, "/")
 			spec.Targets = map[string]dalec.Target{
 				first: {
 					PackageConfig: &dalec.PackageConfig{
@@ -82,7 +82,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 			}
 			spec.PackageConfig.Signer = nil
 
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
+			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package))
 		})
 
 		t.Run("target config takes precedence when root config is there", func(t *testing.T) {
@@ -102,7 +102,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 				}
 			}
 
-			first, _, _ := strings.Cut(testConfig.SignTarget, "/")
+			first, _, _ := strings.Cut(testConfig.Target.Package, "/")
 			spec.Targets = map[string]dalec.Target{
 				first: {
 					PackageConfig: &dalec.PackageConfig{
@@ -116,7 +116,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 			}
 
 			spec.PackageConfig.Signer.Image = "notexist"
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget), testenv.WithSolveStatusFn(handleStatus))
+			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package), testenv.WithSolveStatusFn(handleStatus))
 
 			assert.Assert(t, found, "Spec signing override warning message not emitted")
 		})
@@ -129,7 +129,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 				"HELLO": "world",
 				"FOO":   "bar",
 			}
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
+			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package))
 		})
 
 		t.Run("with path build arg and build context", func(t *testing.T) {
@@ -145,7 +145,7 @@ signer:
 			runTest(t, distroSigningTest(
 				t,
 				spec,
-				testConfig.SignTarget,
+				testConfig.Target.Package,
 				withBuildContext(ctx, t, "dalec_signing_config", signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"),
@@ -179,7 +179,7 @@ signer:
 				distroSigningTest(
 					t,
 					spec,
-					testConfig.SignTarget,
+					testConfig.Target.Package,
 					withBuildContext(ctx, t, "dalec_signing_config", signConfig),
 					withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
 					withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"),
@@ -203,7 +203,7 @@ signer:
 			runTest(t, distroSigningTest(
 				t,
 				spec,
-				testConfig.SignTarget,
+				testConfig.Target.Package,
 				withBuildContext(ctx, t, "dalec_signing_config", signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"),
@@ -224,7 +224,7 @@ signer:
 			runTest(t, distroSigningTest(
 				t,
 				spec,
-				testConfig.SignTarget,
+				testConfig.Target.Package,
 				withMainContext(ctx, t, signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			))
@@ -256,7 +256,7 @@ signer:
 			runTest(t, distroSigningTest(
 				t,
 				spec,
-				testConfig.SignTarget,
+				testConfig.Target.Package,
 				withMainContext(ctx, t, signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			), testenv.WithSolveStatusFn(handleStatus))
@@ -280,7 +280,7 @@ signer:
 					}
 				}
 			}
-			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget), testenv.WithSolveStatusFn(handleStatus))
+			runTest(t, distroSkipSigningTest(t, spec, testConfig.Target.Package), testenv.WithSolveStatusFn(handleStatus))
 			assert.Assert(t, found, "Signing disabled warning message not emitted")
 		})
 
@@ -313,7 +313,7 @@ signer:
 			runTest(t, distroSkipSigningTest(
 				t,
 				spec,
-				testConfig.SignTarget,
+				testConfig.Target.Package,
 				withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 				withBuildContext(ctx, t, "dalec_signing_config", signConfig),
@@ -351,7 +351,7 @@ signer:
 			runTest(t, distroSkipSigningTest(
 				t,
 				spec,
-				testConfig.SignTarget,
+				testConfig.Target.Package,
 				withMainContext(ctx, t, signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			), testenv.WithSolveStatusFn(handleStatus))

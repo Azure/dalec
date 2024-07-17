@@ -35,7 +35,7 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := specToContainerLLB(w, client, spec, targetKey, rpmDir, rpms, sOpt, pg)
+			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, rpms, sOpt, pg)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -62,12 +62,17 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
+			base, err := w.Base(sOpt, pg)
+			if err != nil {
+				return nil, nil, err
+			}
+
 			withTestDeps := func(in llb.State) llb.State {
 				deps := spec.GetTestDeps(targetKey)
 				if len(deps) == 0 {
 					return in
 				}
-				return w.Base(client, pg).Run(
+				return base.Run(
 					w.Install(spec.GetTestDeps(targetKey), atRoot("/tmp/rootfs")),
 					pg,
 					dalec.ProgressGroup("Install test dependencies"),
@@ -130,11 +135,14 @@ func readRPMs(ctx context.Context, client gwclient.Client, st llb.State) ([]stri
 	return out, nil
 }
 
-func specToContainerLLB(w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, rpmDir llb.State, files []string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb.State, files []string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
-	builderImg := w.Base(client, opts...)
+	builderImg, err := w.Base(sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
 
 	rootfs := llb.Scratch()
 	if ref := dalec.GetBaseOutputImage(spec, targetKey); ref != "" {

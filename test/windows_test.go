@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/windows"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
@@ -18,21 +19,63 @@ func TestWindows(t *testing.T) {
 
 	ctx := startTestSpan(baseCtx, t)
 	testWindows(ctx, t, "windowscross/container")
+
+	t.Run("custom worker", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testCustomWindowscrossWorker(ctx, t, targetConfig{
+			Container: "windowscross/container",
+			// The way the test uses the package target is to generate a package which
+			// it then feeds back into a custom repo and adds that package as a build dep
+			// to another package.
+			// We don't build system packages for the windowscross base image.
+			// There's also no .deb support (currently)
+			// So... use a mariner2 rpm and then in CreateRepo, convert the rpm to a deb package
+			// which we'll use to create the repo...
+			// We can switch to this jammy/deb when that is available.
+			Package: "mariner2/rpm",
+			Worker:  "windowscross/worker",
+		}, workerConfig{
+			ContextName: windows.WindowscrossWorkerContextName,
+			CreateRepo: func(pkg llb.State) llb.StateOption {
+				return func(in llb.State) llb.State {
+					dt := []byte(`
+deb [trusted=yes] copy:/tmp/repo /
+`)
+
+					repo := in.
+						Run(
+							dalec.ShArgs("apt-get update && apt-get install -y apt-utils alien"),
+							dalec.WithMountedAptCache("test-windowscross"),
+						).
+						Run(
+							llb.Dir("/tmp/repo"),
+							dalec.ShArgs("set -e; for i in ./RPMS/*/*.rpm; do alien --to-deb \"$i\"; done; rm -rf ./RPMS; rm -rf ./SRPMS; apt-ftparchive packages . | gzip -1 > Packages.gz"),
+						).
+						AddMount("/tmp/repo", pkg)
+
+					return in.
+						File(llb.Mkfile("/etc/apt/sources.list.d/windowscross.list", 0o644, dt)).
+						File(llb.Copy(repo, "/", "/tmp/repo"))
+				}
+			},
+		})
+	})
+}
+
+// Windows is only supported on amd64 (ie there is no arm64 windows image currently)
+// This allows the test to run on arm64 machines.
+// I looked at having a good way to skip the test on non-amd64 and it all ends up
+// being a bit janky and error prone.
+// I'd rather just let the test run since it will work when we set an explicit platform
+func withWindowsAmd64(sr *gwclient.SolveRequest) {
+	if sr.FrontendOpt == nil {
+		sr.FrontendOpt = make(map[string]string)
+	}
+	sr.FrontendOpt["platform"] = "windows/amd64"
 }
 
 func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
-	// Windows is only supported on amd64 (ie there is no arm64 windows image currently)
-	// This allows the test to run on arm64 machines.
-	// I looked at having a good way to skip the test on non-amd64 and it all ends up
-	// being a bit janky and error prone.
-	// I'd rather just let the test run since it will work when we set an explicit platform
-	withAmd64Platform := func(sr *gwclient.SolveRequest) {
-		if sr.FrontendOpt == nil {
-			sr.FrontendOpt = make(map[string]string)
-		}
-		sr.FrontendOpt["platform"] = "windows/amd64"
-	}
-
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -54,7 +97,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -85,7 +128,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
 			sr.Evaluate = true
 
 			_, err := gwc.Solve(ctx, sr)
@@ -219,7 +262,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withAmd64Platform)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
 			sr.Evaluate = true
 			res := solveT(ctx, t, gwc, sr)
 
@@ -310,7 +353,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec), withAmd64Platform)
+			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec), withWindowsAmd64)
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -371,23 +414,6 @@ func getZipperState(ctx context.Context, t *testing.T, gwc gwclient.Client) llb.
 	return zipper
 }
 
-func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {
-	t.Helper()
-	res := solveT(ctx, t, gwc, sr)
-
-	ref, err := res.SingleRef()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	st, err := ref.ToState()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return st
-}
-
 func fillMetadata(fakename string, s *dalec.Spec) *dalec.Spec {
 	s.Name = fakename
 	s.Version = "0.0.1"
@@ -399,4 +425,82 @@ func fillMetadata(fakename string, s *dalec.Spec) *dalec.Spec {
 	s.Packager = "Bill Spummins"
 
 	return s
+}
+
+func testCustomWindowscrossWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		// base package that will be used as a build dependency of the main package.
+		depSpec := &dalec.Spec{
+			Name:        "dalec-test-package",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "A basic package for various testing uses",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"hello.txt": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "hello world!",
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"hello.txt": {},
+				},
+			},
+		}
+
+		// Main package, this should fail to build without a custom worker that has
+		// the base package available.
+		spec := &dalec.Spec{
+			Name:        "test-dalec-custom-worker",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "Testing allowing custom worker images to be provided",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					depSpec.Name: {},
+				},
+			},
+		}
+
+		// Make sure the built-in worker can't build this package
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(targetCfg.Container), withWindowsAmd64)
+		_, err := gwc.Solve(ctx, sr)
+		if err == nil {
+			t.Fatal("expected solve to fail")
+		}
+
+		var xErr *moby_buildkit_v1_frontend.ExitError
+		if !errors.As(err, &xErr) {
+			t.Fatalf("got unexpected error, expected error type %T: %v", xErr, err)
+		}
+
+		// Build the base package
+		sr = newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(targetCfg.Package))
+		pkg := reqToState(ctx, gwc, sr, t)
+
+		// Build the worker target, this will give us the worker image as an output.
+		// Note: Currently we need to provide a dalec spec just due to how the router is setup.
+		//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
+		sr = newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))
+		worker := reqToState(ctx, gwc, sr, t)
+
+		// Add the base package + repo to the worker
+		// This should make it so when dalec installs build deps it can use the package
+		// we built above.
+		worker = worker.With(workerCfg.CreateRepo(pkg))
+
+		// Now build again with our custom worker
+		// Note, we are solving the main spec, not depSpec here.
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, workerCfg.ContextName, worker), withBuildTarget(targetCfg.Container), withWindowsAmd64)
+		solveT(ctx, t, gwc, sr)
+
+		// TODO: we should have a test to make sure this also works with source policies.
+		// Unfortunately it seems like there is an issue with the gateway client passing
+		// in source policies.
+	})
 }

@@ -52,6 +52,7 @@ func buildBaseFrontend(ctx context.Context, c gwclient.Client) (*gwclient.Result
 			dockerui.DefaultLocalNameContext:    defPB,
 			dockerui.DefaultLocalNameDockerfile: dockerfileDef.ToPB(),
 		},
+		Evaluate: true,
 	})
 }
 
