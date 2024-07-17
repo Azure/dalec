@@ -141,12 +141,7 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
-func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cfgPath string, sOpt dalec.SourceOpts) (*dalec.PackageSigner, error) {
-	configCtxName := dockerui.DefaultLocalNameContext
-	if cn := getSignConfigCtxName(client); cn != "" {
-		configCtxName = cn
-	}
-
+func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cfgPath string, configCtxName string, sOpt dalec.SourceOpts) (*dalec.PackageSigner, error) {
 	sc := dalec.SourceContext{Name: configCtxName}
 	signConfigState, err := sc.AsState([]string{cfgPath}, nil, sOpt)
 	if err != nil {
@@ -187,7 +182,7 @@ func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cf
 
 func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string, sOpt dalec.SourceOpts) (llb.State, error) {
 	if signingDisabled(client) {
-		Warn(ctx, client, st, "Signing disabled by build-arg "+keySkipSigningArg)
+		Warnf(ctx, client, st, "Signing disabled by build-arg %q", keySkipSigningArg)
 		return st, nil
 	}
 
@@ -201,13 +196,26 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 
 		return forwardToSigner(ctx, client, cfg, st)
 	default:
-		cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, sOpt)
+		configCtxName := getSignContextNameWithDefault(client)
+		if specCfg := spec.GetSigner(targetKey); specCfg != nil {
+			Warnf(ctx, client, st, "Spec signing config overwritten by config at path %q in build-context %q", cfgPath, configCtxName)
+		}
+
+		cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, configCtxName, sOpt)
 		if err != nil {
 			return llb.Scratch(), err
 		}
 
 		return forwardToSigner(ctx, client, cfg, st)
 	}
+}
+
+func getSignContextNameWithDefault(client gwclient.Client) string {
+	configCtxName := dockerui.DefaultLocalNameContext
+	if cn := getSignConfigCtxName(client); cn != "" {
+		configCtxName = cn
+	}
+	return configCtxName
 }
 
 func signingDisabled(client gwclient.Client) bool {

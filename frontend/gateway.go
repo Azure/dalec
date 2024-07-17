@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -238,4 +239,9 @@ func Warn(ctx context.Context, client gwclient.Client, st llb.State, msg string)
 	if err := client.Warn(ctx, dgst, msg, gwclient.WarnOpts{}); err != nil {
 		bklog.G(ctx).WithError(err).WithField("warn", msg).Warn("Error writing warning message")
 	}
+}
+
+func Warnf(ctx context.Context, client gwclient.Client, st llb.State, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	Warn(ctx, client, st, msg)
 }
