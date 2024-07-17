@@ -19,7 +19,7 @@ func runTest(t *testing.T, f testenv.TestFunc, opts ...testenv.TestRunnerOpt) {
 	testEnv.RunTest(ctx, t, f, opts...)
 }
 
-func newSpec() *dalec.Spec {
+func newSimpleSpec() *dalec.Spec {
 	spec := fillMetadata("foo", &dalec.Spec{
 		Sources: map[string]dalec.Source{
 			"foo": {
@@ -49,54 +49,28 @@ func newSpec() *dalec.Spec {
 
 func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*testing.T) {
 	return func(t *testing.T) {
-		newSpec := func() *dalec.Spec {
-			return &dalec.Spec{
-				Name:        "foo",
-				Version:     "0.0.1",
-				Description: "foo bar baz",
-				Website:     "https://foo.bar.baz",
-				Revision:    "1",
-				License:     "MIT",
-				PackageConfig: &dalec.PackageConfig{
-					Signer: &dalec.PackageSigner{
-						Frontend: &dalec.Frontend{
-							Image: phonySignerRef,
-						},
-					},
-				},
-				Sources: map[string]dalec.Source{
-					"foo": {
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
-							},
-						},
-					},
-				},
-				Build: dalec.ArtifactBuild{
-					Steps: []dalec.BuildStep{
-						{
-							Command: "/bin/true",
-						},
-					},
-				},
-				Artifacts: dalec.Artifacts{
-					Binaries: map[string]dalec.ArtifactConfig{
-						"foo": {},
+		newSigningSpec := func() *dalec.Spec {
+			spec := newSimpleSpec()
+			spec.PackageConfig = &dalec.PackageConfig{
+				Signer: &dalec.PackageSigner{
+					Frontend: &dalec.Frontend{
+						Image: phonySignerRef,
 					},
 				},
 			}
+
+			return spec
 		}
 
 		t.Run("root config", func(t *testing.T) {
 			t.Parallel()
-			spec := newSpec()
+			spec := newSigningSpec()
 			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
 		})
 
 		t.Run("with target config", func(t *testing.T) {
 			t.Parallel()
-			spec := newSpec()
+			spec := newSigningSpec()
 			first, _, _ := strings.Cut(testConfig.SignTarget, "/")
 			spec.Targets = map[string]dalec.Target{
 				first: {
@@ -112,7 +86,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 
 		t.Run("target config takes precedence when root config is there", func(t *testing.T) {
 			t.Parallel()
-			spec := newSpec()
+			spec := newSigningSpec()
 
 			first, _, _ := strings.Cut(testConfig.SignTarget, "/")
 			spec.Targets = map[string]dalec.Target{
@@ -134,7 +108,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 		t.Run("with args", func(t *testing.T) {
 			t.Parallel()
 
-			spec := newSpec()
+			spec := newSigningSpec()
 			spec.PackageConfig.Signer.Args = map[string]string{
 				"HELLO": "world",
 				"FOO":   "bar",
@@ -143,7 +117,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 		})
 
 		t.Run("with path build arg and build context", func(t *testing.T) {
-			spec := newSpec()
+			spec := newSigningSpec()
 			spec.PackageConfig.Signer = nil
 
 			signConfig := llb.Scratch().File(llb.Mkfile("/unusual_place.yml", 0o400, []byte(`
@@ -163,7 +137,7 @@ signer:
 		})
 
 		t.Run("path build arg takes precedence over spec config", func(t *testing.T) {
-			spec := newSpec()
+			spec := newSigningSpec()
 			spec.PackageConfig.Signer.Frontend.Image = "notexist"
 
 			signConfig := llb.Scratch().File(llb.Mkfile("/unusual_place.yml", 0o400, []byte(`
@@ -183,7 +157,7 @@ signer:
 		})
 
 		t.Run("with path build arg and build context", func(t *testing.T) {
-			spec := newSpec()
+			spec := newSigningSpec()
 			spec.PackageConfig.Signer = nil
 
 			signConfig := llb.Scratch().File(llb.Mkfile("/unusual_place.yml", 0o400, []byte(`
@@ -203,12 +177,11 @@ signer:
 		})
 
 		t.Run("with no build context and config path build arg", func(t *testing.T) {
-			spec := newSpec()
+			spec := newSigningSpec()
 			spec.PackageConfig.Signer = nil
 
 			signConfig := llb.Scratch().
-				File(llb.Mkdir("/test/fixtures/signer/", 0o755, llb.WithParents(true))).
-				File(llb.Mkfile("/test/fixtures/signer/sign_config.yml", 0o400, []byte(`
+				File(llb.Mkfile("/sign_config.yml", 0o400, []byte(`
 signer:
   image: `+phonySignerRef+`
   cmdline: /signer
@@ -219,17 +192,16 @@ signer:
 				spec,
 				testConfig.SignTarget,
 				withMainContext(ctx, t, signConfig),
-				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"),
+				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			))
 		})
 
 		t.Run("local context with config path takes precedence over spec", func(t *testing.T) {
-			spec := newSpec()
+			spec := newSigningSpec()
 			spec.PackageConfig.Signer.Frontend.Image = "notexist"
 
 			signConfig := llb.Scratch().
-				File(llb.Mkdir("/test/fixtures/signer/", 0o755, llb.WithParents(true))).
-				File(llb.Mkfile("/test/fixtures/signer/sign_config.yml", 0o400, []byte(`
+				File(llb.Mkfile("/sign_config.yml", 0o400, []byte(`
 signer:
   image: `+phonySignerRef+`
   cmdline: /signer
@@ -240,26 +212,25 @@ signer:
 				spec,
 				testConfig.SignTarget,
 				withMainContext(ctx, t, signConfig),
-				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"),
+				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			))
 		})
 
 		t.Run("skip signing", func(t *testing.T) {
 			t.Parallel()
 
-			spec := newSpec()
+			spec := newSigningSpec()
 			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
 		})
 
 		t.Run("skip signing takes precedence over custom context", func(t *testing.T) {
 			t.Parallel()
 
-			spec := newSpec()
+			spec := newSigningSpec()
 			spec.PackageConfig.Signer = nil
 
 			signConfig := llb.Scratch().
-				File(llb.Mkdir("/test/fixtures/signer/", 0o755, llb.WithParents(true))).
-				File(llb.Mkfile("/test/fixtures/signer/sign_config.yml", 0o400, []byte(`
+				File(llb.Mkfile("/sign_config.yml", 0o400, []byte(`
 signer:
   image: `+phonySignerRef+`
   cmdline: /signer
@@ -270,7 +241,7 @@ signer:
 				spec,
 				testConfig.SignTarget,
 				withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
-				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"),
+				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 				withBuildContext(ctx, t, "dalec_signing_config", signConfig),
 			))
 			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
@@ -279,12 +250,11 @@ signer:
 		t.Run("skip signing takes precedence over local context", func(t *testing.T) {
 			t.Parallel()
 
-			spec := newSpec()
+			spec := newSigningSpec()
 			spec.PackageConfig.Signer = nil
 
 			signConfig := llb.Scratch().
-				File(llb.Mkdir("/test/fixtures/signer/", 0o755, llb.WithParents(true))).
-				File(llb.Mkfile("/test/fixtures/signer/sign_config.yml", 0o400, []byte(`
+				File(llb.Mkfile("/sign_config.yml", 0o400, []byte(`
 signer:
   image: `+phonySignerRef+`
   cmdline: /signer
@@ -295,7 +265,7 @@ signer:
 				spec,
 				testConfig.SignTarget,
 				withMainContext(ctx, t, signConfig),
-				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"),
+				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			))
 			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
 		})
@@ -306,7 +276,7 @@ func windowsSigningTests(t *testing.T) {
 	t.Run("target spec config", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := newSpec()
+			spec := newSimpleSpec()
 			spec.Targets = map[string]dalec.Target{
 				"windowscross": {
 					PackageConfig: &dalec.PackageConfig{
@@ -326,7 +296,7 @@ func windowsSigningTests(t *testing.T) {
 	t.Run("root spec config", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := newSpec()
+			spec := newSimpleSpec()
 			spec.PackageConfig = &dalec.PackageConfig{
 				Signer: &dalec.PackageSigner{
 					Frontend: &dalec.Frontend{
@@ -342,7 +312,7 @@ func windowsSigningTests(t *testing.T) {
 	t.Run("with path arg and build context", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := newSpec()
+			spec := newSimpleSpec()
 
 			signConfig := llb.Scratch().File(llb.Mkfile("/unusual_place.yml", 0o400, []byte(`
 signer:
@@ -365,11 +335,10 @@ signer:
 	t.Run("with path arg and local context", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := newSpec()
+			spec := newSimpleSpec()
 
 			signConfig := llb.Scratch().
-				File(llb.Mkdir("/test/fixtures/signer/", 0o755, llb.WithParents(true))).
-				File(llb.Mkfile("/test/fixtures/signer/sign_config.yml", 0o400, []byte(`
+				File(llb.Mkfile("/sign_config.yml", 0o400, []byte(`
 signer:
   image: `+phonySignerRef+`
   cmdline: /signer
@@ -380,7 +349,7 @@ signer:
 				gwc,
 				spec,
 				withMainContext(ctx, t, signConfig),
-				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "test/fixtures/signer/sign_config.yml"),
+				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			)
 		})
 
@@ -389,7 +358,7 @@ signer:
 	t.Run("test skipping windows signing", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := newSpec()
+			spec := newSimpleSpec()
 			st := prepareSigningState(ctx, t, gwc, spec, withBuildArg("DALEC_SKIP_SIGNING", "1"))
 
 			def, err := st.Marshal(ctx)

@@ -200,7 +200,7 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 		}
 
 		return forwardToSigner(ctx, client, cfg, st)
-	default: // no custom path provided, check the spec
+	default:
 		cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, sOpt)
 		if err != nil {
 			return llb.Scratch(), err
