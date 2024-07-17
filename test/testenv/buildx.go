@@ -237,13 +237,56 @@ func withResolveLocal(so *client.SolveOpt) {
 
 type TestFunc func(context.Context, gwclient.Client)
 
-func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc) {
+type TestRunnerConfig struct {
+	// SolveStatusFn replaces the builtin status logger with a custom implementation.
+	// This is useful particularly if you need to inspect the solve statuses.
+	SolveStatusFn func(*client.SolveStatus)
+}
+
+type TestRunnerOpt func(*TestRunnerConfig)
+
+// SolveStatus is convenience wrapper for [client.SolveStatus] to help disambiguate
+// imports of the [client] package.
+type SolveStatus = client.SolveStatus
+
+func WithSolveStatusFn(f func(*SolveStatus)) TestRunnerOpt {
+	return func(cfg *TestRunnerConfig) {
+		cfg.SolveStatusFn = f
+	}
+}
+
+func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts ...TestRunnerOpt) {
+	var cfg TestRunnerConfig
+
+	for _, o := range opts {
+		o(&cfg)
+	}
+
 	c, err := b.Buildkit(ctx)
 	if err != nil {
 		t.Fatalf("%+v", err)
 	}
 
-	ch, done := displaySolveStatus(ctx, t)
+	var (
+		ch   chan *client.SolveStatus
+		done <-chan struct{}
+	)
+
+	if cfg.SolveStatusFn != nil {
+		chDone := make(chan struct{})
+
+		ch = make(chan *client.SolveStatus, 1)
+		done = chDone
+		go func() {
+			defer close(chDone)
+
+			for msg := range ch {
+				cfg.SolveStatusFn(msg)
+			}
+		}()
+	} else {
+		ch, done = displaySolveStatus(ctx, t)
+	}
 
 	var so client.SolveOpt
 	withProjectRoot(t, &so)
@@ -261,13 +304,14 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc) {
 		f(ctx, gwc)
 		return gwclient.NewResult(), nil
 	}, ch)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Make sure the display goroutine has finished.
 	// Ensures there's no test output after the test has finished (which the test runner will complain about)
 	<-done
+
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 // clientForceDalecWithInput is a gwclient.Client that forces the solve request to use the main dalec frontend.

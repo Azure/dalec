@@ -15,6 +15,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const keySkipSigningArg = "DALEC_SKIP_SIGNING"
+
 type solveRequestOpt func(*gwclient.SolveRequest) error
 
 func newSolveRequest(opts ...solveRequestOpt) (gwclient.SolveRequest, error) {
@@ -137,6 +139,7 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 
 func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string) (llb.State, error) {
 	if signingDisabled(client) {
+		Warn(ctx, client, st, "Signing disabled by build-arg "+keySkipSigningArg)
 		return st, nil
 	}
 
@@ -155,7 +158,7 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 
 func signingDisabled(client gwclient.Client) bool {
 	bopts := client.BuildOpts().Opts
-	v, ok := bopts["build-arg:DALEC_SKIP_SIGNING"]
+	v, ok := bopts["build-arg:"+keySkipSigningArg]
 	if !ok {
 		return false
 	}

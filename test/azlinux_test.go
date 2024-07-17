@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/testenv"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	"gotest.tools/v3/assert"
 )
 
 func TestMariner2(t *testing.T) {
@@ -374,10 +377,10 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	runTest := func(t *testing.T, f testenv.TestFunc) {
+	runTest := func(t *testing.T, f testenv.TestFunc, opts ...testenv.TestRunnerOpt) {
 		t.Helper()
 		ctx := startTestSpan(baseCtx, t)
-		testEnv.RunTest(ctx, t, f)
+		testEnv.RunTest(ctx, t, f, opts...)
 	}
 
 	t.Run("test signing", func(t *testing.T) {
@@ -441,7 +444,20 @@ echo "$BAR" > bar.txt
 			t.Parallel()
 
 			spec := newSpec()
-			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
+			var found bool
+			handleStatus := func(status *client.SolveStatus) {
+				if found {
+					return
+				}
+				for _, w := range status.Warnings {
+					if strings.Contains(string(w.Short), "Signing disabled by build-arg") {
+						found = true
+						return
+					}
+				}
+			}
+			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget), testenv.WithSolveStatusFn(handleStatus))
+			assert.Assert(t, found, "Signing disabled warning message not emitted")
 		})
 	})
 
