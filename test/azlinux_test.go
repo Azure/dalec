@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/azlinux"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
@@ -19,15 +20,22 @@ func TestMariner2(t *testing.T) {
 
 	ctx := startTestSpan(baseCtx, t)
 	testLinuxDistro(ctx, t, testLinuxConfig{
-		BuildTarget: "mariner2/container",
-		SignTarget:  "mariner2/rpm",
-		LicenseDir:  "/usr/share/licenses",
+		Target: targetConfig{
+			Package:   "mariner2/rpm",
+			Container: "mariner2/container",
+			Worker:    "mariner2/worker",
+		},
+		LicenseDir: "/usr/share/licenses",
 		SystemdDir: struct {
 			Units   string
 			Targets string
 		}{
 			Units:   "/usr/lib/systemd",
 			Targets: "/etc/systemd/system",
+		},
+		Worker: workerConfig{
+			ContextName: azlinux.Mariner2WorkerContextName,
+			CreateRepo:  azlinuxWithRepo,
 		},
 	})
 }
@@ -37,9 +45,12 @@ func TestAzlinux3(t *testing.T) {
 
 	ctx := startTestSpan(baseCtx, t)
 	testLinuxDistro(ctx, t, testLinuxConfig{
-		BuildTarget: "azlinux3/container",
-		SignTarget:  "azlinux3/rpm",
-		LicenseDir:  "/usr/share/licenses",
+		Target: targetConfig{
+			Package:   "azlinux3/rpm",
+			Container: "azlinux3/container",
+			Worker:    "azlinux3/worker",
+		},
+		LicenseDir: "/usr/share/licenses",
 		SystemdDir: struct {
 			Units   string
 			Targets string
@@ -47,17 +58,65 @@ func TestAzlinux3(t *testing.T) {
 			Units:   "/usr/lib/systemd",
 			Targets: "/etc/systemd/system",
 		},
+		Worker: workerConfig{
+			ContextName: azlinux.Azlinux3WorkerContextName,
+			CreateRepo:  azlinuxWithRepo,
+		},
 	})
 }
 
+func azlinuxWithRepo(rpms llb.State) llb.StateOption {
+	return func(in llb.State) llb.State {
+		localRepo := []byte(`
+[Local]
+name=Local Repository
+baseurl=file:///opt/repo
+gpgcheck=0
+priority=0
+enabled=1
+`)
+		pg := dalec.ProgressGroup("Install local repo for test")
+		return in.
+			File(llb.Mkdir("/opt/repo/RPMS", 0o755, llb.WithParents(true)), pg).
+			File(llb.Mkdir("/opt/repo/SRPMS", 0o755), pg).
+			Run(dalec.ShArgs("tdnf install -y createrepo"), pg).
+			File(llb.Mkfile("/etc/yum.repos.d/local.repo", 0o644, localRepo), pg).
+			Run(
+				llb.AddMount("/tmp/st", rpms, llb.Readonly),
+				dalec.ShArgs("cp /tmp/st/RPMS/$(uname -m)/* /opt/repo/RPMS/ && cp /tmp/st/SRPMS/* /opt/repo/SRPMS"),
+				pg,
+			).
+			Run(dalec.ShArgs("createrepo --compatibility /opt/repo"), pg).
+			Root()
+	}
+}
+
+type workerConfig struct {
+	// CreateRepo takes in a state which is the output of the sign target,
+	// the output [llb.StateOption] should install the repo into the worker image.
+	CreateRepo func(llb.State) llb.StateOption
+	// ContextName is the name of the worker context that the build target will use
+	// to see if a custom worker is proivded in a context
+	ContextName string
+}
+
+type targetConfig struct {
+	// Package is the target for creating a package.
+	Package string
+	// Container is the target for creating a container.
+	Container string
+	// Target is the build target for creating the worker image.
+	Worker string
+}
+
 type testLinuxConfig struct {
-	BuildTarget string
-	SignTarget  string
-	LicenseDir  string
-	SystemdDir  struct {
+	Target     targetConfig
+	LicenseDir string
+	SystemdDir struct {
 		Units   string
 		Targets string
 	}
+	Worker workerConfig
 }
 
 func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
@@ -82,7 +141,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.Target.Container))
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -116,7 +175,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.BuildTarget))
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.Target.Container))
 			sr.Evaluate = true
 
 			_, err := gwc.Solve(ctx, sr)
@@ -348,7 +407,7 @@ echo "$BAR" > bar.txt
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(
 				withSpec(ctx, t, &spec),
-				withBuildTarget(testConfig.BuildTarget),
+				withBuildTarget(testConfig.Target.Container),
 				withBuildContext(ctx, t, src2Patch3ContextName, src2Patch3Context),
 			)
 			sr.Evaluate = true
@@ -438,7 +497,7 @@ WantedBy=multi-user.target
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 
@@ -464,7 +523,7 @@ WantedBy=multi-user.target
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 
@@ -493,7 +552,7 @@ WantedBy=multi-user.target
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -607,7 +666,7 @@ WantedBy=multi-user.target
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -663,7 +722,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -719,7 +778,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -770,7 +829,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			res := solveT(ctx, t, client, req)
 
 			ref, err := res.SingleRef()
@@ -859,7 +918,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			res := solveT(ctx, t, client, req)
 
 			ref, err := res.SingleRef()
@@ -935,7 +994,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			sr := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			sr := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			sr.Evaluate = true
 			solveT(ctx, t, client, sr)
 		})
@@ -1014,7 +1073,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			sr := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			sr := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			sr.Evaluate = true
 			solveT(ctx, t, client, sr)
 		})
@@ -1040,7 +1099,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.BuildTarget), withSpec(ctx, t, spec))
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			res := solveT(ctx, t, client, req)
 			ref, err := res.SingleRef()
 			if err != nil {
@@ -1054,6 +1113,103 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 		})
+	})
+
+	t.Run("custom worker", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testCustomLinuxWorker(ctx, t, testConfig.Target, testConfig.Worker)
+	})
+}
+
+func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		// base package that will be used as a build dependency of the main package.
+		depSpec := &dalec.Spec{
+			Name:        "dalec-test-package",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "A basic package for various testing uses",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"hello.txt": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "hello world!",
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"hello.txt": {},
+				},
+			},
+		}
+
+		// Main package, this should fail to build without a custom worker that has
+		// the base package available.
+		spec := &dalec.Spec{
+			Name:        "test-dalec-custom-worker",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "Testing allowing custom worker images to be provided",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					depSpec.Name: {},
+				},
+				Runtime: map[string]dalec.PackageConstraints{
+					depSpec.Name: {},
+				},
+			},
+		}
+
+		// Make sure the built-in worker can't build this package
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(targetCfg.Container))
+		_, err := gwc.Solve(ctx, sr)
+		if err == nil {
+			t.Fatal("expected solve to fail")
+		}
+
+		var xErr *moby_buildkit_v1_frontend.ExitError
+		if !errors.As(err, &xErr) {
+			t.Fatalf("got unexpected error, expected error type %T: %v", xErr, err)
+		}
+
+		// Build the base package
+		sr = newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(targetCfg.Package))
+		pkg := reqToState(ctx, gwc, sr, t)
+
+		// Build the worker target, this will give us the worker image as an output.
+		// Note: Currently we need to provide a dalec spec just due to how the router is setup.
+		//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
+		sr = newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))
+		worker := reqToState(ctx, gwc, sr, t)
+
+		// Add the base package + repo to the worker
+		// This should make it so when dalec installs build deps it can use the package
+		// we built above.
+		worker = worker.With(workerCfg.CreateRepo(pkg))
+
+		// Now build again with our custom worker
+		// Note, we are solving the main spec, not depSpec here.
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, workerCfg.ContextName, worker), withBuildTarget(targetCfg.Container))
+		res := solveT(ctx, t, gwc, sr)
+		ref, err := res.SingleRef()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Since we also added the dep as a runtime dep, the file in the base package should be installed in the output container.
+		_, err = ref.StatFile(ctx, gwclient.StatRequest{Path: "/usr/share/doc/" + depSpec.Name + "/hello.txt"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// TODO: we should have a test to make sure this also works with source policies.
+		// Unfortunately it seems like there is an issue with the gateway client passing
+		// in source policies.
 	})
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
@@ -265,4 +266,30 @@ func withBuildContext(ctx context.Context, t *testing.T, name string, st llb.Sta
 		sr.FrontendOpt["context:"+name] = "input:" + name
 		sr.FrontendInputs[name] = def.ToPB()
 	}
+}
+
+func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {
+	t.Helper()
+	res := solveT(ctx, t, gwc, sr)
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := ref.ToState()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dt, ok := res.Metadata[exptypes.ExporterPlatformsKey]
+	if ok {
+		var pls exptypes.Platforms
+		if err := json.Unmarshal(dt, &pls); err != nil {
+			t.Fatal(err)
+		}
+		st = st.Platform(pls.Platforms[0].Platform)
+	}
+
+	return st
 }
