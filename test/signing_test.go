@@ -8,9 +8,10 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/testenv"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/v3/assert"
 )
 
 func runTest(t *testing.T, f testenv.TestFunc, opts ...testenv.TestRunnerOpt) {
@@ -146,14 +147,30 @@ signer:
   cmdline: /signer
 `)))
 
-			runTest(t, distroSigningTest(
-				t,
-				spec,
-				testConfig.SignTarget,
-				withBuildContext(ctx, t, "dalec_signing_config", signConfig),
-				withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
-				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"),
-			))
+			var found bool
+			handleStatus := func(status *client.SolveStatus) {
+				if found {
+					return
+				}
+				for _, w := range status.Warnings {
+					if strings.Contains(string(w.Short), "Spec signing config overwritten") {
+						found = true
+						return
+					}
+				}
+			}
+
+			runTest(t,
+				distroSigningTest(
+					t,
+					spec,
+					testConfig.SignTarget,
+					withBuildContext(ctx, t, "dalec_signing_config", signConfig),
+					withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
+					withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"),
+				),
+				testenv.WithSolveStatusFn(handleStatus),
+			)
 		})
 
 		t.Run("with path build arg and build context", func(t *testing.T) {
@@ -220,7 +237,20 @@ signer:
 			t.Parallel()
 
 			spec := newSigningSpec()
-			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
+			var found bool
+			handleStatus := func(status *client.SolveStatus) {
+				if found {
+					return
+				}
+				for _, w := range status.Warnings {
+					if strings.Contains(string(w.Short), "Signing disabled by build-arg") {
+						found = true
+						return
+					}
+				}
+			}
+			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget), testenv.WithSolveStatusFn(handleStatus))
+			assert.Assert(t, found, "Signing disabled warning message not emitted")
 		})
 
 		t.Run("skip signing takes precedence over custom context", func(t *testing.T) {
@@ -357,6 +387,20 @@ signer:
 
 	t.Run("test skipping windows signing", func(t *testing.T) {
 		t.Parallel()
+
+		var found bool
+		handleStatus := func(status *client.SolveStatus) {
+			if found {
+				return
+			}
+			for _, w := range status.Warnings {
+				if strings.Contains(string(w.Short), "Signing disabled by build-arg") {
+					found = true
+					return
+				}
+			}
+		}
+
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := newSimpleSpec()
 			st := prepareSigningState(ctx, t, gwc, spec, withBuildArg("DALEC_SKIP_SIGNING", "1"))
@@ -377,9 +421,12 @@ signer:
 			if _, err = maybeReadFile(ctx, "/config.json", res); err == nil {
 				t.Fatalf("signing took place even though signing was disabled")
 			}
-		})
+		}, testenv.WithSolveStatusFn(handleStatus))
+
+		assert.Assert(t, found, "Signing disabled warning message not emitted")
 	})
 }
+
 func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string, extraSrOpts ...srOpt) testenv.TestFunc {
 	return func(ctx context.Context, gwc gwclient.Client) {
 		topTgt, _, _ := strings.Cut(buildTarget, "/")
