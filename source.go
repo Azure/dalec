@@ -527,8 +527,14 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 		patchState := sourceToState[p.Source]
 		// on each iteration, mount source state to /src to run `patch`, and
 		// set the state under /src to be the source state for the next iteration
+
+		subPath := p.Source
+		if p.Path != "" {
+			subPath = p.Path
+		}
+
 		sourceState = worker.Run(
-			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(filepath.Join(p.Source, p.Path))),
+			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(subPath)),
 			llb.Dir("src"),
 			ShArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
 			WithConstraints(opts...),
