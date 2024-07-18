@@ -18,8 +18,6 @@ const (
 	tdnfCacheDir = "/var/cache/tdnf"
 )
 
-type installFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.RunOption, error)
-
 type worker interface {
 	Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 	Install(pkgs []string, opts ...installOpt) llb.RunOption
@@ -62,12 +60,12 @@ func handleDebug(w worker) gwclient.BuildFunc {
 		if err != nil {
 			return nil, err
 		}
-		return rpm.HandleDebug(getSpecWorker(ctx, w, client, sOpt))(ctx, client)
+		return rpm.HandleDebug(getSpecWorker(ctx, w, sOpt))(ctx, client)
 	}
 }
 
-func getSpecWorker(ctx context.Context, w worker, client gwclient.Client, sOpt dalec.SourceOpts) rpm.WorkerFunc {
-	return func(resolver llb.ImageMetaResolver, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func getSpecWorker(ctx context.Context, w worker, sOpt dalec.SourceOpts) rpm.WorkerFunc {
+	return func(resolver llb.ImageMetaResolver, spec *dalec.Spec, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
 		st, err := w.Base(sOpt, opts...)
 		if err != nil {
 			return llb.Scratch(), err
@@ -83,7 +81,7 @@ func getSpecWorker(ctx context.Context, w worker, client gwclient.Client, sOpt d
 				return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
 			}
 
-			installOpt, err := installBuildDeps(ctx, w, client, spec, targetKey, opts...)
+			installOpt, err := installBuildDeps(w, sOpt, spec, targetKey, platform, opts...)
 			if err != nil {
 				return llb.Scratch(), err
 			}

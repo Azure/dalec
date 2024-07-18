@@ -11,6 +11,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
 func handleRPM(w worker) gwclient.BuildFunc {
@@ -26,7 +27,7 @@ func handleRPM(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := specToRpmLLB(ctx, w, client, spec, sOpt, targetKey, pg, dalec.WithPlatform(platform))
+			st, err := buildOutputRPM(ctx, w, client, spec, sOpt, targetKey, platform, pg)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -52,8 +53,10 @@ func handleRPM(w worker) gwclient.BuildFunc {
 	}
 }
 
+type installFunc func(dalec.SourceOpts) (llb.RunOption, error)
+
 // Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
-func installBuildDepsPackage(target string, packageName string, w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
+func installBuildDepsPackage(target string, packageName string, w worker, sOpt dalec.SourceOpts, deps map[string]dalec.PackageConstraints, platform *ocispecs.Platform, installOpts ...installOpt) installFunc {
 	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
 	depsOnly := dalec.Spec{
 		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
@@ -66,11 +69,11 @@ func installBuildDepsPackage(target string, packageName string, w worker, deps m
 		},
 	}
 
-	return func(ctx context.Context, client gwclient.Client, sOpt dalec.SourceOpts) (llb.RunOption, error) {
+	return func(Opt dalec.SourceOpts) (llb.RunOption, error) {
 		pg := dalec.ProgressGroup("Building container for build dependencies")
 
 		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := specToRpmLLB(ctx, w, client, &depsOnly, sOpt, target, pg)
+		rpmDir, err := createRPM(w, sOpt, &depsOnly, target, platform, pg)
 		if err != nil {
 			return nil, err
 		}
@@ -91,20 +94,15 @@ func installBuildDepsPackage(target string, packageName string, w worker, deps m
 	}
 }
 
-func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+func installBuildDeps(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
 	deps := spec.GetBuildDeps(targetKey)
 	if len(deps) == 0 {
 		return func(in llb.State) llb.State { return in }, nil
 	}
 
-	sOpt, err := frontend.SourceOptFromClient(ctx, client)
-	if err != nil {
-		return nil, err
-	}
-
 	opts = append(opts, dalec.ProgressGroup("Install build deps"))
 
-	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps, installWithConstraints(opts))(ctx, client, sOpt)
+	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, sOpt, deps, platform, installWithConstraints(opts))(sOpt)
 	if err != nil {
 		return nil, err
 	}
@@ -114,24 +112,65 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 	}, nil
 }
 
-func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	base, err := w.Base(sOpt, opts...)
+func rpmWorker(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	base, err := w.Base(sOpt, append(opts, dalec.WithPlatform(platform))...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	installOpt, err := installBuildDeps(ctx, w, client, spec, targetKey, opts...)
+	installDeps, err := installBuildDeps(w, sOpt, spec, targetKey, platform, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
-	base = base.With(installOpt)
 
-	br, err := rpm.SpecToBuildrootLLB(base, spec, sOpt, targetKey, opts...)
+	base = base.With(installDeps)
+	return base, nil
+}
+
+func createBuildroot(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	opts = append(opts, dalec.ProgressGroup("Prepare rpm build root: "+spec.Name))
+
+	// Always generate the build root using the native platform
+	// There is nothing it does that should require the requested target platform
+	native, err := w.Base(sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
+
+	if spec.HasGomods() {
+		// Since the spec has go mods in it, we need to make sure we have go
+		// installed in the image.
+		install, err := installBuildDeps(w, sOpt, spec, targetKey, nil, opts...)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		native = native.With(install)
+	}
+
+	return rpm.SpecToBuildrootLLB(native, spec, sOpt, targetKey, opts...)
+}
+
+func createRPM(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	br, err := createBuildroot(w, sOpt, spec, targetKey, opts...)
+	if err != nil {
+		return llb.Scratch(), errors.Wrap(err, "error creating rpm build root")
+	}
+
+	base, err := rpmWorker(w, sOpt, spec, targetKey, platform, opts...)
+	if err != nil {
+		return llb.Scratch(), nil
+	}
+
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
-	st := rpm.Build(br, base, specPath, opts...)
+	opts = append(opts, dalec.ProgressGroup("Create RPM: "+spec.Name))
+	return rpm.Build(br, base, specPath, opts...), nil
+}
 
+func buildOutputRPM(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	st, err := createRPM(w, sOpt, spec, targetKey, platform, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 }

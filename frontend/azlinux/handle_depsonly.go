@@ -36,7 +36,7 @@ func handleDepsOnly(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, files, sOpt, pg)
+			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, files, sOpt, pg, dalec.WithPlatform(platform))
 			if err != nil {
 				return nil, nil, err
 			}
