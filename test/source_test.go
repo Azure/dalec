@@ -260,6 +260,7 @@ index ea874f5..ba38f84 100644
 
 	// Note: module here should be moduyle+version because this is checking the go module path on disk
 	checkModule := func(ctx context.Context, gwc gwclient.Client, module string, spec *dalec.Spec) {
+		t.Helper()
 		res, err := gwc.Solve(ctx, newSolveRequest(withBuildTarget("debug/gomods"), withSpec(ctx, t, spec)))
 		if err != nil {
 			t.Fatal(err)
@@ -314,24 +315,49 @@ index ea874f5..ba38f84 100644
 	})
 
 	t.Run("with patch", func(t *testing.T) {
-		t.Parallel()
-		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := baseSpec()
+		t.Run("file", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := baseSpec()
 
-			patchName := "patch"
-			spec.Sources[patchName] = dalec.Source{
-				Inline: &dalec.SourceInline{
-					File: &dalec.SourceInlineFile{
-						Contents: downgradePatch,
+				patchName := "patch"
+				spec.Sources[patchName] = dalec.Source{
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: downgradePatch,
+						},
 					},
-				},
-			}
+				}
 
-			spec.Patches = map[string][]dalec.PatchSpec{
-				srcName: {{Source: patchName}},
-			}
+				spec.Patches = map[string][]dalec.PatchSpec{
+					srcName: {{Source: patchName}},
+				}
 
-			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
+				checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
+			})
+		})
+		t.Run("dir", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := baseSpec()
+
+				patchName := "patch"
+				spec.Sources[patchName] = dalec.Source{
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"patch-file": {Contents: downgradePatch},
+							},
+						},
+					},
+				}
+
+				spec.Patches = map[string][]dalec.PatchSpec{
+					srcName: {{Source: patchName, Path: "patch-file"}},
+				}
+
+				checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
+			})
 		})
 	})
 }
