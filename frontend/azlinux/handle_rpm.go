@@ -26,7 +26,7 @@ func handleRPM(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := specToRpmLLB(ctx, w, client, spec, sOpt, targetKey, pg, dalec.WithPlatform(platform))
+			st, err := specToRpmLLB(ctx, w, client, spec, sOpt, targetKey, platform, pg)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -64,18 +64,26 @@ func installBuildDeps(w worker, spec *dalec.Spec, targetKey string, opts ...llb.
 	}
 }
 
-func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	base, err := w.Base(sOpt, opts...)
-	base = base.With(installBuildDeps(w, spec, targetKey, opts...))
+func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	// Generate the buildroot with the native platform
+	native, err := w.Base(sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
-
-	br, err := rpm.SpecToBuildrootLLB(base, spec, sOpt, targetKey, opts...)
+	native = native.With(installBuildDeps(w, spec, targetKey, opts...))
+	br, err := rpm.SpecToBuildrootLLB(native, spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
+
+	// Build the RPM with the target platform
+	opts = append(opts, dalec.WithPlatform(platform))
+	base, err := w.Base(sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	base = base.With(installBuildDeps(w, spec, targetKey, opts...))
 	st := rpm.Build(br, base, specPath, opts...)
 
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
