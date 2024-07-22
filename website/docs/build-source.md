@@ -179,7 +179,7 @@ This will create `RPM` and `SRPM` directories in the `_output` directory with th
 To build a container, we can use the following command:
 
 ```shell
-docker build -t go-md2man:2.0.3 -f examples/go-md2man.yml --target=mariner2
+docker build -t go-md2man:2.0.3 -f examples/go-md2man.yml --target=mariner2 .
 ```
 
 This will produce a container image named `go-md2man:2.0.3`.
