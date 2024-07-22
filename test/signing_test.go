@@ -89,6 +89,19 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 			t.Parallel()
 			spec := newSigningSpec()
 
+			var found bool
+			handleStatus := func(status *client.SolveStatus) {
+				if found {
+					return
+				}
+				for _, w := range status.Warnings {
+					if strings.Contains(string(w.Short), "Root signing spec overridden") {
+						found = true
+						return
+					}
+				}
+			}
+
 			first, _, _ := strings.Cut(testConfig.SignTarget, "/")
 			spec.Targets = map[string]dalec.Target{
 				first: {
@@ -103,7 +116,9 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 			}
 
 			spec.PackageConfig.Signer.Image = "notexist"
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
+			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget), testenv.WithSolveStatusFn(handleStatus))
+
+			assert.Assert(t, found, "Spec signing override warning message not emitted")
 		})
 
 		t.Run("with args", func(t *testing.T) {
@@ -171,6 +186,8 @@ signer:
 				),
 				testenv.WithSolveStatusFn(handleStatus),
 			)
+
+			assert.Assert(t, found, "Signing overwritten warning message not emitted")
 		})
 
 		t.Run("with path build arg and build context", func(t *testing.T) {

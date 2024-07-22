@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
@@ -186,18 +187,23 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 		return st, nil
 	}
 
+	cfg, warning := spec.GetSigner(targetKey)
 	switch cfgPath := getUserSignConfigPath(client); cfgPath {
 	case "": // no custom path provided, check the spec
-		cfg := spec.GetSigner(targetKey)
 		if cfg == nil {
 			// i.e. there's no signing config. not in the build context, not in the spec.
 			return st, nil
 		}
 
+		if warning != nil {
+			t, _, _ := strings.Cut(targetKey, "/")
+			Warnf(ctx, client, st, "%s: target %q", warning.Error(), t)
+		}
+
 		return forwardToSigner(ctx, client, cfg, st)
 	default:
 		configCtxName := getSignContextNameWithDefault(client)
-		if specCfg := spec.GetSigner(targetKey); specCfg != nil {
+		if specCfg := cfg; specCfg != nil {
 			Warnf(ctx, client, st, "Spec signing config overwritten by config at path %q in build-context %q", cfgPath, configCtxName)
 		}
 
