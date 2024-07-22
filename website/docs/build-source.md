@@ -147,7 +147,7 @@ tests:
 ```
 
 :::note
-Full example can be found at [examples/go-md2man.yml](https://github.com/Azure/dalec/blob/main/docs/examples/go-md2man.yml)
+Full example can be found at [docs/examples/go-md2man.yml](https://github.com/Azure/dalec/blob/main/docs/examples/go-md2man.yml)
 :::
 
 Now that we have a spec file, we can build the package and container using `docker`.
@@ -169,7 +169,7 @@ These steps are independent of each other. You don't have to build an RPM first 
 To build an RPM package only, we can use the following command:
 
 ```shell
-docker build -t go-md2man:2.0.3 -f examples/go-md2man.yml --target=mariner2/rpm --output=_output .
+docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=mariner2/rpm --output=_output .
 ```
 
 This will create `RPM` and `SRPM` directories in the `_output` directory with the built RPM and SRPM packages respectively.
@@ -179,7 +179,7 @@ This will create `RPM` and `SRPM` directories in the `_output` directory with th
 To build a container, we can use the following command:
 
 ```shell
-docker build -t go-md2man:2.0.3 -f examples/go-md2man.yml --target=mariner2 .
+docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=mariner2 .
 ```
 
 This will produce a container image named `go-md2man:2.0.3`.
