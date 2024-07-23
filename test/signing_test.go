@@ -240,6 +240,18 @@ signer:
   image: `+phonySignerRef+`
   cmdline: /signer
 `)))
+			var found bool
+			handleStatus := func(status *client.SolveStatus) {
+				if found {
+					return
+				}
+				for _, w := range status.Warnings {
+					if strings.Contains(string(w.Short), "Spec signing config overwritten by config at path") {
+						found = true
+						return
+					}
+				}
+			}
 
 			runTest(t, distroSigningTest(
 				t,
@@ -247,7 +259,9 @@ signer:
 				testConfig.SignTarget,
 				withMainContext(ctx, t, signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
-			))
+			), testenv.WithSolveStatusFn(handleStatus))
+
+			assert.Assert(t, found, "spec signing config overwritten warning not emitted")
 		})
 
 		t.Run("skip signing", func(t *testing.T) {
@@ -283,6 +297,19 @@ signer:
   cmdline: /signer
 `)))
 
+			var found bool
+			handleStatus := func(status *client.SolveStatus) {
+				if found {
+					return
+				}
+				for _, w := range status.Warnings {
+					if strings.Contains(string(w.Short), "Signing disabled by build-arg") {
+						found = true
+						return
+					}
+				}
+			}
+
 			runTest(t, distroSkipSigningTest(
 				t,
 				spec,
@@ -290,8 +317,9 @@ signer:
 				withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 				withBuildContext(ctx, t, "dalec_signing_config", signConfig),
-			))
-			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
+			), testenv.WithSolveStatusFn(handleStatus))
+
+			assert.Assert(t, found, "Signing disabled warning message not emitted")
 		})
 
 		t.Run("skip signing takes precedence over local context", func(t *testing.T) {
@@ -307,14 +335,28 @@ signer:
   cmdline: /signer
 `)))
 
+			var found bool
+			handleStatus := func(status *client.SolveStatus) {
+				if found {
+					return
+				}
+				for _, w := range status.Warnings {
+					if strings.Contains(string(w.Short), "Signing disabled by build-arg") {
+						found = true
+						return
+					}
+				}
+			}
+
 			runTest(t, distroSkipSigningTest(
 				t,
 				spec,
 				testConfig.SignTarget,
 				withMainContext(ctx, t, signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
-			))
-			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget))
+			), testenv.WithSolveStatusFn(handleStatus))
+
+			assert.Assert(t, found, "Signing disabled warning message not emitted")
 		})
 	}
 }
