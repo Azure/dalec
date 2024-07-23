@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
@@ -187,33 +186,32 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 		return st, nil
 	}
 
-	cfg, warning := spec.GetSigner(targetKey)
-	switch cfgPath := getUserSignConfigPath(client); cfgPath {
-	case "": // no custom path provided, check the spec
+	cfg, rootSigningSpecOverriddenByTarget := spec.GetSigner(targetKey)
+	cfgPath := getUserSignConfigPath(client)
+	if cfgPath == "" {
 		if cfg == nil {
 			// i.e. there's no signing config. not in the build context, not in the spec.
 			return st, nil
 		}
 
-		if warning != nil {
-			t, _, _ := strings.Cut(targetKey, "/")
-			Warnf(ctx, client, st, "%s: target %q", warning.Error(), t)
-		}
-
-		return forwardToSigner(ctx, client, cfg, st)
-	default:
-		configCtxName := getSignContextNameWithDefault(client)
-		if specCfg := cfg; specCfg != nil {
-			Warnf(ctx, client, st, "Spec signing config overwritten by config at path %q in build-context %q", cfgPath, configCtxName)
-		}
-
-		cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, configCtxName, sOpt)
-		if err != nil {
-			return llb.Scratch(), err
+		if rootSigningSpecOverriddenByTarget {
+			Warnf(ctx, client, st, "Root signing spec overridden by target signing spec: target %q", targetKey)
 		}
 
 		return forwardToSigner(ctx, client, cfg, st)
 	}
+
+	configCtxName := getSignContextNameWithDefault(client)
+	if specCfg := cfg; specCfg != nil {
+		Warnf(ctx, client, st, "Spec signing config overwritten by config at path %q in build-context %q", cfgPath, configCtxName)
+	}
+
+	cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, configCtxName, sOpt)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	return forwardToSigner(ctx, client, cfg, st)
 }
 
 func getSignContextNameWithDefault(client gwclient.Client) string {

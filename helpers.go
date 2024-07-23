@@ -3,7 +3,6 @@ package dalec
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -15,13 +14,7 @@ import (
 	"github.com/moby/buildkit/identity"
 )
 
-type Warning error
-
-var (
-	disableDiffMerge atomic.Bool
-
-	WarningTargetOverrideRootSigningConfig = errors.New("Root signing spec overridden by target signing spec")
-)
+var disableDiffMerge atomic.Bool
 
 // DisableDiffMerge allows disabling the use of [llb.Diff] and [llb.Merge] in favor of [llb.Copy].
 // This is needed when the buildkit version does not support [llb.Diff] and [llb.Merge].
@@ -375,23 +368,20 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 	})
 }
 
-func (s *Spec) GetSigner(targetKey string) (*PackageSigner, Warning) {
+func (s *Spec) GetSigner(targetKey string) (*PackageSigner, bool) {
 	if s.Targets != nil {
-		var warning Warning
-		if hasValidSigner(s.PackageConfig) {
-			warning = WarningTargetOverrideRootSigningConfig
-		}
+		targetOverridesRootSigningConfig := hasValidSigner(s.PackageConfig)
 
 		if t, ok := s.Targets[targetKey]; ok && hasValidSigner(t.PackageConfig) {
-			return t.PackageConfig.Signer, warning
+			return t.PackageConfig.Signer, targetOverridesRootSigningConfig
 		}
 	}
 
 	if hasValidSigner(s.PackageConfig) {
-		return s.PackageConfig.Signer, nil
+		return s.PackageConfig.Signer, false
 	}
 
-	return nil, nil
+	return nil, false
 }
 
 func hasValidSigner(pc *PackageConfig) bool {
