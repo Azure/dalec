@@ -8,11 +8,9 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/test/testenv"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
-	"gotest.tools/v3/assert"
 )
 
 func TestWindows(t *testing.T) {
@@ -259,175 +257,7 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	runTest := func(t *testing.T, f testenv.TestFunc, opts ...testenv.TestRunnerOpt) {
-		t.Helper()
-		ctx := startTestSpan(baseCtx, t)
-		testEnv.RunTest(ctx, t, f, opts...)
-	}
-
-	t.Run("test windows signing", func(t *testing.T) {
-		t.Parallel()
-		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := fillMetadata("foo", &dalec.Spec{
-				Targets: map[string]dalec.Target{
-					"windowscross": {
-						PackageConfig: &dalec.PackageConfig{
-							Signer: &dalec.PackageSigner{
-								Frontend: &dalec.Frontend{
-									Image: phonySignerRef,
-								},
-							},
-						},
-					},
-				},
-				Sources: map[string]dalec.Source{
-					"foo": {
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
-							},
-						},
-					},
-				},
-				Build: dalec.ArtifactBuild{
-					Steps: []dalec.BuildStep{
-						{
-							Command: "/bin/true",
-						},
-					},
-				},
-				Artifacts: dalec.Artifacts{
-					Binaries: map[string]dalec.ArtifactConfig{
-						"foo": {},
-					},
-				},
-			})
-
-			zipperSpec := fillMetadata("bar", &dalec.Spec{
-				Dependencies: &dalec.PackageDependencies{
-					Runtime: map[string]dalec.PackageConstraints{
-						"unzip": {},
-					},
-				},
-			})
-
-			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
-			zipper := reqToState(ctx, gwc, sr, t)
-
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"))
-			st := reqToState(ctx, gwc, sr, t)
-
-			st = zipper.Run(llb.Args([]string{"bash", "-c", `for f in ./*.zip; do unzip "$f"; done`}), llb.Dir("/tmp/mnt")).
-				AddMount("/tmp/mnt", st)
-
-			def, err := st.Marshal(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-
-			tgt := readFile(ctx, t, "/target", res)
-			cfg := readFile(ctx, t, "/config.json", res)
-
-			if string(tgt) != "windowscross" {
-				t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-			}
-
-			if !strings.Contains(string(cfg), "windows") {
-				t.Fatal(fmt.Errorf("configuration incorrect"))
-			}
-		})
-	})
-
-	t.Run("test skipping windows signing", func(t *testing.T) {
-		t.Parallel()
-
-		var found bool
-		handleStatus := func(status *testenv.SolveStatus) {
-
-			for _, w := range status.Warnings {
-				if strings.Contains(string(w.Short), "Signing disabled by build-arg") {
-					found = true
-					return
-				}
-			}
-		}
-
-		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := fillMetadata("foo", &dalec.Spec{
-				Targets: map[string]dalec.Target{
-					"windowscross": {
-						PackageConfig: &dalec.PackageConfig{
-							Signer: &dalec.PackageSigner{
-								Frontend: &dalec.Frontend{
-									Image: phonySignerRef,
-								},
-							},
-						},
-					},
-				},
-				Sources: map[string]dalec.Source{
-					"foo": {
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
-							},
-						},
-					},
-				},
-				Build: dalec.ArtifactBuild{
-					Steps: []dalec.BuildStep{
-						{
-							Command: "/bin/true",
-						},
-					},
-				},
-				Artifacts: dalec.Artifacts{
-					Binaries: map[string]dalec.ArtifactConfig{
-						"foo": {},
-					},
-				},
-			})
-
-			zipperSpec := fillMetadata("bar", &dalec.Spec{
-				Dependencies: &dalec.PackageDependencies{
-					Runtime: map[string]dalec.PackageConstraints{
-						"unzip": {},
-					},
-				},
-			})
-
-			sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
-			zipper := reqToState(ctx, gwc, sr, t)
-
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"), withBuildArg("DALEC_SKIP_SIGNING", "1"))
-			st := reqToState(ctx, gwc, sr, t)
-
-			st = zipper.Run(llb.Args([]string{"bash", "-c", `for f in ./*.zip; do unzip "$f"; done`}), llb.Dir("/tmp/mnt")).
-				AddMount("/tmp/mnt", st)
-
-			def, err := st.Marshal(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-
-			if _, err := maybeReadFile(ctx, "/target", res); err == nil {
-				t.Fatalf("signing took place even though signing was disabled")
-			}
-
-			if _, err = maybeReadFile(ctx, "/config.json", res); err == nil {
-				t.Fatalf("signing took place even though signing was disabled")
-			}
-		}, testenv.WithSolveStatusFn(handleStatus))
-		assert.Assert(t, found, "Signing disabled warning message not emitted")
-	})
+	t.Run("test signing", windowsSigningTests)
 
 	t.Run("go module", func(t *testing.T) {
 		t.Parallel()
@@ -486,6 +316,61 @@ echo "$BAR" > bar.txt
 	})
 }
 
+func runBuild(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, srOpts ...srOpt) {
+	st := prepareSigningState(ctx, t, gwc, spec, srOpts...)
+
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := solveT(ctx, t, gwc, gwclient.SolveRequest{
+		Definition: def.ToPB(),
+	})
+
+	verifySigning(ctx, t, res)
+}
+
+func verifySigning(ctx context.Context, t *testing.T, res *gwclient.Result) {
+	tgt := readFile(ctx, t, "/target", res)
+	cfg := readFile(ctx, t, "/config.json", res)
+
+	if string(tgt) != "windowscross" {
+		t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
+	}
+
+	if !strings.Contains(string(cfg), "windows") {
+		t.Fatal(fmt.Errorf("configuration incorrect"))
+	}
+}
+
+func prepareSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
+	zipper := getZipperState(ctx, t, gwc)
+
+	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget("windowscross/zip")}
+	srOpts = append(srOpts, extraSrOpts...)
+
+	sr := newSolveRequest(srOpts...)
+	st := reqToState(ctx, gwc, sr, t)
+	st = zipper.Run(llb.Args([]string{"bash", "-c", `for f in ./*.zip; do unzip "$f"; done`}), llb.Dir("/tmp/mnt")).
+		AddMount("/tmp/mnt", st)
+	return st
+}
+
+func getZipperState(ctx context.Context, t *testing.T, gwc gwclient.Client) llb.State {
+	zipperSpec := fillMetadata("bar", &dalec.Spec{
+		Dependencies: &dalec.PackageDependencies{
+			Runtime: map[string]dalec.PackageConstraints{
+				"unzip": {},
+			},
+		},
+	})
+
+	sr := newSolveRequest(withSpec(ctx, t, zipperSpec), withBuildTarget("mariner2/container"))
+	zipper := reqToState(ctx, gwc, sr, t)
+	return zipper
+}
+
 func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {
 	t.Helper()
 	res := solveT(ctx, t, gwc, sr)
@@ -504,7 +389,7 @@ func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveReque
 }
 
 func fillMetadata(fakename string, s *dalec.Spec) *dalec.Spec {
-	s.Name = "bar"
+	s.Name = fakename
 	s.Version = "0.0.1"
 	s.Description = "foo bar baz"
 	s.Website = "https://foo.bar.baz"

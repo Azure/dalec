@@ -230,6 +230,24 @@ func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient
 	return res
 }
 
+func withMainContext(ctx context.Context, t *testing.T, st llb.State) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
+		if sr.FrontendInputs == nil {
+			sr.FrontendInputs = make(map[string]*pb.Definition)
+		}
+
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sr.FrontendInputs[dockerui.DefaultLocalNameContext] = def.ToPB()
+	}
+}
+
 func withBuildContext(ctx context.Context, t *testing.T, name string, st llb.State) srOpt {
 	return func(sr *gwclient.SolveRequest) {
 		if sr.FrontendOpt == nil {

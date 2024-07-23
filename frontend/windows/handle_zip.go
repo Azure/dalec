@@ -144,7 +144,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 		llb.Network(llb.NetModeNone),
 	).AddMount(outputDir, llb.Scratch())
 
-	return frontend.MaybeSign(ctx, client, st, spec, targetKey)
+	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 }
 
 func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {

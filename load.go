@@ -21,6 +21,10 @@ func knownArg(key string) bool {
 		return true
 	case "DALEC_SKIP_SIGNING":
 		return true
+	case "DALEC_SIGNING_CONFIG_CONTEXT_NAME":
+		return true
+	case "DALEC_SIGNING_CONFIG_PATH":
+		return true
 	case "SOURCE_DATE_EPOCH":
 		return true
 	}

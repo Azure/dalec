@@ -6,16 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/test/testenv"
-	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
-	"gotest.tools/v3/assert"
 )
 
 func TestMariner2(t *testing.T) {
@@ -377,89 +373,7 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	runTest := func(t *testing.T, f testenv.TestFunc, opts ...testenv.TestRunnerOpt) {
-		t.Helper()
-		ctx := startTestSpan(baseCtx, t)
-		testEnv.RunTest(ctx, t, f, opts...)
-	}
-
-	t.Run("test signing", func(t *testing.T) {
-		newSpec := func() *dalec.Spec {
-			return &dalec.Spec{
-				Name:        "foo",
-				Version:     "0.0.1",
-				Description: "foo bar baz",
-				Website:     "https://foo.bar.baz",
-				Revision:    "1",
-				License:     "MIT",
-				PackageConfig: &dalec.PackageConfig{
-					Signer: &dalec.PackageSigner{
-						Frontend: &dalec.Frontend{
-							Image: phonySignerRef,
-						},
-					},
-				},
-				Sources: map[string]dalec.Source{
-					"foo": {
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
-							},
-						},
-					},
-				},
-				Build: dalec.ArtifactBuild{
-					Steps: []dalec.BuildStep{
-						{
-							Command: "/bin/true",
-						},
-					},
-				},
-				Artifacts: dalec.Artifacts{
-					Binaries: map[string]dalec.ArtifactConfig{
-						"foo": {},
-					},
-				},
-			}
-		}
-
-		t.Run("no args", func(t *testing.T) {
-			t.Parallel()
-			spec := newSpec()
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
-		})
-
-		t.Run("with args", func(t *testing.T) {
-			t.Parallel()
-
-			spec := newSpec()
-			spec.PackageConfig.Signer.Args = map[string]string{
-				"HELLO": "world",
-				"FOO":   "bar",
-			}
-			runTest(t, distroSigningTest(t, spec, testConfig.SignTarget))
-		})
-
-		t.Run("with skip signing", func(t *testing.T) {
-			t.Parallel()
-
-			spec := newSpec()
-			var found bool
-			handleStatus := func(status *client.SolveStatus) {
-				if found {
-					return
-				}
-				for _, w := range status.Warnings {
-					if strings.Contains(string(w.Short), "Signing disabled by build-arg") {
-						found = true
-						return
-					}
-				}
-			}
-			runTest(t, distroSkipSigningTest(t, spec, testConfig.SignTarget), testenv.WithSolveStatusFn(handleStatus))
-			assert.Assert(t, found, "Signing disabled warning message not emitted")
-		})
-	})
+	t.Run("test signing", linuxSigningTests(ctx, testConfig))
 
 	t.Run("test systemd unit", func(t *testing.T) {
 		t.Parallel()
