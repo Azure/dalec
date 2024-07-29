@@ -9,7 +9,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
-func installWithReqs(w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
+func installWithReqs(target string, w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
 	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
 	depsOnly := dalec.Spec{
 		Name:        "azlinux-build-dependencies",
@@ -26,7 +26,7 @@ func installWithReqs(w worker, deps map[string]dalec.PackageConstraints, install
 		pg := dalec.ProgressGroup("Building container for build dependencies")
 
 		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := specToRpmLLB(ctx, w, client, &depsOnly, sOpt, "mariner2", pg)
+		rpmDir, err := specToRpmLLB(ctx, w, client, &depsOnly, sOpt, target, pg)
 		if err != nil {
 			return nil, err
 		}

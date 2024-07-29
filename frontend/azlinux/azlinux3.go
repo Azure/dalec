@@ -61,7 +61,7 @@ func (w azlinux3) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 }
 
 func (w azlinux3) InstallWithReqs(deps map[string]dalec.PackageConstraints, opts ...installOpt) installFunc {
-	return installWithReqs(w, deps, opts...)
+	return installWithReqs("azlinux3", w, deps, opts...)
 }
 
 func (azlinux3) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {

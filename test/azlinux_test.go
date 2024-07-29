@@ -103,7 +103,7 @@ type workerConfig struct {
 type targetConfig struct {
 	// Package is the target for creating a package.
 	Package string
-	// Container is the target for creating a container.
+	// Container is the target for creating a con
 	Container string
 	// Target is the build target for creating the worker image.
 	Worker string
@@ -1115,52 +1115,43 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
-	t.Run("pinned build dependencies", func(t *testing.T) {
-		// Ensure that packages that just install other packages give the expected output
-
-		t.Parallel()
-		ctx := startTestSpan(baseCtx, t)
-
-		spec := &dalec.Spec{
-			Name:        "some-meta-thing",
-			Version:     "0.0.1",
-			Revision:    "1",
-			Description: "meta test",
-			License:     "MIT",
-			Dependencies: &dalec.PackageDependencies{
-				Build: map[string]dalec.PackageConstraints{
-					"curl": {
-						// should pin to = 7.84.x
-						Version: []string{"> 7.83", "< 7.86"},
-					},
-				},
-			},
-
-			Build: dalec.ArtifactBuild{
-				Steps: []dalec.BuildStep{
-					{
-						Command: `[[ $(curl --version | head -n1 | awk '{{ print $2 }}') =~ 7\.84\.* ]]`,
-					},
-				},
-			},
-		}
-
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
-			res := solveT(ctx, t, client, req)
-			_, err := res.SingleRef()
-
-			if err != nil {
-				t.Fatal(err)
-			}
-		})
-	})
-
 	t.Run("custom worker", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 		testCustomLinuxWorker(ctx, t, testConfig.Target, testConfig.Worker)
 	})
+
+	t.Run("pinned build dependencies", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testPinnedBuildDeps(ctx, t, testConfig.Target, testConfig.Worker)
+	})
+}
+
+func testPackage(name, version string) *dalec.Spec {
+	depSpec := &dalec.Spec{
+		Name:        name,
+		Version:     version,
+		Revision:    "1",
+		Description: "A basic package for various testing uses",
+		License:     "MIT",
+		Sources: map[string]dalec.Source{
+			"version.txt": {
+				Inline: &dalec.SourceInline{
+					File: &dalec.SourceInlineFile{
+						Contents: "version: " + version,
+					},
+				},
+			},
+		},
+		Artifacts: dalec.Artifacts{
+			Docs: map[string]dalec.ArtifactConfig{
+				"version.txt": {},
+			},
+		},
+	}
+
+	return depSpec
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -1251,6 +1242,89 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 		// TODO: we should have a test to make sure this also works with source policies.
 		// Unfortunately it seems like there is an issue with the gateway client passing
 		// in source policies.
+	})
+}
+
+func testPinnedBuildDeps(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
+	pkgName := "dalec-test-package"
+	depSpecs := []*dalec.Spec{
+		testPackage(pkgName, "1.1.1"),
+		testPackage(pkgName, "1.2.0"),
+		testPackage(pkgName, "1.3.0"),
+	}
+
+	// Main package, this should fail to build without a custom worker that has
+	// the base package available.
+	spec := &dalec.Spec{
+		Name:        "dalec-test-pinned-build-deps",
+		Version:     "0.0.1",
+		Revision:    "1",
+		Description: "Testing allowing custom worker images to be provided",
+		License:     "MIT",
+	}
+
+	tests := []struct {
+		name        string
+		constraints string
+		want        string
+	}{
+		{
+			name:        "exact dep available",
+			constraints: "== 1.1.1",
+			want:        "1.1.1",
+		},
+
+		{
+			name:        "lt dep available",
+			constraints: "< 1.3.0",
+			want:        "1.2.0",
+		},
+
+		{
+			name:        "gt dep available",
+			constraints: "> 1.2.0",
+			want:        "1.3.0",
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		// Build the worker target, this will give us the worker image as an output.
+		// Note: Currently we need to provide a dalec spec just due to how the router is setup.
+		//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
+		sr := newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))
+		worker := reqToState(ctx, gwc, sr, t)
+
+		var pkgs []llb.State
+		for _, depSpec := range depSpecs {
+			sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(targetCfg.Package))
+			pkg := reqToState(ctx, gwc, sr, t)
+			pkgs = append(pkgs, pkg)
+		}
+		worker = worker.With(workerCfg.CreateRepo(llb.Merge(pkgs)))
+
+		for _, tt := range tests {
+			spec.Dependencies = &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					pkgName: {
+						Version: []string{tt.constraints},
+					},
+				},
+			}
+
+			spec.Build.Steps = []dalec.BuildStep{
+				{
+					Command: fmt.Sprintf(`[[ $(cat /usr/share/doc/%s/version.txt) == "version: %s" ]]`, pkgName, tt.want),
+				},
+			}
+
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, workerCfg.ContextName, worker), withBuildTarget(targetCfg.Container))
+			res := solveT(ctx, t, gwc, sr)
+			_, err := res.SingleRef()
+
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 	})
 }
 

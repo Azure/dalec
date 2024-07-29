@@ -52,7 +52,7 @@ func (w mariner2) Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.S
 }
 
 func (w mariner2) InstallWithReqs(deps map[string]dalec.PackageConstraints, opts ...installOpt) installFunc {
-	return installWithReqs(w, deps, opts...)
+	return installWithReqs("mariner2", w, deps, opts...)
 }
 
 func (w mariner2) Install(pkgs []string, opts ...installOpt) llb.RunOption {
