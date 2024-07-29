@@ -1128,7 +1128,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 	})
 }
 
-func testPackage(name, version string) *dalec.Spec {
+func getTestPackageSpec(name, version string) *dalec.Spec {
 	depSpec := &dalec.Spec{
 		Name:        name,
 		Version:     version,
@@ -1248,9 +1248,9 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 func testPinnedBuildDeps(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
 	pkgName := "dalec-test-package"
 	depSpecs := []*dalec.Spec{
-		testPackage(pkgName, "1.1.1"),
-		testPackage(pkgName, "1.2.0"),
-		testPackage(pkgName, "1.3.0"),
+		getTestPackageSpec(pkgName, "1.1.1"),
+		getTestPackageSpec(pkgName, "1.2.0"),
+		getTestPackageSpec(pkgName, "1.3.0"),
 	}
 
 	// Main package, this should fail to build without a custom worker that has

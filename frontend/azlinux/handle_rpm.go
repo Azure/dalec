@@ -65,8 +65,6 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 
 	opts = append(opts, dalec.ProgressGroup("Install build deps"))
 
-	// TODO: does InstallWithReqs need to return another func() if the arguments to the func
-	// are immediately resolved at every call site?
 	rOpt, err := w.InstallWithReqs(deps, installWithConstraints(opts))(ctx, client, sOpt)
 	if err != nil {
 		return nil, err

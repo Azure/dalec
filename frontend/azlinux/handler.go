@@ -12,7 +12,6 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -74,10 +73,7 @@ func getSpecWorker(ctx context.Context, w worker, client gwclient.Client, sOpt d
 			return llb.Scratch(), err
 		}
 		if spec.HasGomods() {
-			depsMap := spec.GetBuildDeps(targetKey)
-
-			deps := maps.Keys(depsMap)
-			slices.Sort(deps)
+			deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
 
 			hasGolang := func(s string) bool {
 				return s == "golang" || s == "msft-golang"
