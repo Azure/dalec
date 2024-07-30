@@ -103,7 +103,7 @@ type workerConfig struct {
 type targetConfig struct {
 	// Package is the target for creating a package.
 	Package string
-	// Container is the target for creating a con
+	// Container is the target for creating a container
 	Container string
 	// Target is the build target for creating the worker image.
 	Worker string
@@ -1254,8 +1254,6 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, targetCfg targetConf
 		getTestPackageSpec("1.3.0"),
 	}
 
-	// Main package, this should fail to build without a custom worker that has
-	// the base package available.
 	spec := &dalec.Spec{
 		Name:        "dalec-test-pinned-build-deps",
 		Version:     "0.0.1",
