@@ -60,10 +60,6 @@ func (w azlinux3) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 	return dalec.WithRunOptions(tdnfInstall(&cfg, "3.0", pkgs), w.tdnfCacheMount(cfg.root))
 }
 
-func (w azlinux3) InstallWithReqs(deps map[string]dalec.PackageConstraints, opts ...installOpt) installFunc {
-	return installWithReqs("azlinux3", w, deps, opts...)
-}
-
 func (azlinux3) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {
 	_, _, dt, err := resolver.ResolveImageConfig(ctx, azlinux3DistrolessRef, sourceresolver.Opt{Platform: platform})
 	if err != nil {

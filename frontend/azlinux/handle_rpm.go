@@ -52,6 +52,45 @@ func handleRPM(w worker) gwclient.BuildFunc {
 	}
 }
 
+// Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
+func installBuildDepsPackage(target string, w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
+	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
+	depsOnly := dalec.Spec{
+		Name:        "azlinux-build-dependencies",
+		Description: "Provides build dependencies for mariner2 and azlinux3",
+		Version:     "1.0",
+		License:     "Apache 2.0",
+		Revision:    "1",
+		Dependencies: &dalec.PackageDependencies{
+			Runtime: deps,
+		},
+	}
+
+	return func(ctx context.Context, client gwclient.Client, sOpt dalec.SourceOpts) (llb.RunOption, error) {
+		pg := dalec.ProgressGroup("Building container for build dependencies")
+
+		// create an RPM with just the build dependencies, using our same base worker
+		rpmDir, err := specToRpmLLB(ctx, w, client, &depsOnly, sOpt, target, pg)
+		if err != nil {
+			return nil, err
+		}
+
+		var opts []llb.ConstraintsOpt
+		opts = append(opts, dalec.ProgressGroup("Install build deps"))
+
+		rpmMountDir := "/tmp/rpms"
+
+		installOpts = append([]installOpt{
+			noGPGCheck,
+			withMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
+			installWithConstraints(opts),
+		}, installOpts...)
+
+		// install the built RPMs into the worker itself
+		return w.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
+	}
+}
+
 func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
 	deps := spec.GetBuildDeps(targetKey)
 	if len(deps) == 0 {
@@ -65,13 +104,13 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 
 	opts = append(opts, dalec.ProgressGroup("Install build deps"))
 
-	rOpt, err := w.InstallWithReqs(deps, installWithConstraints(opts))(ctx, client, sOpt)
+	installOpt, err := installBuildDepsPackage(targetKey, w, deps, installWithConstraints(opts))(ctx, client, sOpt)
 	if err != nil {
 		return nil, err
 	}
 
 	return func(in llb.State) llb.State {
-		return in.Run(rOpt, dalec.WithConstraints(opts...)).Root()
+		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
 	}, nil
 }
 
