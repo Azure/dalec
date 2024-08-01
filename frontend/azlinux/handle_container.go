@@ -151,7 +151,7 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 
 	if len(files) > 0 {
 		rpmMountDir := "/tmp/rpms"
-		updated := make([]string, 0, len(files))
+		updated := w.BasePackages()
 		for _, f := range files {
 			updated = append(updated, filepath.Join(rpmMountDir, f))
 		}

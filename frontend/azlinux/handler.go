@@ -23,6 +23,7 @@ type worker interface {
 	Install(pkgs []string, opts ...installOpt) llb.RunOption
 	DefaultImageConfig(context.Context, llb.ImageMetaResolver, *ocispecs.Platform) (*dalec.DockerImageSpec, error)
 	WorkerImageConfig(context.Context, llb.ImageMetaResolver, *ocispecs.Platform) (*dalec.DockerImageSpec, error)
+	BasePackages() []string
 }
 
 func newHandler(w worker) gwclient.BuildFunc {
