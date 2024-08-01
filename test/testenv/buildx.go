@@ -15,9 +15,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	pkgerrors "github.com/pkg/errors"
 )
 
@@ -213,6 +215,31 @@ func (b *BuildxEnv) Buildkit(ctx context.Context) (*client.Client, error) {
 	}
 
 	panic("unreachable: if you see this then this is a bug in the testenv bootstrap code")
+}
+
+func (b *BuildxEnv) Platforms(ctx context.Context) ([]ocispecs.Platform, error) {
+	client, err := b.Buildkit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	workers, err := client.ListWorkers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	v := make(map[string]ocispecs.Platform)
+	for _, w := range workers {
+		for _, p := range w.Platforms {
+			v[platforms.Format(p)] = p
+		}
+	}
+
+	out := make([]ocispecs.Platform, 0, len(v))
+	for _, p := range v {
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 type FrontendSpec struct {

@@ -25,6 +25,8 @@ func HandleSources(wf WorkerFunc) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
+			// Note, we are not passing platform down here because everything should
+			// be able to work regardless of platform, so prefer the native platform.
 			sources, err := Dalec2SourcesLLB(worker, spec, sOpt)
 			if err != nil {
 				return nil, nil, err

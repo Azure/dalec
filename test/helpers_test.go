@@ -3,14 +3,18 @@ package test
 import (
 	"bytes"
 	"context"
+	"debug/elf"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend"
 	"github.com/containerd/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
@@ -19,6 +23,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/tonistiigi/fsutil/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -188,6 +193,9 @@ func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
 
 func withPlatform(platform platforms.Platform) srOpt {
 	return func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
 		sr.FrontendOpt["platform"] = platforms.Format(platform)
 	}
 }
@@ -204,6 +212,15 @@ func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {
 	}
 }
 
+func withSubrequest(id string) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
+		sr.FrontendOpt[frontend.KeyRequestID] = id
+	}
+}
+
 func withBuildTarget(target string) srOpt {
 	return func(sr *gwclient.SolveRequest) {
 		if sr.FrontendOpt == nil {
@@ -216,10 +233,7 @@ func withBuildTarget(target string) srOpt {
 // withListTargetsOnly sets up the request so that we do a subrequest to just list targets
 // None of the targets will be run with this set.
 func withListTargetsOnly(sr *gwclient.SolveRequest) {
-	if sr.FrontendOpt == nil {
-		sr.FrontendOpt = make(map[string]string)
-	}
-	sr.FrontendOpt["requestid"] = targets.RequestTargets
+	withSubrequest(targets.RequestTargets)(sr)
 }
 
 func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient.SolveRequest) *gwclient.Result {
@@ -292,4 +306,61 @@ func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveReque
 	}
 
 	return st
+}
+
+func elfToPlatform(f *elf.File, target *ocispecs.Platform) {
+	switch f.Machine {
+	case elf.EM_X86_64:
+		target.Architecture = "amd64"
+	case elf.EM_ARM:
+		target.Architecture = "arm"
+		// TODO: subarch?
+	case elf.EM_AARCH64:
+		target.Architecture = "arm64"
+	case elf.EM_PPC64:
+		if f.ByteOrder == binary.LittleEndian {
+			target.Architecture = "ppc64le"
+		}
+		target.Architecture = "ppc64"
+	case elf.EM_S390:
+		target.Architecture = "s390x"
+	case elf.EM_RISCV:
+		target.Architecture = "riscv64"
+	}
+}
+
+type platformsAsStringer []ocispecs.Platform
+
+func (ls platformsAsStringer) String() string {
+	collect := make([]string, 0, len(ls))
+	for _, p := range ls {
+		collect = append(collect, platforms.Format(p))
+	}
+
+	return strings.Join(collect, ", ")
+}
+
+func readResultPlatforms(t *testing.T, res *gwclient.Result) []ocispecs.Platform {
+	dt, ok := res.Metadata[exptypes.ExporterPlatformsKey]
+	if !ok {
+		return nil
+	}
+
+	var pls exptypes.Platforms
+	if err := json.Unmarshal(dt, &pls); err != nil {
+		t.Fatal(err)
+	}
+
+	out := make([]ocispecs.Platform, 0, len(pls.Platforms))
+	for _, p := range pls.Platforms {
+		out = append(out, p.Platform)
+	}
+
+	return out
+}
+
+type platformStringer ocispecs.Platform
+
+func (p platformStringer) String() string {
+	return platforms.Format(ocispecs.Platform(p))
 }
