@@ -68,11 +68,11 @@ deb [trusted=yes] copy:/tmp/repo /
 // I looked at having a good way to skip the test on non-amd64 and it all ends up
 // being a bit janky and error prone.
 // I'd rather just let the test run since it will work when we set an explicit platform
-func withWindowsAmd64(sr *gwclient.SolveRequest) {
-	if sr.FrontendOpt == nil {
-		sr.FrontendOpt = make(map[string]string)
+func withWindowsAmd64(cfg *newSolveRequestConfig) {
+	if cfg.req.FrontendOpt == nil {
+		cfg.req.FrontendOpt = make(map[string]string)
 	}
-	sr.FrontendOpt["platform"] = "windows/amd64"
+	cfg.req.FrontendOpt["platform"] = "windows/amd64"
 }
 
 func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
