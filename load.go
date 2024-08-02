@@ -27,6 +27,8 @@ func knownArg(key string) bool {
 		return true
 	case "SOURCE_DATE_EPOCH":
 		return true
+	case "DALEC_SKIP_TESTS":
+		return true
 	}
 
 	return platformArg(key)
