@@ -143,14 +143,14 @@ func TestHandlerSubrequestResolve(t *testing.T) {
 						"TARGETARCH": "",
 					},
 				}
-				req := newSolveRequest(withSpec(ctx, t, spec), withSubrequest("frontend.dalec.resolve"), func(req *gwclient.SolveRequest) {
+				req := newSolveRequest(withSpec(ctx, t, spec), withSubrequest("frontend.dalec.resolve"), func(cfg *newSolveRequestConfig) {
 					if len(pls) == 0 {
 						return
 					}
-					if req.FrontendOpt == nil {
-						req.FrontendOpt = make(map[string]string)
+					if cfg.req.FrontendOpt == nil {
+						cfg.req.FrontendOpt = make(map[string]string)
 					}
-					req.FrontendOpt["platform"] = strings.Join(pls, ",")
+					cfg.req.FrontendOpt["platform"] = strings.Join(pls, ",")
 				})
 
 				res, err := gwc.Solve(ctx, req)

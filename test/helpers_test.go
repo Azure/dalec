@@ -177,57 +177,76 @@ func (d dirStatAsStringer) String() string {
 	return buf.String()
 }
 
+type solveConfig struct {
+	r *gwclient.SolveRequest
+}
+
+type newSolveRequestConfig struct {
+	req              *gwclient.SolveRequest
+	noFillSpecFields bool
+}
+
 // srOpt is used by [newSolveRequest] to apply changes to a [gwclient.SolveRequest].
-type srOpt func(*gwclient.SolveRequest)
+type srOpt func(*newSolveRequestConfig)
 
 func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
-	sr := gwclient.SolveRequest{Evaluate: true}
-	for _, opt := range opts {
-		opt(&sr)
+	cfg := newSolveRequestConfig{
+		req: &gwclient.SolveRequest{Evaluate: true},
 	}
-	return sr
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return *cfg.req
 }
 
 func withPlatform(platform platforms.Platform) srOpt {
-	return func(sr *gwclient.SolveRequest) {
-		sr.FrontendOpt["platform"] = platforms.Format(platform)
+	return func(cfg *newSolveRequestConfig) {
+		cfg.req.FrontendOpt["platform"] = platforms.Format(platform)
 	}
 }
 
 func withBuildArg(k, v string) srOpt {
-	return func(sr *gwclient.SolveRequest) {
-		sr.FrontendOpt["build-arg:"+k] = v
+	return func(cfg *newSolveRequestConfig) {
+		cfg.req.FrontendOpt["build-arg:"+k] = v
 	}
 }
 
 func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {
-	return func(sr *gwclient.SolveRequest) {
-		specToSolveRequest(ctx, t, spec, sr)
+	return func(cfg *newSolveRequestConfig) {
+		if spec != nil && !cfg.noFillSpecFields {
+			if spec.Packager == "" {
+				spec.Packager = "test"
+			}
+			if spec.Website == "" {
+				spec.Website = "https://github.com/Azure/dalec"
+			}
+		}
+		specToSolveRequest(ctx, t, spec, cfg.req)
 	}
 }
 
 func withBuildTarget(target string) srOpt {
-	return func(sr *gwclient.SolveRequest) {
-		if sr.FrontendOpt == nil {
-			sr.FrontendOpt = make(map[string]string)
+	return func(cfg *newSolveRequestConfig) {
+		if cfg.req.FrontendOpt == nil {
+			cfg.req.FrontendOpt = make(map[string]string)
 		}
-		sr.FrontendOpt["target"] = target
+		cfg.req.FrontendOpt["target"] = target
 	}
 }
 
 func withSubrequest(id string) srOpt {
-	return func(sr *gwclient.SolveRequest) {
-		if sr.FrontendOpt == nil {
-			sr.FrontendOpt = make(map[string]string)
+	return func(cfg *newSolveRequestConfig) {
+		if cfg.req.FrontendOpt == nil {
+			cfg.req.FrontendOpt = make(map[string]string)
 		}
-		sr.FrontendOpt["requestid"] = id
+		cfg.req.FrontendOpt["requestid"] = id
 	}
 }
 
 // withListTargetsOnly sets up the request so that we do a subrequest to just list targets
 // None of the targets will be run with this set.
-func withListTargetsOnly(sr *gwclient.SolveRequest) {
-	withSubrequest(targets.RequestTargets)(sr)
+func withListTargetsOnly(cfg *newSolveRequestConfig) {
+	withSubrequest(targets.RequestTargets)(cfg)
 }
 
 func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient.SolveRequest) *gwclient.Result {
@@ -240,12 +259,12 @@ func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient
 }
 
 func withMainContext(ctx context.Context, t *testing.T, st llb.State) srOpt {
-	return func(sr *gwclient.SolveRequest) {
-		if sr.FrontendOpt == nil {
-			sr.FrontendOpt = make(map[string]string)
+	return func(cfg *newSolveRequestConfig) {
+		if cfg.req.FrontendOpt == nil {
+			cfg.req.FrontendOpt = make(map[string]string)
 		}
-		if sr.FrontendInputs == nil {
-			sr.FrontendInputs = make(map[string]*pb.Definition)
+		if cfg.req.FrontendInputs == nil {
+			cfg.req.FrontendInputs = make(map[string]*pb.Definition)
 		}
 
 		def, err := st.Marshal(ctx)
@@ -253,17 +272,17 @@ func withMainContext(ctx context.Context, t *testing.T, st llb.State) srOpt {
 			t.Fatal(err)
 		}
 
-		sr.FrontendInputs[dockerui.DefaultLocalNameContext] = def.ToPB()
+		cfg.req.FrontendInputs[dockerui.DefaultLocalNameContext] = def.ToPB()
 	}
 }
 
 func withBuildContext(ctx context.Context, t *testing.T, name string, st llb.State) srOpt {
-	return func(sr *gwclient.SolveRequest) {
-		if sr.FrontendOpt == nil {
-			sr.FrontendOpt = make(map[string]string)
+	return func(cfg *newSolveRequestConfig) {
+		if cfg.req.FrontendOpt == nil {
+			cfg.req.FrontendOpt = make(map[string]string)
 		}
-		if sr.FrontendInputs == nil {
-			sr.FrontendInputs = make(map[string]*pb.Definition)
+		if cfg.req.FrontendInputs == nil {
+			cfg.req.FrontendInputs = make(map[string]*pb.Definition)
 		}
 
 		def, err := st.Marshal(ctx)
@@ -271,8 +290,8 @@ func withBuildContext(ctx context.Context, t *testing.T, name string, st llb.Sta
 			t.Fatal(err)
 		}
 
-		sr.FrontendOpt["context:"+name] = "input:" + name
-		sr.FrontendInputs[name] = def.ToPB()
+		cfg.req.FrontendOpt["context:"+name] = "input:" + name
+		cfg.req.FrontendInputs[name] = def.ToPB()
 	}
 }
 
