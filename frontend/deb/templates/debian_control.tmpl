@@ -1,10 +1,10 @@
-Source: {{.Name}}
-{{if .Packager }}Maintainer: {{.Packager}}{{end}}
-{{if .Website}}Homepage: {{.Website}}{{end}}
-{{ .BuildDeps }}
+Source: {{- .Name -}}{{- "\n" -}}
+{{- if .Packager }}Maintainer: {{- .Packager -}}{{- "\n" -}}{{end -}}
+{{- if .Website}}Homepage: {{- .Website -}}{{- "\n" -}}{{end -}}
+{{- .BuildDeps }}
 
-Package: {{.Name}}
-Architecture: {{.Architecture}}
+Package: {{- .Name -}}{{- "\n" -}}
+Architecture: {{- .Architecture -}}{{- "\n" -}}
 Section: -
 {{.AllRuntimeDeps -}}
 {{.Replaces -}}

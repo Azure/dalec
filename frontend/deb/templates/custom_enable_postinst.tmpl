@@ -1,0 +1,17 @@
+# Automatically added by github.com/Azure/dalec
+# This is generally copied from dh_installsystemd
+# This is required because dh_installsystemd operates on the unit base name and
+# not the full unit name (e.g. "foo" instead of "foo.service") and sometimes
+# we want to enable one and not the other.
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	# This will only remove masks created by d-s-h on package removal.
+	deb-systemd-helper unmask '{{.}}' >/dev/null || true
+
+	if deb-systemd-helper --quiet was-enabled '{{.}}'; then
+		deb-systemd-helper enable '{{.}}' > /dev/null || true
+	else
+		deb-systemd-helper update-state '{{.}}' >/dev/null || true
+	fi
+fi
+# End automatically added section
+

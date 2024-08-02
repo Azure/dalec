@@ -10,6 +10,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
 func handleDeb(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -55,13 +56,14 @@ func installPackages(opts llb.ConstraintsOpt, ls ...string) llb.StateOption {
 }
 
 func buildDeb(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	worker := workerBase(sOpt.Resolver).With(basePackages(opts...)).With(buildDepends(spec, targetKey, opts...))
+	installBuildDeps, err := buildDepends(sOpt, spec, targetKey, opts...)
+	worker := workerBase(sOpt.Resolver).With(basePackages(opts...)).With(installBuildDeps)
 	st, err := deb.BuildDeb(worker, spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	signed, err := frontend.MaybeSign(ctx, client, st, spec, targetKey)
+	signed, err := frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -76,14 +78,53 @@ func basePackages(opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		opts = append(opts, dalec.ProgressGroup("Install base packages"))
 		return in.
-			With(installPackages(dalec.WithConstraints(opts...), "dpkg-dev", "devscripts", "equivs", "fakeroot", "dh-make", "build-essential", "dh-apparmor", "dh-make", "dh-exec"))
+			With(installPackages(dalec.WithConstraints(opts...), "dpkg-dev", "devscripts", "equivs", "fakeroot", "dh-make", "build-essential", "dh-apparmor", "dh-make", "dh-exec", "debhelper-compat="+deb.DebHelperCompat))
 	}
 }
 
-func buildDepends(spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return func(in llb.State) llb.State {
-		opts = append(opts, dalec.ProgressGroup("Install build dependencies"))
-		deps := spec.GetBuildDeps(targetKey)
-		return in.With(installPackages(dalec.WithConstraints(opts...), deps...))
+func buildDepends(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	deps := spec.Dependencies
+	if t, ok := spec.Targets[targetKey]; ok {
+		if t.Dependencies != nil {
+			deps = t.Dependencies
+		}
 	}
+
+	var buildDeps map[string]dalec.PackageConstraints
+	if deps != nil {
+		buildDeps = deps.Build
+	}
+
+	if buildDeps == nil {
+		return func(in llb.State) llb.State {
+			return in
+		}, nil
+	}
+
+	depsSpec := &dalec.Spec{
+		Name:     spec.Name + "-deps",
+		Packager: "Dalec",
+		Version:  spec.Version,
+		Revision: spec.Revision,
+		Dependencies: &dalec.PackageDependencies{
+			Runtime: buildDeps,
+		},
+		Description: "Build dependencies for " + spec.Name,
+	}
+
+	worker := workerBase(sOpt.Resolver).With(basePackages(opts...))
+	pg := dalec.ProgressGroup("Install build dependencies")
+	opts = append(opts, pg)
+	deb, err := deb.BuildDeb(worker, depsSpec, sOpt, targetKey, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating intermediate package for insalling build dependencies")
+	}
+
+	return func(in llb.State) llb.State {
+		return in.Run(
+			llb.AddMount("/tmp/builddeps", deb, llb.Readonly),
+			dalec.ShArgs("apt install -y /tmp/builddeps/*.deb"),
+			dalec.WithMountedAptCache(aptCachePrefix),
+		).Root()
+	}, nil
 }

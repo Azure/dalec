@@ -14,7 +14,8 @@ import (
 const (
 	// Unique name that would not normally be in the spec
 	// This will get used to create the source tar for go module deps
-	gomodsName = "xxxdalecGomodsInternal"
+	gomodsName      = "xxxdalecGomodsInternal"
+	DebHelperCompat = "13"
 )
 
 func mountSources(sources map[string]llb.State, dir string, mod func(string) string) llb.RunOption {
@@ -74,6 +75,7 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 	if err := validateSpec(spec); err != nil {
 		return llb.Scratch(), err
 	}
+	dr, err := Debroot(sOpt, spec, worker, llb.Scratch(), targetKey, "")
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -107,6 +109,7 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 		llb.Dir("/work/pkg"),
 		llb.AddMount("/work/pkg/debian", dr, llb.SourcePath("debian")), // This cannot be readonly because the debian directory gets modified by dpkg-buildpackage
 		llb.AddMount("/work/pkg/debian/patches", patches, llb.Readonly),
+		llb.AddEnv("DH_VERBOSE", "1"),
 		llb.Network(pb.NetMode_NONE),
 		mountSources(sources, "/work/pkg", sanitizeSourceKey),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
