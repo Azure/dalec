@@ -3,6 +3,7 @@ package testenv
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -133,18 +134,38 @@ func withDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.Sol
 func displaySolveStatus(ctx context.Context, t *testing.T) (chan *client.SolveStatus, <-chan struct{}) {
 	ch := make(chan *client.SolveStatus)
 	done := make(chan struct{})
-	display, err := progressui.NewDisplay(&testWriter{t}, progressui.AutoMode, progressui.WithPhase(t.Name()))
+
+	dir := t.TempDir()
+	f, err := os.OpenFile(filepath.Join(dir, "build.log"), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatalf("error opening temp file: %v", err)
+	}
+	display, err := progressui.NewDisplay(f, progressui.AutoMode, progressui.WithPhase(t.Name()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	go func() {
+		defer close(done)
+
 		_, err := display.UpdateFrom(ctx, ch)
 		if err != nil {
 			t.Log(err)
 		}
-		close(done)
+		defer f.Close()
+
+		if !t.Failed() {
+			return
+		}
+
+		sz, _ := f.Seek(0, io.SeekEnd)
+		f.Seek(0, io.SeekStart)
+		_, err = io.CopyN(&testWriter{t}, f, sz)
+		if err != nil {
+			t.Log(err)
+		}
 	}()
+
 	return ch, done
 }
 

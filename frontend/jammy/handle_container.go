@@ -15,7 +15,25 @@ import (
 	"github.com/pkg/errors"
 )
 
-const jammyRef = "docker.io/library/ubuntu:jammy"
+const jammyRef = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
+
+// Unlike how azlinux works, when creating a debian system there are many implicit
+// dpeendencies which are already expected to be on the system that are not in
+// the package dependency tree.
+// These are the extra packages we'll include when building a container.
+var (
+	baseDeps = []string{
+		"base-files",
+		"base-passwd",
+		"usrmerge",
+	}
+	systemdDeps = []string{
+		"init-system-helpers",
+		"bash",
+		"systemctl",
+		"dash",
+	}
+)
 
 func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
@@ -121,7 +139,7 @@ func buildImageRootfs(spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, ta
 	// This requries some special handling.
 	// When there is a base image we assume apt-get to be available.
 	if base == "" {
-		return boostrapRootfs(worker, repoMount, spec, opts...).With(installSymlinks)
+		base = jammyRef
 	}
 
 	baseImg := llb.Image(base, llb.WithMetaResolver(sOpt.Resolver))
@@ -131,6 +149,7 @@ func buildImageRootfs(spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, ta
 // buildRootfsFromBase creates a rootfs from a base image and installs the built package and all its runtime dependencies
 // This requires apt-get and /bin/sh to be installed in the base image
 func buildRootfsFromBase(base llb.State, repoMount llb.RunOption, spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
+	debug := llb.Scratch().File(llb.Mkfile("debug", 0o644, []byte(`debug=2`)), opts...)
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))
 	return base.Run(
 		dalec.ShArgs("apt-get update && apt-get install -y "+spec.Name),
@@ -138,6 +157,7 @@ func buildRootfsFromBase(base llb.State, repoMount llb.RunOption, spec *dalec.Sp
 		dalec.WithMountedAptCache(aptCachePrefix),
 		repoMount,
 		dalec.WithConstraints(opts...),
+		llb.AddMount("/etc/dpkg/dpkg.cfg.d/99-dalec-debug", debug, llb.SourcePath("debug"), llb.Readonly),
 	).Root()
 }
 
@@ -145,8 +165,26 @@ func buildRootfsFromBase(base llb.State, repoMount llb.RunOption, spec *dalec.Sp
 // It is assumed that the location that debs should be installed to is /tmp/rootfs
 // It is also assumed that the apt sources is at /etc/apt/sources.list
 // This also removes all apt artifacts.
-func debstrap(packages ...string) llb.RunOption {
-	return dalec.ShArgs("apt-get update && mmdebstrap --variant=custom --mode=chrootless --include=" + strings.Join(packages, ",") + " jammy /tmp/rootfs /etc/apt/sources.list && rm -rf /tmp/rootfs/var/lib/apt && rm -rf /tmp/rootfs/var/cache/apt")
+func debstrap(packages []string) llb.RunOption {
+	return dalec.ShArgs("set -ex; apt-get update; mmdebstrap --debug --verbose --variant=essential --mode=chrootless --include=" + strings.Join(packages, ",") + " jammy /tmp/rootfs /etc/apt/sources.list; rm -rf /tmp/rootfs/var/lib/apt; rm -rf /tmp/rootfs/var/cache/apt")
+}
+
+func shouldIncludeSystemdDeps(spec *dalec.Spec) bool {
+	if spec.Artifacts.Systemd.IsEmpty() {
+		return false
+	}
+	return len(spec.Artifacts.Systemd.Units) > 0
+}
+
+func getPackageList(spec *dalec.Spec) []string {
+	// pkgs := baseDeps
+	var pkgs []string
+	//if shouldIncludeSystemdDeps(spec) {
+	//	pkgs = append(pkgs, systemdDeps...)
+	//}
+
+	pkgs = append(pkgs, spec.Name)
+	return pkgs
 }
 
 // bootstrapRootfs creates a rootfs from scratch using the built package and all its runtime dependencies
@@ -154,10 +192,12 @@ func boostrapRootfs(worker llb.State, repoMount llb.RunOption, spec *dalec.Spec,
 	opts = append(opts, dalec.ProgressGroup("Bootstrap rootfs"))
 	return worker.
 		Run(
-			debstrap(spec.Name),
+			// llb.Security(llb.SecurityModeInsecure),
+			debstrap(getPackageList(spec)),
 			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
 			repoMount,
 			dalec.WithConstraints(opts...),
+			dalec.WithMountedAptCache(aptCachePrefix),
 		).
 		AddMount("/tmp/rootfs", llb.Scratch())
 }
@@ -206,7 +246,8 @@ func installTestDeps(resolver llb.ImageMetaResolver, spec *dalec.Spec, targetKey
 		if noBaseImg {
 			worker := workerBase(resolver).With(aptWorker(opts...))
 			return worker.Run(
-				debstrap(deps...),
+				debstrap(deps),
+				llb.Security(llb.SecurityModeInsecure),
 				llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
 			).
 				AddMount("/tmp/rootfs", in)

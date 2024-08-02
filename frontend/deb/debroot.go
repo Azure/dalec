@@ -7,12 +7,15 @@ import (
 	"io"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"sync"
 
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
+
+const customSystemdPostinstFile = "custom_systemd_postinst.sh.partial"
 
 //go:embed templates/patch-header.txt
 var patchHeader []byte
@@ -43,14 +46,14 @@ func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, s
 		states = append(states, st)
 	}
 
-	series := base.File(llb.Mkfile(filepath.Join(patchesPath, "series"), 0o440, seriesBuf.Bytes()), opts...)
+	series := base.File(llb.Mkfile(filepath.Join(patchesPath, "series"), 0o640, seriesBuf.Bytes()), opts...)
 
 	return append(states, series), nil
 }
 
 // Debroot creates a debian root directory suitable for use with debbuild.
 // This does not include sources in case you want to mount sources (instead of copying them) later.
-func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, in llb.State, target, dir string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, target, dir string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	control, err := controlFile(spec, in, target, dir)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error generating control file")
@@ -71,15 +74,20 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, in llb.State, target, dir 
 	}
 
 	base := llb.Scratch().File(llb.Mkdir(dir, 0o755), opts...)
-	installers := createInstallScripts(spec, dir)
+	installers := createInstallScripts(worker, spec, dir)
 
 	debian := base.
-		File(llb.Mkfile(filepath.Join(dir, "compat"), 0o440, []byte("10")), opts...).
 		File(llb.Mkdir(filepath.Join(dir, "source"), 0o755), opts...).
-		File(llb.Mkfile(filepath.Join(dir, "source/format"), 0o440, []byte("3.0 (quilt)")), opts...).
-		File(llb.Mkfile(filepath.Join(dir, "source/options"), 0o440, []byte("create-empty-orig")), opts...).
+		With(func(in llb.State) llb.State {
+			if len(spec.Sources) == 0 {
+				return in
+			}
+			return in.
+				File(llb.Mkfile(filepath.Join(dir, "source/format"), 0o640, []byte("3.0 (quilt)")), opts...).
+				File(llb.Mkfile(filepath.Join(dir, "source/options"), 0o640, []byte("create-empty-orig")), opts...)
+		}).
 		File(llb.Mkdir(filepath.Join(dir, "dalec"), 0o755), opts...).
-		File(llb.Mkfile(filepath.Join(dir, "source/include-binaries"), 0o440, append([]byte("dalec"), '\n')), opts...)
+		File(llb.Mkfile(filepath.Join(dir, "source/include-binaries"), 0o640, append([]byte("dalec"), '\n')), opts...)
 
 	states := []llb.State{control, rules, changelog, debian}
 	states = append(states, installers...)
@@ -91,6 +99,16 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, in llb.State, target, dir 
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/patch.sh"), 0o700, createPatchScript(spec)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_file_backed_sources.sh"), 0o700, fixupFileBackedSourcesScript(spec)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPerms(spec)), opts...))
+
+	customEnable, err := customDHInstallSystemdPostinst(spec)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	if len(customEnable) > 0 {
+		// This is not meant to be executed on its own and will instead get added
+		// to a post inst file, so need to mark this as executable.
+		states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/"+customSystemdPostinstFile), 0o600, customEnable), opts...))
+	}
 
 	patchDir := dalecDir.File(llb.Mkdir(filepath.Join(dir, "dalec/patches"), 0o755), opts...)
 	sorted := dalec.SortMapKeys(spec.Patches)
@@ -221,7 +239,7 @@ func createBuildScript(spec *dalec.Spec) []byte {
 	return buf.Bytes()
 }
 
-func createInstallScripts(spec *dalec.Spec, dir string) []llb.State {
+func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.State {
 	if spec.Artifacts.IsEmpty() {
 		return nil
 	}
@@ -235,16 +253,22 @@ func createInstallScripts(spec *dalec.Spec, dir string) []llb.State {
 		fmt.Fprintln(installBuf)
 	})
 
-	writeInstall := func(src, dst string) {
+	writeInstall := func(src, dir, name string) {
 		writeInstallHeader()
-		fmt.Fprintln(installBuf, src, "=>", dst)
+
+		if filepath.Base(src) != name || strings.Contains(src, "*") {
+			fmt.Fprintln(installBuf, src, "=>", filepath.Join(dir, name))
+			return
+		}
+
+		fmt.Fprintln(installBuf, src, dir)
 	}
 
 	if len(spec.Artifacts.Binaries) > 0 {
 		sorted := dalec.SortMapKeys(spec.Artifacts.Binaries)
 		for _, key := range sorted {
 			cfg := spec.Artifacts.Binaries[key]
-			writeInstall(key, filepath.Join("/usr/bin", cfg.SubPath, cfg.ResolveName(key)))
+			writeInstall(key, filepath.Join("/usr/bin", cfg.SubPath), cfg.ResolveName(key))
 		}
 	}
 
@@ -254,9 +278,10 @@ func createInstallScripts(spec *dalec.Spec, dir string) []llb.State {
 		for _, p := range sorted {
 			cfg := spec.Artifacts.ConfigFiles[p]
 
-			installPath := filepath.Join("/etc", cfg.SubPath, cfg.ResolveName(p))
-			writeInstall(p, installPath)
-			fmt.Fprintln(buf, installPath)
+			dir := filepath.Join("/etc", cfg.SubPath)
+			name := cfg.ResolveName(p)
+			writeInstall(p, dir, name)
+			fmt.Fprintln(buf, filepath.Join(dir, name))
 		}
 
 		// See: https://man7.org/linux/man-pages/man5/deb-conffiles.5.html for tracking config files in packages
@@ -267,17 +292,19 @@ func createInstallScripts(spec *dalec.Spec, dir string) []llb.State {
 		buf := bytes.NewBuffer(nil)
 
 		sorted := dalec.SortMapKeys(spec.Artifacts.Manpages)
-		for _, p := range sorted {
-			cfg := spec.Artifacts.Manpages[p]
+		for _, key := range sorted {
+			cfg := spec.Artifacts.Manpages[key]
 			if cfg.Name != "" || cfg.SubPath != "" {
-				writeInstall(p, filepath.Join("/usr/share/doc/manpages", spec.Name, cfg.SubPath, cfg.ResolveName(p)))
-			} else {
-				fmt.Fprintln(buf, p)
+				resolved := cfg.ResolveName(key)
+				writeInstall(key, filepath.Join("/usr/share/doc/manpages", spec.Name, cfg.SubPath), resolved)
+				continue
 			}
+			fmt.Fprintln(buf, key)
 		}
 		if buf.Len() > 0 {
 			states = append(states, base.File(llb.Mkfile(filepath.Join(dir, spec.Name+".manpages"), 0o640, buf.Bytes())))
 		}
+
 	}
 
 	if spec.Artifacts.Directories != nil {
@@ -302,8 +329,9 @@ func createInstallScripts(spec *dalec.Spec, dir string) []llb.State {
 		sorted := dalec.SortMapKeys(spec.Artifacts.Docs)
 		for _, key := range sorted {
 			cfg := spec.Artifacts.Docs[key]
-			if cfg.Name != "" || cfg.SubPath != "" {
-				writeInstall(key, filepath.Join("/usr/share/doc", spec.Name, cfg.SubPath, cfg.ResolveName(key)))
+			resolved := cfg.ResolveName(key)
+			if resolved != key || cfg.SubPath != "" {
+				writeInstall(key, filepath.Join("/usr/share/doc", spec.Name, cfg.SubPath), resolved)
 			} else {
 				fmt.Fprintln(buf, key)
 			}
@@ -312,8 +340,9 @@ func createInstallScripts(spec *dalec.Spec, dir string) []llb.State {
 		sorted = dalec.SortMapKeys(spec.Artifacts.Licenses)
 		for _, key := range sorted {
 			cfg := spec.Artifacts.Licenses[key]
-			if cfg.Name != "" || cfg.SubPath != "" {
-				writeInstall(key, filepath.Join("/usr/share/doc", spec.Name, cfg.SubPath, cfg.ResolveName(key)))
+			resolved := cfg.ResolveName(key)
+			if resolved != key || cfg.SubPath != "" {
+				writeInstall(key, filepath.Join("/usr/share/doc", spec.Name, cfg.SubPath), resolved)
 			} else {
 				fmt.Fprintln(buf, key)
 			}
@@ -324,8 +353,63 @@ func createInstallScripts(spec *dalec.Spec, dir string) []llb.State {
 		}
 	}
 
+	if units := spec.Artifacts.Systemd.GetUnits(); len(units) > 0 {
+		// deb-systemd will look for service files in DEBIAN/<package-name>[.<service-name>].<unit-type>
+		// To handle this we'll create symlinks to the actual unit files in the source.
+		// https://manpages.debian.org/testing/debhelper/dh_installsystemd.1.en.html#FILES
+
+		// Maps the base name of a unit, e.g. "foo.service" -> foo, to the list of
+		// units that fall under that basename
+		// (e.g. "foo.socket" and  "foo.service")
+		// We need to track this in cases where some units under a base are
+		// enabled and some are not since dh_installsystemd does not support this
+		// directly.
+
+		sorted := dalec.SortMapKeys(units)
+		for _, key := range sorted {
+			cfg := units[key]
+			name, suffix := cfg.SplitName(key)
+			if name != spec.Name {
+				name = spec.Name + "." + name
+			}
+
+			name = name + "." + suffix
+
+			// Unforutnately there is not currently any way to create a symlink
+			// directory with llb, so we need to use the worker to create the
+			// symlink for us.
+			st := worker.Run(
+				llb.Dir(filepath.Join("/tmp/work", dir)),
+				dalec.ShArgs("ln -s ../"+key+" "+name),
+			).AddMount("/tmp/work", llb.Scratch())
+
+			states = append(states, st)
+		}
+	}
+
+	if dropins := spec.Artifacts.Systemd.GetDropins(); len(dropins) > 0 {
+		sorted := dalec.SortMapKeys(dropins)
+		for _, key := range sorted {
+			cfg := dropins[key]
+			cfgA := cfg.Artifact()
+			name := cfgA.ResolveName(key)
+
+			writeInstall(key, filepath.Join("/lib/systemd/system", cfg.Unit+".d"), name)
+		}
+	}
+
+	if len(spec.Artifacts.DataDirs) > 0 {
+		sorted := dalec.SortMapKeys(spec.Artifacts.DataDirs)
+		for _, key := range sorted {
+			cfg := spec.Artifacts.DataDirs[key]
+			resolved := cfg.ResolveName(key)
+
+			writeInstall(key, filepath.Join("/usr/share", cfg.SubPath), resolved)
+		}
+	}
+
 	if installBuf.Len() > 0 {
-		states = append(states, base.File(llb.Mkfile(filepath.Join(dir, spec.Name+".install"), 0o740, installBuf.Bytes())))
+		states = append(states, base.File(llb.Mkfile(filepath.Join(dir, spec.Name+".install"), 0o700, installBuf.Bytes())))
 	}
 
 	return states

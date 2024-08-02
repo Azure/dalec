@@ -28,5 +28,8 @@ override_dh_auto_configure: fix_file_backed_sources
 
 {{ .OverridePerms }}
 
+{{ .OverrideSystemd }}
+
 %:
-	dh $@
+	dh $@ -v
+

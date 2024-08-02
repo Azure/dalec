@@ -19,7 +19,8 @@ func handleDebianSourcePackage(ctx context.Context, client gwclient.Client) (*gw
 		}
 
 		opt := dalec.ProgressGroup("Building Jammy source package: " + spec.Name)
-		worker := workerBase(sOpt.Resolver).With(basePackages(opt)).With(buildDepends(spec, targetKey, opt))
+		installBuildDeps, err := buildDepends(sOpt, spec, targetKey, opt)
+		worker := workerBase(sOpt.Resolver).With(basePackages(opt)).With(installBuildDeps)
 		st, err := deb.SourcePackage(sOpt, worker, spec, targetKey, opt)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building source package")
