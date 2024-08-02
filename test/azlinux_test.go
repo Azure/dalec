@@ -453,7 +453,7 @@ echo "$BAR" > bar.txt
 			})
 
 			// update the spec in the solve reuqest
-			withSpec(ctx, t, &spec)(&sr)
+			withSpec(ctx, t, &spec)(&newSolveRequestConfig{req: &sr})
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {
 				t.Fatal("expected test spec to run with error but got none")
