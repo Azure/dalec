@@ -441,7 +441,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		return b
 	}
 
-	copyArtifact := func(root, p string, cfg dalec.ArtifactConfig) {
+	copyArtifact := func(root, p string, cfg *dalec.ArtifactConfig) {
 		targetDir := filepath.Join(root, cfg.SubPath)
 		fmt.Fprintln(b, "mkdir -p", targetDir)
 
@@ -458,13 +458,13 @@ func (w *specWrapper) Install() fmt.Stringer {
 	binKeys := dalec.SortMapKeys(w.Spec.Artifacts.Binaries)
 	for _, p := range binKeys {
 		cfg := w.Spec.Artifacts.Binaries[p]
-		copyArtifact(`%{buildroot}/%{_bindir}`, p, cfg)
+		copyArtifact(`%{buildroot}/%{_bindir}`, p, &cfg)
 	}
 
 	manKeys := dalec.SortMapKeys(w.Spec.Artifacts.Manpages)
 	for _, p := range manKeys {
 		cfg := w.Spec.Artifacts.Manpages[p]
-		copyArtifact(`%{buildroot}/%{_mandir}`, p, cfg)
+		copyArtifact(`%{buildroot}/%{_mandir}`, p, &cfg)
 	}
 
 	createArtifactDir := func(root, p string, cfg dalec.ArtifactDirConfig) {
@@ -495,14 +495,14 @@ func (w *specWrapper) Install() fmt.Stringer {
 		dataFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataDirs)
 		for _, k := range dataFileKeys {
 			df := w.Spec.Artifacts.DataDirs[k]
-			copyArtifact(`%{buildroot}/%{_datadir}`, k, df)
+			copyArtifact(`%{buildroot}/%{_datadir}`, k, &df)
 		}
 	}
 
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
-		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, cfg)
+		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, &cfg)
 	}
 
 	if w.Spec.Artifacts.Systemd != nil {
@@ -524,14 +524,14 @@ func (w *specWrapper) Install() fmt.Stringer {
 	for _, d := range docKeys {
 		cfg := w.Spec.Artifacts.Docs[d]
 		root := filepath.Join(`%{buildroot}/%{_docdir}`, w.Name)
-		copyArtifact(root, d, cfg)
+		copyArtifact(root, d, &cfg)
 	}
 
 	licenseKeys := dalec.SortMapKeys(w.Spec.Artifacts.Licenses)
 	for _, l := range licenseKeys {
 		cfg := w.Spec.Artifacts.Licenses[l]
 		root := filepath.Join(`%{buildroot}/%{_licensedir}`, w.Name)
-		copyArtifact(root, l, cfg)
+		copyArtifact(root, l, &cfg)
 	}
 
 	b.WriteString("\n")
