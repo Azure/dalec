@@ -463,7 +463,7 @@ echo "$BAR" > bar.txt
 
 	t.Run("test signing", linuxSigningTests(ctx, testConfig))
 
-	t.Run("test systemd unit", func(t *testing.T) {
+	t.Run("test systemd unit single", func(t *testing.T) {
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
@@ -605,43 +605,43 @@ WantedBy=multi-user.target
 							Files: map[string]*dalec.SourceInlineFile{
 								"foo.service": {
 									Contents: `
-	# simple-socket.service
-	[Unit]
-	Description=Foo Service
-	After=network.target foo.socket
-	Requires=foo.socket
+[Unit]
+Description=Foo Service
+After=network.target foo.socket
+Requires=foo.socket
 
-	[Service]
-	Type=simple
-	ExecStart=/usr/bin/foo
-	ExecReload=/bin/kill -HUP $MAINPID
-	StandardOutput=journal
-	StandardError=journal
-	`},
+[Service]
+Type=simple
+ExecStart=/usr/bin/foo
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+`},
 
 								"foo.socket": {
 									Contents: `
-	[Unit]
-	Description=foo socket
-	PartOf=foo.service
+[Unit]
+Description=foo socket
+PartOf=foo.service
 
-	[Socket]
-	ListenStream=127.0.0.1:8080
+[Socket]
+ListenStream=127.0.0.1:8080
 
-	[Install]
-	WantedBy=sockets.target
+[Install]
+WantedBy=sockets.target
 									`,
 								},
 								"foo.conf": {
 									Contents: `
-	[Service]
-	Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+[Service]
+Environment="FOO_ARGS=--some-foo-arg"
 									`,
 								},
 								"env.conf": {
 									Contents: `
-	[Service]
-	Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+[Service]
+Environment="FOO_ARGS=--some-foo-args"
 									`,
 								},
 							},
