@@ -10,6 +10,7 @@ import (
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
 func LoadSpec(ctx context.Context, client *dockerui.Client, platform *ocispecs.Platform) (*dalec.Spec, error) {
@@ -33,7 +34,7 @@ func LoadSpec(ctx context.Context, client *dockerui.Client, platform *ocispecs.P
 	fillPlatformArgs("BUILD", args, client.BuildPlatforms[0])
 
 	if err := spec.SubstituteArgs(args); err != nil {
-		return nil, fmt.Errorf("error resolving build args")
+		return nil, errors.Wrap(err, "error resolving build args")
 	}
 	return spec, nil
 }
