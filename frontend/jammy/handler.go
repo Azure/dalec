@@ -19,12 +19,12 @@ func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 	mux.Add("deb", handleDeb, &targets.Target{
 		Name:        "deb",
 		Description: "Builds a deb package for jammy.",
+		Default:     true,
 	})
 
-	mux.Add("container", handleContainer, &targets.Target{
-		Name:        "container",
-		Description: "Builds a container image for jammy.",
-		Default:     true,
+	mux.Add("testing/container", handleContainer, &targets.Target{
+		Name:        "testing/container",
+		Description: "Builds a container image for jammy for testing purposes only.",
 	})
 
 	mux.Add("dsc", handleDebianSourcePackage, &targets.Target{

@@ -51,9 +51,7 @@ func (w *controlWrapper) depends(buf io.Writer, depsSpec *dalec.PackageDependenc
 		return
 	}
 
-	deps := maps.Keys(depsSpec.Runtime)
-
-	slices.Sort(deps)
+	deps := dalec.SortMapKeys(depsSpec.Runtime)
 	injectConstraints(deps, depsSpec.Runtime)
 
 	fmt.Fprintln(buf, multiline("Depends", deps))
@@ -78,32 +76,26 @@ func (w *controlWrapper) recommends(buf io.Writer, depsSpec *dalec.PackageDepend
 	fmt.Fprintln(buf, multiline("Recommends", deps))
 }
 
-func (w *controlWrapper) buildDeps(buf io.Writer, depsSpec *dalec.PackageDependencies) {
-	if len(depsSpec.Build) == 0 {
-		return
-	}
-
-	deps := maps.Keys(depsSpec.Build)
-	slices.Sort(deps)
-	injectConstraints(deps, depsSpec.Build)
-
-	fmt.Fprintln(buf, multiline("Build-Depends", deps))
-}
-
 func (w *controlWrapper) BuildDeps() fmt.Stringer {
 	b := &strings.Builder{}
 
-	deps := w.Spec.GetPackageDeps(w.Target)
-	if deps == nil {
-		return b
-	}
+	depsSpec := w.Spec.GetPackageDeps(w.Target)
 
-	w.buildDeps(b, deps)
+	var deps []string
+	if depsSpec != nil {
+		deps := maps.Keys(depsSpec.Build)
+		slices.Sort(deps)
+		injectConstraints(deps, depsSpec.Build)
+	}
+	deps = append(deps, "debhelper-compat (= 13)")
+
+	fmt.Fprintln(b, multiline("Build-Depends", deps))
 	return b
 }
 
 func (w *controlWrapper) AllRuntimeDeps() fmt.Stringer {
 	b := &strings.Builder{}
+
 	deps := w.Spec.GetPackageDeps(w.Target)
 
 	if deps == nil {
