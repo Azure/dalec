@@ -14,6 +14,13 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+var (
+	//go:embed templates/debian_rules.tmpl
+	rulesTmplContent []byte
+
+	rulesTmpl = template.Must(template.New("rules").Parse(string(rulesTmplContent)))
+)
+
 func Rules(spec *dalec.Spec, in llb.State, dir string) (llb.State, error) {
 	buf := bytes.NewBuffer(nil)
 
@@ -56,12 +63,8 @@ func (w *rulesWrapper) Envs() fmt.Stringer {
 func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 	b := &strings.Builder{}
 
-	if w.Artifacts.Directories == nil {
-		return b
-	}
-
 	var fixPerms bool
-	for _, cfg := range w.Artifacts.Directories.Config {
+	for _, cfg := range w.Spec.Artifacts.Directories.GetConfig() {
 		if cfg.Mode != 0 {
 			fixPerms = true
 			break
@@ -69,7 +72,7 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 	}
 
 	if !fixPerms {
-		for _, cfg := range w.Artifacts.Directories.State {
+		for _, cfg := range w.Spec.Artifacts.Directories.GetState() {
 			if cfg.Mode != 0 {
 				fixPerms = true
 				break
@@ -155,10 +158,3 @@ func (w *rulesWrapper) OverrideSystemd() (fmt.Stringer, error) {
 
 	return b, nil
 }
-
-var (
-	//go:embed templates/debian_rules.tmpl
-	rulesTmplContent []byte
-
-	rulesTmpl = template.Must(template.New("rules").Parse(string(rulesTmplContent)))
-)
