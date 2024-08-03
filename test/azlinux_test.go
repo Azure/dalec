@@ -904,7 +904,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 							Files: map[string]*dalec.SourceInlineFile{
 								"nested_data_file": {
 									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
-									Permissions: 0o400,
+									Permissions: 0o644,
 								},
 							},
 						},
@@ -916,7 +916,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 							Files: map[string]*dalec.SourceInlineFile{
 								"another_nested_data_file": {
 									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
-									Permissions: 0o400,
+									Permissions: 0o644,
 								},
 							},
 						},
@@ -926,7 +926,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					Inline: &dalec.SourceInline{
 						File: &dalec.SourceInlineFile{
 							Contents:    "This is a data file which should end up at /usr/share/data_file\n",
-							Permissions: 0o400,
+							Permissions: 0o644,
 						},
 					},
 				},
@@ -958,13 +958,13 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o400); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o400); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o400); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
 		})
