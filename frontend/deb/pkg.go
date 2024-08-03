@@ -85,13 +85,6 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 		return llb.Scratch(), err
 	}
 
-	for _, patches := range spec.Patches {
-		for _, patch := range patches {
-			// patches do not need to be included in the sources
-			delete(sources, patch.Source)
-		}
-	}
-
 	gomodSt, err := spec.GomodDeps(sOpt, worker, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error preparing gomod deps")

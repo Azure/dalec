@@ -34,12 +34,17 @@ func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, s
 	for _, patch := range spec.Patches[name] {
 		src := spec.Sources[patch.Source]
 
+		copySrc := patch.Source
+		if patch.Path != "" {
+			src.Includes = append(src.Includes, patch.Path)
+			copySrc = filepath.Base(patch.Path)
+		}
 		st, err := src.AsState(patch.Source, sOpt, opts...)
 		if err != nil {
 			return nil, errors.Wrap(err, "error creating patch state")
 		}
 
-		st = base.File(llb.Copy(st, patch.Source, filepath.Join(patchesPath, patch.Source)), opts...)
+		st = base.File(llb.Copy(st, copySrc, filepath.Join(patchesPath, patch.Source)), opts...)
 		if _, err := seriesBuf.WriteString(name + "\n"); err != nil {
 			return nil, errors.Wrap(err, "error writing to series file")
 		}
@@ -97,7 +102,7 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, targ
 
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/build.sh"), 0o700, createBuildScript(spec)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/patch.sh"), 0o700, createPatchScript(spec)), opts...))
-	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_file_backed_sources.sh"), 0o700, fixupFileBackedSourcesScript(spec)), opts...))
+	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_sources.sh"), 0o700, fixupSources(spec)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPerms(spec)), opts...))
 
 	customEnable, err := customDHInstallSystemdPostinst(spec)
@@ -157,33 +162,31 @@ func fixupArtifactPerms(spec *dalec.Spec) []byte {
 	return buf.Bytes()
 }
 
-// for debian sources, file backed sources are not in the correct format as expected by dalec.
-// This script fixes that by moving the file to the correct location.
-// It is called from `debian/rules` after the source tarball has been extracted.
-func fixupFileBackedSourcesScript(spec *dalec.Spec) []byte {
-	// first, don't bother doing this for patches, which we don't include in our source tarballs.
-	patches := map[string]struct{}{}
-	for _, patchList := range spec.Patches {
-		for _, patch := range patchList {
-			patches[patch.Source] = struct{}{}
-		}
-	}
-
+// For debian sources
+//  1. File backed sources are not in the correct format as expected by dalec.
+//  2. Sources with certain characters in the name had to be changed, so we need
+//     to bring those back.
+//
+// This is called from `debian/rules` after the source tarball has been extracted.
+func fixupSources(spec *dalec.Spec) []byte {
 	buf := bytes.NewBuffer(nil)
 	writeScriptHeader(buf)
 
 	// now, we need to find all the sources that are file-backed and fix them up
 	for name, src := range spec.Sources {
-		if _, ok := patches[name]; ok {
-			continue
-		}
+		dirName := sanitizeSourceKey(name)
+
 		if dalec.SourceIsDir(src) {
+			if dirName == name {
+				continue
+			}
+			fmt.Fprintf(buf, "mv '%s' '%s'\n", dirName, name)
 			continue
 		}
 
-		fmt.Fprintf(buf, "mv %s/%s %s.dalec.tmp\n", name, name, name)
-		fmt.Fprintln(buf, "rm -rf", name)
-		fmt.Fprintf(buf, "mv \"%s.dalec.tmp\" %q\n", name, name)
+		fmt.Fprintf(buf, "mv '%s/%s' '%s.dalec.tmp' || (ls -lh %q; exit 2)\n", dirName, name, name, dirName)
+		fmt.Fprintf(buf, "rm -rf '%s'\n", dirName)
+		fmt.Fprintf(buf, "mv '%s.dalec.tmp' '%s'\n", name, name)
 		fmt.Fprintln(buf)
 	}
 
