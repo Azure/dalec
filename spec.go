@@ -150,9 +150,9 @@ type Artifacts struct {
 // CreateArtifactDirectories represents different directory paths that are common to RPM systems.
 type CreateArtifactDirectories struct {
 	// Config is a list of directories the RPM should place under the system config directory (i.e. /etc)
-	Config map[string]ArtifactDirConfig
+	Config map[string]ArtifactDirConfig `yaml:"config,omitempty" json:"config,omitempty"`
 	// State is a list of directories the RPM should place under the common directory for shared state and libs (i.e. /var/lib).
-	State map[string]ArtifactDirConfig
+	State map[string]ArtifactDirConfig `yaml:"state,omitempty" json:"state,omitempty"`
 }
 
 // ArtifactDirConfig contains information about the directory to be created
