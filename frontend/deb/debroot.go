@@ -131,7 +131,7 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, targ
 func fixupArtifactPerms(spec *dalec.Spec) []byte {
 	buf := bytes.NewBuffer(nil)
 
-	fmt.Fprintln(buf, "#!/usr/bin/env bash")
+	fmt.Fprintln(buf, "#!/usr/bin/env sh")
 	fmt.Fprintln(buf, "set -ex")
 	fmt.Fprintln(buf)
 
@@ -141,7 +141,7 @@ func fixupArtifactPerms(spec *dalec.Spec) []byte {
 		return nil
 	}
 
-	sorted := dalec.SortMapKeys(spec.Artifacts.Directories.Config)
+	sorted := dalec.SortMapKeys(spec.Artifacts.Directories.GetConfig())
 	for _, name := range sorted {
 		cfg := spec.Artifacts.Directories.Config[name]
 		if cfg.Mode.Perm() != 0 {
@@ -150,7 +150,7 @@ func fixupArtifactPerms(spec *dalec.Spec) []byte {
 		}
 	}
 
-	sorted = dalec.SortMapKeys(spec.Artifacts.Directories.State)
+	sorted = dalec.SortMapKeys(spec.Artifacts.Directories.GetState())
 	for _, name := range sorted {
 		cfg := spec.Artifacts.Directories.State[name]
 		if cfg.Mode.Perm() != 0 {
