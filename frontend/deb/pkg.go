@@ -128,6 +128,7 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, targetK
 		Run(
 			dalec.ShArgs("set -e; ls -lh; dpkg-source -x ./*.dsc; ls -lh; cd "+spec.Name+"-"+spec.Version+"; ls -lh *; dpkg-buildpackage -b -uc -us; mkdir -p /tmp/out; cp ../*.deb /tmp/out; ls -lh /tmp/out"),
 			llb.Dir(dirName),
+			llb.AddEnv("DH_VERBOSE", "1"),
 			llb.AddMount(dirName, srcPkg),
 			llb.Network(pb.NetMode_NONE),
 			dalec.WithConstraints(opts...),
