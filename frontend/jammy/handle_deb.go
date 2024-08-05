@@ -7,11 +7,14 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/deb"
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
+
+const JammyWorkerContextName = "dalec-jammy-worker"
 
 func handleDeb(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
@@ -41,7 +44,11 @@ func handleDeb(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		if err != nil {
 			return nil, nil, err
 		}
-		return ref, nil, nil
+		if platform == nil {
+			p := platforms.DefaultSpec()
+			platform = &p
+		}
+		return ref, &dalec.DockerImageSpec{Image: ocispecs.Image{Platform: *platform}}, nil
 	})
 }
 
@@ -49,15 +56,24 @@ func installPackages(opts llb.ConstraintsOpt, ls ...string) llb.StateOption {
 	return func(in llb.State) llb.State {
 		return in.Run(
 			dalec.ShArgs("apt-get update && apt-get install -y "+strings.Join(ls, " ")),
-			dalec.WithMountedAptCache(aptCachePrefix),
+			dalec.WithMountedAptCache(AptCachePrefix),
 			opts,
 		).Root()
 	}
 }
 
 func buildDeb(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	installBuildDeps, err := buildDepends(sOpt, spec, targetKey, opts...)
-	worker := workerBase(sOpt.Resolver).With(basePackages(opts...)).With(installBuildDeps)
+	worker, err := workerBase(sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	installBuildDeps, err := buildDepends(worker, sOpt, spec, targetKey, opts...)
+	if err != nil {
+		return llb.Scratch(), errors.Wrap(err, "error creating deb for build dependencies")
+	}
+
+	worker = worker.With(installBuildDeps)
 	st, err := deb.BuildDeb(worker, spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err
@@ -70,8 +86,25 @@ func buildDeb(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 	return signed, nil
 }
 
-func workerBase(resolver llb.ImageMetaResolver) llb.State {
-	return llb.Image(jammyRef, llb.WithMetaResolver(resolver))
+func workerBase(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	base, err := sOpt.GetContext(jammyRef, dalec.WithConstraints(opts...))
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	if base != nil {
+		return *base, nil
+	}
+
+	base, err = sOpt.GetContext(JammyWorkerContextName, dalec.WithConstraints(opts...))
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	if base != nil {
+		return *base, nil
+	}
+
+	return llb.Image(jammyRef, llb.WithMetaResolver(sOpt.Resolver)).With(basePackages(opts...)), nil
 }
 
 func basePackages(opts ...llb.ConstraintsOpt) llb.StateOption {
@@ -82,7 +115,7 @@ func basePackages(opts ...llb.ConstraintsOpt) llb.StateOption {
 	}
 }
 
-func buildDepends(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+func buildDepends(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
 	deps := spec.Dependencies
 	if t, ok := spec.Targets[targetKey]; ok {
 		if t.Dependencies != nil {
@@ -95,7 +128,7 @@ func buildDepends(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opt
 		buildDeps = deps.Build
 	}
 
-	if buildDeps == nil {
+	if len(buildDeps) == 0 {
 		return func(in llb.State) llb.State {
 			return in
 		}, nil
@@ -112,10 +145,9 @@ func buildDepends(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opt
 		Description: "Build dependencies for " + spec.Name,
 	}
 
-	worker := workerBase(sOpt.Resolver).With(basePackages(opts...))
 	pg := dalec.ProgressGroup("Install build dependencies")
 	opts = append(opts, pg)
-	deb, err := deb.BuildDeb(worker, depsSpec, sOpt, targetKey, opts...)
+	deb, err := deb.BuildDeb(worker, depsSpec, sOpt, targetKey, append(opts, dalec.ProgressGroup("Create intermediate deb for build dependnencies"))...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating intermediate package for insalling build dependencies")
 	}
@@ -123,8 +155,9 @@ func buildDepends(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opt
 	return func(in llb.State) llb.State {
 		return in.Run(
 			llb.AddMount("/tmp/builddeps", deb, llb.Readonly),
-			dalec.ShArgs("apt install -y /tmp/builddeps/*.deb"),
-			dalec.WithMountedAptCache(aptCachePrefix),
+			dalec.ShArgs("apt update && apt install -y /tmp/builddeps/*.deb"),
+			dalec.WithMountedAptCache(AptCachePrefix),
+			dalec.WithConstraints(opts...),
 		).Root()
 	}, nil
 }
