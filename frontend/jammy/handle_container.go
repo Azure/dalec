@@ -158,6 +158,15 @@ func buildRootfsFromBase(base llb.State, repoMount llb.RunOption, spec *dalec.Sp
 		repoMount,
 		dalec.WithConstraints(opts...),
 		llb.AddMount("/etc/dpkg/dpkg.cfg.d/99-dalec-debug", debug, llb.SourcePath("debug"), llb.Readonly),
+		dalec.RunOptFunc(func(cfg *llb.ExecInfo) {
+			tmp := llb.Scratch().File(llb.Mkfile("tmp", 0o644, nil))
+			// Warning: HACK here
+			// The base ubuntu image has this `excludes` config file which prevents
+			// installation of a lot of thigns, including doc files.
+			// This is mounting over that file with an empty file so that our test suite
+			// passes (as it is looking at these files).
+			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
+		}),
 	).Root()
 }
 
