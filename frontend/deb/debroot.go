@@ -264,7 +264,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 			return
 		}
 
-		fmt.Fprintln(installBuf, src, dir)
+		fmt.Fprintln(installBuf, src, dir+"/")
 	}
 
 	if len(spec.Artifacts.Binaries) > 0 {
