@@ -137,9 +137,8 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, targetK
 }
 
 func sanitizeSourceKey(key string) string {
-	key = strings.Replace(key, "_", "", -1)
-	key = strings.Replace(key, "-", "", -1)
-	return key
+	replacer := strings.NewReplacer("_", "", "-", "", ".", "")
+	return replacer.Replace(key)
 }
 
 func debSources(worker llb.State, sources map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
