@@ -9,8 +9,10 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/testenv"
+	"github.com/goccy/go-yaml"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
+	"gotest.tools/v3/assert"
 )
 
 // TestHandlerTargetForwarding tests that targets are forwarded to the correct frontend.
@@ -119,5 +121,36 @@ func TestHandlerTargetForwarding(t *testing.T) {
 				t.Fatalf("expected error %q, got %v", expect, err)
 			}
 		})
+	})
+}
+
+func TestHandlerSubrequestResolve(t *testing.T) {
+	t.Parallel()
+
+	runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+		spec := &dalec.Spec{
+			Name:    "foobar",
+			Version: "$VERSION",
+			Args: map[string]string{
+				"VERSION": "0.0.1",
+			},
+		}
+
+		req := newSolveRequest(withSpec(ctx, t, spec), withSubrequest("frontend.dalec.resolve"))
+		res, err := gwc.Solve(ctx, req)
+		assert.NilError(t, err)
+
+		dt, ok := res.Metadata["result.txt"]
+		assert.Assert(t, ok)
+
+		var ls []dalec.Spec
+		err = yaml.Unmarshal(dt, &ls)
+		assert.NilError(t, err)
+
+		assert.Assert(t, len(ls) == 1)
+		s := ls[0]
+
+		assert.Equal(t, s.Name, "foobar")
+		assert.Equal(t, s.Version, "0.0.1")
 	})
 }
