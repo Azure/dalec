@@ -49,7 +49,7 @@ func HandleSources(wf WorkerFunc) gwclient.BuildFunc {
 			if err != nil {
 				return nil, nil, err
 			}
-			return ref, nil, nil
+			return ref, &dalec.DockerImageSpec{}, nil
 		})
 	}
 }

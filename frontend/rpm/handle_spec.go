@@ -38,7 +38,7 @@ func HandleSpec() gwclient.BuildFunc {
 				return nil, nil, err
 			}
 			ref, err := res.SingleRef()
-			return ref, nil, err
+			return ref, &dalec.DockerImageSpec{}, err
 		})
 	}
 

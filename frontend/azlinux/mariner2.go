@@ -57,6 +57,10 @@ func (w mariner2) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 	return dalec.WithRunOptions(tdnfInstall(&cfg, "2.0", pkgs), w.tdnfCacheMount(cfg.root))
 }
 
+func (w mariner2) BasePackages() []string {
+	return []string{"mariner-release"}
+}
+
 func (mariner2) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {
 	_, _, dt, err := resolver.ResolveImageConfig(ctx, mariner2DistrolessRef, sourceresolver.Opt{
 		Platform: platform,

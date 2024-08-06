@@ -47,7 +47,7 @@ func handleRPM(w worker) gwclient.BuildFunc {
 			if err != nil {
 				return nil, nil, err
 			}
-			return ref, nil, nil
+			return ref, &dalec.DockerImageSpec{}, nil
 		})
 	}
 }

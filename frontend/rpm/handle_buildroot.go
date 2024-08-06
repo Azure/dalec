@@ -48,7 +48,7 @@ func HandleBuildroot(wf WorkerFunc) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			return ref, nil, nil
+			return ref, &dalec.DockerImageSpec{}, nil
 		})
 	}
 }

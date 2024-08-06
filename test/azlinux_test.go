@@ -37,6 +37,10 @@ func TestMariner2(t *testing.T) {
 			ContextName: azlinux.Mariner2WorkerContextName,
 			CreateRepo:  azlinuxWithRepo,
 		},
+		Release: OSRelease{
+			ID:        "mariner",
+			VersionID: "2.0",
+		},
 	})
 }
 
@@ -61,6 +65,10 @@ func TestAzlinux3(t *testing.T) {
 		Worker: workerConfig{
 			ContextName: azlinux.Azlinux3WorkerContextName,
 			CreateRepo:  azlinuxWithRepo,
+		},
+		Release: OSRelease{
+			ID:        "azurelinux",
+			VersionID: "3.0",
 		},
 	})
 }
@@ -116,7 +124,13 @@ type testLinuxConfig struct {
 		Units   string
 		Targets string
 	}
-	Worker workerConfig
+	Worker  workerConfig
+	Release OSRelease
+}
+
+type OSRelease struct {
+	ID        string
+	VersionID string
 }
 
 func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
@@ -399,6 +413,21 @@ echo "$BAR" > bar.txt
 						{Command: "/bin/bash -c 'test -L /src1'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
 						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
+					},
+				},
+				{
+					Name: "Check /etc/os-release",
+					Files: map[string]dalec.FileCheckOutput{
+						"/etc/os-release": {
+							CheckOutput: dalec.CheckOutput{
+								Contains: []string{
+									fmt.Sprintf("ID=%s\n", testConfig.Release.ID),
+									// Note: the value of `VERSION_ID` needs to be quoted!
+									// TODO: Something is stripping the quotes here...
+									// fmt.Sprintf("VERSION_ID=%q\n", testConfig.Release.VersionID),
+								},
+							},
+						},
 					},
 				},
 			},

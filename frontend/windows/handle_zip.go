@@ -57,7 +57,7 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, err
 		}
 		ref, err := res.SingleRef()
-		return ref, nil, err
+		return ref, &dalec.DockerImageSpec{}, err
 	})
 }
 
