@@ -113,7 +113,7 @@ const manifestSh = "manifest.sh"
 
 func tdnfInstall(cfg *installConfig, relVer string, pkgs []string) llb.RunOption {
 	cmdFlags := tdnfInstallFlags(cfg)
-	cmdArgs := fmt.Sprintf("set -ex; tdnf install -y --releasever=%s %s %s", relVer, cmdFlags, strings.Join(pkgs, " "))
+	cmdArgs := fmt.Sprintf("set -ex; tdnf install -y --refresh --releasever=%s %s %s", relVer, cmdFlags, strings.Join(pkgs, " "))
 
 	var runOpts []llb.RunOption
 
