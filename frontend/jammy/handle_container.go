@@ -23,24 +23,6 @@ const (
 	testRepoSourceListPath = "/etc/apt/sources.list.d/test-dalec-local-repo.list"
 )
 
-// Unlike how azlinux works, when creating a debian system there are many implicit
-// dpeendencies which are already expected to be on the system that are not in
-// the package dependency tree.
-// These are the extra packages we'll include when building a container.
-var (
-	baseDeps = []string{
-		"base-files",
-		"base-passwd",
-		"usrmerge",
-	}
-	systemdDeps = []string{
-		"init-system-helpers",
-		"bash",
-		"systemctl",
-		"dash",
-	}
-)
-
 func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		sOpt, err := frontend.SourceOptFromClient(ctx, client)
@@ -136,12 +118,6 @@ func buildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec 
 	return img, nil
 }
 
-func aptWorker(opts ...llb.ConstraintsOpt) llb.StateOption {
-	return func(in llb.State) llb.State {
-		return in.With(installPackages(dalec.WithConstraints(opts...), "apt-utils", "mmdebstrap"))
-	}
-}
-
 func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, targetKey string, includeTestRepo bool, opts ...llb.ConstraintsOpt) llb.State {
 	base := dalec.GetBaseOutputImage(spec, targetKey)
 
@@ -195,47 +171,6 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		With(installSymlinks)
 }
 
-// debstrap produces a command suitable for using mmdebstrap to install depdendencies.
-// It is assumed that the location that debs should be installed to is /tmp/rootfs
-// It is also assumed that the apt sources is at /etc/apt/sources.list
-// This also removes all apt artifacts.
-func debstrap(packages []string) llb.RunOption {
-	return dalec.ShArgs("set -ex; apt-get update; mmdebstrap --debug --verbose --variant=essential --mode=chrootless --include=" + strings.Join(packages, ",") + " jammy /tmp/rootfs /etc/apt/sources.list; rm -rf /tmp/rootfs/var/lib/apt; rm -rf /tmp/rootfs/var/cache/apt")
-}
-
-func shouldIncludeSystemdDeps(spec *dalec.Spec) bool {
-	if spec.Artifacts.Systemd.IsEmpty() {
-		return false
-	}
-	return len(spec.Artifacts.Systemd.Units) > 0
-}
-
-func getPackageList(spec *dalec.Spec) []string {
-	// pkgs := baseDeps
-	var pkgs []string
-	//if shouldIncludeSystemdDeps(spec) {
-	//	pkgs = append(pkgs, systemdDeps...)
-	//}
-
-	pkgs = append(pkgs, spec.Name)
-	return pkgs
-}
-
-// bootstrapRootfs creates a rootfs from scratch using the built package and all its runtime dependencies
-func bootstrapRootfs(worker llb.State, repoMount llb.RunOption, spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
-	opts = append(opts, dalec.ProgressGroup("Bootstrap rootfs"))
-	return worker.
-		Run(
-			// llb.Security(llb.SecurityModeInsecure),
-			debstrap(getPackageList(spec)),
-			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
-			repoMount,
-			dalec.WithConstraints(opts...),
-			dalec.WithMountedAptCache(AptCachePrefix),
-		).
-		AddMount("/tmp/rootfs", llb.Scratch())
-}
-
 func installTestDeps(worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		deps := spec.GetTestDeps(targetKey)
@@ -244,23 +179,6 @@ func installTestDeps(worker llb.State, spec *dalec.Spec, targetKey string, opts 
 		}
 
 		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
-
-		noBaseImg := dalec.GetBaseOutputImage(spec, targetKey) == ""
-
-		// When building the actual container we differentiate whether or not to use
-		// mmdebstrap or straight apt-get based on wehter or not the spec includes a
-		// custom base image to use.
-		// It ia assumed that if a custom base is provided then it is able to use apt-get.
-		// Since we are installing more packages to the container image we'll use that same logic here.
-		if noBaseImg {
-			worker := worker.With(aptWorker(opts...))
-			return worker.Run(
-				debstrap(deps),
-				llb.Security(llb.SecurityModeInsecure),
-				llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
-			).
-				AddMount("/tmp/rootfs", in)
-		}
 
 		return in.Run(
 			dalec.ShArgs("apt-get update && apt-get install -y --no-install-recommends "+strings.Join(deps, " ")),
