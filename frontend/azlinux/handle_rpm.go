@@ -53,10 +53,10 @@ func handleRPM(w worker) gwclient.BuildFunc {
 }
 
 // Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
-func installBuildDepsPackage(target string, w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
+func installBuildDepsPackage(target string, packageName string, w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
 	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
 	depsOnly := dalec.Spec{
-		Name:        "azlinux-build-dependencies",
+		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
 		Description: "Provides build dependencies for mariner2 and azlinux3",
 		Version:     "1.0",
 		License:     "Apache 2.0",
@@ -104,7 +104,7 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 
 	opts = append(opts, dalec.ProgressGroup("Install build deps"))
 
-	installOpt, err := installBuildDepsPackage(targetKey, w, deps, installWithConstraints(opts))(ctx, client, sOpt)
+	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps, installWithConstraints(opts))(ctx, client, sOpt)
 	if err != nil {
 		return nil, err
 	}
