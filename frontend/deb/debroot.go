@@ -297,7 +297,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 		sorted := dalec.SortMapKeys(spec.Artifacts.Manpages)
 		for _, key := range sorted {
 			cfg := spec.Artifacts.Manpages[key]
-			if cfg.Name != "" || cfg.SubPath != "" {
+			if cfg.Name != "" || (cfg.SubPath != "" && cfg.SubPath != filepath.Base(filepath.Dir(key))) {
 				resolved := cfg.ResolveName(key)
 				writeInstall(key, filepath.Join("/usr/share/doc/manpages", spec.Name, cfg.SubPath), resolved)
 				continue
