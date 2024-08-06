@@ -159,10 +159,15 @@ func displaySolveStatus(ctx context.Context, t *testing.T) (chan *client.SolveSt
 		}
 
 		sz, _ := f.Seek(0, io.SeekEnd)
-		f.Seek(0, io.SeekStart)
+		_, err = f.Seek(0, io.SeekStart)
+		if err != nil {
+			t.Log(err)
+			return
+		}
 		_, err = io.CopyN(&testWriter{t}, f, sz)
 		if err != nil {
 			t.Log(err)
+			return
 		}
 	}()
 

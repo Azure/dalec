@@ -24,6 +24,9 @@ func handleDebianSourcePackage(ctx context.Context, client gwclient.Client) (*gw
 			return nil, nil, err
 		}
 		installBuildDeps, err := buildDepends(worker, sOpt, spec, targetKey, opt)
+		if err != nil {
+			return nil, nil, err
+		}
 		worker = worker.With(installBuildDeps)
 		st, err := deb.SourcePackage(sOpt, worker, spec, targetKey, opt)
 		if err != nil {
