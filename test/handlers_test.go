@@ -9,8 +9,12 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/testenv"
+	"github.com/containerd/platforms"
+	"github.com/goccy/go-yaml"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
+	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 // TestHandlerTargetForwarding tests that targets are forwarded to the correct frontend.
@@ -120,4 +124,72 @@ func TestHandlerTargetForwarding(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestHandlerSubrequestResolve(t *testing.T) {
+	t.Parallel()
+
+	testPlatforms := func(t *testing.T, pls ...string) func(t *testing.T) {
+		return func(t *testing.T) {
+			t.Parallel()
+
+			runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := &dalec.Spec{
+					Name:     "foobar",
+					Version:  "$VERSION",
+					Revision: "$TARGETARCH",
+					Args: map[string]string{
+						"VERSION":    "0.0.1",
+						"TARGETARCH": "",
+					},
+				}
+				req := newSolveRequest(withSpec(ctx, t, spec), withSubrequest("frontend.dalec.resolve"), func(req *gwclient.SolveRequest) {
+					if len(pls) == 0 {
+						return
+					}
+					if req.FrontendOpt == nil {
+						req.FrontendOpt = make(map[string]string)
+					}
+					req.FrontendOpt["platform"] = strings.Join(pls, ",")
+				})
+
+				res, err := gwc.Solve(ctx, req)
+				assert.NilError(t, err)
+
+				dt, ok := res.Metadata["result.txt"]
+				assert.Assert(t, ok)
+
+				var ls []dalec.Spec
+				err = yaml.Unmarshal(dt, &ls)
+				assert.NilError(t, err)
+
+				var checkPlatforms []platforms.Platform
+
+				for _, p := range pls {
+					platform, err := platforms.Parse(p)
+					assert.NilError(t, err)
+					checkPlatforms = append(checkPlatforms, platform)
+				}
+
+				if len(checkPlatforms) == 0 {
+					// No platform set, so we need to read the platform from the builder
+					p := readDefaultPlatform(ctx, t, gwc)
+					checkPlatforms = append(checkPlatforms, p)
+				}
+
+				assert.Assert(t, cmp.Len(ls, len(checkPlatforms)))
+
+				for i, p := range checkPlatforms {
+					s := ls[i]
+					assert.Equal(t, s.Name, "foobar")
+					assert.Equal(t, s.Version, "0.0.1")
+					assert.Equal(t, s.Revision, p.Architecture)
+				}
+			})
+		}
+	}
+
+	t.Run("no platform", testPlatforms(t))
+	t.Run("single platform", testPlatforms(t, "linux/amd64"))
+	t.Run("multi-platform", testPlatforms(t, "linux/amd64", "linux/arm64"))
 }

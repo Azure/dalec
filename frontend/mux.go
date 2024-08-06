@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/Azure/dalec"
+	"github.com/containerd/containerd/platforms"
+	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -19,6 +21,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
+)
+
+const (
+	keyResolveSpec = "frontend.dalec.resolve"
+
+	// KeyDefaultPlatform is the subreuqest id for returning the default platform
+	// for the builder.
+	KeyDefaultPlatform = "frontend.dalec.defaultPlatform"
 )
 
 // BuildMux implements a buildkit BuildFunc via its Handle method. With a
@@ -100,9 +110,8 @@ func (m *BuildMux) describe() (*gwclient.Result, error) {
 
 	res := gwclient.NewResult()
 	res.Metadata = map[string][]byte{
-		"result.json": dt,
-		"result.txt":  buf.Bytes(),
-		"version":     []byte(subrequests.SubrequestsDescribeDefinition.Version),
+		"result.txt": buf.Bytes(),
+		"version":    []byte(subrequests.SubrequestsDescribeDefinition.Version),
 	}
 	return res, nil
 }
@@ -119,9 +128,70 @@ func (m *BuildMux) handleSubrequest(ctx context.Context, client gwclient.Client,
 		return res, true, err
 	case keyTopLevelTarget:
 		return nil, false, nil
+	case keyResolveSpec:
+		res, err := handleResolveSpec(ctx, client)
+		return res, true, err
+	case KeyDefaultPlatform:
+		res, err := handleDefaultPlatform()
+		return res, true, err
 	default:
 		return nil, false, errors.Errorf("unsupported subrequest %q", opts[requestIDKey])
 	}
+}
+
+func handleResolveSpec(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+	dc, err := dockerui.NewClient(client)
+	if err != nil {
+		return nil, err
+	}
+
+	targets := dc.TargetPlatforms
+	if len(targets) == 0 {
+		targets = append(targets, platforms.DefaultSpec())
+	}
+
+	out := make([]*dalec.Spec, 0, len(targets))
+	for _, p := range targets {
+		spec, err := LoadSpec(ctx, dc, &p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, spec)
+	}
+
+	dtYaml, err := yaml.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+
+	dtJSON, err := json.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+
+	res := gwclient.NewResult()
+	res.AddMeta("result.json", dtJSON)
+	// result.txt here so that `docker buildx build --print` will output it directly.
+	// Otherwise it prints a go object.
+	res.AddMeta("result.txt", dtYaml)
+
+	return res, nil
+}
+
+// handleDefaultPlatform returns the default platform
+func handleDefaultPlatform() (*gwclient.Result, error) {
+	res := gwclient.NewResult()
+
+	p := platforms.DefaultSpec()
+	dt, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+
+	res.AddMeta("result.json", dt)
+	res.AddMeta("result.txt", []byte(platforms.Format(p)))
+
+	return res, nil
 }
 
 func (m *BuildMux) loadSpec(ctx context.Context, client gwclient.Client) (*dalec.Spec, error) {
