@@ -213,13 +213,19 @@ func withBuildTarget(target string) srOpt {
 	}
 }
 
+func withSubrequest(id string) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
+		sr.FrontendOpt["requestid"] = id
+	}
+}
+
 // withListTargetsOnly sets up the request so that we do a subrequest to just list targets
 // None of the targets will be run with this set.
 func withListTargetsOnly(sr *gwclient.SolveRequest) {
-	if sr.FrontendOpt == nil {
-		sr.FrontendOpt = make(map[string]string)
-	}
-	sr.FrontendOpt["requestid"] = targets.RequestTargets
+	withSubrequest(targets.RequestTargets)(sr)
 }
 
 func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient.SolveRequest) *gwclient.Result {
