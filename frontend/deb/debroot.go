@@ -7,7 +7,6 @@ import (
 	"io"
 	"path/filepath"
 	"runtime/debug"
-	"strings"
 	"sync"
 
 	"github.com/Azure/dalec"
@@ -259,7 +258,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 	writeInstall := func(src, dir, name string) {
 		writeInstallHeader()
 
-		if filepath.Base(src) != name || strings.Contains(src, "*") {
+		if filepath.Base(src) != name {
 			fmt.Fprintln(installBuf, src, "=>", filepath.Join(dir, name))
 			return
 		}
