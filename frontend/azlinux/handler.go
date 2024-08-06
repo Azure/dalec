@@ -18,6 +18,8 @@ const (
 	tdnfCacheDir = "/var/cache/tdnf"
 )
 
+type installFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.RunOption, error)
+
 type worker interface {
 	Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 	Install(pkgs []string, opts ...installOpt) llb.RunOption
@@ -60,18 +62,19 @@ func handleDebug(w worker) gwclient.BuildFunc {
 		if err != nil {
 			return nil, err
 		}
-		return rpm.HandleDebug(getSpecWorker(w, sOpt))(ctx, client)
+		return rpm.HandleDebug(getSpecWorker(ctx, w, client, sOpt))(ctx, client)
 	}
 }
 
-func getSpecWorker(w worker, sOpt dalec.SourceOpts) rpm.WorkerFunc {
+func getSpecWorker(ctx context.Context, w worker, client gwclient.Client, sOpt dalec.SourceOpts) rpm.WorkerFunc {
 	return func(resolver llb.ImageMetaResolver, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 		st, err := w.Base(sOpt, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
 		if spec.HasGomods() {
-			deps := spec.GetBuildDeps(targetKey)
+			deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
+
 			hasGolang := func(s string) bool {
 				return s == "golang" || s == "msft-golang"
 			}
@@ -79,7 +82,13 @@ func getSpecWorker(w worker, sOpt dalec.SourceOpts) rpm.WorkerFunc {
 			if !slices.ContainsFunc(deps, hasGolang) {
 				return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
 			}
-			st = st.With(installBuildDeps(w, spec, targetKey, opts...))
+
+			installOpt, err := installBuildDeps(ctx, w, client, spec, targetKey, opts...)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+
+			st = st.With(installOpt)
 		}
 		return st, nil
 	}
