@@ -1,12 +1,8 @@
 # syntax=ghcr.io/azure/dalec/frontend:latest
-args:
-  GO_MD2MAN_COMMIT: v2.0.3
-  REVISION: 1
-  VERSION: 2.0.3
 
 name: go-md2man
-version: ${VERSION}
-revision: ${REVISION}
+version: 2.0.3
+revision: 1
 packager: Dalec Example
 vendor: Dalec Example
 license: MIT
@@ -20,7 +16,7 @@ sources:
       - gomod: {}
     git:
       url: https://github.com/cpuguy83/go-md2man.git
-      commit: "${GO_MD2MAN_COMMIT}"
+      commit: v2.0.3
 
 dependencies:
   build:

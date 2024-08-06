@@ -111,6 +111,7 @@ tests:
     files:
       /usr/bin/runc:
         permissions: 0755
+      /usr/share/man/man8/runc-create.8.gz:
   - name: version reporting
     steps:
       - command: runc --version
@@ -120,10 +121,4 @@ tests:
             - "libseccomp: "
         stderr:
           empty: true
-  - name: manpages
-    files:
-      /usr/share/man/man8/runc-create.8.gz:
 
-image:
-  entrypoint: runc
-  cmd: --help

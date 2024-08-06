@@ -96,7 +96,7 @@ target "runc-jammy" {
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     matrix = {
-        tgt = ["deb/control", "deb/debroot", "deb", "container", "deb/sources"]
+        tgt = ["deb/control", "deb/debroot", "deb", "testing/container", "deb/sources"]
     }
     target = "jammy/${tgt}"
     // only tag the container target
