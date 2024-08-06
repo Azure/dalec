@@ -96,13 +96,13 @@ target "runc-jammy" {
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     matrix = {
-        tgt = ["deb/control", "deb/debroot", "deb", "testing/container", "deb/sources"]
+        tgt = ["deb", "container"]
     }
-    target = "jammy/${tgt}"
+    target = tgt == "container" ? "jammy/testing/${tgt}" : "jammy/${tgt}"
     // only tag the container target
-    tags = tgt == "container" ? ["runc:jammy"] : []
+    tags = tgt == "testing/container" ? ["runc:jammy"] : []
     // only output non-container targets to the fs
-    output = tgt != "container" ? ["_output"] : []
+    output = tgt != "testing/container" ? ["_output"] : []
 
     cache-from = ["type=gha,scope=dalec/runc/jammy/${tgt}"]
     cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/jammy/${tgt},mode=max"] : []
