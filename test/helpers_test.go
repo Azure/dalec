@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend"
 	"github.com/containerd/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
@@ -22,6 +23,7 @@ import (
 	"github.com/tonistiigi/fsutil/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
+	"gotest.tools/v3/assert"
 )
 
 const (
@@ -213,13 +215,19 @@ func withBuildTarget(target string) srOpt {
 	}
 }
 
+func withSubrequest(id string) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
+		sr.FrontendOpt["requestid"] = id
+	}
+}
+
 // withListTargetsOnly sets up the request so that we do a subrequest to just list targets
 // None of the targets will be run with this set.
 func withListTargetsOnly(sr *gwclient.SolveRequest) {
-	if sr.FrontendOpt == nil {
-		sr.FrontendOpt = make(map[string]string)
-	}
-	sr.FrontendOpt["requestid"] = targets.RequestTargets
+	withSubrequest(targets.RequestTargets)(sr)
 }
 
 func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient.SolveRequest) *gwclient.Result {
@@ -292,4 +300,16 @@ func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveReque
 	}
 
 	return st
+}
+
+func readDefaultPlatform(ctx context.Context, t *testing.T, gwc gwclient.Client) platforms.Platform {
+	req := newSolveRequest(withSubrequest(frontend.KeyDefaultPlatform), withSpec(ctx, t, nil))
+	res := solveT(ctx, t, gwc, req)
+
+	dt := res.Metadata["result.json"]
+	var p platforms.Platform
+
+	err := json.Unmarshal(dt, &p)
+	assert.NilError(t, err)
+	return p
 }
