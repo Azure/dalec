@@ -399,3 +399,12 @@ func SortedMapValues[T any](m map[string]T) []T {
 
 	return out
 }
+
+// GetPackageDeps returns the package dependencies for the given target.
+// If the target does not have dependencies, the global dependencies are returned.
+func (s *Spec) GetPackageDeps(target string) *PackageDependencies {
+	if deps := s.Targets[target]; deps.Dependencies != nil {
+		return deps.Dependencies
+	}
+	return s.Dependencies
+}

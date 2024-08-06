@@ -453,7 +453,7 @@ echo "$BAR" > bar.txt
 			})
 
 			// update the spec in the solve reuqest
-			withSpec(ctx, t, &spec)(&sr)
+			withSpec(ctx, t, &spec)(&newSolveRequestConfig{req: &sr})
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {
 				t.Fatal("expected test spec to run with error but got none")
@@ -463,7 +463,7 @@ echo "$BAR" > bar.txt
 
 	t.Run("test signing", linuxSigningTests(ctx, testConfig))
 
-	t.Run("test systemd unit", func(t *testing.T) {
+	t.Run("test systemd unit single", func(t *testing.T) {
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
@@ -605,43 +605,43 @@ WantedBy=multi-user.target
 							Files: map[string]*dalec.SourceInlineFile{
 								"foo.service": {
 									Contents: `
-	# simple-socket.service
-	[Unit]
-	Description=Foo Service
-	After=network.target foo.socket
-	Requires=foo.socket
+[Unit]
+Description=Foo Service
+After=network.target foo.socket
+Requires=foo.socket
 
-	[Service]
-	Type=simple
-	ExecStart=/usr/bin/foo
-	ExecReload=/bin/kill -HUP $MAINPID
-	StandardOutput=journal
-	StandardError=journal
-	`},
+[Service]
+Type=simple
+ExecStart=/usr/bin/foo
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+`},
 
 								"foo.socket": {
 									Contents: `
-	[Unit]
-	Description=foo socket
-	PartOf=foo.service
+[Unit]
+Description=foo socket
+PartOf=foo.service
 
-	[Socket]
-	ListenStream=127.0.0.1:8080
+[Socket]
+ListenStream=127.0.0.1:8080
 
-	[Install]
-	WantedBy=sockets.target
+[Install]
+WantedBy=sockets.target
 									`,
 								},
 								"foo.conf": {
 									Contents: `
-	[Service]
-	Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+[Service]
+Environment="FOO_ARGS=--some-foo-arg"
 									`,
 								},
 								"env.conf": {
 									Contents: `
-	[Service]
-	Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+[Service]
+Environment="FOO_ARGS=--some-foo-args"
 									`,
 								},
 							},
@@ -904,7 +904,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 							Files: map[string]*dalec.SourceInlineFile{
 								"nested_data_file": {
 									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
-									Permissions: 0o400,
+									Permissions: 0o644,
 								},
 							},
 						},
@@ -916,7 +916,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 							Files: map[string]*dalec.SourceInlineFile{
 								"another_nested_data_file": {
 									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
-									Permissions: 0o400,
+									Permissions: 0o644,
 								},
 							},
 						},
@@ -926,7 +926,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					Inline: &dalec.SourceInline{
 						File: &dalec.SourceInlineFile{
 							Contents:    "This is a data file which should end up at /usr/share/data_file\n",
-							Permissions: 0o400,
+							Permissions: 0o644,
 						},
 					},
 				},
@@ -958,13 +958,13 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o400); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o400); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o400); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
 		})

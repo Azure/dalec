@@ -1,0 +1,18 @@
+# Automatically added by github.com/Azure/dalec
+# This is generally copied from dh_installsystemd
+# This is required because dh_installsystemd operates on the unit base name and
+# not the full unit name (e.g. "foo" instead of "foo.service") and sometimes
+# we want to enable one and not the other.
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+    if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload >/dev/null || true
+        if [ -n "$2" ]; then
+            _dh_action=restart
+        else
+            _dh_action=start
+        fi
+        deb-systemd-invoke $_dh_action '{{.}}' >/dev/null || true
+    fi
+fi
+# End automatically added section
+

@@ -57,6 +57,23 @@ targets: # Distro specific build requirements
     <<: *azl
   mariner2:
     <<: *azl
+  jammy:
+    image:
+    dependencies:
+      build:
+        libseccomp-dev:
+        gcc:
+        go-md2man:
+        git:
+        tar:
+        make:
+        golang:
+        libtool:
+        libltdl-dev:
+      runtime:
+        libseccomp2:
+          version:
+            - ">= 2.3"
 
 packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
@@ -104,3 +121,4 @@ tests:
             - "libseccomp: "
         stderr:
           empty: true
+

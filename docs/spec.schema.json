@@ -273,14 +273,14 @@
 		},
 		"CreateArtifactDirectories": {
 			"properties": {
-				"Config": {
+				"config": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactDirConfig"
 					},
 					"type": "object",
 					"description": "Config is a list of directories the RPM should place under the system config directory (i.e. /etc)"
 				},
-				"State": {
+				"state": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactDirConfig"
 					},
@@ -290,10 +290,6 @@
 			},
 			"additionalProperties": false,
 			"type": "object",
-			"required": [
-				"Config",
-				"State"
-			],
 			"description": "CreateArtifactDirectories describes various directories that should be created on install."
 		},
 		"FileCheckOutput": {
