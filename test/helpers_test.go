@@ -177,10 +177,6 @@ func (d dirStatAsStringer) String() string {
 	return buf.String()
 }
 
-type solveConfig struct {
-	r *gwclient.SolveRequest
-}
-
 type newSolveRequestConfig struct {
 	req              *gwclient.SolveRequest
 	noFillSpecFields bool
