@@ -24,6 +24,11 @@ func Sources(ctx context.Context, client gwclient.Client) (*client.Result, error
 			return nil, nil, err
 		}
 
+		for k, v := range sources {
+			st := llb.Scratch().File(llb.Copy(v, "/", k))
+			sources[k] = st
+		}
+
 		def, err := dalec.MergeAtPath(llb.Scratch(), dalec.SortedMapValues(sources), "/").Marshal(ctx)
 		if err != nil {
 			return nil, nil, err

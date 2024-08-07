@@ -3,6 +3,7 @@ package dalec
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -36,11 +37,9 @@ func getFilter(src Source, forMount bool, opts ...llb.ConstraintsOpt) llb.StateO
 	case src.HTTP != nil,
 		src.Git != nil,
 		src.Build != nil,
+		src.Context != nil,
 		src.Inline != nil:
 		return filterState(path, src.Includes, src.Excludes, opts...)
-	case src.Context != nil:
-		// context sources handle includes and excludes
-		return filterState(path, []string{}, []string{})
 	case src.DockerImage != nil:
 		if src.DockerImage.Cmd != nil {
 			// if a docker image source has a command,
@@ -62,7 +61,7 @@ func getSource(src Source, name string, sOpt SourceOpts, opts ...llb.Constraints
 	case src.Git != nil:
 		st, err = src.Git.AsState(opts...)
 	case src.Context != nil:
-		st, err = src.Context.AsState(src.Includes, src.Excludes, sOpt, opts...)
+		st, err = src.Context.AsState(src.Path, src.Includes, src.Excludes, sOpt, opts...)
 	case src.DockerImage != nil:
 		st, err = src.DockerImage.AsState(name, src.Path, sOpt, opts...)
 	case src.Build != nil:
@@ -83,8 +82,32 @@ func (src *SourceInline) AsState(name string) (llb.State, error) {
 	return llb.Scratch().With(src.Dir.PopulateAt("/")), nil
 }
 
-func (src *SourceContext) AsState(includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(includes, excludes), withConstraints(opts))
+// withFollowPath similar to using [llb.IncludePatterns] except that it will
+// follow symlinks at the provided path.
+func withFollowPath(p string) localOptionFunc {
+	return func(li *llb.LocalInfo) {
+		if isRoot(p) {
+			return
+		}
+
+		paths := []string{p}
+		if li.FollowPaths != "" {
+			var ls []string
+			if err := json.Unmarshal([]byte(li.FollowPaths), &ls); err != nil {
+				panic(err)
+			}
+			paths = append(ls, paths...)
+		}
+		llb.FollowPaths(paths).SetLocalOption(li)
+	}
+}
+
+func (src *SourceContext) AsState(path string, includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	if !isRoot(path) {
+		excludes = append(excludeAllButPath(path), excludes...)
+	}
+
+	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(includes, excludes), withFollowPath(path), withConstraints(opts))
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -94,6 +117,13 @@ func (src *SourceContext) AsState(includes []string, excludes []string, sOpt Sou
 	}
 
 	return *st, nil
+}
+
+func excludeAllButPath(p string) []string {
+	return []string{
+		"*",
+		"!" + filepath.ToSlash(filepath.Clean(p)),
+	}
 }
 
 func (src *SourceGit) AsState(opts ...llb.ConstraintsOpt) (llb.State, error) {

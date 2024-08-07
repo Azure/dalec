@@ -20,6 +20,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func TestSourceGitSSH(t *testing.T) {
@@ -527,9 +528,12 @@ func TestSourceContext(t *testing.T) {
 				ops := getSourceOp(ctx, t, src)
 				checkContext(t, ops[0].GetSource(), &src)
 				// With include/exclude only, this should be handled with just one op.
-				if len(ops) != 1 {
+				// except... there are optimizations to prevent fetching the same context multiple times
+				// As such we need to make sure filters are applied correctly.
+				if len(ops) != 2 {
 					t.Fatalf("expected 1 op, got %d\n%s", len(ops), ops)
 				}
+				checkFilter(t, ops[1].GetFile(), &src)
 			})
 
 			t.Run("subpath with include-exclude", func(t *testing.T) {
@@ -540,10 +544,6 @@ func TestSourceContext(t *testing.T) {
 				ops := getSourceOp(ctx, t, src)
 				checkContext(t, ops[0].GetSource(), &src)
 				// for context source, we expect to have a copy operation as the last op when subdir is used
-
-				// set includes, excludes to nil before checking against filter, as includes and excludes are
-				// handled before filter operation for context sources
-				src.Includes, src.Excludes = nil, nil
 				checkFilter(t, ops[1].GetFile(), &src)
 			})
 		})
@@ -879,6 +879,7 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 }
 
 func checkFilter(t *testing.T, op *pb.FileOp, src *Source) {
+	t.Helper()
 	if op == nil {
 		t.Fatal("expected file op")
 	}
@@ -996,17 +997,32 @@ func checkContext(t *testing.T, op *pb.SourceOp, src *Source) {
 		if string(includesJson) != localIncludes {
 			t.Errorf("expected includes %q on local op, got %q", includesJson, localIncludes)
 		}
+
+	}
+
+	if !isRoot(src.Path) {
+		expect := append(excludeAllButPath(src.Path), src.Excludes...)
+
+		var actual []string
+		localExcludes := op.Attrs["local.excludepatterns"]
+		err := json.Unmarshal([]byte(localExcludes), &actual)
+		assert.NilError(t, err)
+		assert.Check(t, cmp.DeepEqual(actual, expect))
 	}
 
 	if src.Excludes != nil {
-		excludesJson, err := json.Marshal(src.Excludes)
+		v := src.Excludes
+		if src.Path != "" {
+			v = append(excludeAllButPath(src.Path), v...)
+		}
+		excludesJson, err := json.Marshal(v)
 		if err != nil {
 			t.Fatal(err)
 		}
 		localExcludes := op.Attrs["local.excludepatterns"]
 
 		if string(excludesJson) != localExcludes {
-			t.Errorf("expected includes %q on local op, got %q", excludesJson, localExcludes)
+			t.Errorf("expected excludes %q on local op, got %q", excludesJson, localExcludes)
 		}
 	}
 }
