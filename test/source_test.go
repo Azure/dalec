@@ -3,10 +3,14 @@ package test
 import (
 	"context"
 	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/opencontainers/go-digest"
 )
@@ -66,8 +70,8 @@ func TestSourceCmd(t *testing.T) {
 		req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
 		res := solveT(ctx, t, gwc, req)
 
-		checkFile(ctx, t, "foo", res, []byte("foo bar\n"))
-		checkFile(ctx, t, "hello", res, []byte("hello\n"))
+		checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar\n"))
+		checkFile(ctx, t, filepath.Join(sourceName, "hello"), res, []byte("hello\n"))
 	})
 
 	t.Run("with mounted file", func(t *testing.T) {
@@ -97,7 +101,7 @@ func TestSourceCmd(t *testing.T) {
 			req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
 			res := solveT(ctx, t, gwc, req)
 
-			checkFile(ctx, t, "foo", res, []byte("foo bar"))
+			checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar"))
 		})
 	})
 }
@@ -113,7 +117,7 @@ func TestSourceBuild(t *testing.T) {
 				ro := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
 
 				res := solveT(ctx, t, gwc, ro)
-				checkFile(ctx, t, "hello", res, []byte("hello\n"))
+				checkFile(ctx, t, "test/hello", res, []byte("hello\n"))
 			})
 		})
 	}
@@ -369,4 +373,107 @@ index ea874f5..ba38f84 100644
 			})
 		})
 	})
+}
+
+func TestSourceContext(t *testing.T) {
+	t.Parallel()
+
+	contextSt := llb.Scratch().
+		File(llb.Mkfile("/base", 0o644, nil)).
+		File(llb.Mkdir("/foo/bar", 0o755, llb.WithParents(true))).
+		File(llb.Mkfile("/foo/file", 0o644, nil)).
+		File(llb.Mkfile("/foo/bar/another", 0o644, nil))
+
+	spec := &dalec.Spec{
+		Name: "test-dalec-context-source",
+		Sources: map[string]dalec.Source{
+			"basic":         {Context: &dalec.SourceContext{}},
+			"with-path":     {Path: "/foo/bar", Context: &dalec.SourceContext{}},
+			"with-includes": {Includes: []string{"foo/**/*"}, Context: &dalec.SourceContext{}},
+			"with-excludes": {Excludes: []string{"foo/**/*"}, Context: &dalec.SourceContext{}},
+			"with-path-and-includes-excludes": {
+				Path:     "/foo",
+				Includes: []string{"file", "bar"},
+				Excludes: []string{"bar/another"},
+				Context:  &dalec.SourceContext{},
+			},
+		},
+	}
+
+	runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+		req := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, "context", contextSt), withBuildTarget("debug/sources"))
+		res := solveT(ctx, t, gwc, req)
+		ref, err := res.SingleRef()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		dir := bkfs.FromRef(ctx, ref)
+
+		existsNotDir := checkFileStatOpt{Exists: true}
+		existsDir := checkFileStatOpt{Exists: true, IsDir: true}
+		notExists := checkFileStatOpt{}
+
+		checkFileStat(t, dir, "basic/base", existsNotDir)
+		checkFileStat(t, dir, "basic/foo/bar", existsDir)
+		checkFileStat(t, dir, "basic/foo/file", existsNotDir)
+		checkFileStat(t, dir, "basic/foo/bar/another", existsNotDir)
+
+		checkFileStat(t, dir, "with-path/base", notExists)
+		checkFileStat(t, dir, "with-path/foo", notExists)
+		checkFileStat(t, dir, "with-path/another", existsNotDir)
+
+		checkFileStat(t, dir, "with-includes/base", notExists)
+		checkFileStat(t, dir, "with-includes/foo/bar", existsDir)
+		checkFileStat(t, dir, "with-includes/foo/file", existsNotDir)
+		checkFileStat(t, dir, "with-includes/foo/bar/another", existsNotDir)
+
+		checkFileStat(t, dir, "with-excludes/base", existsNotDir)
+		checkFileStat(t, dir, "with-excludes/foo", existsDir)
+		checkFileStat(t, dir, "with-excludes/foo/file", notExists)
+		checkFileStat(t, dir, "with-excludes/foo/bar", notExists)
+
+		checkFileStat(t, dir, "with-path-and-includes-excludes/base", notExists)
+		checkFileStat(t, dir, "with-path-and-includes-excludes/foo", notExists)
+		checkFileStat(t, dir, "with-path-and-includes-excludes/file", existsNotDir)
+		checkFileStat(t, dir, "with-path-and-includes-excludes/bar", existsDir)
+		checkFileStat(t, dir, "with-path-and-includes-excludes/bar/another", notExists)
+	})
+}
+
+type checkFileStatOpt struct {
+	IsDir  bool
+	Exists bool
+}
+
+func checkFileStat(t *testing.T, dir fs.FS, p string, opt checkFileStatOpt) {
+	t.Helper()
+
+	stat, err := fs.Stat(dir, p)
+	if err != nil && !os.IsNotExist(err) {
+		// TODO: the error returned from the buildkit client is not giving us what we want here.
+		// So we need to check the error string for now
+		if !strings.Contains(err.Error(), "no such file or directory") {
+			t.Error(err)
+			return
+		}
+
+		if opt.Exists {
+			t.Errorf("file %q should exist", p)
+		}
+		return
+	}
+
+	if !opt.Exists {
+		t.Errorf("file %q should not exist", p)
+		return
+	}
+
+	if stat == nil {
+		return
+	}
+
+	if stat.IsDir() != opt.IsDir {
+		t.Errorf("expected file %q isDir=%v, got %v", p, opt.IsDir, stat.IsDir())
+	}
 }

@@ -116,6 +116,9 @@ func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOp
 			}
 			st, _, err := dc.NamedContext(ctx, ref, dockerui.ContextOpt{
 				ResolveMode: dc.ImageResolveMode.String(),
+				AsyncLocalOpts: func() []llb.LocalOption {
+					return opts
+				},
 			})
 			if err != nil {
 				return nil, err

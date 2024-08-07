@@ -143,7 +143,7 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 
 func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cfgPath string, configCtxName string, sOpt dalec.SourceOpts) (*dalec.PackageSigner, error) {
 	sc := dalec.SourceContext{Name: configCtxName}
-	signConfigState, err := sc.AsState([]string{cfgPath}, nil, sOpt)
+	signConfigState, err := sc.AsState(cfgPath, []string{cfgPath}, nil, sOpt)
 	if err != nil {
 		return nil, err
 	}
