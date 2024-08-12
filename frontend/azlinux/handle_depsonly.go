@@ -15,9 +15,18 @@ func handleDepsOnly(w worker) gwclient.BuildFunc {
 	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 		return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 			pg := dalec.ProgressGroup("Build mariner2 deps-only container: " + spec.Name)
-			baseImg := w.Base(client, pg)
+
+			sOpt, err := frontend.SourceOptFromClient(ctx, client)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			baseImg, err := w.Base(sOpt, pg)
+			if err != nil {
+				return nil, nil, err
+			}
 			rpmDir := baseImg.Run(
-				shArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(spec.GetRuntimeDeps(targetKey), " ")),
+				dalec.ShArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(spec.GetRuntimeDeps(targetKey), " ")),
 				pg,
 			).
 				AddMount("/tmp/rpms", llb.Scratch())
@@ -27,11 +36,7 @@ func handleDepsOnly(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			sOpt, err := frontend.SourceOptFromClient(ctx, client)
-			if err != nil {
-				return nil, nil, err
-			}
-			st, err := specToContainerLLB(w, client, spec, targetKey, rpmDir, files, sOpt, pg)
+			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, files, sOpt, pg)
 			if err != nil {
 				return nil, nil, err
 			}

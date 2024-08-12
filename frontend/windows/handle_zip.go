@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	workerImgRef    = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
-	outputDir       = "/tmp/output"
-	buildScriptName = "_build.sh"
-	aptCachePrefix  = "jammy-windowscross"
+	workerImgRef                  = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
+	WindowscrossWorkerContextName = "dalec-windowscross-worker"
+	outputDir                     = "/tmp/output"
+	buildScriptName               = "_build.sh"
+	aptCachePrefix                = "jammy-windowscross"
 )
 
 func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -32,7 +33,10 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		}
 
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
-		worker := workerImg(sOpt, pg)
+		worker, err := workerImg(sOpt, pg)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
 		if err != nil {
@@ -53,27 +57,16 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, err
 		}
 		ref, err := res.SingleRef()
-		return ref, nil, err
+		return ref, &dalec.DockerImageSpec{}, err
 	})
 }
 
 const gomodsName = "__gomods"
 
 func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
-	out := make(map[string]llb.State, len(spec.Sources))
-	for k, src := range spec.Sources {
-		displayRef, err := src.GetDisplayRef()
-		if err != nil {
-			return nil, err
-		}
-
-		pg := dalec.ProgressGroup("Add spec source: " + k + " " + displayRef)
-		st, err := src.AsState(k, sOpt, append(opts, pg)...)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error creating source state for %q", k)
-		}
-
-		out[k] = st
+	out, err := dalec.Sources(spec, sOpt, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error preparign spec sources")
 	}
 
 	opts = append(opts, dalec.ProgressGroup("Add gomod sources"))
@@ -99,7 +92,7 @@ func installBuildDeps(deps []string) llb.StateOption {
 		slices.Sort(sorted)
 
 		return s.Run(
-			shArgs("apt-get update && apt-get install -y "+strings.Join(sorted, " ")),
+			dalec.ShArgs("apt-get update && apt-get install -y "+strings.Join(sorted, " ")),
 			dalec.WithMountedAptCache(aptCachePrefix),
 		).Root()
 	}
@@ -135,7 +128,10 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 }
 
 func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
-	worker = worker.With(installBuildDeps(spec.GetBuildDeps(targetKey)))
+	deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
+
+	// note: we do not yet support pinning build dependencies for windows workers
+	worker = worker.With(installBuildDeps(deps))
 
 	sources, err := specToSourcesLLB(worker, spec, sOpt)
 	if err != nil {
@@ -148,29 +144,20 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	script := generateInvocationScript(binaries)
 
 	st := worker.Run(
-		shArgs(script.String()),
+		dalec.ShArgs(script.String()),
 		llb.Dir("/build"),
 		withSourcesMounted("/build", patched, spec.Sources),
 		llb.AddMount("/tmp/scripts", buildScript),
 		llb.Network(llb.NetModeNone),
 	).AddMount(outputDir, llb.Scratch())
 
-	if signer, ok := spec.GetSigner(targetKey); ok {
-		signed, err := frontend.ForwardToSigner(ctx, client, signer, st)
-		if err != nil {
-			return llb.Scratch(), err
-		}
-
-		st = signed
-	}
-
-	return st, nil
+	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 }
 
 func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {
 	outName := filepath.Join(outputDir, name+".zip")
 	zipped := worker.Run(
-		shArgs("zip "+outName+" *"),
+		dalec.ShArgs("zip "+outName+" *"),
 		llb.Dir("/tmp/artifacts"),
 		llb.AddMount("/tmp/artifacts", artifacts),
 	).AddMount(outputDir, llb.Scratch())
@@ -188,17 +175,29 @@ func generateInvocationScript(binaries []string) *strings.Builder {
 	return script
 }
 
-func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
-	// TODO: support named context override... also this should possibly be its own image, maybe?
+func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	base, err := sOpt.GetContext(workerImgRef, dalec.WithConstraints(opts...))
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	if base != nil {
+		return *base, nil
+	}
+
+	base, err = sOpt.GetContext(WindowscrossWorkerContextName, dalec.WithConstraints(opts...))
+	if err != nil {
+		return llb.Scratch(), nil
+	}
+	if base != nil {
+		return *base, nil
+	}
+
 	return llb.Image(workerImgRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).
 		Run(
-			shArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip"),
+			dalec.ShArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip"),
 			dalec.WithMountedAptCache(aptCachePrefix),
-		).Root()
-}
-
-func shArgs(cmd string) llb.RunOption {
-	return llb.Args([]string{"sh", "-c", cmd})
+		).Root(), nil
 }
 
 func createBuildScript(spec *dalec.Spec) llb.State {

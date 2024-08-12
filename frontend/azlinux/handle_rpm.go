@@ -47,29 +47,85 @@ func handleRPM(w worker) gwclient.BuildFunc {
 			if err != nil {
 				return nil, nil, err
 			}
-			return ref, nil, nil
+			return ref, &dalec.DockerImageSpec{}, nil
 		})
 	}
 }
 
-func shArgs(cmd string) llb.RunOption {
-	return llb.Args([]string{"sh", "-c", cmd})
-}
+// Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
+func installBuildDepsPackage(target string, packageName string, w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
+	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
+	depsOnly := dalec.Spec{
+		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
+		Description: "Provides build dependencies for mariner2 and azlinux3",
+		Version:     "1.0",
+		License:     "Apache 2.0",
+		Revision:    "1",
+		Dependencies: &dalec.PackageDependencies{
+			Runtime: deps,
+		},
+	}
 
-func installBuildDeps(w worker, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return func(in llb.State) llb.State {
-		deps := spec.GetBuildDeps(targetKey)
-		if len(deps) == 0 {
-			return in
+	return func(ctx context.Context, client gwclient.Client, sOpt dalec.SourceOpts) (llb.RunOption, error) {
+		pg := dalec.ProgressGroup("Building container for build dependencies")
+
+		// create an RPM with just the build dependencies, using our same base worker
+		rpmDir, err := specToRpmLLB(ctx, w, client, &depsOnly, sOpt, target, pg)
+		if err != nil {
+			return nil, err
 		}
+
+		var opts []llb.ConstraintsOpt
 		opts = append(opts, dalec.ProgressGroup("Install build deps"))
 
-		return in.Run(w.Install(deps, installWithConstraints(opts)), dalec.WithConstraints(opts...)).Root()
+		rpmMountDir := "/tmp/rpms"
+
+		installOpts = append([]installOpt{
+			noGPGCheck,
+			withMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
+			installWithConstraints(opts),
+		}, installOpts...)
+
+		// install the built RPMs into the worker itself
+		return w.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
 	}
 }
 
+func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	deps := spec.GetBuildDeps(targetKey)
+	if len(deps) == 0 {
+		return func(in llb.State) llb.State { return in }, nil
+	}
+
+	sOpt, err := frontend.SourceOptFromClient(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	opts = append(opts, dalec.ProgressGroup("Install build deps"))
+
+	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps, installWithConstraints(opts))(ctx, client, sOpt)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(in llb.State) llb.State {
+		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
+	}, nil
+}
+
 func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	base := w.Base(client, opts...).With(installBuildDeps(w, spec, targetKey, opts...))
+	base, err := w.Base(sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	installOpt, err := installBuildDeps(ctx, w, client, spec, targetKey, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	base = base.With(installOpt)
+
 	br, err := rpm.SpecToBuildrootLLB(base, spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err
@@ -77,13 +133,5 @@ func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *d
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 	st := rpm.Build(br, base, specPath, opts...)
 
-	if signer, ok := spec.GetSigner(targetKey); ok {
-		signed, err := frontend.ForwardToSigner(ctx, client, signer, st)
-		if err != nil {
-			return llb.Scratch(), err
-		}
-		st = signed
-	}
-
-	return st, nil
+	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 }

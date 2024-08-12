@@ -91,7 +91,7 @@ The HTTP source type is considered to be a "file" source.
 Clients provide a build context to Dalec.
 As an example, here is how the Docker client provides a build context to Dalec:
 
-```bash
+```shell
 $ docker build <some args> .
 ```
 
@@ -205,7 +205,7 @@ sources:
             include_distro_key: false # Add the target key from the target being built into the cache key
             include_arch_key: false # add the architecture of the image to run the command in into the cache key
           }
-        
+
         steps:
           - command: echo ${FOO} ${BAR}
             env: # Environment variables to set for the step
@@ -320,6 +320,108 @@ sources:
 
 `gomod` currently does not have any options but may in the future.
 
+
+## Patches
+
+Dalec supports applying patches to sources. Patches must be specified in the
+sources section just like any other type of source.
+To apply a source as a patch to another source there is a patches section that
+is a mapping of the source name you want to apply a patch to, to an ordered list
+of sources that are the patch to apply.
+
+```yaml
+sources:
+  md2man:
+    git:
+      url: https://github.com/cpuguy83/go-md2man.git
+        commit: v2.0.3
+    generate:
+      gomod: {} # Generates a go module cache to cache dependencies
+  md2man-patch:
+    http:
+      url: https://github.com/cpuguy83/go-md2man/commit/fd6bc094ed445b6954a67df55e75d7db95fa8879.patch
+
+patches:
+  m2dman: # Name of the source we want to patch.
+      # Each entry is a patch spec and points to a source listed in the `sources` section
+    - source: md2man-patch # The name of the source that contains the patch
+      path: "" # Path inside the patch source where the patch file is located.
+    # Add more patches to the list (After adding them to the sources section) if needed
+```
+
+Each patch in the list of patch sources MUST be pointing to a file. When the
+patch source is a file-based source, such as `http`, the `path` parameter in the
+patch spec must not be set. When the patch is a directory-based source, such as
+`context`, the `path` parameter in the patch spec must be set AND referencing a file
+in the source.
+See the source type definitions for if a source type is directory or file based.
+
+Here is another example using a directory-backed source for patches. In the
+example we'll also sow using multiple patch files from the same source.
+
+```yaml
+sources:
+  md2man:
+    git:
+      url: https://github.com/cpuguy83/go-md2man.git
+      commit: v2.0.3
+  localPatches:
+    context: {}
+
+
+patches:
+  md2man:
+    - source: localPatches
+      path: patches/some0.patch
+    - source: localPatches
+      path: patches/some2.patch
+```
+
+Note: If you want to optimize the above example you can use the `includes`
+feature on the context source so that only the needed files are fetched during
+the build.
+
+```yaml
+sources:
+  md2man:
+    git:
+      url: https://github.com/cpuguy83/go-md2man.git
+      commit: v2.0.3
+  localPatches:
+    context: {}
+    includes:
+      - patches/some0.patch
+      - patches/some1.patch
+
+patches:
+  md2man:
+    - source: localPatches
+      path: patches/some0.patch
+    - source: localPatches
+      path: patches/some2.patch
+```
+
+Here is another example where we have a directory-based source with a subpath
+defined on the source. Note that even if the subpath is pointing to a file, it
+is still considered a directory-based source and still requires specifying a path
+in the patch spec.
+
+```yaml
+sources:
+  md2man:
+    git:
+      url: https://github.com/cpuguy83/go-md2man.git
+      commit: v2.0.3
+  localPatches:
+    context: {}
+    path: patches/some0.patch
+
+patches:
+  md2man:
+    - source: localPatches
+      path: some0.patch
+```
+
 ## Advanced Source Configurations
 
 You can see more advanced configurations in our [test fixtures](https://github.com/Azure/dalec/tree/main/test/fixtures).
@@ -327,3 +429,4 @@ These are in here to test lots of different edge cases and are only mentioned to
 when these simple configurations are not enough.
 The examples in that directory are not exhaustive and are not guaranteed to work in all cases or with all inputs and are
 there strictly for testing purposes.
+

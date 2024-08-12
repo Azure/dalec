@@ -2,6 +2,7 @@ package frontend
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/util/bklog"
+	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
@@ -212,4 +215,33 @@ type BuildOpstGetter interface {
 // GetTargetKey returns the key that should be used to select the [dalec.Target] from the [dalec.Spec]
 func GetTargetKey(client BuildOpstGetter) string {
 	return client.BuildOpts().Opts[keyTopLevelTarget]
+}
+
+// Warn sends a warning to the client for the provided state.
+func Warn(ctx context.Context, client gwclient.Client, st llb.State, msg string) {
+	// Note: This will attempt to marshal the state to get its digest for metadata
+	// on the warning message, but it is not required to actually write the message.
+	// For this reason we can continue on error.
+
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		bklog.G(ctx).WithError(err).WithField("warn", msg).Warn("Error marshalling state for outputing warning message")
+	}
+
+	var dgst digest.Digest
+	if def != nil {
+		dgst, err = def.Head()
+		if err != nil {
+			bklog.G(ctx).WithError(err).WithField("warn", msg).Warn("Could not get state digest for outputing warning message")
+		}
+	}
+
+	if err := client.Warn(ctx, dgst, msg, gwclient.WarnOpts{}); err != nil {
+		bklog.G(ctx).WithError(err).WithField("warn", msg).Warn("Error writing warning message")
+	}
+}
+
+func Warnf(ctx context.Context, client gwclient.Client, st llb.State, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	Warn(ctx, client, st, msg)
 }

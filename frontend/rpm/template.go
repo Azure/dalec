@@ -5,47 +5,58 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"text/template"
 
 	"github.com/Azure/dalec"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const gomodsName = "__gomods"
 
-var specTmpl = template.Must(template.New("spec").Parse(strings.TrimSpace(`
-Summary: {{.Description}}
+var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
 Name: {{.Name}}
 Version: {{.Version}}
 Release: {{.Release}}%{?dist}
-License: {{.License}}
-URL: {{.Website}}
-Vendor: {{.Vendor}}
-Packager: {{.Packager}}
-{{- if .NoArch}}
+License: {{ .License }}
+Summary: {{ .Description }}
+{{ optionalField "URL" .Website -}}
+{{ optionalField "Vendor" .Vendor -}}
+{{ optionalField "Packager" .Packager -}}
+{{ if .NoArch }}
 BuildArch: noarch
-{{- end}}
-
-
-{{ .Sources }}
-{{ .Conflicts }}
-{{ .Provides }}
-{{ .Replaces }}
-{{ .Requires }}
+{{ end }}
+{{- .Sources -}}
+{{- .Conflicts -}}
+{{- .Provides -}}
+{{- .Replaces -}}
+{{- .Requires -}}
 
 %description
 {{.Description}}
-{{ .PrepareSources }}
-{{ .BuildSteps }}
-{{ .Install }}
-{{ .Post }}
-{{ .PreUn }}
-{{ .PostUn }}
-{{ .Files }}
-{{ .Changelog }}
+
+{{ .PrepareSources -}}
+{{ .BuildSteps -}}
+{{ .Install -}}
+{{ .Post -}}
+{{ .PreUn -}}
+{{ .PostUn -}}
+{{ .Files -}}
+{{ .Changelog -}}
 `)))
+
+func optionalField(key, value string) string {
+	if value == "" {
+		return ""
+	}
+	return key + ": " + value + "\n"
+}
+
+var tmplFuncs = map[string]any{
+	"optionalField": optionalField,
+}
 
 type specWrapper struct {
 	*dalec.Spec
@@ -68,16 +79,20 @@ func (w *specWrapper) Changelog() (fmt.Stringer, error) {
 		}
 	}
 
+	b.WriteString("\n")
 	return b, nil
 }
 
 func (w *specWrapper) Provides() fmt.Stringer {
 	b := &strings.Builder{}
 
-	sort.Strings(w.Spec.Provides)
-	for _, name := range w.Spec.Provides {
-		fmt.Fprintln(b, "Provides:", name)
+	ls := maps.Keys(w.Spec.Provides)
+	slices.Sort(ls)
+
+	for _, name := range ls {
+		writeDep(b, "Provides", name, w.Spec.Replaces[name])
 	}
+	b.WriteString("\n")
 	return b
 }
 
@@ -91,8 +106,42 @@ func (w *specWrapper) Replaces() fmt.Stringer {
 	return b
 }
 
+func getSystemdRequires(cfg *dalec.SystemdConfiguration) string {
+	var requires, orderRequires string
+	if cfg.IsEmpty() {
+		return ""
+	}
+
+	enabledUnits := cfg.EnabledUnits()
+	if len(enabledUnits) > 0 {
+		// if we are enabling any units, we need to require systemd
+		// specifically for %post
+		requires += "Requires(post): systemd\n"
+		orderRequires += "OrderWithRequires(post): systemd\n"
+	}
+
+	// in any case where we have units as artifacts, we must require systemd
+	// for %preun and %postun, as we are using the rpm systemd macros
+	// in those stages which depend on systemctl
+	requires +=
+		`Requires(preun): systemd
+Requires(postun): systemd
+`
+
+	orderRequires +=
+		`OrderWithRequires(preun): systemd
+OrderWithRequires(postun): systemd
+`
+
+	return requires + orderRequires
+}
+
 func (w *specWrapper) Requires() fmt.Stringer {
 	b := &strings.Builder{}
+
+	// first write systemd requires if they exist,
+	// as these do not come from dependencies in the spec
+	b.WriteString(getSystemdRequires(w.Artifacts.Systemd))
 
 	deps := w.Spec.Targets[w.Target].Dependencies
 	if deps == nil {
@@ -115,23 +164,35 @@ func (w *specWrapper) Requires() fmt.Stringer {
 	runtimeKeys := dalec.SortMapKeys(deps.Runtime)
 	for _, name := range runtimeKeys {
 		constraints := deps.Runtime[name]
-		// satisifes is only for build deps, not runtime deps
 		// TODO: consider if it makes sense to support sources satisfying runtime deps
 		writeDep(b, "Requires", name, constraints)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 
-func writeDep(b *strings.Builder, kind, name string, constraints []string) {
-	if len(constraints) == 0 {
-		fmt.Fprintf(b, "%s: %s\n", kind, name)
+func writeDep(b *strings.Builder, kind, name string, constraints dalec.PackageConstraints) {
+	do := func() {
+		if len(constraints.Version) == 0 {
+			fmt.Fprintf(b, "%s: %s\n", kind, name)
+			return
+		}
+
+		for _, c := range constraints.Version {
+			fmt.Fprintf(b, "%s: %s %s\n", kind, name, c)
+		}
+	}
+
+	if len(constraints.Arch) == 0 {
+		do()
 		return
 	}
 
-	sort.Strings(constraints)
-	for _, c := range constraints {
-		fmt.Fprintf(b, "%s: %s %s\n", kind, name, c)
+	for _, arch := range constraints.Arch {
+		fmt.Fprintf(b, "%%ifarch %s\n", arch)
+		do()
+		fmt.Fprintf(b, "%%endif\n")
 	}
 }
 
@@ -143,6 +204,7 @@ func (w *specWrapper) Conflicts() string {
 		constraints := w.Spec.Conflicts[name]
 		writeDep(b, "Conflicts", name, constraints)
 	}
+	b.WriteString("\n")
 	return b.String()
 }
 
@@ -180,6 +242,9 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", len(keys), gomodsName)
 	}
 
+	if len(keys) > 0 {
+		b.WriteString("\n")
+	}
 	return b, nil
 }
 
@@ -217,35 +282,33 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
 	})
 
-	for _, name := range keys {
-		src := w.Spec.Sources[name]
-
-		err := func(name string, src dalec.Source) error {
-			if patches[name] {
-				// This source is a patch so we don't need to set anything up
-				return nil
-			}
-
-			isDir := dalec.SourceIsDir(src)
-
-			if !isDir {
-				fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", name)
-				return nil
-			}
-
-			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", name)
-			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", name, name)
-
-			for _, patch := range w.Spec.Patches[name] {
-				fmt.Fprintf(b, "patch -d %q -p%d -s < \"%%{_sourcedir}/%s\"\n", name, *patch.Strip, patch.Source)
-			}
-
-			prepareGomods()
-			return nil
-		}(name, src)
-		if err != nil {
-			return nil, fmt.Errorf("error preparing source %s: %w", name, err)
+	// Extract all the sources from the rpm source dir
+	for _, key := range keys {
+		if !dalec.SourceIsDir(w.Spec.Sources[key]) {
+			// This is a file, nothing to extract, but we need to put it into place
+			// in  the rpm build dir
+			fmt.Fprintf(b, "cp -a \"%%{_sourcedir}/%s\" .\n", key)
+			continue
 		}
+		// This is a directory source so it needs to be untarred into the rpm build dir.
+		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", key)
+		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", key, key)
+	}
+	prepareGomods()
+
+	// Apply patches to all sources.
+	// Note: These are applied based on the key sorting algorithm (lexicographic).
+	//  Using one patch to patch another patch is not supported, except that it may
+	//  occur if they happen to be sorted lexicographically.
+	patchKeys := dalec.SortMapKeys(w.Spec.Patches)
+	for _, key := range patchKeys {
+		for _, patch := range w.Spec.Patches[key] {
+			fmt.Fprintf(b, "patch -d %q -p%d -s --input \"%%{_builddir}/%s\"\n", key, *patch.Strip, filepath.Join(patch.Source, patch.Path))
+		}
+	}
+
+	if len(keys) > 0 {
+		b.WriteString("\n")
 	}
 	return b, nil
 }
@@ -288,50 +351,90 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 		writeStep(b, step)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 
 func (w *specWrapper) PreUn() fmt.Stringer {
 	b := &strings.Builder{}
-	b.WriteString("%preun\n")
 
-	if w.Spec.Artifacts.Systemd != nil {
-		keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
-		for _, servicePath := range keys {
-			serviceName := filepath.Base(servicePath)
-			fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
-		}
+	if w.Artifacts.Systemd.IsEmpty() {
+		return b
 	}
 
+	b.WriteString("%preun\n")
+	keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
+	for _, servicePath := range keys {
+		serviceName := filepath.Base(servicePath)
+		fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
+	}
+
+	b.WriteString("\n")
 	return b
+}
+
+func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
+	// if service isn't explicitly specified as enabled in the spec,
+	// then we don't need to do anything in the post script
+	if !cfg.Enable {
+		return ""
+	}
+
+	// should be equivalent to the systemd_post scriptlet in the rpm spec,
+	// but without the use of a .preset file
+	return fmt.Sprintf(`
+if [ $1 -eq 1 ]; then
+    # initial installation
+    systemctl enable %s
+fi
+`, unitName)
 }
 
 func (w *specWrapper) Post() fmt.Stringer {
 	b := &strings.Builder{}
+
+	if w.Artifacts.Systemd.IsEmpty() {
+		return b
+	}
+
+	enabledUnits := w.Artifacts.Systemd.EnabledUnits()
+	if len(enabledUnits) == 0 {
+		// if we have no enabled units, we don't need to do anything systemd related
+		// in the post script. In this case, we shouldn't emit '%post'
+		// as this eliminates the need for extra dependencies in the target container
+		return b
+	}
+
 	b.WriteString("%post\n")
 	// TODO: can inject other post install steps here in the future
 
-	if w.Spec.Artifacts.Systemd != nil {
-		keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
-		for _, servicePath := range keys {
-			unitConf := w.Spec.Artifacts.Systemd.Units[servicePath].Artifact()
-			fmt.Fprintf(b, "%%systemd_post %s\n", unitConf.ResolveName(servicePath))
-		}
+	keys := dalec.SortMapKeys(enabledUnits)
+	for _, servicePath := range keys {
+		unitConf := w.Spec.Artifacts.Systemd.Units[servicePath]
+		artifact := unitConf.Artifact()
+		b.WriteString(
+			systemdPostScript(artifact.ResolveName(servicePath), unitConf),
+		)
 	}
+
+	b.WriteString("\n")
 	return b
 }
 
 func (w *specWrapper) PostUn() fmt.Stringer {
 	b := &strings.Builder{}
+
+	if w.Artifacts.Systemd.IsEmpty() {
+		return b
+	}
+
 	b.WriteString("%postun\n")
-	if w.Spec.Artifacts.Systemd != nil {
-		keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
-		for _, servicePath := range keys {
-			cfg := w.Spec.Artifacts.Systemd.Units[servicePath]
-			a := cfg.Artifact()
-			serviceName := a.ResolveName(servicePath)
-			fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
-		}
+	keys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
+	for _, servicePath := range keys {
+		cfg := w.Spec.Artifacts.Systemd.Units[servicePath]
+		a := cfg.Artifact()
+		serviceName := a.ResolveName(servicePath)
+		fmt.Fprintf(b, "%%systemd_postun %s\n", serviceName)
 	}
 
 	return b
@@ -342,6 +445,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 
 	fmt.Fprintln(b, "%install")
 	if w.Spec.Artifacts.IsEmpty() {
+		b.WriteString("\n")
 		return b
 	}
 
@@ -395,6 +499,14 @@ func (w *specWrapper) Install() fmt.Stringer {
 		}
 	}
 
+	if w.Spec.Artifacts.DataDirs != nil {
+		dataFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataDirs)
+		for _, k := range dataFileKeys {
+			df := w.Spec.Artifacts.DataDirs[k]
+			copyArtifact(`%{buildroot}/%{_datadir}`, k, df)
+		}
+	}
+
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
@@ -403,27 +515,10 @@ func (w *specWrapper) Install() fmt.Stringer {
 
 	if w.Spec.Artifacts.Systemd != nil {
 		serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
-		presetName := "%{name}.preset"
 		for _, p := range serviceKeys {
 			cfg := w.Spec.Artifacts.Systemd.Units[p]
 			// must include systemd unit extension (.service, .socket, .timer, etc.) in name
 			copyArtifact(`%{buildroot}/%{_unitdir}`, p, cfg.Artifact())
-
-			verb := "disable"
-			if cfg.Enable {
-				verb = "enable"
-			}
-
-			unitName := filepath.Base(p)
-			if cfg.Name != "" {
-				unitName = cfg.Name
-			}
-
-			fmt.Fprintf(b, "echo '%s %s' >> '%s'\n", verb, unitName, presetName)
-		}
-
-		if len(serviceKeys) > 0 {
-			copyArtifact(`%{buildroot}/%{_presetdir}`, presetName, dalec.ArtifactConfig{})
 		}
 
 		dropinKeys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Dropins)
@@ -447,6 +542,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		copyArtifact(root, l, cfg)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 
@@ -455,6 +551,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 
 	fmt.Fprintf(b, "%%files\n")
 	if w.Spec.Artifacts.IsEmpty() {
+		b.WriteString("\n")
 		return b
 	}
 
@@ -483,6 +580,15 @@ func (w *specWrapper) Files() fmt.Stringer {
 		}
 	}
 
+	if w.Spec.Artifacts.DataDirs != nil {
+		dataKeys := dalec.SortMapKeys(w.Spec.Artifacts.DataDirs)
+		for _, k := range dataKeys {
+			df := w.Spec.Artifacts.DataDirs[k]
+			fullPath := filepath.Join(`%{_datadir}`, df.SubPath, df.ResolveName(k))
+			fmt.Fprintln(b, fullPath)
+		}
+	}
+
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
@@ -494,13 +600,10 @@ func (w *specWrapper) Files() fmt.Stringer {
 	if w.Spec.Artifacts.Systemd != nil {
 		serviceKeys := dalec.SortMapKeys(w.Spec.Artifacts.Systemd.Units)
 		for _, p := range serviceKeys {
-			serviceName := filepath.Base(p)
-			unitPath := filepath.Join(`%{_unitdir}/`, serviceName)
+			cfg := w.Spec.Artifacts.Systemd.Units[p]
+			a := cfg.Artifact()
+			unitPath := filepath.Join(`%{_unitdir}/`, a.SubPath, a.ResolveName(p))
 			fmt.Fprintln(b, unitPath)
-		}
-
-		if len(serviceKeys) > 0 {
-			fmt.Fprintln(b, "%{_presetdir}/%{name}.preset")
 		}
 
 		dropins := make(map[string][]string)
@@ -556,6 +659,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 		fmt.Fprintln(b, fullDirective)
 	}
 
+	b.WriteString("\n")
 	return b
 }
 

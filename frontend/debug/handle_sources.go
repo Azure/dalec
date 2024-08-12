@@ -19,16 +19,12 @@ func Sources(ctx context.Context, client gwclient.Client) (*client.Result, error
 			return nil, nil, err
 		}
 
-		sources := make([]llb.State, 0, len(spec.Sources))
-		for name, src := range spec.Sources {
-			st, err := src.AsState(name, sOpt)
-			if err != nil {
-				return nil, nil, err
-			}
-			sources = append(sources, st)
+		sources, err := dalec.Sources(spec, sOpt)
+		if err != nil {
+			return nil, nil, err
 		}
 
-		def, err := dalec.MergeAtPath(llb.Scratch(), sources, "/").Marshal(ctx)
+		def, err := dalec.MergeAtPath(llb.Scratch(), dalec.SortedMapValues(sources), "/").Marshal(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -44,6 +40,6 @@ func Sources(ctx context.Context, client gwclient.Client) (*client.Result, error
 		if err != nil {
 			return nil, nil, err
 		}
-		return ref, nil, nil
+		return ref, &dalec.DockerImageSpec{}, nil
 	})
 }

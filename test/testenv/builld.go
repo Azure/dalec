@@ -52,10 +52,11 @@ func buildBaseFrontend(ctx context.Context, c gwclient.Client) (*gwclient.Result
 			dockerui.DefaultLocalNameContext:    defPB,
 			dockerui.DefaultLocalNameDockerfile: dockerfileDef.ToPB(),
 		},
+		Evaluate: true,
 	})
 }
 
-// InjectInput adds the neccessary options to a solve request to use the output of the provided build function as an input to the solve request.
+// InjectInput adds the necessary options to a solve request to use the output of the provided build function as an input to the solve request.
 func injectInput(ctx context.Context, res *gwclient.Result, id string, req *gwclient.SolveRequest) (retErr error) {
 	ctx, span := otel.Tracer("").Start(ctx, "build input "+id)
 	defer func() {
@@ -111,7 +112,7 @@ func injectInput(ctx context.Context, res *gwclient.Result, id string, req *gwcl
 	return nil
 }
 
-// withDalecInput adds the neccessary options to a solve request to use
+// withDalecInput adds the necessary options to a solve request to use
 // the locally built frontend as an input to the solve request.
 // This only works with buildkit >= 0.12
 func withDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.SolveRequest) error {

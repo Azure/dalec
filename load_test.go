@@ -691,3 +691,81 @@ build:
 			`error performing shell expansion on build step 0: error performing shell expansion on env var "OS" for step 0: opt-in arg "TARGETOS" not present in args`)
 	})
 }
+
+func Test_validatePatch(t *testing.T) {
+	type testCase struct {
+		name     string
+		patchSrc Source
+		subpath  bool
+	}
+
+	// Create a test case for each source type.
+	// For each type we need to specify if it should have a subpath or not.
+	cases := []testCase{
+		{
+			name:     "ineline file",
+			patchSrc: Source{Inline: &SourceInline{File: &SourceInlineFile{}}},
+			subpath:  false,
+		},
+		{
+			name:     "inline dir",
+			patchSrc: Source{Inline: &SourceInline{Dir: &SourceInlineDir{}}},
+			subpath:  true,
+		},
+		{
+			name:     "git",
+			patchSrc: Source{Git: &SourceGit{}},
+			subpath:  true,
+		},
+		{
+			name:     "image",
+			patchSrc: Source{DockerImage: &SourceDockerImage{}},
+			subpath:  true,
+		},
+		{
+			name:     "HTTP",
+			patchSrc: Source{HTTP: &SourceHTTP{}},
+			subpath:  false,
+		},
+		{
+			name:     "context",
+			patchSrc: Source{Context: &SourceContext{}},
+			subpath:  true,
+		},
+		{
+			name:     "build",
+			patchSrc: Source{Build: &SourceBuild{}},
+			subpath:  true,
+		},
+	}
+
+	// For each case generate 2 tests: 1 with a subpath and 1 without
+	// Use the subpath field in the test case to determine if the validation
+	// should return an error.
+	//
+	// If subpath is false in the testcase but the test is passing in a subpath then
+	// an error is expected.
+	// Likewise when subpath is true but no subpath is given.
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("subpath=true", func(t *testing.T) {
+				ps := PatchSpec{Path: "/test"}
+				err := validatePatch(ps, tc.patchSrc)
+				if tc.subpath {
+					assert.NilError(t, err)
+					return
+				}
+				assert.ErrorIs(t, err, errPatchFileNoSubpath)
+			})
+			t.Run("subpath=false", func(t *testing.T) {
+				ps := PatchSpec{}
+				err := validatePatch(ps, tc.patchSrc)
+				if tc.subpath {
+					assert.ErrorIs(t, err, errPatchRequiresSubpath)
+					return
+				}
+				assert.NilError(t, err)
+			})
+		})
+	}
+}

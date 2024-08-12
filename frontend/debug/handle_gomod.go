@@ -55,6 +55,6 @@ func Gomods(ctx context.Context, client gwclient.Client) (*client.Result, error)
 		if err != nil {
 			return nil, nil, err
 		}
-		return ref, nil, nil
+		return ref, &dalec.DockerImageSpec{}, nil
 	})
 }

@@ -19,9 +19,9 @@ func TestTemplateSources(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if s.String() != "" {
-			t.Fatalf("unexpected sources: %s", s.String())
-		}
+		expect := ""
+		actual := s.String()
+		assert.Equal(t, actual, expect)
 	})
 
 	// Each source entry is prefixed by comments documenting how the source was generated
@@ -65,7 +65,7 @@ func TestTemplateSources(t *testing.T) {
 		}
 
 		// File sources are not (currently) compressed, so the source is the file itself
-		expected := "Source0: src1\n"
+		expected := "Source0: src1\n\n"
 		actual := s[len(expectedDoc):] // trim off the doc from the output
 		if actual != expected {
 			t.Fatalf("unexpected sources: expected %q, got: %q", expected, actual)
@@ -95,7 +95,7 @@ func TestTemplateSources(t *testing.T) {
 			t.Errorf("Expected doc:\n%q\n\n, got:\n%q\n", expectedDoc, s)
 		}
 
-		expected := "Source0: src1.tar.gz\n"
+		expected := "Source0: src1.tar.gz\n\n"
 		actual := s[len(expectedDoc):] // trim off the doc from the output
 		if actual != expected {
 			t.Fatalf("unexpected sources: expected %q, got: %q", expected, actual)
@@ -113,12 +113,14 @@ func TestTemplateSources(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			s2 := out2.String()
+			// trim last newline from the first output since that has shifted
+			s = s[:len(s)-1]
 			if !strings.HasPrefix(s2, s) {
 				t.Fatalf("expected output to start with %q, got %q", s, out2.String())
 			}
 
 			s2 = strings.TrimPrefix(out2.String(), s)
-			expected := "Source1: " + gomodsName + ".tar.gz\n"
+			expected := "Source1: " + gomodsName + ".tar.gz\n\n"
 			if s2 != expected {
 				t.Fatalf("unexpected sources: expected %q, got: %q", expected, s2)
 			}
@@ -197,7 +199,7 @@ func TestTemplateSources(t *testing.T) {
 		// Now we should have one more entry for gomods.
 		// Note there are 2 gomod sources but they should be combined into one entry.
 
-		expected := "Source5: " + gomodsName + ".tar.gz\n"
+		expected := "Source5: " + gomodsName + ".tar.gz\n\n"
 		if s != expected {
 			t.Fatalf("gomod: unexpected sources: expected %q, got: %q", expected, s)
 		}
@@ -209,6 +211,47 @@ func TestTemplateSources(t *testing.T) {
 }
 
 func TestTemplate_Artifacts(t *testing.T) {
+
+	t.Run("test systemd post", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"test1.service": {},
+						"test2.service": {
+							Enable: true,
+						},
+					},
+				},
+			},
+		}}
+
+		assert.Equal(t, w.Post().String(),
+			`%post
+
+if [ $1 -eq 1 ]; then
+    # initial installation
+    systemctl enable test2.service
+fi
+
+`)
+	})
+
+	t.Run("test systemd post, no enabled units", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"test1.service": {},
+						"test2.service": {},
+					},
+				},
+			},
+		}}
+
+		assert.Equal(t, w.Post().String(), ``)
+	})
+
 	t.Run("test systemd unit postun", func(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
@@ -245,7 +288,9 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %doc %{_docdir}/test-pkg/docs/README
+
 `
+
 		assert.Equal(t, want, got)
 	})
 
@@ -263,6 +308,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %doc %{_docdir}/test-pkg/README.md
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -281,6 +327,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %doc %{_docdir}/test-pkg/README.md
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -299,6 +346,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %license %{_licensedir}/test-pkg/LICENSE
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -320,6 +368,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %license %{_licensedir}/test-pkg/licenses/LICENSE.md
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -341,6 +390,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %config(noreplace) %{_sysconfdir}/sysconfig/config
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -359,6 +409,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		got := w.Files().String()
 		want := `%files
 %config(noreplace) %{_sysconfdir}/config.env
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -381,6 +432,7 @@ func TestTemplate_Artifacts(t *testing.T) {
 		want := `%files
 %dir %{_unitdir}/foo.service.d
 %{_unitdir}/foo.service.d/blah.config
+
 `
 		assert.Equal(t, want, got)
 	})
@@ -408,9 +460,61 @@ func TestTemplate_Artifacts(t *testing.T) {
 %dir %{_unitdir}/foo.service.d
 %{_unitdir}/foo.service.d/blah.config
 %{_unitdir}/foo.service.d/test.conf
+
 `
 		assert.Equal(t, want, got)
 	})
+
+	t.Run("test systemd artifact installed under a different name", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Name:        "test-systemd-unit",
+			Description: "Test systemd unit",
+			Website:     "https://www.github.com/Azure/dalec",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Vendor:      "Microsoft",
+			License:     "Apache 2.0",
+			Packager:    "Microsoft <support@microsoft.com>",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+
+							Files: map[string]*dalec.SourceInlineFile{
+								"simple.service": {
+									Contents: `
+Phony unit
+`},
+							},
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"src/simple.service": {
+							Enable: true,
+							Name:   "phony.service",
+						},
+					},
+				},
+			},
+		}
+		w := specWrapper{Spec: spec}
+
+		assert.Equal(t, w.Install().String(), `%install
+mkdir -p %{buildroot}/%{_unitdir}
+cp -r src/simple.service %{buildroot}/%{_unitdir}/phony.service
+
+`)
+
+		assert.Equal(t, w.Files().String(), `%files
+%{_unitdir}/phony.service
+
+`)
+	})
+
 }
 
 func TestTemplate_Requires(t *testing.T) {
@@ -421,24 +525,48 @@ func TestTemplate_Requires(t *testing.T) {
 			// note: I've prefixed these packages with a/b/c for sorting purposes
 			// Since the underlying code will sort packages this just makes it
 			// simpler to read for tests.
-			Build: map[string][]string{
+			Build: map[string]dalec.PackageConstraints{
 				"a-lib-no-constraints": {},
 				"b-lib-one-constraints": {
-					"< 2.0",
+					Version: []string{"< 2.0"},
 				},
 				"c-lib-multiple-constraints": {
-					"< 2.0",
-					">= 1.0",
+					Version: []string{
+						"< 2.0",
+						">= 1.0",
+					},
+				},
+				"d-lib-single-arch-constraints": {
+					Arch: []string{"arm64"},
+				},
+				"e-lib-multi-arch-constraints": {
+					Arch: []string{"amd64", "arm64"},
+				},
+				"f-lib-multi-arch-multi-version-constraints": {
+					Arch:    []string{"amd64", "arm64"},
+					Version: []string{"< 2.0", ">= 1.0"},
 				},
 			},
-			Runtime: map[string][]string{
+			Runtime: map[string]dalec.PackageConstraints{
 				"a-no-constraints": {},
 				"b-one-constraints": {
-					"< 2.0",
+					Version: []string{"< 2.0"},
 				},
 				"c-multiple-constraints": {
-					"< 2.0",
-					">= 1.0",
+					Version: []string{
+						"< 2.0",
+						">= 1.0",
+					},
+				},
+				"d-single-arch-constraints": {
+					Arch: []string{"arm64"},
+				},
+				"e-multi-arch-constraints": {
+					Arch: []string{"amd64", "arm64"},
+				},
+				"f-multi-arch-multi-version-constraints": {
+					Arch:    []string{"amd64", "arm64"},
+					Version: []string{"< 2.0", ">= 1.0"},
 				},
 			},
 		},
@@ -451,12 +579,154 @@ func TestTemplate_Requires(t *testing.T) {
 BuildRequires: b-lib-one-constraints < 2.0
 BuildRequires: c-lib-multiple-constraints < 2.0
 BuildRequires: c-lib-multiple-constraints >= 1.0
+%ifarch arm64
+BuildRequires: d-lib-single-arch-constraints
+%endif
+%ifarch amd64
+BuildRequires: e-lib-multi-arch-constraints
+%endif
+%ifarch arm64
+BuildRequires: e-lib-multi-arch-constraints
+%endif
+%ifarch amd64
+BuildRequires: f-lib-multi-arch-multi-version-constraints < 2.0
+BuildRequires: f-lib-multi-arch-multi-version-constraints >= 1.0
+%endif
+%ifarch arm64
+BuildRequires: f-lib-multi-arch-multi-version-constraints < 2.0
+BuildRequires: f-lib-multi-arch-multi-version-constraints >= 1.0
+%endif
 
 Requires: a-no-constraints
 Requires: b-one-constraints < 2.0
 Requires: c-multiple-constraints < 2.0
 Requires: c-multiple-constraints >= 1.0
+%ifarch arm64
+Requires: d-single-arch-constraints
+%endif
+%ifarch amd64
+Requires: e-multi-arch-constraints
+%endif
+%ifarch arm64
+Requires: e-multi-arch-constraints
+%endif
+%ifarch amd64
+Requires: f-multi-arch-multi-version-constraints < 2.0
+Requires: f-multi-arch-multi-version-constraints >= 1.0
+%endif
+%ifarch arm64
+Requires: f-multi-arch-multi-version-constraints < 2.0
+Requires: f-multi-arch-multi-version-constraints >= 1.0
+%endif
+
 `
 
 	assert.Equal(t, want, got)
+}
+
+func TestTemplateOptionalFields(t *testing.T) {
+	spec := &dalec.Spec{
+		Name:        "testing",
+		Version:     "0.0.1",
+		Revision:    "1",
+		Description: "A helpful tool",
+		License:     "MIT",
+	}
+
+	w := &strings.Builder{}
+	err := specTmpl.Execute(w, &specWrapper{Spec: spec})
+	assert.NilError(t, err)
+
+	actual := strings.TrimSpace(w.String())
+	expect := strings.TrimSpace(`
+Name: testing
+Version: 0.0.1
+Release: 1%{?dist}
+License: MIT
+Summary: A helpful tool
+
+
+%description
+A helpful tool
+
+%install
+
+%files
+`)
+
+	assert.Equal(t, expect, actual)
+
+	w.Reset()
+
+	spec.Packager = "Awesome Packager"
+	err = specTmpl.Execute(w, &specWrapper{Spec: spec})
+	assert.NilError(t, err)
+
+	actual = strings.TrimSpace(w.String())
+	expect = strings.TrimSpace(`
+Name: testing
+Version: 0.0.1
+Release: 1%{?dist}
+License: MIT
+Summary: A helpful tool
+Packager: Awesome Packager
+
+
+%description
+A helpful tool
+
+%install
+
+%files
+
+`)
+
+	defer func() {
+		if t.Failed() {
+			t.Log(actual)
+		}
+	}()
+	assert.Equal(t, expect, actual)
+}
+
+func TestTemplate_ImplicitRequires(t *testing.T) {
+	spec := &dalec.Spec{
+		Artifacts: dalec.Artifacts{
+			Systemd: &dalec.SystemdConfiguration{
+				Units: map[string]dalec.SystemdUnitConfig{
+					"test.service": {
+						Enable: true,
+					},
+				},
+			},
+		},
+	}
+
+	w := specWrapper{Spec: spec}
+
+	got := w.Requires().String()
+	assert.Equal(t, got,
+		`Requires(post): systemd
+Requires(preun): systemd
+Requires(postun): systemd
+OrderWithRequires(post): systemd
+OrderWithRequires(preun): systemd
+OrderWithRequires(postun): systemd
+`,
+	)
+
+	spec.Artifacts.Systemd.Units = map[string]dalec.SystemdUnitConfig{
+		"test.service": {
+			Enable: false,
+		},
+	}
+
+	got = w.Requires().String()
+	assert.Equal(t, got,
+		`Requires(preun): systemd
+Requires(postun): systemd
+OrderWithRequires(preun): systemd
+OrderWithRequires(postun): systemd
+`)
+
 }

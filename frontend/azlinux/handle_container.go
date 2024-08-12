@@ -1,7 +1,6 @@
 package azlinux
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -36,7 +35,7 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := specToContainerLLB(w, client, spec, targetKey, rpmDir, rpms, sOpt, pg)
+			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, rpms, sOpt, pg)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -63,12 +62,17 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
+			base, err := w.Base(sOpt, pg)
+			if err != nil {
+				return nil, nil, err
+			}
+
 			withTestDeps := func(in llb.State) llb.State {
 				deps := spec.GetTestDeps(targetKey)
 				if len(deps) == 0 {
 					return in
 				}
-				return w.Base(client, pg).Run(
+				return base.Run(
 					w.Install(spec.GetTestDeps(targetKey), atRoot("/tmp/rootfs")),
 					pg,
 					dalec.ProgressGroup("Install test dependencies"),
@@ -131,20 +135,23 @@ func readRPMs(ctx context.Context, client gwclient.Client, st llb.State) ([]stri
 	return out, nil
 }
 
-func specToContainerLLB(w worker, client gwclient.Client, spec *dalec.Spec, target string, rpmDir llb.State, files []string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb.State, files []string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
-	builderImg := w.Base(client, opts...)
+	builderImg, err := w.Base(sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
 
 	rootfs := llb.Scratch()
-	if ref := dalec.GetBaseOutputImage(spec, target); ref != "" {
+	if ref := dalec.GetBaseOutputImage(spec, targetKey); ref != "" {
 		rootfs = llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	}
 
 	if len(files) > 0 {
 		rpmMountDir := "/tmp/rpms"
-		updated := make([]string, 0, len(files))
+		updated := w.BasePackages()
 		for _, f := range files {
 			updated = append(updated, filepath.Join(rpmMountDir, f))
 		}
@@ -156,53 +163,13 @@ func specToContainerLLB(w worker, client gwclient.Client, spec *dalec.Spec, targ
 		).AddMount(workPath, rootfs)
 	}
 
-	if post := getImagePostInstall(spec, target); post != nil && len(post.Symlinks) > 0 {
+	if post := spec.GetImagePost(targetKey); post != nil && len(post.Symlinks) > 0 {
 		rootfs = builderImg.
-			Run(dalec.WithConstraints(opts...), addImagePost(post, workPath)).
+			Run(dalec.WithConstraints(opts...), dalec.InstallPostSymlinks(post, workPath)).
 			AddMount(workPath, rootfs)
 	}
 
 	return rootfs, nil
-}
-
-func getImagePostInstall(spec *dalec.Spec, targetKey string) *dalec.PostInstall {
-	tgt, ok := spec.Targets[targetKey]
-	if ok && tgt.Image != nil && tgt.Image.Post != nil {
-		return tgt.Image.Post
-	}
-
-	if spec.Image == nil {
-		return nil
-	}
-	return spec.Image.Post
-}
-
-func addImagePost(post *dalec.PostInstall, rootfsPath string) llb.RunOption {
-	return runOptionFunc(func(ei *llb.ExecInfo) {
-		if post == nil {
-			return
-		}
-
-		if len(post.Symlinks) == 0 {
-			return
-		}
-
-		buf := bytes.NewBuffer(nil)
-		buf.WriteString("set -ex\n")
-		fmt.Fprintf(buf, "cd %q\n", rootfsPath)
-
-		for src, tgt := range post.Symlinks {
-			fmt.Fprintf(buf, "ln -s %q %q\n", src, filepath.Join(rootfsPath, tgt.Path))
-		}
-		shArgs(buf.String()).SetRunOption(ei)
-		dalec.ProgressGroup("Add post-install symlinks").SetRunOption(ei)
-	})
-}
-
-type runOptionFunc func(*llb.ExecInfo)
-
-func (f runOptionFunc) SetRunOption(ei *llb.ExecInfo) {
-	f(ei)
 }
 
 func resolveBaseConfig(ctx context.Context, w worker, resolver llb.ImageMetaResolver, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (*dalec.DockerImageSpec, error) {

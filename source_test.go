@@ -516,7 +516,7 @@ func TestSourceContext(t *testing.T) {
 				src.Path = "subdir"
 				ops := getSourceOp(ctx, t, src)
 				checkContext(t, ops[0].GetSource(), &src)
-				// for context soruce, we expect to have a copy operation as the last op when subdir is used
+				// for context source, we expect to have a copy operation as the last op when subdir is used
 				checkFilter(t, ops[1].GetFile(), &src)
 			})
 
@@ -539,7 +539,7 @@ func TestSourceContext(t *testing.T) {
 				src.Excludes = []string{"baz"}
 				ops := getSourceOp(ctx, t, src)
 				checkContext(t, ops[0].GetSource(), &src)
-				// for context soruce, we expect to have a copy operation as the last op when subdir is used
+				// for context source, we expect to have a copy operation as the last op when subdir is used
 
 				// set includes, excludes to nil before checking against filter, as includes and excludes are
 				// handled before filter operation for context sources
@@ -1024,7 +1024,7 @@ type stubMetaResolver struct{}
 
 func (stubMetaResolver) ResolveImageConfig(ctx context.Context, ref string, opt sourceresolver.Opt) (string, digest.Digest, []byte, error) {
 	// Craft a dummy image config
-	// If we don't put at least 1 diffID, buildkit will treat this as `FROM scratch` (and actually litterally convert it `llb.Scratch`)
+	// If we don't put at least 1 diffID, buildkit will treat this as `FROM scratch` (and actually literally convert it `llb.Scratch`)
 	// This affects what ops that get marshaled.
 	// Namely it removes our `docker-image` identifier op.
 	img := DockerImageSpec{

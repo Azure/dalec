@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/azlinux"
+	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 )
@@ -16,17 +19,121 @@ func TestMariner2(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, "mariner2/container", "mariner2/rpm")
+	testLinuxDistro(ctx, t, testLinuxConfig{
+		Target: targetConfig{
+			Package:   "mariner2/rpm",
+			Container: "mariner2/container",
+			Worker:    "mariner2/worker",
+		},
+		LicenseDir: "/usr/share/licenses",
+		SystemdDir: struct {
+			Units   string
+			Targets string
+		}{
+			Units:   "/usr/lib/systemd",
+			Targets: "/etc/systemd/system",
+		},
+		Worker: workerConfig{
+			ContextName: azlinux.Mariner2WorkerContextName,
+			CreateRepo:  azlinuxWithRepo,
+		},
+		Release: OSRelease{
+			ID:        "mariner",
+			VersionID: "2.0",
+		},
+	})
 }
 
 func TestAzlinux3(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, "azlinux3/container", "azlinux3/rpm")
+	testLinuxDistro(ctx, t, testLinuxConfig{
+		Target: targetConfig{
+			Package:   "azlinux3/rpm",
+			Container: "azlinux3/container",
+			Worker:    "azlinux3/worker",
+		},
+		LicenseDir: "/usr/share/licenses",
+		SystemdDir: struct {
+			Units   string
+			Targets string
+		}{
+			Units:   "/usr/lib/systemd",
+			Targets: "/etc/systemd/system",
+		},
+		Worker: workerConfig{
+			ContextName: azlinux.Azlinux3WorkerContextName,
+			CreateRepo:  azlinuxWithRepo,
+		},
+		Release: OSRelease{
+			ID:        "azurelinux",
+			VersionID: "3.0",
+		},
+	})
 }
 
-func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, signTarget string) {
+func azlinuxWithRepo(rpms llb.State) llb.StateOption {
+	return func(in llb.State) llb.State {
+		localRepo := []byte(`
+[Local]
+name=Local Repository
+baseurl=file:///opt/repo
+gpgcheck=0
+priority=0
+enabled=1
+`)
+		pg := dalec.ProgressGroup("Install local repo for test")
+		return in.
+			File(llb.Mkdir("/opt/repo/RPMS", 0o755, llb.WithParents(true)), pg).
+			File(llb.Mkdir("/opt/repo/SRPMS", 0o755), pg).
+			Run(dalec.ShArgs("tdnf install -y createrepo"), pg).
+			File(llb.Mkfile("/etc/yum.repos.d/local.repo", 0o644, localRepo), pg).
+			Run(
+				llb.AddMount("/tmp/st", rpms, llb.Readonly),
+				dalec.ShArgs("cp /tmp/st/RPMS/$(uname -m)/* /opt/repo/RPMS/ && cp /tmp/st/SRPMS/* /opt/repo/SRPMS"),
+				pg,
+			).
+			Run(dalec.ShArgs("createrepo --compatibility /opt/repo"), pg).
+			Root()
+	}
+}
+
+type workerConfig struct {
+	// CreateRepo takes in a state which is the output of the sign target,
+	// the output [llb.StateOption] should install the repo into the worker image.
+	CreateRepo func(llb.State) llb.StateOption
+	// ContextName is the name of the worker context that the build target will use
+	// to see if a custom worker is proivded in a context
+	ContextName string
+}
+
+type targetConfig struct {
+	// Package is the target for creating a package.
+	Package string
+	// Container is the target for creating a container
+	Container string
+	// Target is the build target for creating the worker image.
+	Worker string
+}
+
+type testLinuxConfig struct {
+	Target     targetConfig
+	LicenseDir string
+	SystemdDir struct {
+		Units   string
+		Targets string
+	}
+	Worker  workerConfig
+	Release OSRelease
+}
+
+type OSRelease struct {
+	ID        string
+	VersionID string
+}
+
+func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -47,15 +154,14 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.Target.Container))
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
 			if !errors.As(err, &xErr) {
 				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
 			}
-			return gwclient.NewResult(), nil
 		})
 	})
 
@@ -71,7 +177,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			Packager:    "Dalec",
 			Description: "Should not have internet access during build",
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{"curl": {}},
+				Build: map[string]dalec.PackageConstraints{"curl": {}},
 			},
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
@@ -82,8 +188,8 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.Target.Container))
 			sr.Evaluate = true
 
 			_, err := gwc.Solve(ctx, sr)
@@ -91,11 +197,27 @@ func testLinuxDistro(ctx context.Context, t *testing.T, buildTarget string, sign
 			if !errors.As(err, &xErr) {
 				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
 			}
-			return gwclient.NewResult(), nil
 		})
 	})
 
 	t.Run("container", func(t *testing.T) {
+		const src2Patch3File = "patch3"
+		src2Patch3Content := []byte(`
+diff --git a/file3 b/file3
+new file mode 100700
+index 0000000..5260cb1
+--- /dev/null
++++ b/file3
+@@ -0,0 +1,3 @@
++#!/usr/bin/env bash
++
++echo "Added another new file"
+`)
+		src2Patch3Context := llb.Scratch().File(
+			llb.Mkfile(src2Patch3File, 0o600, src2Patch3Content),
+		)
+		src2Patch3ContextName := "patch-context"
+
 		spec := dalec.Spec{
 			Name:        "test-container-build",
 			Version:     "0.0.1",
@@ -140,8 +262,10 @@ index 84d55c5..22b9b11 100644
 				},
 				"src2-patch2": {
 					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents: `
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"the-patch": {
+									Contents: `
 diff --git a/file2 b/file2
 new file mode 100700
 index 0000000..5260cb1
@@ -152,19 +276,27 @@ index 0000000..5260cb1
 +
 +echo "Added a new file"
 `,
+								},
+							},
 						},
+					},
+				},
+				"src2-patch3": {
+					Context: &dalec.SourceContext{
+						Name: src2Patch3ContextName,
 					},
 				},
 			},
 			Patches: map[string][]dalec.PatchSpec{
 				"src2": {
 					{Source: "src2-patch1"},
-					{Source: "src2-patch2"},
+					{Source: "src2-patch2", Path: "the-patch"},
+					{Source: "src2-patch3", Path: src2Patch3File},
 				},
 			},
 
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{
+				Runtime: map[string]dalec.PackageConstraints{
 					"bash":      {},
 					"coreutils": {},
 				},
@@ -201,6 +333,17 @@ index 0000000..5260cb1
 					},
 					{
 						Command: "grep 'Added a new file' ./src2/file2",
+					},
+					{
+						// file added by patch
+						Command: "test -f ./src2/file3",
+					},
+					{
+						// file added by patch
+						Command: "test -x ./src2/file3",
+					},
+					{
+						Command: "grep 'Added another new file' ./src2/file3",
 					},
 					{
 						// Test that a multiline command works with env vars
@@ -272,10 +415,34 @@ echo "$BAR" > bar.txt
 						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 					},
 				},
+				{
+					Name: "Check /etc/os-release",
+					Files: map[string]dalec.FileCheckOutput{
+						"/etc/os-release": {
+							CheckOutput: dalec.CheckOutput{
+								Contains: []string{
+									fmt.Sprintf("ID=%s\n", testConfig.Release.ID),
+									// Note: the value of `VERSION_ID` needs to be quoted!
+									// TODO: Something is stripping the quotes here...
+									// fmt.Sprintf("VERSION_ID=%q\n", testConfig.Release.VersionID),
+								},
+							},
+						},
+					},
+				},
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(
+				withSpec(ctx, t, &spec),
+				withBuildTarget(testConfig.Target.Container),
+				withBuildContext(ctx, t, src2Patch3ContextName, src2Patch3Context),
+			)
+			sr.Evaluate = true
+
+			solveT(ctx, t, gwc, sr)
+
 			// Make sure the test framework was actually executed by the build target.
 			// This appends a test case so that is expected to fail and as such cause the build to fail.
 			spec.Tests = append(spec.Tests, &dalec.TestSpec{
@@ -285,79 +452,16 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget))
-			sr.Evaluate = true
+			// update the spec in the solve reuqest
+			withSpec(ctx, t, &spec)(&sr)
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {
-				return nil, fmt.Errorf("expected test spec to run with error but got none")
+				t.Fatal("expected test spec to run with error but got none")
 			}
-
-			return gwclient.NewResult(), nil
 		})
 	})
 
-	runTest := func(t *testing.T, f gwclient.BuildFunc) {
-		t.Helper()
-		ctx := startTestSpan(baseCtx, t)
-		testEnv.RunTest(ctx, t, f)
-	}
-
-	t.Run("test signing", func(t *testing.T) {
-		newSpec := func() *dalec.Spec {
-			return &dalec.Spec{
-				Name:        "foo",
-				Version:     "v0.0.1",
-				Description: "foo bar baz",
-				Website:     "https://foo.bar.baz",
-				Revision:    "1",
-				PackageConfig: &dalec.PackageConfig{
-					Signer: &dalec.PackageSigner{
-						Frontend: &dalec.Frontend{
-							Image: phonySignerRef,
-						},
-					},
-				},
-				Sources: map[string]dalec.Source{
-					"foo": {
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "#!/usr/bin/env bash\necho \"hello, world!\"\n",
-							},
-						},
-					},
-				},
-				Build: dalec.ArtifactBuild{
-					Steps: []dalec.BuildStep{
-						{
-							Command: "/bin/true",
-						},
-					},
-				},
-				Artifacts: dalec.Artifacts{
-					Binaries: map[string]dalec.ArtifactConfig{
-						"foo": {},
-					},
-				},
-			}
-		}
-
-		t.Run("no args", func(t *testing.T) {
-			t.Parallel()
-			spec := newSpec()
-			runTest(t, distroSigningTest(t, spec, signTarget))
-		})
-
-		t.Run("with args", func(t *testing.T) {
-			t.Parallel()
-
-			spec := newSpec()
-			spec.PackageConfig.Signer.Args = map[string]string{
-				"HELLO": "world",
-				"FOO":   "bar",
-			}
-			runTest(t, distroSigningTest(t, spec, signTarget))
-		})
-	})
+	t.Run("test signing", linuxSigningTests(ctx, testConfig))
 
 	t.Run("test systemd unit", func(t *testing.T) {
 		t.Parallel()
@@ -377,7 +481,7 @@ echo "$BAR" > bar.txt
 
 							Files: map[string]*dalec.SourceInlineFile{
 								"simple.service": {
-									Contents: `,
+									Contents: `
 [Unit]
 Description=Phony Service
 After=network.target
@@ -408,22 +512,22 @@ WantedBy=multi-user.target
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/systemd/system/simple.service": {
+						filepath.Join(testConfig.SystemdDir.Units, "system/simple.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 							Permissions: 0644,
 						},
-						"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
-							CheckOutput: dalec.CheckOutput{Contains: []string{"enable simple.service"}},
-							Permissions: 0644,
+						// symlinked file in multi-user.target.wants should point to simple.service.
+						filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/simple.service"): {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 						},
 					},
 				},
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
 		})
 
 		// Test to ensure disabling works by default
@@ -436,23 +540,49 @@ WantedBy=multi-user.target
 			{
 				Name: "Check service files",
 				Files: map[string]dalec.FileCheckOutput{
-					"/usr/lib/systemd/system/simple.service": {
+					filepath.Join(testConfig.SystemdDir.Units, "system/simple.service"): {
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
 						Permissions: 0644,
 					},
-					"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
-						// This is the only change from the previous test, service should be
-						// disabled in preset
-						CheckOutput: dalec.CheckOutput{Contains: []string{"disable simple.service"}},
-						Permissions: 0644,
+					filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/simple.service"): {
+						NotExist: true,
 					},
 				},
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
+		})
+
+		// Test to ensure unit can be installed under a different name
+		spec.Artifacts.Systemd = &dalec.SystemdConfiguration{
+			Units: map[string]dalec.SystemdUnitConfig{
+				"src/simple.service": {
+					Name: "phony.service",
+				},
+			},
+		}
+
+		spec.Tests = []*dalec.TestSpec{
+			{
+				Name: "Check service files",
+				Files: map[string]dalec.FileCheckOutput{
+					filepath.Join(testConfig.SystemdDir.Units, "system/phony.service"): {
+						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
+						Permissions: 0644,
+					},
+					filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/phony.service"): {
+						NotExist: true,
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -475,44 +605,44 @@ WantedBy=multi-user.target
 							Files: map[string]*dalec.SourceInlineFile{
 								"foo.service": {
 									Contents: `
-# simple-socket.service
-[Unit]
-Description=Foo Service
-After=network.target foo.socket
-Requires=foo.socket
+	# simple-socket.service
+	[Unit]
+	Description=Foo Service
+	After=network.target foo.socket
+	Requires=foo.socket
 
-[Service]
-Type=simple
-ExecStart=/usr/bin/foo
-ExecReload=/bin/kill -HUP $MAINPID
-StandardOutput=journal
-StandardError=journal
-`},
+	[Service]
+	Type=simple
+	ExecStart=/usr/bin/foo
+	ExecReload=/bin/kill -HUP $MAINPID
+	StandardOutput=journal
+	StandardError=journal
+	`},
 
 								"foo.socket": {
 									Contents: `
-[Unit]
-Description=foo socket
-PartOf=foo.service
+	[Unit]
+	Description=foo socket
+	PartOf=foo.service
 
-[Socket]
-ListenStream=127.0.0.1:8080
+	[Socket]
+	ListenStream=127.0.0.1:8080
 
-[Install]
-WantedBy=sockets.target
-								`,
+	[Install]
+	WantedBy=sockets.target
+									`,
 								},
 								"foo.conf": {
 									Contents: `
-[Service]
-Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
-								`,
+	[Service]
+	Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+									`,
 								},
 								"env.conf": {
 									Contents: `
-[Service]
-Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
-								`,
+	[Service]
+	Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+									`,
 								},
 							},
 						},
@@ -541,20 +671,21 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/systemd/system/foo.service": {
+						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/foo"}},
 							Permissions: 0644,
 						},
-						"/usr/lib/systemd/system-preset/test-systemd-unit.preset": {
-							CheckOutput: dalec.CheckOutput{Contains: []string{"enable foo.socket",
-								"disable foo.service"}},
-							Permissions: 0644,
+						filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/foo.service"): {
+							NotExist: true,
 						},
-						"/usr/lib/systemd/system/foo.service.d/foo.conf": {
+						filepath.Join(testConfig.SystemdDir.Targets, "sockets.target.wants/foo.socket"): {
+							CheckOutput: dalec.CheckOutput{Contains: []string{"Description=foo socket"}},
+						},
+						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
-						"/usr/lib/systemd/system/foo.socket.d/env.conf": {
+						filepath.Join(testConfig.SystemdDir.Units, "system/foo.socket.d/env.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
@@ -563,9 +694,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -610,7 +741,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				{
 					Name: "Check service files",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/systemd/system/foo.service.d/foo.conf": {
+						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
 							Permissions: 0644,
 						},
@@ -619,9 +750,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -657,7 +788,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				},
 			},
 			Dependencies: &dalec.PackageDependencies{
-				Build: map[string][]string{
+				Build: map[string]dalec.PackageConstraints{
 					// TODO: This works at least for now, but is distro specific and
 					// could break on new distros (though that is still unlikely).
 					"golang": {},
@@ -675,9 +806,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			return client.Solve(ctx, req)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -685,7 +816,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-directory-creation",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -693,7 +824,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Packager:    "Dalec",
 			Description: "Should Create Specified Directories",
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{"curl": {}},
+				Runtime: map[string]dalec.PackageConstraints{
+					"curl": {},
+				},
 			},
 			Sources: map[string]dalec.Source{
 				"src1": {
@@ -724,28 +857,116 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
-			res, err := client.Solve(ctx, req)
-			if err != nil {
-				return nil, err
-			}
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
 
 			ref, err := res.SingleRef()
 			if err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
 
 			if err := validatePathAndPermissions(ctx, ref, "/etc/test", 0o755); err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
 			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithPerms", 0o700); err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
 			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755); err != nil {
-				return nil, err
+				t.Fatal(err)
 			}
-			return gwclient.NewResult(), nil
+		})
+	})
+
+	t.Run("test data file installation", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "test-data-file-installation",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Should install specified data files",
+			Sources: map[string]dalec.Source{
+				"bin": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"data_dir": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"nested_data_file": {
+									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
+									Permissions: 0o400,
+								},
+							},
+						},
+					},
+				},
+				"another_data_dir": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"another_nested_data_file": {
+									Contents:    "this is a file which should end up at the path /usr/share/data_dir/nested_data_file\n",
+									Permissions: 0o400,
+								},
+							},
+						},
+					},
+				},
+				"data_file": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "This is a data file which should end up at /usr/share/data_file\n",
+							Permissions: 0o400,
+						},
+					},
+				},
+			},
+			Build: dalec.ArtifactBuild{},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"bin": {},
+				},
+				DataDirs: map[string]dalec.ArtifactConfig{
+					"data_dir": {},
+					"another_data_dir": {
+						SubPath: "subpath",
+					},
+					"data_file": {},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o400); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o400); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o400); err != nil {
+				t.Fatal(err)
+			}
 		})
 	})
 
@@ -753,7 +974,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-config-files-work",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -761,7 +982,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Packager:    "Dalec",
 			Description: "Should Create Specified Directories",
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string][]string{"curl": {}},
+				Runtime: map[string]dalec.PackageConstraints{"curl": {}},
 			},
 			Sources: map[string]dalec.Source{
 				"src1": {
@@ -801,14 +1022,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			sr.Evaluate = true
-			_, err := client.Solve(ctx, sr)
-			if err != nil {
-				return nil, fmt.Errorf("unable to build package with config files %w", err)
-			}
-			return gwclient.NewResult(), nil
+			solveT(ctx, t, client, sr)
 		})
 	})
 
@@ -816,7 +1033,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-docs-handled",
-			Version:     "v0.0.1",
+			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
 			Website:     "https://github.com/azure/dalec",
@@ -875,24 +1092,267 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				{
 					Name: "Doc files should be created in correct place",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/share/doc/test-docs-handled/src1":                      {},
-						"/usr/share/doc/test-docs-handled/subpath/src2":              {},
-						"/usr/share/licenses/test-docs-handled/src3":                 {},
-						"/usr/share/licenses/test-docs-handled/license-subpath/src4": {},
+						"/usr/share/doc/test-docs-handled/src1":                                        {},
+						"/usr/share/doc/test-docs-handled/subpath/src2":                                {},
+						filepath.Join(testConfig.LicenseDir, "test-docs-handled/src3"):                 {},
+						filepath.Join(testConfig.LicenseDir, "test-docs-handled/license-subpath/src4"): {},
 					},
 				},
 			},
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-			sr := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec))
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
 			sr.Evaluate = true
-			_, err := client.Solve(ctx, sr)
-			if err != nil {
-				return nil, fmt.Errorf("unable to build package with doc files as expected %w", err)
-			}
-			return gwclient.NewResult(), nil
+			solveT(ctx, t, client, sr)
 		})
+	})
+
+	t.Run("meta package", func(t *testing.T) {
+		// Ensure that packages that just install other packages give the expected output
+
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "some-meta-thing",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "meta test",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: map[string]dalec.PackageConstraints{
+					"curl": {},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = ref.StatFile(ctx, gwclient.StatRequest{
+				Path: "/usr/bin/curl",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("custom worker", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testCustomLinuxWorker(ctx, t, testConfig.Target, testConfig.Worker)
+	})
+
+	t.Run("pinned build dependencies", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testPinnedBuildDeps(ctx, t, testConfig.Target, testConfig.Worker)
+	})
+}
+
+func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		// base package that will be used as a build dependency of the main package.
+		depSpec := &dalec.Spec{
+			Name:        "dalec-test-package",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "A basic package for various testing uses",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"hello.txt": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "hello world!",
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"hello.txt": {},
+				},
+			},
+		}
+
+		// Main package, this should fail to build without a custom worker that has
+		// the base package available.
+		spec := &dalec.Spec{
+			Name:        "test-dalec-custom-worker",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "Testing allowing custom worker images to be provided",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					depSpec.Name: {},
+				},
+				Runtime: map[string]dalec.PackageConstraints{
+					depSpec.Name: {},
+				},
+			},
+		}
+
+		// Make sure the built-in worker can't build this package
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(targetCfg.Container))
+		_, err := gwc.Solve(ctx, sr)
+		if err == nil {
+			t.Fatal("expected solve to fail")
+		}
+
+		var xErr *moby_buildkit_v1_frontend.ExitError
+		if !errors.As(err, &xErr) {
+			t.Fatalf("got unexpected error, expected error type %T: %v", xErr, err)
+		}
+
+		// Build the base package
+		sr = newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(targetCfg.Package))
+		pkg := reqToState(ctx, gwc, sr, t)
+
+		// Build the worker target, this will give us the worker image as an output.
+		// Note: Currently we need to provide a dalec spec just due to how the router is setup.
+		//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
+		sr = newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))
+		worker := reqToState(ctx, gwc, sr, t)
+
+		// Add the base package + repo to the worker
+		// This should make it so when dalec installs build deps it can use the package
+		// we built above.
+		worker = worker.With(workerCfg.CreateRepo(pkg))
+
+		// Now build again with our custom worker
+		// Note, we are solving the main spec, not depSpec here.
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, workerCfg.ContextName, worker), withBuildTarget(targetCfg.Container))
+		res := solveT(ctx, t, gwc, sr)
+		ref, err := res.SingleRef()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Since we also added the dep as a runtime dep, the file in the base package should be installed in the output container.
+		_, err = ref.StatFile(ctx, gwclient.StatRequest{Path: "/usr/share/doc/" + depSpec.Name + "/hello.txt"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// TODO: we should have a test to make sure this also works with source policies.
+		// Unfortunately it seems like there is an issue with the gateway client passing
+		// in source policies.
+	})
+}
+
+func testPinnedBuildDeps(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
+	var pkgName = "dalec-test-package"
+
+	getTestPackageSpec := func(version string) *dalec.Spec {
+		depSpec := &dalec.Spec{
+			Name:        pkgName,
+			Version:     version,
+			Revision:    "1",
+			Description: "A basic package for various testing uses",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"version.txt": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "version: " + version,
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"version.txt": {},
+				},
+			},
+		}
+
+		return depSpec
+	}
+
+	depSpecs := []*dalec.Spec{
+		getTestPackageSpec("1.1.1"),
+		getTestPackageSpec("1.2.0"),
+		getTestPackageSpec("1.3.0"),
+	}
+
+	spec := &dalec.Spec{
+		Name:        "dalec-test-pinned-build-deps",
+		Version:     "0.0.1",
+		Revision:    "1",
+		Description: "Testing allowing custom worker images to be provided",
+		License:     "MIT",
+	}
+
+	tests := []struct {
+		name        string
+		constraints string
+		want        string
+	}{
+		{
+			name:        "exact dep available",
+			constraints: "== 1.1.1",
+			want:        "1.1.1",
+		},
+
+		{
+			name:        "lt dep available",
+			constraints: "< 1.3.0",
+			want:        "1.2.0",
+		},
+
+		{
+			name:        "gt dep available",
+			constraints: "> 1.2.0",
+			want:        "1.3.0",
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		// Build the worker target, this will give us the worker image as an output.
+		// Note: Currently we need to provide a dalec spec just due to how the router is setup.
+		//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
+		sr := newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))
+		worker := reqToState(ctx, gwc, sr, t)
+
+		var pkgs []llb.State
+		for _, depSpec := range depSpecs {
+			sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(targetCfg.Package))
+			pkg := reqToState(ctx, gwc, sr, t)
+			pkgs = append(pkgs, pkg)
+		}
+		worker = worker.With(workerCfg.CreateRepo(llb.Merge(pkgs)))
+
+		for _, tt := range tests {
+			spec.Dependencies = &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					pkgName: {
+						Version: []string{tt.constraints},
+					},
+				},
+			}
+
+			spec.Build.Steps = []dalec.BuildStep{
+				{
+					Command: fmt.Sprintf(`[[ $(cat /usr/share/doc/%s/version.txt) == "version: %s" ]]`, pkgName, tt.want),
+				},
+			}
+
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, workerCfg.ContextName, worker), withBuildTarget(targetCfg.Container))
+			res := solveT(ctx, t, gwc, sr)
+			_, err := res.SingleRef()
+
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 	})
 }
 

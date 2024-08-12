@@ -3,6 +3,7 @@ package frontend
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
@@ -12,6 +13,12 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
+)
+
+const (
+	keySkipSigningArg                     = "DALEC_SKIP_SIGNING"
+	buildArgDalecSigningConfigPath        = "DALEC_SIGNING_CONFIG_PATH"
+	buildArgDalecSigningConfigContextName = "DALEC_SIGNING_CONFIG_CONTEXT_NAME"
 )
 
 type solveRequestOpt func(*gwclient.SolveRequest) error
@@ -134,7 +141,111 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
-func ForwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
+func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cfgPath string, configCtxName string, sOpt dalec.SourceOpts) (*dalec.PackageSigner, error) {
+	sc := dalec.SourceContext{Name: configCtxName}
+	signConfigState, err := sc.AsState([]string{cfgPath}, nil, sOpt)
+	if err != nil {
+		return nil, err
+	}
+
+	scDef, err := signConfigState.Marshal(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Solve(ctx, gwclient.SolveRequest{
+		Definition: scDef.ToPB(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+		Filename: cfgPath,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var pc dalec.PackageConfig
+	if err := yaml.Unmarshal(dt, &pc); err != nil {
+		return nil, err
+	}
+
+	return pc.Signer, nil
+}
+
+func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string, sOpt dalec.SourceOpts) (llb.State, error) {
+	if signingDisabled(client) {
+		Warnf(ctx, client, st, "Signing disabled by build-arg %q", keySkipSigningArg)
+		return st, nil
+	}
+
+	cfg, rootSigningSpecOverriddenByTarget := spec.GetSigner(targetKey)
+	cfgPath := getUserSignConfigPath(client)
+	if cfgPath == "" {
+		if cfg == nil {
+			// i.e. there's no signing config. not in the build context, not in the spec.
+			return st, nil
+		}
+
+		if rootSigningSpecOverriddenByTarget {
+			Warnf(ctx, client, st, "Root signing spec overridden by target signing spec: target %q", targetKey)
+		}
+
+		return forwardToSigner(ctx, client, cfg, st)
+	}
+
+	configCtxName := getSignContextNameWithDefault(client)
+	if specCfg := cfg; specCfg != nil {
+		Warnf(ctx, client, st, "Spec signing config overwritten by config at path %q in build-context %q", cfgPath, configCtxName)
+	}
+
+	cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, configCtxName, sOpt)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	return forwardToSigner(ctx, client, cfg, st)
+}
+
+func getSignContextNameWithDefault(client gwclient.Client) string {
+	configCtxName := dockerui.DefaultLocalNameContext
+	if cn := getSignConfigCtxName(client); cn != "" {
+		configCtxName = cn
+	}
+	return configCtxName
+}
+
+func signingDisabled(client gwclient.Client) bool {
+	bopts := client.BuildOpts().Opts
+	v, ok := bopts["build-arg:"+keySkipSigningArg]
+	if !ok {
+		return false
+	}
+
+	isDisabled, err := strconv.ParseBool(v)
+	if err != nil {
+		return false
+	}
+
+	return isDisabled
+}
+
+func getUserSignConfigPath(client gwclient.Client) string {
+	return client.BuildOpts().Opts["build-arg:"+buildArgDalecSigningConfigPath]
+}
+
+func getSignConfigCtxName(client gwclient.Client) string {
+	return client.BuildOpts().Opts["build-arg:"+buildArgDalecSigningConfigContextName]
+}
+
+func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
 	const (
 		sourceKey  = "source"
 		contextKey = "context"

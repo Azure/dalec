@@ -52,22 +52,17 @@ func TestSourceCmd(t *testing.T) {
 		}
 	}
 
-	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		spec := testSpec()
 		req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
-		res, err := gwc.Solve(ctx, req)
-		if err != nil {
-			return nil, err
-		}
+		res := solveT(ctx, t, gwc, req)
 
 		checkFile(ctx, t, "foo", res, []byte("foo bar\n"))
 		checkFile(ctx, t, "hello", res, []byte("hello\n"))
-
-		return gwclient.NewResult(), nil
 	})
 
 	t.Run("with mounted file", func(t *testing.T) {
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := testSpec()
 			spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
 				{
@@ -91,13 +86,9 @@ func TestSourceCmd(t *testing.T) {
 			}
 
 			req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
-			res, err := gwc.Solve(ctx, req)
-			if err != nil {
-				return nil, err
-			}
+			res := solveT(ctx, t, gwc, req)
 
 			checkFile(ctx, t, "foo", res, []byte("foo bar"))
-			return gwclient.NewResult(), nil
 		})
 	})
 }
@@ -109,15 +100,11 @@ func TestSourceBuild(t *testing.T) {
 		t.Run(subTest, func(t *testing.T) {
 			t.Parallel()
 
-			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 				ro := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
 
-				res, err := gwc.Solve(ctx, ro)
-				if err != nil {
-					return nil, err
-				}
+				res := solveT(ctx, t, gwc, ro)
 				checkFile(ctx, t, "hello", res, []byte("hello\n"))
-				return gwclient.NewResult(), nil
 			})
 		})
 	}
@@ -201,7 +188,7 @@ func TestSourceHTTP(t *testing.T) {
 		}
 	}
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		bad := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, newSpec(url, badDigest)))
 		bad.Evaluate = true
 		_, err := gwc.Solve(ctx, bad)
@@ -215,12 +202,7 @@ func TestSourceHTTP(t *testing.T) {
 
 		good := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, newSpec(url, goodDigest)))
 		good.Evaluate = true
-		_, err = gwc.Solve(ctx, good)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		return gwclient.NewResult(), nil
+		solveT(ctx, t, gwc, good)
 	})
 }
 
@@ -278,6 +260,7 @@ index ea874f5..ba38f84 100644
 
 	// Note: module here should be moduyle+version because this is checking the go module path on disk
 	checkModule := func(ctx context.Context, gwc gwclient.Client, module string, spec *dalec.Spec) {
+		t.Helper()
 		res, err := gwc.Solve(ctx, newSolveRequest(withBuildTarget("debug/gomods"), withSpec(ctx, t, spec)))
 		if err != nil {
 			t.Fatal(err)
@@ -326,33 +309,55 @@ index ea874f5..ba38f84 100644
 
 	t.Run("no patch", func(t *testing.T) {
 		t.Parallel()
-		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.1", baseSpec())
-			return gwclient.NewResult(), nil
 		})
 	})
 
 	t.Run("with patch", func(t *testing.T) {
-		t.Parallel()
-		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
-			spec := baseSpec()
+		t.Run("file", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := baseSpec()
 
-			patchName := "patch"
-			spec.Sources[patchName] = dalec.Source{
-				Inline: &dalec.SourceInline{
-					File: &dalec.SourceInlineFile{
-						Contents: downgradePatch,
+				patchName := "patch"
+				spec.Sources[patchName] = dalec.Source{
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: downgradePatch,
+						},
 					},
-				},
-			}
+				}
 
-			spec.Patches = map[string][]dalec.PatchSpec{
-				srcName: {{Source: patchName}},
-			}
+				spec.Patches = map[string][]dalec.PatchSpec{
+					srcName: {{Source: patchName}},
+				}
 
-			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
+				checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
+			})
+		})
+		t.Run("dir", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := baseSpec()
 
-			return gwclient.NewResult(), nil
+				patchName := "patch"
+				spec.Sources[patchName] = dalec.Source{
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"patch-file": {Contents: downgradePatch},
+							},
+						},
+					},
+				}
+
+				spec.Patches = map[string][]dalec.PatchSpec{
+					srcName: {{Source: patchName, Path: "patch-file"}},
+				}
+
+				checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
+			})
 		})
 	})
 }

@@ -2,6 +2,21 @@
 
 This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
 
+### Building the docs
+
+You can view the docs locally by running:
+
+```console
+$ go -C website run .
+```
+
+This will, by default, make the docs available on `http://localhost:3000/dalec/`.
+You can customize the port with `--port <port>`.
+
+```console
+$ go -C website run . --port 3001
+```
+
 ### Installation
 
 ```

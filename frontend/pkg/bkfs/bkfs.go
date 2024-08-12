@@ -2,6 +2,7 @@ package bkfs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"io/fs"
 	"path"
@@ -14,9 +15,12 @@ import (
 	"github.com/moby/buildkit/client/llb"
 )
 
-var _ fs.DirEntry = &stateRefDirEntry{}
-var _ fs.ReadDirFS = &StateRefFS{}
-var _ io.ReaderAt = &stateRefFile{}
+var (
+	_ fs.DirEntry  = (*stateRefDirEntry)(nil)
+	_ fs.ReadDirFS = (*StateRefFS)(nil)
+	_ io.ReaderAt  = (*stateRefFile)(nil)
+	_ fs.ReadDirFS = (*nullFS)(nil)
+)
 
 type StateRefFS struct {
 	ctx context.Context
@@ -30,8 +34,12 @@ func FromRef(ctx context.Context, ref gwclient.Reference) *StateRefFS {
 	}
 }
 
-func FromState(ctx context.Context, state llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) (*StateRefFS, error) {
-	res, err := fetchRef(client, state, ctx, opts...)
+func FromState(ctx context.Context, state *llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) (fs.ReadDirFS, error) {
+	if state == nil {
+		return &nullFS{}, nil
+	}
+
+	res, err := fetchRef(client, *state, ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +97,7 @@ func (st *StateRefFS) ReadDir(name string) ([]fs.DirEntry, error) {
 		Path: name,
 	})
 	if err != nil {
-		return nil, err
+		return nil, &fs.PathError{Op: "readdir", Path: name, Err: err}
 	}
 
 	entries := []fs.DirEntry{}
@@ -161,7 +169,7 @@ func (s *stateRefFile) Stat() (fs.FileInfo, error) {
 
 func (st *StateRefFS) Open(name string) (fs.File, error) {
 	if !fs.ValidPath(name) {
-		return nil, fs.ErrInvalid
+		return nil, &fs.PathError{Err: fs.ErrInvalid, Path: name, Op: "open"}
 	}
 
 	stat, err := st.ref.StatFile(st.ctx, gwclient.StatRequest{
@@ -181,4 +189,14 @@ func (st *StateRefFS) Open(name string) (fs.File, error) {
 	}
 
 	return f, nil
+}
+
+type nullFS struct{}
+
+func (st *nullFS) Open(name string) (fs.File, error) {
+	return nil, fmt.Errorf("nullfs: %s: %w", name, fs.ErrNotExist)
+}
+
+func (st *nullFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	return nil, fmt.Errorf("nullfs: %s: %w", name, fs.ErrNotExist)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
@@ -82,6 +83,25 @@ func readFile(ctx context.Context, t *testing.T, name string, res *gwclient.Resu
 	return dt
 }
 
+func maybeReadFile(ctx context.Context, name string, res *gwclient.Result) ([]byte, error) {
+	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+		Filename: name,
+	})
+	if err != nil {
+		stat, _ := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+			Path: filepath.Dir(name),
+		})
+		return nil, fmt.Errorf("error reading file %q: %v, dir contents: \n%s", name, err, dirStatAsStringer(stat))
+	}
+
+	return dt, nil
+}
+
 func statFile(ctx context.Context, t *testing.T, name string, res *gwclient.Result) {
 	t.Helper()
 
@@ -111,10 +131,7 @@ func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *d
 	t.Helper()
 
 	sr := newSolveRequest(withListTargetsOnly, withSpec(ctx, t, spec))
-	res, err := gwc.Solve(ctx, sr)
-	if err != nil {
-		t.Fatalf("could not solve list targets: %v", err)
-	}
+	res := solveT(ctx, t, gwc, sr)
 
 	dt, ok := res.Metadata["result.json"]
 	if !ok {
@@ -175,6 +192,12 @@ func withPlatform(platform platforms.Platform) srOpt {
 	}
 }
 
+func withBuildArg(k, v string) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		sr.FrontendOpt["build-arg:"+k] = v
+	}
+}
+
 func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {
 	return func(sr *gwclient.SolveRequest) {
 		specToSolveRequest(ctx, t, spec, sr)
@@ -197,4 +220,76 @@ func withListTargetsOnly(sr *gwclient.SolveRequest) {
 		sr.FrontendOpt = make(map[string]string)
 	}
 	sr.FrontendOpt["requestid"] = targets.RequestTargets
+}
+
+func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient.SolveRequest) *gwclient.Result {
+	t.Helper()
+	res, err := gwc.Solve(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func withMainContext(ctx context.Context, t *testing.T, st llb.State) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
+		if sr.FrontendInputs == nil {
+			sr.FrontendInputs = make(map[string]*pb.Definition)
+		}
+
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sr.FrontendInputs[dockerui.DefaultLocalNameContext] = def.ToPB()
+	}
+}
+
+func withBuildContext(ctx context.Context, t *testing.T, name string, st llb.State) srOpt {
+	return func(sr *gwclient.SolveRequest) {
+		if sr.FrontendOpt == nil {
+			sr.FrontendOpt = make(map[string]string)
+		}
+		if sr.FrontendInputs == nil {
+			sr.FrontendInputs = make(map[string]*pb.Definition)
+		}
+
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sr.FrontendOpt["context:"+name] = "input:" + name
+		sr.FrontendInputs[name] = def.ToPB()
+	}
+}
+
+func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveRequest, t *testing.T) llb.State {
+	t.Helper()
+	res := solveT(ctx, t, gwc, sr)
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := ref.ToState()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dt, ok := res.Metadata[exptypes.ExporterPlatformsKey]
+	if ok {
+		var pls exptypes.Platforms
+		if err := json.Unmarshal(dt, &pls); err != nil {
+			t.Fatal(err)
+		}
+		st = st.Platform(pls.Platforms[0].Platform)
+	}
+
+	return st
 }

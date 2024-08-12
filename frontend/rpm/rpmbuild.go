@@ -29,7 +29,7 @@ func Build(topDir, workerImg llb.State, specPath string, opts ...llb.Constraints
 		// TODO(cpuguy83): specPath would ideally never change.
 		// We don't want to have to re-run this step just because the path changed, this should be based on inputs only (ie the content of the rpm spec, sources, etc)
 		// The path should not be an input.
-		shArgs(`rpmbuild --define "_topdir /build/top" --define "_srcrpmdir /build/out/SRPMS" --define "_rpmdir /build/out/RPMS" --buildroot /build/tmp/work -ba `+specPath),
+		dalec.ShArgs(`rpmbuild --define "_topdir /build/top" --define "_srcrpmdir /build/out/SRPMS" --define "_rpmdir /build/out/RPMS" --buildroot /build/tmp/work -ba `+specPath),
 		llb.AddMount("/build/top", topDir),
 		llb.AddMount("/build/tmp", llb.Scratch(), llb.Tmpfs()),
 		llb.Dir("/build/top"),
@@ -56,8 +56,8 @@ func ValidateSpec(spec *dalec.Spec) (out error) {
 	if spec.Description == "" {
 		out = errors.Join(out, fmt.Errorf("%w: description", errMissingRequiredField))
 	}
-	if spec.Website == "" {
-		out = errors.Join(out, fmt.Errorf("%w: website", errMissingRequiredField))
+	if spec.License == "" {
+		out = errors.Join(out, fmt.Errorf("%w: license", errMissingRequiredField))
 	}
 	return out
 }

@@ -34,7 +34,8 @@ x-azl: &azl
       tar:
     runtime:
       libseccomp:
-        - ">= 2.3"
+        version:
+          - ">= 2.3"
     test:
       - /bin/sh
   tests:
@@ -64,7 +65,7 @@ conflicts:
   runc-io:
   containerd.io:
 provides:
-  - runc
+  runc: {}
 sources:
   src:
     git:

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"testing"
 	"time"
 
@@ -70,8 +71,22 @@ func TestMain(m *testing.M) {
 	testEnv = testenv.New()
 
 	run := func() int {
-		ctx, _ := signal.NotifyContext(baseCtx, os.Interrupt)
+		ctx, done := signal.NotifyContext(baseCtx, os.Interrupt)
 		baseCtx = ctx
+
+		go func() {
+			<-ctx.Done()
+			// The context was cancelled due to interupt
+			// This _should_ trigger builds to cancel naturally and exit the program,
+			// but in some cases it may not (due to timing, bugs in buildkit, uninteruptable operations, etc.).
+			// Cancel our signal handler so the normal handler takes over from here.
+			// This allows subsequent interupts to use the default behavior (exit the program)
+			done()
+
+			<-time.After(30 * time.Second)
+			fmt.Fprintln(os.Stderr, "Timeout waiting for builds to cancel after interupt")
+			os.Exit(int(syscall.SIGINT))
+		}()
 
 		defer func() {
 			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)

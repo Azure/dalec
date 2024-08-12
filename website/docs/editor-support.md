@@ -2,7 +2,7 @@
 title: Editor Support
 ---
 
-There is a [json schema file](https://github.com/Azure/dalec/blob/main/docs/spec.schema.json) which can be used to integrate with your editor.
+We provide a [JSON schema file](https://github.com/Azure/dalec/blob/main/docs/spec.schema.json) to integrate with your editor.
 This will help validate your yaml files and provide intellisense for the spec.
 
 ## VSCode
@@ -12,6 +12,7 @@ Follow the plugins instructions to add the schema to your workspace.
 Here are some examples of vscode workspace configs `settings.json` enabling the JSON schema:
 
 1. Schema is locally available and enable it for yml files under a single directory.
+
 ```json
 {
     "yaml.schemas": {
@@ -19,7 +20,9 @@ Here are some examples of vscode workspace configs `settings.json` enabling the 
     }
 }
 ```
-2. Schema is locally available and enable it for yml files under multiple directories.
+
+1. Schema is locally available and enable it for yml files under multiple directories.
+
 ```json
 {
     "yaml.schemas": {
@@ -30,7 +33,9 @@ Here are some examples of vscode workspace configs `settings.json` enabling the 
     }
 }
 ```
-3. Directly reference schema from GitHub repository URL.
+
+1. Directly reference schema from GitHub repository URL.
+
 ```json
 {
     "yaml.schemas": {
@@ -53,3 +58,60 @@ The yaml plugin will complain that it is an incorrect type. To fix this you can 
 args:
     FOO: ""
 ```
+
+## Vim
+
+For vim there are 2 required vim plugins to add to your vimrc, though you may
+find your own equivalents. The example below uses vim-plug to manage the plugins.
+The first two listed below are required, the second two are recommended.
+
+```
+Plug 'prabirshrestha/vim-lsp'
+Plug 'mattn/vim-lsp-settings'
+Plug 'prabirshrestha/asyncomplete.vim'
+Plug 'prabirshrestha/asyncomplete-lsp.vim'
+```
+
+The `mattn/vim-lsp-settings` is a generic plugin for installing and managing
+LSP servers on your system.
+See the [github](https://github.com/mattn/vim-lsp-settings) repo for more details
+as well as links to the other mentioned plugins.
+
+After the plugins are installed, while editing a yaml file you need to run the
+following vim command to install the correct LSP, this only needs to be done one
+time:
+
+```
+:LspInstallServer
+```
+
+Finally, in your project dir you can add a file `.vim-lsp-settings/settings.json`
+where we'll put the yaml LSP config for the particular project. Here is an example
+similar to the vscode example above:
+
+```json
+{
+	"yaml-language-server": {
+		"schemas": [
+			{
+				"fileMatch": ["test/fixtures/*.yml"],
+				"url": "https://raw.githubusercontent.com/Azure/dalec/<version>/docs/spec.schema.json"
+			}
+		],
+		"completion": true,
+		"validate": true
+	}
+}
+```
+
+In the `"fileMatch"` section you can add the file patterns to associate the schema
+with.
+In this case,  `<version>`  should be replaced with the specific Dalec frontend
+version  (i.e., `v0.6.1`) that is referenced in any files which match the
+`fileMatch` pattern. To pick up whatever the latest schema is, released or not,
+use `main`.
+
+:::note
+One or more of the above plugins depend on node.js and is known to work with
+node >= 16.20 but may work with earlier releases.
+:::

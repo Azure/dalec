@@ -34,21 +34,21 @@ type Spec struct {
 
 	// Conflicts is the list of packages that conflict with the generated package.
 	// This will prevent the package from being installed if any of these packages are already installed or vice versa.
-	Conflicts map[string][]string `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
+	Conflicts map[string]PackageConstraints `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
 	// Replaces is the list of packages that are replaced by the generated package.
-	Replaces map[string][]string `yaml:"replaces,omitempty" json:"replaces,omitempty"`
+	Replaces map[string]PackageConstraints `yaml:"replaces,omitempty" json:"replaces,omitempty"`
 	// Provides is the list of things that the generated package provides.
 	// This can be used to satisfy dependencies of other packages.
 	// As an example, the moby-runc package provides "runc", other packages could depend on "runc" and be satisfied by moby-runc.
 	// This is an advanced use case and consideration should be taken to ensure that the package actually provides the thing it claims to provide.
-	Provides []string `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Provides map[string]PackageConstraints `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Sources is the list of sources to use to build the artifact(s).
 	// The map key is the name of the source and the value is the source configuration.
 	// The source configuration is used to fetch the source and filter the files to include/exclude.
 	// This can be mounted into the build using the "Mounts" field in the StepGroup.
 	//
-	// Sources can be embedded in the main spec as here or overriden in a build request.
+	// Sources can be embedded in the main spec as here or overridden in a build request.
 	Sources map[string]Source `yaml:"sources,omitempty" json:"sources,omitempty"`
 
 	// Patches is the list of patches to apply to the sources.
@@ -70,9 +70,9 @@ type Spec struct {
 	// License is the license of the package.
 	License string `yaml:"license" json:"license"`
 	// Vendor is the vendor of the package.
-	Vendor string `yaml:"vendor" json:"vendor"`
+	Vendor string `yaml:"vendor,omitempty" json:"vendor,omitempty"`
 	// Packager is the name of the person,team,company that packaged the package.
-	Packager string `yaml:"packager" json:"packager"`
+	Packager string `yaml:"packager,omitempty" json:"packager,omitempty"`
 
 	// Artifacts is the list of artifacts to include in the package.
 	Artifacts Artifacts `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
@@ -107,6 +107,9 @@ type PatchSpec struct {
 	// Strip is the number of leading path components to strip from the patch.
 	// The default is 1 which is typical of a git diff.
 	Strip *int `yaml:"strip,omitempty" json:"strip,omitempty"`
+	// Optional subpath to the patch file inside the source
+	// This is only useful for directory-backed sources.
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
 }
 
 // ChangelogEntry is an entry in the changelog.
@@ -128,6 +131,8 @@ type Artifacts struct {
 	Binaries map[string]ArtifactConfig `yaml:"binaries,omitempty" json:"binaries,omitempty"`
 	// Manpages is the list of manpages to include in the package.
 	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
+	// DataDirs is a list of read-only architecture-independent data files, to be placed in /usr/share/
+	DataDirs map[string]ArtifactConfig `yaml:"data_dirs,omitempty" json:"data_dirs,omitempty"`
 	// Directories is a list of various directories that should be created by the package.
 	Directories *CreateArtifactDirectories `yaml:"createDirectories,omitempty" json:"createDirectories,omitempty"`
 	// ConfigFiles is a list of files that should be marked as config files in the package.
@@ -243,6 +248,9 @@ func (a *Artifacts) IsEmpty() bool {
 		return false
 	}
 	if a.Directories != nil && (len(a.Directories.Config) > 0 || len(a.Directories.State) > 0) {
+		return false
+	}
+	if len(a.DataDirs) > 0 {
 		return false
 	}
 	if len(a.ConfigFiles) > 0 {
@@ -418,17 +426,29 @@ type SourceGenerator struct {
 	Gomod *GeneratorGomod `yaml:"gomod" json:"gomod"`
 }
 
+// PackageConstraints is used to specify complex constraints for a package dependency.
+type PackageConstraints struct {
+	// Version is a list of version constraints for the package.
+	// The format of these strings is depenendent on the package manager of the target system.
+	// Examples:
+	//   [">=1.0.0", "<2.0.0"]
+	Version []string `yaml:"version,omitempty" json:"version,omitempty"`
+	// Arch is a list of architecture constraints for the package.
+	// Use this to specify that a package constraint only applies to certain architectures.
+	Arch []string `yaml:"arch,omitempty" json:"arch,omitempty"`
+}
+
 // PackageDependencies is a list of dependencies for a package.
 // This will be included in the package metadata so that the package manager can install the dependencies.
 // It also includes build-time dedendencies, which we'll install before running any build steps.
 type PackageDependencies struct {
 	// Build is the list of packagese required to build the package.
-	Build map[string][]string `yaml:"build,omitempty" json:"build,omitempty"`
+	Build map[string]PackageConstraints `yaml:"build,omitempty" json:"build,omitempty"`
 	// Runtime is the list of packages required to install/run the package.
-	Runtime map[string][]string `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Runtime map[string]PackageConstraints `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	// Recommends is the list of packages recommended to install with the generated package.
 	// Note: Not all package managers support this (e.g. rpm)
-	Recommends map[string][]string `yaml:"recommends,omitempty" json:"recommends,omitempty"`
+	Recommends map[string]PackageConstraints `yaml:"recommends,omitempty" json:"recommends,omitempty"`
 
 	// Test lists any extra packages required for running tests
 	// These packages are only installed for tests which have steps that require
@@ -510,7 +530,7 @@ type Target struct {
 	Image *ImageConfig `yaml:"image,omitempty" json:"image,omitempty"`
 
 	// Frontend is the frontend configuration to use for the target.
-	// This is used to forward the build to a different, dalec-compatabile frontend.
+	// This is used to forward the build to a different, dalec-compatible frontend.
 	// This can be useful when testing out new distros or using a different version of the frontend for a given distro.
 	Frontend *Frontend `yaml:"frontend,omitempty" json:"frontend,omitempty"`
 
@@ -681,4 +701,31 @@ type CheckOutputError struct {
 
 func (c *CheckOutputError) Error() string {
 	return fmt.Sprintf("expected %q %s %q, got %q", c.Path, c.Kind, c.Expected, c.Actual)
+}
+
+func (s *SystemdConfiguration) IsEmpty() bool {
+	if s == nil {
+		return true
+	}
+
+	if len(s.Units) == 0 {
+		return true
+	}
+
+	return false
+}
+
+func (s *SystemdConfiguration) EnabledUnits() map[string]SystemdUnitConfig {
+	if len(s.Units) == 0 {
+		return nil
+	}
+
+	units := make(map[string]SystemdUnitConfig)
+	for path, unit := range s.Units {
+		if unit.Enable {
+			units[path] = unit
+		}
+	}
+
+	return units
 }

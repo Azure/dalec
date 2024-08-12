@@ -54,7 +54,10 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		}
 
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
-		worker := workerImg(sOpt, pg)
+		worker, err := workerImg(sOpt, pg)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
 		if err != nil {
@@ -66,7 +69,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 
 		out := baseImage.
 			File(llb.Copy(bin, "/", windowsSystemDir)).
-			With(copySymlinks(spec.GetSymlinks(targetKey)))
+			With(copySymlinks(spec.GetImagePost(targetKey)))
 
 		def, err := out.Marshal(ctx)
 		if err != nil {
@@ -106,8 +109,13 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 	})
 }
 
-func copySymlinks(lm map[string]dalec.SymlinkTarget) llb.StateOption {
+func copySymlinks(post *dalec.PostInstall) llb.StateOption {
 	return func(s llb.State) llb.State {
+		if post == nil {
+			return s
+		}
+
+		lm := post.Symlinks
 		if len(lm) == 0 {
 			return s
 		}
