@@ -580,7 +580,7 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 
 	for name, f := range c.Files {
 		if err := f.processBuildArgs(lex, args); err != nil {
-			appendErr(errors.Wrap(err, name))
+			appendErr(fmt.Errorf("error performing shell expansion to check output of file %s: %w", name, err))
 		}
 		c.Files[name] = f
 	}
