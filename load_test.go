@@ -671,6 +671,38 @@ build:
 		assert.ErrorContains(t, err, `error performing shell expansion on build step 0: error performing shell expansion on env var "TEST" for step 0: build arg "test" not declared`)
 	})
 
+	t.Run("multiple undefined build args", func(t *testing.T) {
+		dt := []byte(`
+args:
+
+sources:
+  test1:
+    git:
+      url: phony.git
+      commit: ${COMMIT1}
+  test2:
+    http:
+      url: ${URL1}
+build:
+  steps:
+    - command: echo ${COMMIT1}
+      env: 
+        TEST: ${COMMIT1}
+`)
+
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = spec.SubstituteArgs(map[string]string{})
+
+		// all occurrences of undefined build args should be reported
+		assert.ErrorContains(t, err, `error performing shell expansion on source "test1": build arg "COMMIT1" not declared`)
+		assert.ErrorContains(t, err, `error performing shell expansion on source "test2": build arg "URL1" not declared`)
+		assert.ErrorContains(t, err, `error performing shell expansion on build step 0: error performing shell expansion on env var "TEST" for step 0: build arg "COMMIT1" not declared`)
+	})
+
 	t.Run("builtin build arg", func(t *testing.T) {
 		dt := []byte(`
 args:
@@ -688,7 +720,7 @@ build:
 
 		err = spec.SubstituteArgs(map[string]string{})
 		assert.ErrorContains(t, err,
-			`error performing shell expansion on build step 0: error performing shell expansion on env var "OS" for step 0: opt-in arg "TARGETOS" not present in args`)
+			`opt-in arg "TARGETOS" not present in args`)
 	})
 }
 

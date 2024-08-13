@@ -44,75 +44,96 @@ func platformArg(key string) bool {
 
 const DefaultPatchStrip int = 1
 
-func expandArgs(lex *shell.Lex, s string, args map[string]string) (string, *ErrorList) {
+func expandArgs(lex *shell.Lex, s string, args map[string]string) (string, error) {
 	result, err := lex.ProcessWordWithMatches(s, args)
 	if err != nil {
-		return "", AsList(err)
+		return "", err
 	}
 
-	var errL ErrorList
+	var errs []error
 	for m := range result.Unmatched {
 		if !knownArg(m) {
-			errL.Append(fmt.Errorf(`build arg "%s" not declared`, m))
+			errs = append(errs, fmt.Errorf(`build arg "%s" not declared`, m))
+		} else if platformArg(m) {
+			errs = append(errs, fmt.Errorf(`opt-in arg "%s" not present in args`, m))
 		}
 	}
 
-	return result.Result, &errL
+	return result.Result, goerrors.Join(errs...)
 }
 
-func (s *Source) substituteBuildArgs(args map[string]string) *ErrorList {
+func (s *Source) substituteBuildArgs(args map[string]string) error {
 	lex := shell.NewLex('\\')
 	// force the shell lexer to skip unresolved env vars so they aren't
 	// replaced with ""
 	lex.SkipUnsetEnv = true
 
-	var errL = &ErrorList{}
+	var errs []error
+	appendErr := func(err error) {
+		errs = append(errs, err)
+	}
 
 	switch {
 	case s.DockerImage != nil:
-		updated, errs := expandArgs(lex, s.DockerImage.Ref, args)
+		updated, err := expandArgs(lex, s.DockerImage.Ref, args)
+		if err != nil {
+			appendErr(fmt.Errorf("error performing shell expansion on docker image ref: %w", err))
+		}
 		s.DockerImage.Ref = updated
-
-		errL = CombineErrorList(errL, errs)
 
 		if s.DockerImage.Cmd != nil {
 			for _, mnt := range s.DockerImage.Cmd.Mounts {
-				errs := mnt.Spec.substituteBuildArgs(args)
-				errL = CombineErrorList(errL, errs)
+				err := mnt.Spec.substituteBuildArgs(args)
+				if err != nil {
+					appendErr(fmt.Errorf("error performing shell expansion on docker image mount: %w", err))
+				}
 			}
 		}
 	case s.Git != nil:
-		updated, errs := expandArgs(lex, s.Git.URL, args)
+		updated, err := expandArgs(lex, s.Git.URL, args)
 		s.Git.URL = updated
-		errL = CombineErrorList(errL, errs)
+		if err != nil {
+			appendErr(err)
+		}
 
-		updated, errs = expandArgs(lex, s.Git.Commit, args)
+		updated, err = expandArgs(lex, s.Git.Commit, args)
 		s.Git.Commit = updated
-		errL = CombineErrorList(errL, errs)
+		if err != nil {
+			appendErr(err)
+		}
 
 	case s.HTTP != nil:
-		updated, errs := expandArgs(lex, s.HTTP.URL, args)
-		errL = CombineErrorList(errL, errs)
-
+		updated, err := expandArgs(lex, s.HTTP.URL, args)
+		if err != nil {
+			appendErr(err)
+		}
 		s.HTTP.URL = updated
 	case s.Context != nil:
-		updated, errs := expandArgs(lex, s.Context.Name, args)
+		updated, err := expandArgs(lex, s.Context.Name, args)
 		s.Context.Name = updated
-		errL = CombineErrorList(errL, errs)
+		if err != nil {
+			appendErr(err)
+		}
 	case s.Build != nil:
-		errs := s.Build.Source.substituteBuildArgs(args)
-		errL = CombineErrorList(errL, errs)
+		err := s.Build.Source.substituteBuildArgs(args)
+		if err != nil {
+			appendErr(err)
+		}
 
-		updated, errs := expandArgs(lex, s.Build.DockerfilePath, args)
-		errL = CombineErrorList(errL, errs)
+		updated, err := expandArgs(lex, s.Build.DockerfilePath, args)
+		if err != nil {
+			appendErr(err)
+		}
 		s.Build.DockerfilePath = updated
 
-		updated, errs = expandArgs(lex, s.Build.Target, args)
-		errL = CombineErrorList(errL, errs)
+		updated, err = expandArgs(lex, s.Build.Target, args)
+		if err != nil {
+			appendErr(err)
+		}
 		s.Build.Target = updated
 	}
 
-	return errL
+	return goerrors.Join(errs...)
 }
 
 func fillDefaults(s *Source) {
@@ -223,7 +244,10 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	// replaced with ""
 	lex.SkipUnsetEnv = true
 
-	var errL *ErrorList = &ErrorList{}
+	var errs []error
+	appendErr := func(err error) {
+		errs = append(errs, err)
+	}
 
 	args := make(map[string]string)
 	for k, v := range s.Args {
@@ -232,7 +256,7 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	for k, v := range env {
 		if _, ok := args[k]; !ok {
 			if !knownArg(k) {
-				errL.Append(fmt.Errorf("%w: %q", errUnknownArg, k))
+				appendErr(fmt.Errorf("%w: %q", errUnknownArg, k))
 			}
 
 			// if the build arg isn't present in args by opt-in, skip
@@ -244,33 +268,33 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	}
 
 	for name, src := range s.Sources {
-		if errs := src.substituteBuildArgs(args); !errs.Empty() {
-			errL.Append(fmt.Errorf("error performing shell expansion on source %q: %w", name, errs.Join()))
+		if err := src.substituteBuildArgs(args); err != nil {
+			appendErr(fmt.Errorf("error performing shell expansion on source %q: %w", name, err))
 		}
 		if src.DockerImage != nil {
 			if err := src.DockerImage.Cmd.processBuildArgs(lex, args, name); err != nil {
-				errL.Append(fmt.Errorf("error performing shell expansion on source %q: %w", name, err))
+				appendErr(fmt.Errorf("error performing shell expansion on source %q: %w", name, err))
 			}
 		}
 		s.Sources[name] = src
 	}
 
-	updated, errs := expandArgs(lex, s.Version, args)
-	if !errs.Empty() {
-		errL.Append(fmt.Errorf("error performing shell expansion on version: %w", errs.Join()))
+	updated, err := expandArgs(lex, s.Version, args)
+	if err != nil {
+		appendErr(fmt.Errorf("error performing shell expansion on version: %w", err))
 	}
 	s.Version = updated
 
-	updated, errs = expandArgs(lex, s.Revision, args)
-	if !errs.Empty() {
-		errL.Append(fmt.Errorf("error performing shell expansion on revision: %w", errs.Join()))
+	updated, err = expandArgs(lex, s.Revision, args)
+	if err != nil {
+		appendErr(fmt.Errorf("error performing shell expansion on revision: %w", err))
 	}
 	s.Revision = updated
 
 	for k, v := range s.Build.Env {
-		updated, errs := expandArgs(lex, v, args)
-		if !errs.Empty() {
-			errL.Append(fmt.Errorf("error performing shell expansion on env var %q: %w", k, errs.Join()))
+		updated, err := expandArgs(lex, v, args)
+		if err != nil {
+			appendErr(fmt.Errorf("error performing shell expansion on env var %q: %w", k, err))
 		}
 		s.Build.Env[k] = updated
 	}
@@ -278,30 +302,30 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	for i, step := range s.Build.Steps {
 		bs := &step
 		if err := bs.processBuildArgs(lex, args, i); err != nil {
-			errL.Append(fmt.Errorf("error performing shell expansion on build step %d: %w", i, err))
+			appendErr(fmt.Errorf("error performing shell expansion on build step %d: %w", i, err))
 		}
 		s.Build.Steps[i] = *bs
 	}
 
 	for _, t := range s.Tests {
 		if err := t.processBuildArgs(lex, args, t.Name); err != nil {
-			errL.Append(fmt.Errorf("error performing shell expansion on test %q: %w", t.Name, err))
+			appendErr(fmt.Errorf("error performing shell expansion on test %q: %w", t.Name, err))
 		}
 	}
 
 	for name, t := range s.Targets {
 		if err := t.processBuildArgs(name, lex, args); err != nil {
-			errL.Append(fmt.Errorf("error processing build args for target %q: %w", name, err))
+			appendErr(fmt.Errorf("error processing build args for target %q: %w", name, err))
 		}
 	}
 
 	if s.PackageConfig != nil {
 		if err := s.PackageConfig.processBuildArgs(lex, args); err != nil {
-			errL.Append(fmt.Errorf("could not process build args for base spec package config: %w", err))
+			appendErr(fmt.Errorf("could not process build args for base spec package config: %w", err))
 		}
 	}
 
-	return errL.Join()
+	return goerrors.Join(errs...)
 }
 
 // LoadSpec loads a spec from the given data.
@@ -341,15 +365,15 @@ func stripXFields(dt []byte) ([]byte, error) {
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {
-	var errL = &ErrorList{}
+	var errs []error
 	for k, v := range s.Env {
-		updated, errs := expandArgs(lex, v, args)
-		if !errs.Empty() {
-			errL.Append(fmt.Errorf("error performing shell expansion on env var %q for step %d: %w", k, i, errs.Join()))
+		updated, err := expandArgs(lex, v, args)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error performing shell expansion on env var %q for step %d: %w", k, i, err))
 		}
 		s.Env[k] = updated
 	}
-	return errL.Join()
+	return goerrors.Join(errs...)
 }
 
 func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
@@ -357,31 +381,36 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 		return nil
 	}
 
-	var errL = &ErrorList{}
+	var errs []error
+	appendErr := func(err error) {
+		errs = append(errs, err)
+	}
+
 	for _, s := range c.Mounts {
-		if errs := s.Spec.substituteBuildArgs(args); !errs.Empty() {
-			errL.Append(fmt.Errorf("error performing shell expansion on source ref %q: %w", name, errs.Join()))
+		if err := s.Spec.substituteBuildArgs(args); err != nil {
+			appendErr(fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err))
 		}
 	}
 	for k, v := range c.Env {
-		updated, errs := expandArgs(lex, v, args)
-		if !errs.Empty() {
-			errL.Append(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, errs.Join()))
+		updated, err := expandArgs(lex, v, args)
+		if err != nil {
+			appendErr(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err))
 		}
 		c.Env[k] = updated
 	}
 	for i, step := range c.Steps {
 		for k, v := range step.Env {
-			updated, errs := expandArgs(lex, v, args)
-			if !errs.Empty() {
-				errL.Append(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, errs.Join()))
+			updated, err := expandArgs(lex, v, args)
+			if err != nil {
+				appendErr(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err))
 			}
+
 			step.Env[k] = updated
 			c.Steps[i] = step
 		}
 	}
 
-	return errL.Join()
+	return goerrors.Join(errs...)
 }
 
 func (s *Spec) FillDefaults() {
@@ -468,61 +497,65 @@ func validatePatch(patch PatchSpec, patchSrc Source) error {
 
 func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) error {
 	for i, contains := range c.Contains {
-		updated, errs := expandArgs(lex, contains, args)
-		if !errs.Empty() {
-			return errors.Wrap(errs.Join(), "error performing shell expansion on contains")
+		updated, err := expandArgs(lex, contains, args)
+		if err != nil {
+			return errors.Wrap(err, "error performing shell expansion on contains")
 		}
 		c.Contains[i] = updated
 	}
 
-	updated, errs := expandArgs(lex, c.EndsWith, args)
-	if !errs.Empty() {
-		return errors.Wrap(errs.Join(), "error performing shell expansion on endsWith")
+	updated, err := expandArgs(lex, c.EndsWith, args)
+	if err != nil {
+		return errors.Wrap(err, "error performing shell expansion on endsWith")
 	}
 	c.EndsWith = updated
 
-	updated, errs = expandArgs(lex, c.Matches, args)
-	if !errs.Empty() {
-		return errors.Wrap(errs.Join(), "error performing shell expansion on matches")
+	updated, err = expandArgs(lex, c.Matches, args)
+	if err != nil {
+		return errors.Wrap(err, "error performing shell expansion on matches")
 	}
 	c.Matches = updated
 
-	updated, errs = expandArgs(lex, c.Equals, args)
-	if !errs.Empty() {
-		return errors.Wrap(errs.Join(), "error performing shell expansion on equals")
+	updated, err = expandArgs(lex, c.Equals, args)
+	if err != nil {
+		return errors.Wrap(err, "error performing shell expansion on equals")
 	}
 	c.Equals = updated
 
-	updated, errs = expandArgs(lex, c.StartsWith, args)
-	if !errs.Empty() {
-		return errors.Wrap(errs.Join(), "error performing shell expansion on startsWith")
+	updated, err = expandArgs(lex, c.StartsWith, args)
+	if err != nil {
+		return errors.Wrap(err, "error performing shell expansion on startsWith")
 	}
 	c.StartsWith = updated
 	return nil
 }
 
 func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
-	var errL = &ErrorList{}
+	var errs []error
+	appendErr := func(err error) {
+		errs = append(errs, err)
+	}
+
 	for _, s := range c.Mounts {
-		errs := s.Spec.substituteBuildArgs(args)
-		if !errs.Empty() {
-			errL.Append(fmt.Errorf("error performing shell expansion on source ref %q: %w", name, errs.Join()))
+		err := s.Spec.substituteBuildArgs(args)
+		if err != nil {
+			appendErr(fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err))
 		}
 	}
 
 	for k, v := range c.Env {
-		updated, errs := expandArgs(lex, v, args)
-		if !errs.Empty() {
-			errL.Append(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, errs.Join()))
+		updated, err := expandArgs(lex, v, args)
+		if err != nil {
+			appendErr(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err))
 		}
 		c.Env[k] = updated
 	}
 
 	for i, step := range c.Steps {
 		for k, v := range step.Env {
-			updated, errs := expandArgs(lex, v, args)
-			if !errs.Empty() {
-				errL.Append(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, errs.Join()))
+			updated, err := expandArgs(lex, v, args)
+			if err != nil {
+				appendErr(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err))
 			}
 			step.Env[k] = updated
 			c.Steps[i] = step
@@ -532,13 +565,13 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 	for i, step := range c.Steps {
 		stdout := step.Stdout
 		if err := stdout.processBuildArgs(lex, args); err != nil {
-			errL.Append(err)
+			appendErr(err)
 		}
 		step.Stdout = stdout
 
 		stderr := step.Stderr
 		if err := stderr.processBuildArgs(lex, args); err != nil {
-			errL.Append(err)
+			appendErr(err)
 		}
 
 		step.Stderr = stderr
@@ -547,12 +580,12 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 
 	for name, f := range c.Files {
 		if err := f.processBuildArgs(lex, args); err != nil {
-			errL.Append(errors.Wrap(err, name))
+			appendErr(errors.Wrap(err, name))
 		}
 		c.Files[name] = f
 	}
 
-	return nil
+	return goerrors.Join(errs...)
 }
 
 func (c *FileCheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) error {
