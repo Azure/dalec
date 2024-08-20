@@ -3,6 +3,7 @@ package rpm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
@@ -54,6 +55,45 @@ func HandleSources(wf WorkerFunc) gwclient.BuildFunc {
 	}
 }
 
+func buildScriptSourceState(spec *dalec.Spec) *llb.State {
+	if len(spec.Build.Steps) == 0 {
+		return nil
+	}
+
+	script := buildScript(spec)
+	st := llb.Scratch().File(llb.Mkfile("build.sh", 0755, []byte(script)))
+	return &st
+}
+
+func buildScript(spec *dalec.Spec) string {
+	b := &strings.Builder{}
+
+	t := spec.Build
+	if len(t.Steps) == 0 {
+		return ""
+	}
+
+	fmt.Fprintln(b, "#!/bin/sh")
+	fmt.Fprintln(b, "set -e")
+
+	if spec.HasGomods() {
+		fmt.Fprintln(b, "export GOMODCACHE=\"$(pwd)/"+gomodsName+"\"")
+	}
+
+	envKeys := dalec.SortMapKeys(t.Env)
+	for _, k := range envKeys {
+		v := t.Env[k]
+		fmt.Fprintf(b, "export %s=\"%s\"\n", k, v)
+	}
+
+	for _, step := range t.Steps {
+		writeStep(b, step)
+	}
+
+	b.WriteString("\n")
+	return b.String()
+}
+
 func Dalec2SourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
 	sources, err := dalec.Sources(spec, sOpt)
 	if err != nil {
@@ -81,6 +121,11 @@ func Dalec2SourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 
 	if st != nil {
 		out = append(out, st.With(sourceTar(worker, gomodsName, withPG("Tar gomod deps")...)))
+	}
+
+	scriptSt := buildScriptSourceState(spec)
+	if scriptSt != nil {
+		out = append(out, *scriptSt)
 	}
 
 	return out, nil
