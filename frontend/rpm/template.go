@@ -15,6 +15,7 @@ import (
 )
 
 const gomodsName = "__gomods"
+const buildScriptName = "build.sh"
 
 var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
 Name: {{.Name}}
@@ -238,8 +239,15 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "Source%d: %s\n", idx, ref)
 	}
 
+	sourceIdx := len(keys)
+
 	if w.Spec.HasGomods() {
-		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", len(keys), gomodsName)
+		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", sourceIdx, gomodsName)
+		sourceIdx += 1
+	}
+
+	if len(w.Spec.Build.Steps) > 0 {
+		fmt.Fprintf(b, "Source%d: %s\n", sourceIdx, buildScriptName)
 	}
 
 	if len(keys) > 0 {
@@ -328,30 +336,14 @@ func writeStep(b *strings.Builder, step dalec.BuildStep) {
 func (w *specWrapper) BuildSteps() fmt.Stringer {
 	b := &strings.Builder{}
 
-	t := w.Spec.Build
-	if len(t.Steps) == 0 {
+	if len(w.Spec.Build.Steps) == 0 {
 		return b
 	}
 
 	fmt.Fprintf(b, "%%build\n")
-
-	fmt.Fprintln(b, "set -e")
-
-	if w.Spec.HasGomods() {
-		fmt.Fprintln(b, "export GOMODCACHE=\"$(pwd)/"+gomodsName+"\"")
-	}
-
-	envKeys := dalec.SortMapKeys(t.Env)
-	for _, k := range envKeys {
-		v := t.Env[k]
-		fmt.Fprintf(b, "export %s=\"%s\"\n", k, v)
-	}
-
-	for _, step := range t.Steps {
-		writeStep(b, step)
-	}
-
+	fmt.Fprintf(b, "%%{_sourcedir}/%s\n", buildScriptName)
 	b.WriteString("\n")
+
 	return b
 }
 
