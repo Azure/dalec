@@ -39,7 +39,7 @@ const config: Config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/Azure/dalec/blob/main/website/docs/',
+            'https://github.com/Azure/dalec/blob/main/website/',
         },
         theme: {
           customCss: './src/css/custom.css',
