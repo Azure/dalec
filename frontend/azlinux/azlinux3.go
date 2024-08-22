@@ -17,10 +17,10 @@ const (
 	tdnfCacheNameAzlinux3 = "azlinux3-tdnf-cache"
 
 	// Azlinux3Ref is the image ref used for the base worker image
-	Azlinux3Ref = "azurelinuxpreview.azurecr.io/public/azurelinux/base/core:3.0"
+	Azlinux3Ref = "mcr.microsoft.com/azurelinux/base/core:3.0"
 	// Azlinux3WorkerContextName is the build context name that can be used to lookup
 	Azlinux3WorkerContextName = "dalec-azlinux3-worker"
-	azlinux3DistrolessRef     = "azurelinuxpreview.azurecr.io/public/azurelinux/distroless/base:3.0"
+	azlinux3DistrolessRef     = "mcr.microsoft.com/azurelinux/distroless/base:3.0"
 )
 
 func NewAzlinux3Handler() gwclient.BuildFunc {

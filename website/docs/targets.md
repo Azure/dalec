@@ -108,6 +108,9 @@ In the `mariner2` target, Dalec looks for a named context called either
 
 If 1 is provided, then 2 is ignored.
 
-This works the same way in the `azlinux3` target but with the `azlinux3` base image
-(not currently displayed here since it is still preview, this will be updated
-once azlinux3 is GA) OR a build context named `dalec-azlinux3-worker`.
+This works the same way in the `azlinux3`:
+
+1. The actual base image used internally for azlinux3
+  i. `--build-context mcr.microsoft.com/azurelinux/base/core:3.0=<new ref>`
+2. A build context named `dalec-mariner2-worker`
+  i. `--build-context dalec-azlinux3-worker=<new ref>`
