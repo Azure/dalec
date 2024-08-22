@@ -149,7 +149,7 @@ func buildDepends(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, tar
 	opts = append(opts, pg)
 	deb, err := deb.BuildDeb(worker, depsSpec, sOpt, targetKey, append(opts, dalec.ProgressGroup("Create intermediate deb for build dependnencies"))...)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating intermediate package for insalling build dependencies")
+		return nil, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
 	}
 
 	return func(in llb.State) llb.State {
