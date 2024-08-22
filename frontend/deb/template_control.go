@@ -89,7 +89,8 @@ func (w *controlWrapper) BuildDeps() fmt.Stringer {
 	if depsSpec != nil {
 		deps = appendConstraints(depsSpec.Build)
 	}
-	deps = append(deps, "debhelper-compat (= 13)")
+
+	deps = append(deps, fmt.Sprintf("debhelper-compat (= %s)", DebHelperCompat))
 
 	fmt.Fprintln(b, multiline("Build-Depends", deps))
 	return b
