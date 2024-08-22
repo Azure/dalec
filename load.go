@@ -54,7 +54,10 @@ func expandArgs(lex *shell.Lex, s string, args map[string]string) (string, error
 	for m := range result.Unmatched {
 		if !knownArg(m) {
 			errs = append(errs, fmt.Errorf(`build arg "%s" not declared`, m))
-		} else if platformArg(m) {
+			continue
+		}
+
+		if platformArg(m) {
 			errs = append(errs, fmt.Errorf(`opt-in arg "%s" not present in args`, m))
 		}
 	}
