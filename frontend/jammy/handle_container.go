@@ -84,7 +84,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		if err := frontend.RunTests(ctx, client, spec, ref, installTestDeps(worker, spec, targetKey, opt), targetKey); err != nil {
+		if err := frontend.RunTests(ctx, client, spec, ref, installTestDeps(spec, targetKey, opt), targetKey); err != nil {
 			return nil, nil, err
 		}
 
@@ -171,7 +171,7 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		With(installSymlinks)
 }
 
-func installTestDeps(worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+func installTestDeps(spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		deps := spec.GetTestDeps(targetKey)
 		if len(deps) == 0 {
