@@ -8,7 +8,6 @@ import (
 	"text/template"
 
 	"github.com/Azure/dalec"
-	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
 
@@ -28,8 +27,16 @@ func (w *controlWrapper) Architecture() string {
 	return "linux-any"
 }
 
-func injectConstraints(in []string, deps map[string]dalec.PackageConstraints) {
-	for i, dep := range in {
+// appendConstraints takes an input list of packages and returns a new list of
+// packages with the constraints appended for use in a debian/control file.
+// The output list is sorted lexicographically.
+func appendConstraints(deps map[string]dalec.PackageConstraints) []string {
+	if deps == nil {
+		return nil
+	}
+	out := dalec.SortMapKeys(deps)
+
+	for i, dep := range out {
 		constraints := deps[dep]
 		s := dep
 		if len(constraints.Version) > 0 {
@@ -42,8 +49,10 @@ func injectConstraints(in []string, deps map[string]dalec.PackageConstraints) {
 			slices.Sort(ls)
 			s = fmt.Sprintf("%s [%s]", s, strings.Join(ls, ", "))
 		}
-		in[i] = s
+		out[i] = s
 	}
+
+	return out
 }
 
 func (w *controlWrapper) depends(buf io.Writer, depsSpec *dalec.PackageDependencies) {
@@ -51,9 +60,7 @@ func (w *controlWrapper) depends(buf io.Writer, depsSpec *dalec.PackageDependenc
 		return
 	}
 
-	deps := dalec.SortMapKeys(depsSpec.Runtime)
-	injectConstraints(deps, depsSpec.Runtime)
-
+	deps := appendConstraints(depsSpec.Runtime)
 	fmt.Fprintln(buf, multiline("Depends", deps))
 
 }
@@ -69,10 +76,7 @@ func (w *controlWrapper) recommends(buf io.Writer, depsSpec *dalec.PackageDepend
 		return
 	}
 
-	deps := maps.Keys(depsSpec.Recommends)
-	slices.Sort(deps)
-	injectConstraints(deps, depsSpec.Recommends)
-
+	deps := appendConstraints(depsSpec.Recommends)
 	fmt.Fprintln(buf, multiline("Recommends", deps))
 }
 
@@ -83,9 +87,7 @@ func (w *controlWrapper) BuildDeps() fmt.Stringer {
 
 	var deps []string
 	if depsSpec != nil {
-		deps := maps.Keys(depsSpec.Build)
-		slices.Sort(deps)
-		injectConstraints(deps, depsSpec.Build)
+		deps = appendConstraints(depsSpec.Build)
 	}
 	deps = append(deps, "debhelper-compat (= 13)")
 
@@ -114,9 +116,7 @@ func (w *controlWrapper) Replaces() fmt.Stringer {
 		return b
 	}
 
-	ls := maps.Keys(w.Spec.Replaces)
-	slices.Sort(ls)
-	injectConstraints(ls, w.Spec.Replaces)
+	ls := appendConstraints(w.Spec.Replaces)
 
 	fmt.Fprintln(b, multiline("Replaces", ls))
 	return b
@@ -128,10 +128,7 @@ func (w *controlWrapper) Conflicts() fmt.Stringer {
 		return b
 	}
 
-	ls := maps.Keys(w.Spec.Conflicts)
-	slices.Sort(ls)
-	injectConstraints(ls, w.Spec.Conflicts)
-
+	ls := appendConstraints(w.Spec.Conflicts)
 	fmt.Fprintln(b, multiline("Conflicts", ls))
 	return b
 }
@@ -142,10 +139,7 @@ func (w *controlWrapper) Provides() fmt.Stringer {
 		return b
 	}
 
-	ls := maps.Keys(w.Spec.Provides)
-	slices.Sort(ls)
-	injectConstraints(ls, w.Spec.Provides)
-
+	ls := appendConstraints(w.Spec.Provides)
 	fmt.Fprintln(b, multiline("Provides", ls))
 	return b
 }
