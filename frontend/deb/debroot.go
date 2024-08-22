@@ -80,6 +80,11 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, targ
 	base := llb.Scratch().File(llb.Mkdir(dir, 0o755), opts...)
 	installers := createInstallScripts(worker, spec, dir)
 
+	const (
+		sourceFormat  = "3.0 (quilt)"
+		sourceOptions = "create-empty-orig"
+	)
+
 	debian := base.
 		File(llb.Mkdir(filepath.Join(dir, "source"), 0o755), opts...).
 		With(func(in llb.State) llb.State {
@@ -87,8 +92,8 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, targ
 				return in
 			}
 			return in.
-				File(llb.Mkfile(filepath.Join(dir, "source/format"), 0o640, []byte("3.0 (quilt)")), opts...).
-				File(llb.Mkfile(filepath.Join(dir, "source/options"), 0o640, []byte("create-empty-orig")), opts...)
+				File(llb.Mkfile(filepath.Join(dir, "source/format"), 0o640, []byte(sourceFormat)), opts...).
+				File(llb.Mkfile(filepath.Join(dir, "source/options"), 0o640, []byte(sourceOptions)), opts...)
 		}).
 		File(llb.Mkdir(filepath.Join(dir, "dalec"), 0o755), opts...).
 		File(llb.Mkfile(filepath.Join(dir, "source/include-binaries"), 0o640, append([]byte("dalec"), '\n')), opts...)
@@ -256,6 +261,8 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 	})
 
 	writeInstall := func(src, dir, name string) {
+		// This is wrapped in a sync.OnceFunc so that this only has an effect the
+		// first time it is called.
 		writeInstallHeader()
 
 		if filepath.Base(src) != name {
