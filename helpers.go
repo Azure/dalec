@@ -339,6 +339,11 @@ func ShArgs(args string) llb.RunOption {
 	return llb.Args(append([]string{"sh", "-c"}, args))
 }
 
+// ShArgsf is the same as [ShArgs] but tkes a format string
+func ShArgsf(format string, args ...interface{}) llb.RunOption {
+	return ShArgs(fmt.Sprintf(format, args...))
+}
+
 // InstallPostSymlinks returns a RunOption that adds symlinks defined in the [PostInstall] underneath the provided rootfs path.
 func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 	return runOptionFunc(func(ei *llb.ExecInfo) {
