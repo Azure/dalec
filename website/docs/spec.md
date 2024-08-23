@@ -33,6 +33,22 @@ args:
   REVISION: 1
 ```
 
+There are a few built-in arguments which, if present, Dalec will substitute values for. They are listed as examples in the following block:
+
+```yaml
+args:
+  TARGETOS:
+  TARGETARCH:
+  TARGETPLATFORM:
+  TARGETVARIANT:
+```
+
+These arguments are set based on the default docker platform for the machine, *unless* the platform is overriden explicitly in the docker build with `--platform`. For example, upon invoking `docker build` on a Linux amd64 machine, we would have `TARGETOS=linux`, `TARGETARCH=amd64`, `TARGETPLATFORM=linux/amd64`.
+
+:::note
+No default value should be included for these build args. These args are opt-in. If you haven't listed them in the args section as shown above, Dalec will **not** substitute values for them.
+:::
+
 ## Metadata section
 
 Metadata section is used to define the metadata of the spec. This metadata includes the name, packager, vendor, license, website, and description of the spec.
@@ -156,6 +172,7 @@ build:
     TAG: v${VERSION}
     GOPROXY: direct
     CGO_ENABLED: "0"
+    GOOS: ${TARGETOS}
   steps:
     - command: |
         go build -ldflags "-s -w -X github.com/foo/bar/version.Version=${TAG}" -o /out/my-binary ./cmd/my-binary
@@ -163,6 +180,10 @@ build:
 
 - `env`: The environment variables for the build.
 - `steps`: The build steps for the package.
+
+:::tip
+TARGETOS is a built-in argument that Dalec will substitute with the target OS value. For more information, please see [Args section](#args-section).
+:::
 
 ## Artifacts section
 
