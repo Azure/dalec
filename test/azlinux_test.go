@@ -15,6 +15,14 @@ import (
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 )
 
+var azlinuxConstraints = constraintsSymbols{
+	Equal:              "==",
+	GreaterThan:        ">",
+	GreaterThanOrEqual: ">=",
+	LessThan:           "<",
+	LessThanOrEqual:    "<=",
+}
+
 func TestMariner2(t *testing.T) {
 	t.Parallel()
 
@@ -24,6 +32,9 @@ func TestMariner2(t *testing.T) {
 			Package:   "mariner2/rpm",
 			Container: "mariner2/container",
 			Worker:    "mariner2/worker",
+			FormatDepEqual: func(v, _ string) string {
+				return v
+			},
 		},
 		LicenseDir: "/usr/share/licenses",
 		SystemdDir: struct {
@@ -36,6 +47,7 @@ func TestMariner2(t *testing.T) {
 		Worker: workerConfig{
 			ContextName: azlinux.Mariner2WorkerContextName,
 			CreateRepo:  azlinuxWithRepo,
+			Constraints: azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "mariner",
@@ -65,6 +77,7 @@ func TestAzlinux3(t *testing.T) {
 		Worker: workerConfig{
 			ContextName: azlinux.Azlinux3WorkerContextName,
 			CreateRepo:  azlinuxWithRepo,
+			Constraints: azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "azurelinux",
@@ -106,6 +119,18 @@ type workerConfig struct {
 	// ContextName is the name of the worker context that the build target will use
 	// to see if a custom worker is proivded in a context
 	ContextName string
+
+	Constraints constraintsSymbols
+}
+
+type constraintsSymbols struct {
+	Equal string
+
+	GreaterThan        string
+	GreaterThanOrEqual string
+
+	LessThan        string
+	LessThanOrEqual string
 }
 
 type targetConfig struct {
@@ -115,6 +140,11 @@ type targetConfig struct {
 	Container string
 	// Target is the build target for creating the worker image.
 	Worker string
+
+	// FormatDepEqual, when set, alters the provided depenedency version to match
+	// what is neccessary for the target distro to set a dependency for an equals
+	// operator.
+	FormatDepEqual func(ver, rev string) string
 }
 
 type testLinuxConfig struct {
@@ -1153,7 +1183,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 	t.Run("pinned build dependencies", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
-		testPinnedBuildDeps(ctx, t, testConfig.Target, testConfig.Worker)
+		testPinnedBuildDeps(ctx, t, testConfig)
 	})
 }
 
@@ -1248,7 +1278,7 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 	})
 }
 
-func testPinnedBuildDeps(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
+func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 	var pkgName = "dalec-test-package"
 
 	getTestPackageSpec := func(version string) *dalec.Spec {
@@ -1291,6 +1321,13 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, targetCfg targetConf
 		License:     "MIT",
 	}
 
+	formatEqualForDistro := func(v, rev string) string {
+		if cfg.Target.FormatDepEqual == nil {
+			return v
+		}
+		return cfg.Target.FormatDepEqual(v, rev)
+	}
+
 	tests := []struct {
 		name        string
 		constraints string
@@ -1298,62 +1335,71 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, targetCfg targetConf
 	}{
 		{
 			name:        "exact dep available",
-			constraints: "== 1.1.1",
+			constraints: cfg.Worker.Constraints.Equal + " " + formatEqualForDistro("1.1.1", "1"),
 			want:        "1.1.1",
 		},
 
 		{
 			name:        "lt dep available",
-			constraints: "< 1.3.0",
+			constraints: cfg.Worker.Constraints.LessThan + " 1.3.0",
 			want:        "1.2.0",
 		},
 
 		{
 			name:        "gt dep available",
-			constraints: "> 1.2.0",
+			constraints: cfg.Worker.Constraints.GreaterThan + " 1.2.0",
 			want:        "1.3.0",
 		},
 	}
 
-	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+	getWorker := func(ctx context.Context, client gwclient.Client) llb.State {
 		// Build the worker target, this will give us the worker image as an output.
 		// Note: Currently we need to provide a dalec spec just due to how the router is setup.
 		//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
-		sr := newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))
-		worker := reqToState(ctx, gwc, sr, t)
+		sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
+		w := reqToState(ctx, client, sr, t)
 
 		var pkgs []llb.State
 		for _, depSpec := range depSpecs {
-			sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(targetCfg.Package))
-			pkg := reqToState(ctx, gwc, sr, t)
+			sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(cfg.Target.Package))
+			pkg := reqToState(ctx, client, sr, t)
 			pkgs = append(pkgs, pkg)
 		}
-		worker = worker.With(workerCfg.CreateRepo(llb.Merge(pkgs)))
+		return w.With(cfg.Worker.CreateRepo(llb.Merge(pkgs)))
+	}
 
-		for _, tt := range tests {
-			spec.Dependencies = &dalec.PackageDependencies{
-				Build: map[string]dalec.PackageConstraints{
-					pkgName: {
-						Version: []string{tt.constraints},
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				worker := getWorker(ctx, gwc)
+				spec.Dependencies = &dalec.PackageDependencies{
+					Build: map[string]dalec.PackageConstraints{
+						pkgName: {
+							Version: []string{tt.constraints},
+						},
 					},
-				},
-			}
+				}
 
-			spec.Build.Steps = []dalec.BuildStep{
-				{
-					Command: fmt.Sprintf(`[[ $(cat /usr/share/doc/%s/version.txt) == "version: %s" ]]`, pkgName, tt.want),
-				},
-			}
+				spec.Build.Steps = []dalec.BuildStep{
+					{
+						Command: fmt.Sprintf(`set -x; [ "$(cat /usr/share/doc/%s/version.txt)" = "version: %s" ]`, pkgName, tt.want),
+					},
+				}
 
-			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, workerCfg.ContextName, worker), withBuildTarget(targetCfg.Container))
-			res := solveT(ctx, t, gwc, sr)
-			_, err := res.SingleRef()
+				sr := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, cfg.Worker.ContextName, worker), withBuildTarget(cfg.Target.Container))
+				res := solveT(ctx, t, gwc, sr)
+				_, err := res.SingleRef()
 
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-	})
+				if err != nil {
+					t.Fatal(err)
+				}
+			})
+		})
+	}
 }
 
 func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expected os.FileMode) error {
