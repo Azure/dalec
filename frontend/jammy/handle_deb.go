@@ -67,13 +67,18 @@ func buildDeb(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 		return llb.Scratch(), err
 	}
 
+	versionID, err := deb.ReadDistroVersionID(ctx, client, worker)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
 	installBuildDeps, err := buildDepends(worker, sOpt, spec, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error creating deb for build dependencies")
 	}
 
 	worker = worker.With(installBuildDeps)
-	st, err := deb.BuildDeb(worker, spec, sOpt, targetKey, opts...)
+	st, err := deb.BuildDeb(worker, spec, sOpt, targetKey, versionID, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -207,7 +212,7 @@ echo No candidates match constraints for package "${pkg}" with constraints $(joi
 
 	pg := dalec.ProgressGroup("Install build dependencies")
 	opts = append(opts, pg)
-	pkg, err := deb.BuildDeb(worker, depsSpec, sOpt, targetKey, append(opts, dalec.ProgressGroup("Create intermediate deb for build dependnencies"))...)
+	pkg, err := deb.BuildDeb(worker, depsSpec, sOpt, targetKey, "", append(opts, dalec.ProgressGroup("Create intermediate deb for build dependnencies"))...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
 	}

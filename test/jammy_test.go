@@ -18,7 +18,7 @@ func TestJammy(t *testing.T) {
 			Package:   "jammy/deb",
 			Worker:    "jammy/worker",
 			FormatDepEqual: func(ver, rev string) string {
-				return ver + "-" + rev
+				return ver + "-ubuntu22.04u" + rev
 			},
 		},
 		LicenseDir: "/usr/share/doc",
