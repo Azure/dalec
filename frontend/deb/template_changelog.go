@@ -15,14 +15,16 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-func Changelog(spec *dalec.Spec, in llb.State, target, dir string) (llb.State, error) {
+const distroVersionIDSeparator = "u"
+
+func Changelog(spec *dalec.Spec, in llb.State, target, dir, distroVersionID string) (llb.State, error) {
 	buf := bytes.NewBuffer(nil)
 
 	if dir == "" {
 		dir = "debian"
 	}
 
-	if err := WriteChangelog(spec, target, buf); err != nil {
+	if err := WriteChangelog(buf, spec, target, distroVersionID); err != nil {
 		return llb.Scratch(), err
 	}
 
@@ -32,13 +34,18 @@ func Changelog(spec *dalec.Spec, in llb.State, target, dir string) (llb.State, e
 		nil
 }
 
-func WriteChangelog(spec *dalec.Spec, target string, w io.Writer) error {
-	return changelogTmpl.Execute(w, &changelogWrapper{spec, target})
+func WriteChangelog(w io.Writer, spec *dalec.Spec, target, distroID string) error {
+	return changelogTmpl.Execute(w, &changelogWrapper{
+		Spec:     spec,
+		Target:   target,
+		DistroID: distroID,
+	})
 }
 
 type changelogWrapper struct {
 	*dalec.Spec
-	Target string
+	Target   string
+	DistroID string
 }
 
 var dummyChangelogEntry = dalec.ChangelogEntry{
@@ -47,6 +54,20 @@ var dummyChangelogEntry = dalec.ChangelogEntry{
 	Changes: []string{
 		"Dummy changelog entry",
 	},
+}
+
+func (w *changelogWrapper) DistroVersionID() string {
+	if w.DistroID == "" {
+		return ""
+	}
+	return w.DistroID
+}
+
+func (w *changelogWrapper) DistroVersionSeparator() string {
+	if w.DistroID == "" {
+		return ""
+	}
+	return distroVersionIDSeparator
 }
 
 func (w *changelogWrapper) Change() string {

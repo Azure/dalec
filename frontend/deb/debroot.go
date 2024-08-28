@@ -1,16 +1,22 @@
 package deb
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	_ "embed"
 	"fmt"
 	"io"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/pkg/errors"
 )
 
@@ -57,7 +63,15 @@ func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, s
 
 // Debroot creates a debian root directory suitable for use with debbuild.
 // This does not include sources in case you want to mount sources (instead of copying them) later.
-func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, target, dir string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+//
+// Set the `distroVersionID` argument to a value suitable for including in the
+// .deb for storing the targeted distro+version in the deb.
+// This is generally needed so that if a distro user upgrades from, for instance,
+// debian 11 to debian 12, that the package built for debian 12 will be considered
+// an upgrade even if it is technically the same underlying source.
+// It may be left blank but is highly recommended to set this.
+// Use [ReadDistroVersionID] to get a suitable value.
+func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, target, dir, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	control, err := controlFile(spec, in, target, dir)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error generating control file")
@@ -68,7 +82,7 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, targ
 		return llb.Scratch(), errors.Wrap(err, "error generating rules file")
 	}
 
-	changelog, err := Changelog(spec, in, target, dir)
+	changelog, err := Changelog(spec, in, target, dir, distroVersionID)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error generating changelog file")
 	}
@@ -442,4 +456,60 @@ func controlFile(spec *dalec.Spec, in llb.State, target, dir string) (llb.State,
 			File(llb.Mkdir(dir, 0o755, llb.WithParents(true))).
 			File(llb.Mkfile(filepath.Join(dir, "control"), 0o640, buf.Bytes())),
 		nil
+}
+
+// ReadDistroVersionID returns a string concatenating the values of ID and
+// VERSION_ID from /etc/os-release from the provided state.
+func ReadDistroVersionID(ctx context.Context, client gwclient.Client, st llb.State) (string, error) {
+	rootfs, err := bkfs.FromState(ctx, &st, client)
+	if err != nil {
+		return "", err
+	}
+
+	f, err := rootfs.Open("etc/os-release")
+	if err != nil {
+		return "", err
+	}
+
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	var (
+		id      string
+		version string
+	)
+
+	for scanner.Scan() {
+		k, v, ok := strings.Cut(scanner.Text(), "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "ID":
+			id = unquote(v)
+		case "VERSION_ID":
+			version = unquote(v)
+		}
+
+		if id != "" && version != "" {
+			break
+		}
+	}
+
+	if scanner.Err() != nil {
+		return "", err
+	}
+
+	if id == "" || version == "" {
+		return "", errors.New("could not determine distro or version ID")
+	}
+
+	return id + version, nil
+}
+
+func unquote(v string) string {
+	if updated, err := strconv.Unquote(v); err == nil {
+		return updated
+	}
+	return v
 }
