@@ -14,10 +14,6 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-const (
-	tdnfCacheDir = "/var/cache/tdnf"
-)
-
 type worker interface {
 	Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 	Install(pkgs []string, opts ...installOpt) llb.RunOption

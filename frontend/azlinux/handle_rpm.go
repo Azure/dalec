@@ -55,45 +55,18 @@ func handleRPM(w worker) gwclient.BuildFunc {
 	}
 }
 
-type installFunc func(dalec.SourceOpts) (llb.RunOption, error)
-
-// Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
-func installBuildDepsPackage(target string, packageName string, w worker, sOpt dalec.SourceOpts, deps map[string]dalec.PackageConstraints, platform *ocispecs.Platform, installOpts ...installOpt) installFunc {
-	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
-	depsOnly := dalec.Spec{
-		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
-		Description: "Provides build dependencies for mariner2 and azlinux3",
-		Version:     "1.0",
-		License:     "Apache 2.0",
-		Revision:    "1",
-		Dependencies: &dalec.PackageDependencies{
-			Runtime: deps,
-		},
+func platformFuzzyMatches(p *ocispecs.Platform) bool {
+	if p == nil {
+		return true
 	}
 
-	return func(Opt dalec.SourceOpts) (llb.RunOption, error) {
-		pg := dalec.ProgressGroup("Building container for build dependencies")
-
-		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := createRPM(w, sOpt, &depsOnly, target, platform, pg)
-		if err != nil {
-			return nil, err
-		}
-
-		var opts []llb.ConstraintsOpt
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-
-		rpmMountDir := "/tmp/rpms"
-
-		installOpts = append([]installOpt{
-			noGPGCheck,
-			withMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
-			installWithConstraints(opts),
-		}, installOpts...)
-
-		// install the built RPMs into the worker itself
-		return w.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
-	}
+	// Note, this is intentionally not doing a strict match here
+	// (e.g. [platforms.OnlyStrict])
+	// This is used to see if we can get some optimizations when building for a
+	// non-native platformm and in most cases the [platforms.Only] vector handles
+	// things like building armv7 on an arm64 machine, which should be able to run
+	// natively.
+	return platforms.Only(platforms.DefaultSpec()).Match(*p)
 }
 
 func installBuildDeps(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
@@ -104,13 +77,54 @@ func installBuildDeps(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetK
 
 	opts = append(opts, dalec.ProgressGroup("Install build deps"))
 
-	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, sOpt, deps, platform, installWithConstraints(opts))(sOpt)
+	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
+	depsOnly := dalec.Spec{
+		Name:        spec.Name + "-build-dependencies",
+		Description: "Provides build dependencies for mariner2 and azlinux3",
+		Version:     "1.0",
+		License:     "Apache 2.0",
+		Revision:    "1",
+		Dependencies: &dalec.PackageDependencies{
+			Runtime: deps,
+		},
+	}
+
+	// create an RPM with just the build dependencies, using our same base worker
+	rpmDir, err := createRPM(w, sOpt, &depsOnly, targetKey, platform, opts...)
 	if err != nil {
 		return nil, err
 	}
 
+	rpmMountDir := "/tmp/rpms"
+	pkg := []string{"/tmp/rpms/*/*.rpm"}
+
+	if !platformFuzzyMatches(platform) {
+		base, err := w.Base(sOpt, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		return func(in llb.State) llb.State {
+			return base.Run(
+				w.Install(
+					pkg,
+					withMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
+					atRoot("/tmp/rootfs"),
+					withPlatform(platform),
+				),
+			).AddMount("/tmp/rootfs", in)
+		}, nil
+	}
+
 	return func(in llb.State) llb.State {
-		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
+		return in.Run(
+			w.Install(
+				[]string{"/tmp/rpms/*/*.rpm"},
+				withMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
+				installWithConstraints(opts),
+			),
+			dalec.WithConstraints(opts...),
+		).Root()
 	}, nil
 }
 
@@ -205,15 +219,13 @@ func createRPM(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey stri
 	}
 
 	var runOpts []llb.RunOption
-	if platform != nil {
-		if platforms.Only(platforms.DefaultSpec()).Match(*platform) && hasGolangBuildDep(spec, targetKey) {
-			native, err := rpmWorker(w, sOpt, spec, targetKey, nil, opts...)
-			if err != nil {
-				return llb.Scratch(), err
-			}
-
-			runOpts = append(runOpts, nativeGoMount(native, platform))
+	if !platformFuzzyMatches(platform) && hasGolangBuildDep(spec, targetKey) {
+		native, err := rpmWorker(w, sOpt, spec, targetKey, nil, opts...)
+		if err != nil {
+			return llb.Scratch(), err
 		}
+
+		runOpts = append(runOpts, nativeGoMount(native, platform))
 	}
 
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")

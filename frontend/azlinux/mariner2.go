@@ -3,7 +3,6 @@ package azlinux
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
@@ -13,8 +12,7 @@ import (
 )
 
 const (
-	Mariner2TargetKey     = "mariner2"
-	tdnfCacheNameMariner2 = "mariner2-tdnf-cache"
+	Mariner2TargetKey = "mariner2"
 
 	Mariner2Ref               = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
 	Mariner2WorkerContextName = "dalec-mariner2-worker"
@@ -46,6 +44,8 @@ func (w mariner2) Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.S
 	}
 
 	return base.Run(
+		w.Install([]string{"dnf"}, installWithConstraints(opts), tdnfOnly),
+	).Run(
 		w.Install([]string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, installWithConstraints(opts)),
 		dalec.WithConstraints(opts...),
 	).Root(), nil
@@ -54,7 +54,7 @@ func (w mariner2) Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.S
 func (w mariner2) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 	var cfg installConfig
 	setInstallOptions(&cfg, opts)
-	return dalec.WithRunOptions(tdnfInstall(&cfg, "2.0", pkgs), w.tdnfCacheMount(cfg.root))
+	return dalec.WithRunOptions(dnfInstall(&cfg, "2.0", pkgs, Mariner2TargetKey))
 }
 
 func (w mariner2) BasePackages() []string {
@@ -89,8 +89,4 @@ func (mariner2) WorkerImageConfig(ctx context.Context, resolver llb.ImageMetaRes
 	}
 
 	return &cfg, nil
-}
-
-func (mariner2) tdnfCacheMount(root string) llb.RunOption {
-	return llb.AddMount(filepath.Join(root, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheNameMariner2, llb.CacheMountLocked))
 }

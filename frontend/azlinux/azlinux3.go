@@ -3,7 +3,6 @@ package azlinux
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
@@ -13,8 +12,7 @@ import (
 )
 
 const (
-	AzLinux3TargetKey     = "azlinux3"
-	tdnfCacheNameAzlinux3 = "azlinux3-tdnf-cache"
+	AzLinux3TargetKey = "azlinux3"
 
 	// Azlinux3Ref is the image ref used for the base worker image
 	Azlinux3Ref = "mcr.microsoft.com/azurelinux/base/core:3.0"
@@ -49,6 +47,8 @@ func (w azlinux3) Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.S
 
 	img := llb.Image(Azlinux3Ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	return img.Run(
+		w.Install([]string{"dnf"}, installWithConstraints(opts), tdnfOnly),
+	).Run(
 		w.Install([]string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, installWithConstraints(opts)),
 		dalec.WithConstraints(opts...),
 	).Root(), nil
@@ -57,7 +57,7 @@ func (w azlinux3) Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.S
 func (w azlinux3) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 	var cfg installConfig
 	setInstallOptions(&cfg, opts)
-	return dalec.WithRunOptions(tdnfInstall(&cfg, "3.0", pkgs), w.tdnfCacheMount(cfg.root))
+	return dalec.WithRunOptions(dnfInstall(&cfg, "3.0", pkgs, AzLinux3TargetKey))
 }
 
 func (w azlinux3) BasePackages() []string {
@@ -90,8 +90,4 @@ func (azlinux3) WorkerImageConfig(ctx context.Context, resolver llb.ImageMetaRes
 	}
 
 	return &cfg, nil
-}
-
-func (azlinux3) tdnfCacheMount(root string) llb.RunOption {
-	return llb.AddMount(filepath.Join(root, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheNameAzlinux3, llb.CacheMountLocked))
 }
