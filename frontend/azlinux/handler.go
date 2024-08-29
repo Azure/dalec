@@ -101,7 +101,7 @@ func handleBaseImg(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			st, err := w.Base(sOpt)
+			st, err := w.Base(sOpt, dalec.WithPlatform(platform))
 			if err != nil {
 				return nil, nil, err
 			}
