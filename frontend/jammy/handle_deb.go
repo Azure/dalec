@@ -2,7 +2,7 @@ package jammy
 
 import (
 	"context"
-	"path/filepath"
+	"fmt"
 	"strings"
 
 	"github.com/Azure/dalec"
@@ -61,6 +61,19 @@ func installPackages(ls ...string) llb.RunOption {
 	})
 }
 
+func installWithConstraints(pkgPath string, pkgName string) llb.RunOption {
+	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+		// The apt solver always tries to select the latest package version even when constraints specify that an older version should be installed and that older version is available in a repo.
+		// This leads the solver to simply refuse to install our target package if the latest version of ANY dependency package is incompatible with the constraints.
+		// To work around this we first install the .deb for the package with dpkg, specifically ignoring any dependencies so that we can avoid the constraints issue.
+		// We then use aptitude to fix the (possibly broken) install of the package, and we pass the aptitude solver a hint to REJECT any solution that involves uninstalling the package.
+		// This forces aptitude to find a solution that will respect the constraints even if the solution involves pinning dependency packages to older versions.
+		dalec.ShArgs(`set -ex; dpkg -i --force-depends ` + pkgPath +
+			fmt.Sprintf(`; apt update; aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject %s :UNINST"`, pkgName)).SetRunOption(ei)
+		dalec.WithMountedAptCache(AptCachePrefix).SetRunOption(ei)
+	})
+}
+
 func buildDeb(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	worker, err := workerBase(sOpt, opts...)
 	if err != nil {
@@ -115,7 +128,7 @@ func basePackages(opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		opts = append(opts, dalec.ProgressGroup("Install base packages"))
 		return in.Run(
-			installPackages("dpkg-dev", "devscripts", "equivs", "fakeroot", "dh-make", "build-essential", "dh-apparmor", "dh-make", "dh-exec", "debhelper-compat="+deb.DebHelperCompat),
+			installPackages("aptitude", "dpkg-dev", "devscripts", "equivs", "fakeroot", "dh-make", "build-essential", "dh-apparmor", "dh-make", "dh-exec", "debhelper-compat="+deb.DebHelperCompat),
 			dalec.WithConstraints(opts...),
 		).Root()
 	}
@@ -140,65 +153,6 @@ func buildDepends(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, tar
 		}, nil
 	}
 
-	const getInstallCandidateScript = `#!/usr/bin/env bash
-
-set -euxo pipefail
-
-pkg="${1}"
-shift
-
-# Check if the arches for this package constraint match the current architecture
-# If not there's nothing to install
-# If no arches are set then assume it is a matching arch
-if [ -n "${DEB_ARCHES}" ]; then
-	arches=(${DEB_ARCHES})
-	if [[ ! ${arches[@]} =~ "$(dpkg --print-architecture)" ]]; then
-		exit 0
-	fi
-fi
-
-apt update
-
-versions=($(apt-cache madison "${pkg}" | awk -F'|' '{ print $2 }' | tr -d '[ ]'))
-
-constraints=("${@}")
-
-fulfills_constraints() {
-	for i in "${constraints[@]}"; do
-	 	# Note: $i is the full constraint value, e.g. ">= 1.3.0"
-		# Hence why it is not quoted here.
-		# dpkg --compare-versions takes 3 arguments: <ver1> <comparison op> <ver2>
-		dpkg --compare-versions "${1}" ${i}
-	done
-}
-
-for v in ${versions[@]}; do
-	if fulfills_constraints "$v"; then
-		apt install -y "${pkg}=${v}"
-		exit 0
-	fi
-done
-
-join_constraints() {
-  local IFS=" && "
-  echo "${constraints[*]}"
-}
-
-
-echo No candidates match constraints for package "${pkg}" with constraints $(join_constraints) >&2
-# Note: This is not going to exit with non-zero because this is a best-effort to
-# get any deps installed that may give the apt solver trouble.
-`
-
-	script := llb.Scratch().File(
-		llb.Mkfile("deps.sh", 0o774, []byte(getInstallCandidateScript)),
-		opts...,
-	)
-
-	scriptDir := "/tmp/internal/dalec/build"
-
-	sorted := dalec.SortMapKeys(buildDeps)
-
 	depsSpec := &dalec.Spec{
 		Name:     spec.Name + "-deps",
 		Packager: "Dalec",
@@ -218,44 +172,12 @@ echo No candidates match constraints for package "${pkg}" with constraints $(joi
 	}
 
 	return func(in llb.State) llb.State {
-		for _, pkg := range sorted {
-			c := buildDeps[pkg]
-
-			if len(c.Version) == 0 {
-				continue
-			}
-
-			// APT's dependency resolution *always* tries to install the latest
-			// version of a package's dependencies regardless of the provided
-			// package constraints.
-			// If the latest package does not fulfill the constraints then it errors out.
-			// But... we really want to be able to build stuff with the provided
-			// constraints.
-			// Instead of using APT's normal solver here we'll do our own version
-			// resolution.
-			//
-			// Because Ubuntu typically removes older versions of packages from the
-			// repos when a newer one becomes available, this may not work out.
-			// Generally I would recommend against using `=`, `<`, or `<=` in version
-			// constraints.
-			opts := append(opts, dalec.ProgressGroup("Determine version matching constraints for package "+pkg))
-			args := []string{filepath.Join(scriptDir, "deps.sh"), pkg}
-			args = append(args, c.Version...)
-
-			in = in.Run(
-				llb.Args(args),
-				llb.AddEnv("DEB_ARCHES", strings.Join(c.Arch, " ")),
-				dalec.WithConstraints(opts...),
-				dalec.WithMountedAptCache(AptCachePrefix),
-				llb.AddMount(scriptDir, script, llb.Readonly),
-			).Root()
-		}
-
 		const (
 			debPath = "/tmp/dalec/internal/build/deps"
 		)
+
 		return in.Run(
-			installPackages(debPath+"/*.deb"),
+			installWithConstraints(debPath+"/*.deb", depsSpec.Name),
 			llb.AddMount(debPath, pkg, llb.Readonly),
 			dalec.WithConstraints(opts...),
 		).Root()
