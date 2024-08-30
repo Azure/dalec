@@ -293,8 +293,6 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	withGHCache(t, &so)
 	withResolveLocal(&so)
 
-	// so.AllowedEntitlements = append(so.AllowedEntitlements, entitlements.EntitlementSecurityInsecure)
-
 	_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		gwc = &clientForceDalecWithInput{gwc}
 
