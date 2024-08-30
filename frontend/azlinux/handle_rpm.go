@@ -207,6 +207,13 @@ func hasGolangBuildDep(spec *dalec.Spec, targetKey string) bool {
 	return false
 }
 
+func platformOrDefault(p *ocispecs.Platform) ocispecs.Platform {
+	if p == nil {
+		return platforms.DefaultSpec()
+	}
+	return *p
+}
+
 func createRPM(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	br, err := createBuildroot(w, sOpt, spec, targetKey, opts...)
 	if err != nil {
@@ -219,13 +226,23 @@ func createRPM(w worker, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey stri
 	}
 
 	var runOpts []llb.RunOption
-	if !platformFuzzyMatches(platform) && hasGolangBuildDep(spec, targetKey) {
-		native, err := rpmWorker(w, sOpt, spec, targetKey, nil, opts...)
-		if err != nil {
-			return llb.Scratch(), err
+	if hasGolangBuildDep(spec, targetKey) {
+		if !platformFuzzyMatches(platform) {
+			native, err := rpmWorker(w, sOpt, spec, targetKey, nil, opts...)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+
+			runOpts = append(runOpts, nativeGoMount(native, platform))
 		}
 
-		runOpts = append(runOpts, nativeGoMount(native, platform))
+		const goCacheDir = "/tmp/dalec/internal/gocache"
+		runOpts = append(runOpts, llb.AddEnv("GOCACHE", goCacheDir))
+
+		// Unfortunately, go cannot invalidate caches for cgo (rather, cgo with 'include' directives).
+		// As such we need to include the platform in our cache key.
+		cacheKey := targetKey + "-golang-" + platforms.Format(platformOrDefault(platform))
+		runOpts = append(runOpts, llb.AddMount(goCacheDir, llb.Scratch(), llb.AsPersistentCacheDir(cacheKey, llb.CacheMountShared)))
 	}
 
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
