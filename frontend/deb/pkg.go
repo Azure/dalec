@@ -106,6 +106,7 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 		llb.Network(pb.NetMode_NONE),
 		mountSources(sources, "/work/pkg", sanitizeSourceKey),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			// Mount all the tar+gz'd sources into the build which will get picked p by debbuild
 			for key, src := range debSources {
 				tarName := fmt.Sprintf("%s_%s.orig-%s.tar.gz", spec.Name, spec.Version, sanitizeSourceKey(key))
 				llb.AddMount(filepath.Join("/work", tarName), src, llb.SourcePath("src.tar.gz"), llb.Readonly).SetRunOption(ei)
