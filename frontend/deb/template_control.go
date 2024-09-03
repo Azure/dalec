@@ -39,6 +39,7 @@ func appendConstraints(deps map[string]dalec.PackageConstraints) []string {
 	for i, dep := range out {
 		constraints := deps[dep]
 		s := dep
+		// Format is specified in https://www.debian.org/doc/debian-policy/ch-relationships.html#syntax-of-relationship-fields
 		if len(constraints.Version) > 0 {
 			ls := constraints.Version
 			slices.Sort(ls)
