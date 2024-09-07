@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -312,14 +313,27 @@ type PackageDependencies struct {
 	ExtraRepos []PackageRepositoryConfig `yaml:"extra_repos,omitempty" json:"extra_repos,omitempty"`
 }
 
+func (p *PackageDependencies) GetExtraRepos(env string) []PackageRepositoryConfig {
+	var repos []PackageRepositoryConfig
+	for _, repo := range p.ExtraRepos {
+		if slices.Contains(repo.Envs, env) {
+			repos = append(repos, repo)
+		}
+	}
+
+	return repos
+}
+
 // PackageRepositoryConfig
 type PackageRepositoryConfig struct {
 	// Keys are the list of keys that need to be imported to use the configured
 	// repositories
-	Keys []Source `yaml:"keys,omitempty" json:"keys,omitempty"`
+	Keys map[string]Source `yaml:"keys,omitempty" json:"keys,omitempty"`
+
 	// Config list of repo configs to to add to the environment.  The format of
 	// these configs are distro specific (e.g. apt/yum configs).
-	Config []Source `yaml:"config" json:"config"`
+	Config map[string]Source `yaml:"config" json:"config"`
+
 	// Data lists all the extra data that needs to be made available for the
 	// provided repository config to work.
 	// As an example, if the provided config is referencing a file backed repository

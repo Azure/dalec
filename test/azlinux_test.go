@@ -1319,6 +1319,67 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 		Revision:    "1",
 		Description: "Testing allowing custom worker images to be provided",
 		License:     "MIT",
+		Dependencies: &dalec.PackageDependencies{
+			ExtraRepos: []dalec.PackageRepositoryConfig{
+				{
+					Config: map[string]dalec.Source{
+						"local.repo": dalec.Source{
+							Inline: &dalec.SourceInline{
+								File: &dalec.SourceInlineFile{
+									Contents: `[Local]
+name=Local Repository
+baseurl=file:///opt/repo
+gpgcheck=0
+priority=0
+enabled=1
+`,
+								},
+							},
+						},
+					},
+					Data: []dalec.SourceMount{
+						{
+							Dest: "/opt/repo",
+							Spec: dalec.Source{
+								Context: &dalec.SourceContext{
+									Name: "test-repo",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	repoSpec := []dalec.PackageRepositoryConfig{
+		{
+			Config: map[string]dalec.Source{
+				"local.repo": dalec.Source{
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: `[Local]
+name=Local Repository
+baseurl=file:///opt/repo
+gpgcheck=0
+priority=0
+enabled=1
+`,
+						},
+					},
+				},
+			},
+			Data: []dalec.SourceMount{
+				{
+					Dest: "/opt/repo",
+					Spec: dalec.Source{
+						Context: &dalec.SourceContext{
+							Name: "test-repo",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	formatEqualForDistro := func(v, rev string) string {
@@ -1352,10 +1413,7 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 		},
 	}
 
-	getWorker := func(ctx context.Context, client gwclient.Client) llb.State {
-		// Build the worker target, this will give us the worker image as an output.
-		// Note: Currently we need to provide a dalec spec just due to how the router is setup.
-		//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
+	getRepoState := func(ctx context.Context, client gwclient.Client, depSpecs []*dalec.Spec) llb.State {
 		sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
 		w := reqToState(ctx, client, sr, t)
 
@@ -1365,8 +1423,25 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 			pkg := reqToState(ctx, client, sr, t)
 			pkgs = append(pkgs, pkg)
 		}
+
 		return w.With(cfg.Worker.CreateRepo(llb.Merge(pkgs)))
 	}
+
+	// getWorker := func(ctx context.Context, client gwclient.Client) llb.State {
+	// 	// Build the worker target, this will give us the worker image as an output.
+	// 	// Note: Currently we need to provide a dalec spec just due to how the router is setup.
+	// 	//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
+	// 	sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
+	// 	w := reqToState(ctx, client, sr, t)
+
+	// 	var pkgs []llb.State
+	// 	for _, depSpec := range depSpecs {
+	// 		sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(cfg.Target.Package))
+	// 		pkg := reqToState(ctx, client, sr, t)
+	// 		pkgs = append(pkgs, pkg)
+	// 	}
+	// 	return w.With(cfg.Worker.CreateRepo(llb.Merge(pkgs)))
+	// }
 
 	for _, tt := range tests {
 		tt := tt
@@ -1375,8 +1450,10 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 			t.Parallel()
 
 			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-				worker := getWorker(ctx, gwc)
+				//worker := getWorker(ctx, gwc)
+				repoState := getRepoState(ctx, gwc, depSpecs)
 				spec.Dependencies = &dalec.PackageDependencies{
+					ExtraRepos: repoSpec,
 					Build: map[string]dalec.PackageConstraints{
 						pkgName: {
 							Version: []string{tt.constraints},
@@ -1390,7 +1467,7 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 					},
 				}
 
-				sr := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, cfg.Worker.ContextName, worker), withBuildTarget(cfg.Target.Container))
+				sr := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, "test-repo", repoState), withBuildTarget(cfg.Target.Container))
 				res := solveT(ctx, t, gwc, sr)
 				_, err := res.SingleRef()
 
