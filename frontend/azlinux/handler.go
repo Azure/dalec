@@ -22,7 +22,7 @@ type installFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.R
 
 type worker interface {
 	Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
-	Install(pkgs []string, opts ...installOpt) llb.RunOption
+	Install(pkgs []string, repoOpt llb.RunOption, opts ...installOpt) llb.RunOption
 	DefaultImageConfig(context.Context, llb.ImageMetaResolver, *ocispecs.Platform) (*dalec.DockerImageSpec, error)
 	WorkerImageConfig(context.Context, llb.ImageMetaResolver, *ocispecs.Platform) (*dalec.DockerImageSpec, error)
 	BasePackages() []string

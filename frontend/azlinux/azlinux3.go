@@ -49,12 +49,12 @@ func (w azlinux3) Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.S
 
 	img := llb.Image(Azlinux3Ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	return img.Run(
-		w.Install([]string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, installWithConstraints(opts)),
+		w.Install([]string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, dalec.NoOption(), installWithConstraints(opts)),
 		dalec.WithConstraints(opts...),
 	).Root(), nil
 }
 
-func (w azlinux3) Install(pkgs []string, opts ...installOpt) llb.RunOption {
+func (w azlinux3) Install(pkgs []string, repoOpt llb.RunOption, opts ...installOpt) llb.RunOption {
 	var cfg installConfig
 	setInstallOptions(&cfg, opts)
 	return dalec.WithRunOptions(tdnfInstall(&cfg, "3.0", pkgs), w.tdnfCacheMount(cfg.root))

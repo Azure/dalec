@@ -73,7 +73,7 @@ func handleContainer(w worker) gwclient.BuildFunc {
 					return in
 				}
 				return base.Run(
-					w.Install(spec.GetTestDeps(targetKey), atRoot("/tmp/rootfs")),
+					w.Install(spec.GetTestDeps(targetKey), dalec.NoOption(), atRoot("/tmp/rootfs")),
 					pg,
 					dalec.ProgressGroup("Install test dependencies"),
 				).AddMount("/tmp/rootfs", in)
@@ -157,7 +157,7 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 		}
 
 		rootfs = builderImg.Run(
-			w.Install(updated, atRoot(workPath), noGPGCheck, withManifests, installWithConstraints(opts)),
+			w.Install(updated, dalec.NoOption(), atRoot(workPath), noGPGCheck, withManifests, installWithConstraints(opts)),
 			llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
 			dalec.WithConstraints(opts...),
 		).AddMount(workPath, rootfs)
