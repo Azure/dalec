@@ -254,5 +254,5 @@ func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *d
 	builder := base.With(dalec.SetBuildNetworkMode(spec))
 	st := rpm.Build(br, builder, specPath, opts...)
 
-	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
+	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt, opts...)
 }
