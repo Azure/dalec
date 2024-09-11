@@ -43,7 +43,7 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
 		}
 
-		st := getZipLLB(worker, spec.Name, bin)
+		st := getZipLLB(worker, spec.Name, bin, pg)
 
 		def, err := st.Marshal(ctx)
 		if err != nil {
@@ -82,7 +82,7 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 	return out, nil
 }
 
-func installBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string) llb.StateOption {
+func installBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 
 	return func(in llb.State) llb.State {
 		deps := spec.GetBuildDeps(targetKey)
@@ -102,7 +102,7 @@ func installBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string)
 				Description: "Build dependencies for " + spec.Name,
 			}
 
-			opts := []llb.ConstraintsOpt{dalec.WithConstraint(c)}
+			opts = append(opts, dalec.WithConstraint(c))
 
 			srcPkg, err := deb.SourcePackage(sOpt, in, depsSpec, targetKey, "", opts...)
 			if err != nil {
@@ -224,12 +224,13 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 }
 
-func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {
+func getZipLLB(worker llb.State, name string, artifacts llb.State, opts ...llb.ConstraintsOpt) llb.State {
 	outName := filepath.Join(outputDir, name+".zip")
 	zipped := worker.Run(
 		dalec.ShArgs("zip "+outName+" *"),
 		llb.Dir("/tmp/artifacts"),
 		llb.AddMount("/tmp/artifacts", artifacts),
+		dalec.WithConstraints(opts...),
 	).AddMount(outputDir, llb.Scratch())
 	return zipped
 }
@@ -266,6 +267,7 @@ func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, er
 	return llb.Image(workerImgRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).Run(
 		dalec.ShArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip aptitude dpkg-dev debhelper-compat="+deb.DebHelperCompat),
 		dalec.WithMountedAptCache(aptCachePrefix),
+		dalec.WithConstraints(opts...),
 	).
 		// This file prevents installation of things like docs in ubuntu
 		// containers We don't want to exclude this because tests want to

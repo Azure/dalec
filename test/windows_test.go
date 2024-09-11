@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -14,6 +13,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/exp/maps"
 )
 
 var windowsAmd64 = ocispecs.Platform{OS: "windows", Architecture: "amd64"}
@@ -25,6 +25,9 @@ func TestWindows(t *testing.T) {
 	testWindows(ctx, t, targetConfig{
 		Package:   "windowscross/zip",
 		Container: "windowscross/container",
+		ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
+			return maps.Keys(spec.Artifacts.Binaries)
+		},
 	})
 
 	tcfg := targetConfig{
@@ -38,6 +41,9 @@ func TestWindows(t *testing.T) {
 		Worker:  "windowscross/worker",
 		FormatDepEqual: func(ver, rev string) string {
 			return ver + "-ubuntu22.04u" + rev
+		},
+		ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
+			return maps.Keys(spec.Artifacts.Binaries)
 		},
 	}
 
@@ -114,7 +120,7 @@ func withWindowsAmd64(cfg *newSolveRequestConfig) {
 	withPlatform(windowsAmd64)(cfg)
 }
 
-func testWindows(ctx context.Context, t *testing.T, cfg targetConfig) {
+func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -136,7 +142,7 @@ func testWindows(ctx context.Context, t *testing.T, cfg targetConfig) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(cfg.Container), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -146,6 +152,37 @@ func testWindows(ctx context.Context, t *testing.T, cfg targetConfig) {
 		})
 	})
 
+	t.Run("should not have internet access during build", func(t *testing.T) {
+		t.Parallel()
+		spec := dalec.Spec{
+			Name:        "test-no-internet-access",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Should not have internet access during build",
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{
+						Command: fmt.Sprintf("curl --head -ksSf %s > /dev/null", externalTestHost),
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
+			sr.Evaluate = true
+
+			_, err := gwc.Solve(ctx, sr)
+			var xErr *moby_buildkit_v1_frontend.ExitError
+			if !errors.As(err, &xErr) {
+				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
+			}
+		})
+	})
 	t.Run("container", func(t *testing.T) {
 		spec := dalec.Spec{
 			Name:        "test-container-build",
@@ -280,7 +317,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(cfg.Container), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 			res := solveT(ctx, t, gwc, sr)
 
@@ -318,7 +355,9 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	t.Run("test signing", windowsSigningTests)
+	t.Run("signing", func(t *testing.T) {
+		windowsSigningTests(t, tcfg)
+	})
 
 	t.Run("go module", func(t *testing.T) {
 		t.Parallel()
@@ -371,7 +410,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(cfg.Container), withSpec(ctx, t, spec), withWindowsAmd64)
+			req := newSolveRequest(withBuildTarget(tcfg.Container), withSpec(ctx, t, spec), withWindowsAmd64)
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -380,45 +419,17 @@ echo "$BAR" > bar.txt
 		t.Parallel()
 
 		ctx := startTestSpan(baseCtx, t)
-		testImageConfig(ctx, t, cfg.Container, withWindowsAmd64)
+		testImageConfig(ctx, t, tcfg.Container, withWindowsAmd64)
 	})
 
 	t.Run("build network mode", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
-		testBuildNetworkMode(ctx, t, cfg)
+		testBuildNetworkMode(ctx, t, tcfg)
 	})
 }
 
-func runBuild(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, srOpts ...srOpt) {
-	st := prepareSigningState(ctx, t, gwc, spec, srOpts...)
-
-	def, err := st.Marshal(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-		Definition: def.ToPB(),
-	})
-
-	verifySigning(ctx, t, res)
-}
-
-func verifySigning(ctx context.Context, t *testing.T, res *gwclient.Result) {
-	tgt := readFile(ctx, t, "/target", res)
-	cfg := readFile(ctx, t, "/config.json", res)
-
-	if string(tgt) != "windowscross" {
-		t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-	}
-
-	if !strings.Contains(string(cfg), "windows") {
-		t.Fatal(fmt.Errorf("configuration incorrect"))
-	}
-}
-
-func prepareSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
+func prepareWindowsSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
 	zipper := getZipperState(ctx, t, gwc)
 
 	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"), withWindowsAmd64}

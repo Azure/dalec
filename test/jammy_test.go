@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/jammy"
 	"github.com/moby/buildkit/client/llb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func signRepoJammy(gpgKey llb.State) llb.StateOption {
@@ -52,6 +53,25 @@ func TestJammy(t *testing.T) {
 			Worker:    "jammy/worker",
 			FormatDepEqual: func(ver, rev string) string {
 				return ver + "-ubuntu22.04u" + rev
+			},
+			ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
+				base := fmt.Sprintf("%s_%s-%su%s", spec.Name, spec.Version, "ubuntu22.04", spec.Revision)
+				sourceBase := fmt.Sprintf("%s_%s.orig", spec.Name, spec.Version)
+
+				out := []string{
+					base + ".debian.tar.xz",
+					base + ".dsc",
+					fmt.Sprintf("%s_%s.deb", base, platform.Architecture),
+					base + "_source.buildinfo",
+					base + "_source.changes",
+					sourceBase + ".tar.xz",
+				}
+
+				for src := range spec.Sources {
+					out = append(out, fmt.Sprintf("%s-%s.tar.gz", sourceBase, src))
+				}
+
+				return out
 			},
 		},
 		LicenseDir: "/usr/share/doc",
