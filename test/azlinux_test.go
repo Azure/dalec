@@ -12,6 +12,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"gotest.tools/v3/assert"
 )
 
@@ -35,6 +36,7 @@ func TestMariner2(t *testing.T) {
 			FormatDepEqual: func(v, _ string) string {
 				return v
 			},
+			ListExpectedSignFiles: azlinuxListSignFiles("cm2"),
 		},
 		LicenseDir: "/usr/share/licenses",
 		SystemdDir: struct {
@@ -62,9 +64,10 @@ func TestAzlinux3(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	testLinuxDistro(ctx, t, testLinuxConfig{
 		Target: targetConfig{
-			Package:   "azlinux3/rpm",
-			Container: "azlinux3/container",
-			Worker:    "azlinux3/worker",
+			Package:               "azlinux3/rpm",
+			Container:             "azlinux3/container",
+			Worker:                "azlinux3/worker",
+			ListExpectedSignFiles: azlinuxListSignFiles("azl3"),
 		},
 		LicenseDir: "/usr/share/licenses",
 		SystemdDir: struct {
@@ -84,6 +87,27 @@ func TestAzlinux3(t *testing.T) {
 			VersionID: "3.0",
 		},
 	})
+}
+
+func azlinuxListSignFiles(ver string) func(*dalec.Spec, ocispecs.Platform) []string {
+	return func(spec *dalec.Spec, platform ocispecs.Platform) []string {
+		base := fmt.Sprintf("%s-%s-%s.%s", spec.Name, spec.Version, spec.Revision, ver)
+
+		var arch string
+		switch platform.Architecture {
+		case "amd64":
+			arch = "x86_64"
+		case "arm64":
+			arch = "aarch64"
+		default:
+			arch = platform.Architecture
+		}
+
+		return []string{
+			filepath.Join("SRPMS", fmt.Sprintf("%s.src.rpm", base)),
+			filepath.Join("RPMS", arch, fmt.Sprintf("%s.%s.rpm", base, arch)),
+		}
+	}
 }
 
 func azlinuxWithRepo(rpms llb.State) llb.StateOption {
@@ -145,6 +169,10 @@ type targetConfig struct {
 	// what is neccessary for the target distro to set a dependency for an equals
 	// operator.
 	FormatDepEqual func(ver, rev string) string
+
+	// Given a spec, list all files (including the full path) that are expected
+	// to be sent to be signed.
+	ListExpectedSignFiles func(*dalec.Spec, ocispecs.Platform) []string
 }
 
 type testLinuxConfig struct {
@@ -491,7 +519,7 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	t.Run("test signing", linuxSigningTests(ctx, testConfig))
+	t.Run("signing", linuxSigningTests(ctx, testConfig))
 
 	t.Run("test systemd unit single", func(t *testing.T) {
 		t.Parallel()

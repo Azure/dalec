@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -12,54 +11,62 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/exp/maps"
 )
 
 func TestWindows(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testWindows(ctx, t, "windowscross/container")
 
-	t.Run("custom worker", func(t *testing.T) {
-		t.Parallel()
-		ctx := startTestSpan(baseCtx, t)
-		testCustomWindowscrossWorker(ctx, t, targetConfig{
-			Container: "windowscross/container",
-			// The way the test uses the package target is to generate a package which
-			// it then feeds back into a custom repo and adds that package as a build dep
-			// to another package.
-			// We don't build system packages for the windowscross base image.
-			// There's also no .deb support (currently)
-			// So... use a mariner2 rpm and then in CreateRepo, convert the rpm to a deb package
-			// which we'll use to create the repo...
-			// We can switch to this jammy/deb when that is available.
-			Package: "mariner2/rpm",
-			Worker:  "windowscross/worker",
-		}, workerConfig{
-			ContextName: windows.WindowscrossWorkerContextName,
-			CreateRepo: func(pkg llb.State) llb.StateOption {
-				return func(in llb.State) llb.State {
-					dt := []byte(`
+	tcfg := targetConfig{
+		Container: "windowscross/container",
+		// The way the test uses the package target is to generate a package which
+		// it then feeds back into a custom repo and adds that package as a build dep
+		// to another package.
+		// We don't build system packages for the windowscross base image.
+		// There's also no .deb support (currently)
+		// So... use a mariner2 rpm and then in CreateRepo, convert the rpm to a deb package
+		// which we'll use to create the repo...
+		// We can switch to this jammy/deb when that is available.
+		Package: "mariner2/rpm",
+		Worker:  "windowscross/worker",
+		ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
+			return maps.Keys(spec.Artifacts.Binaries)
+		},
+	}
+	wcfg := workerConfig{
+		ContextName: windows.WindowscrossWorkerContextName,
+		CreateRepo: func(pkg llb.State) llb.StateOption {
+			return func(in llb.State) llb.State {
+				dt := []byte(`
 deb [trusted=yes] copy:/tmp/repo /
 `)
 
-					repo := in.
-						Run(
-							dalec.ShArgs("apt-get update && apt-get install -y apt-utils alien"),
-							dalec.WithMountedAptCache("test-windowscross"),
-						).
-						Run(
-							llb.Dir("/tmp/repo"),
-							dalec.ShArgs("set -e; for i in ./RPMS/*/*.rpm; do alien --to-deb \"$i\"; done; rm -rf ./RPMS; rm -rf ./SRPMS; apt-ftparchive packages . | gzip -1 > Packages.gz"),
-						).
-						AddMount("/tmp/repo", pkg)
+				repo := in.
+					Run(
+						dalec.ShArgs("apt-get update && apt-get install -y apt-utils alien"),
+						dalec.WithMountedAptCache("test-windowscross"),
+					).
+					Run(
+						llb.Dir("/tmp/repo"),
+						dalec.ShArgs("set -e; for i in ./RPMS/*/*.rpm; do alien --to-deb \"$i\"; done; rm -rf ./RPMS; rm -rf ./SRPMS; apt-ftparchive packages . | gzip -1 > Packages.gz"),
+					).
+					AddMount("/tmp/repo", pkg)
 
-					return in.
-						File(llb.Mkfile("/etc/apt/sources.list.d/windowscross.list", 0o644, dt)).
-						File(llb.Copy(repo, "/", "/tmp/repo"))
-				}
-			},
-		})
+				return in.
+					File(llb.Mkfile("/etc/apt/sources.list.d/windowscross.list", 0o644, dt)).
+					File(llb.Copy(repo, "/", "/tmp/repo"))
+			}
+		},
+	}
+
+	testWindows(ctx, t, tcfg)
+	t.Run("custom worker", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testCustomWindowscrossWorker(ctx, t, tcfg, wcfg)
 	})
 }
 
@@ -75,7 +82,7 @@ func withWindowsAmd64(cfg *newSolveRequestConfig) {
 	cfg.req.FrontendOpt["platform"] = "windows/amd64"
 }
 
-func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
+func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -97,7 +104,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -128,7 +135,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 
 			_, err := gwc.Solve(ctx, sr)
@@ -262,7 +269,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 			res := solveT(ctx, t, gwc, sr)
 
@@ -300,7 +307,9 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	t.Run("test signing", windowsSigningTests)
+	t.Run("signing", func(t *testing.T) {
+		windowsSigningTests(t, tcfg)
+	})
 
 	t.Run("go module", func(t *testing.T) {
 		t.Parallel()
@@ -353,41 +362,13 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec), withWindowsAmd64)
+			req := newSolveRequest(withBuildTarget(tcfg.Container), withSpec(ctx, t, spec), withWindowsAmd64)
 			solveT(ctx, t, client, req)
 		})
 	})
 }
 
-func runBuild(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, srOpts ...srOpt) {
-	st := prepareSigningState(ctx, t, gwc, spec, srOpts...)
-
-	def, err := st.Marshal(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-		Definition: def.ToPB(),
-	})
-
-	verifySigning(ctx, t, res)
-}
-
-func verifySigning(ctx context.Context, t *testing.T, res *gwclient.Result) {
-	tgt := readFile(ctx, t, "/target", res)
-	cfg := readFile(ctx, t, "/config.json", res)
-
-	if string(tgt) != "windowscross" {
-		t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-	}
-
-	if !strings.Contains(string(cfg), "windows") {
-		t.Fatal(fmt.Errorf("configuration incorrect"))
-	}
-}
-
-func prepareSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
+func prepareWindowsSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
 	zipper := getZipperState(ctx, t, gwc)
 
 	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"), withWindowsAmd64}
