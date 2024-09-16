@@ -13,6 +13,7 @@ import (
 	"github.com/goccy/go-yaml"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -163,7 +164,7 @@ func TestHandlerSubrequestResolve(t *testing.T) {
 				err = yaml.Unmarshal(dt, &ls)
 				assert.NilError(t, err)
 
-				var checkPlatforms []platforms.Platform
+				var checkPlatforms []ocispecs.Platform
 
 				for _, p := range pls {
 					platform, err := platforms.Parse(p)
