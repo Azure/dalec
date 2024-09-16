@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/Azure/dalec"
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"

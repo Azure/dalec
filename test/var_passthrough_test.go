@@ -6,15 +6,16 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/testenv"
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-func getBuildPlatform(ctx context.Context, t *testing.T) *platforms.Platform {
-	buildPlatform := make(chan *platforms.Platform, 1)
+func getBuildPlatform(ctx context.Context, t *testing.T) *ocispecs.Platform {
+	buildPlatform := make(chan *ocispecs.Platform, 1)
 	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		defer close(buildPlatform)
 		dc, err := dockerui.NewClient(gwc)
@@ -49,8 +50,8 @@ func TestPassthroughVars(t *testing.T) {
 	tests := []struct {
 		name               string
 		needsBuildPlatform bool
-		targetPlatform     platforms.Platform
-		buildPlatform      *platforms.Platform
+		targetPlatform     ocispecs.Platform
+		buildPlatform      *ocispecs.Platform
 		optInArgs          map[string]string
 		env                map[string]string
 		wantEnv            map[string]string
