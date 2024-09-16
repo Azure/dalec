@@ -12,7 +12,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -20,6 +20,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/tonistiigi/fsutil/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -195,7 +196,7 @@ func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
 	return *cfg.req
 }
 
-func withPlatform(platform platforms.Platform) srOpt {
+func withPlatform(platform ocispecs.Platform) srOpt {
 	return func(cfg *newSolveRequestConfig) {
 		cfg.req.FrontendOpt["platform"] = platforms.Format(platform)
 	}
@@ -317,12 +318,12 @@ func reqToState(ctx context.Context, gwc gwclient.Client, sr gwclient.SolveReque
 	return st
 }
 
-func readDefaultPlatform(ctx context.Context, t *testing.T, gwc gwclient.Client) platforms.Platform {
+func readDefaultPlatform(ctx context.Context, t *testing.T, gwc gwclient.Client) ocispecs.Platform {
 	req := newSolveRequest(withSubrequest(frontend.KeyDefaultPlatform), withSpec(ctx, t, nil))
 	res := solveT(ctx, t, gwc, req)
 
 	dt := res.Metadata["result.json"]
-	var p platforms.Platform
+	var p ocispecs.Platform
 
 	err := json.Unmarshal(dt, &p)
 	assert.NilError(t, err)
