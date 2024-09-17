@@ -95,6 +95,33 @@ func WithRunOptions(opts ...llb.RunOption) llb.RunOption {
 	})
 }
 
+func WithFileActions(actions ...*llb.FileAction) llb.StateOption {
+	return func(s llb.State) llb.State {
+		for _, act := range actions {
+			s = s.File(act)
+		}
+
+		return s
+	}
+}
+
+type NoRunOption func(*llb.ExecInfo)
+
+func (f NoRunOption) SetRunOption(ei *llb.ExecInfo) {
+}
+
+func NoOption() llb.RunOption {
+	return NoRunOption(func(*llb.ExecInfo) {})
+}
+
+func WithCopyAction(opts ...llb.CopyOption) llb.CopyOption {
+	return copyOptionFunc(func(fa *llb.CopyInfo) {
+		for _, opt := range opts {
+			opt.SetCopyOption(fa)
+		}
+	})
+}
+
 type constraintsOptFunc func(*llb.Constraints)
 
 func (f constraintsOptFunc) SetConstraintsOption(c *llb.Constraints) {
@@ -301,6 +328,18 @@ func (s *Spec) GetBuildDeps(targetKey string) map[string]PackageConstraints {
 	return deps.Build
 }
 
+func (s *Spec) GetBuildRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("build")
+}
+
 func (s *Spec) GetTestDeps(targetKey string) []string {
 	var deps *PackageDependencies
 	if t, ok := s.Targets[targetKey]; ok {
@@ -411,5 +450,6 @@ func (s *Spec) GetPackageDeps(target string) *PackageDependencies {
 	if deps := s.Targets[target]; deps.Dependencies != nil {
 		return deps.Dependencies
 	}
+
 	return s.Dependencies
 }

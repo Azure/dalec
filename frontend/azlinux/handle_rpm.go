@@ -53,7 +53,7 @@ func handleRPM(w worker) gwclient.BuildFunc {
 }
 
 // Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
-func installBuildDepsPackage(target string, packageName string, w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
+func installBuildDepsPackage(target string, packageName string, w worker, deps map[string]dalec.PackageConstraints, repoOpts llb.RunOption, installOpts ...installOpt) installFunc {
 	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
 	depsOnly := dalec.Spec{
 		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
@@ -87,8 +87,80 @@ func installBuildDepsPackage(target string, packageName string, w worker, deps m
 		}, installOpts...)
 
 		// install the built RPMs into the worker itself
-		return w.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
+		return w.Install([]string{"/tmp/rpms/*/*.rpm"}, repoOpts, installOpts...), nil
 	}
+}
+
+// meant to return a run option for mounting all repo state
+func getRepoMounts(repos []dalec.PackageRepositoryConfig, sOpts dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	var repoMountsOpts []llb.RunOption
+	for _, repo := range repos {
+		rs, err := mountsForRepo(repo, sOpts, opts...)
+		if err != nil {
+			return nil, err
+		}
+		repoMountsOpts = append(repoMountsOpts, rs)
+	}
+
+	return dalec.WithRunOptions(repoMountsOpts...), nil
+}
+
+// meant to return a run option for mounting state for a single repo
+func mountsForRepo(config dalec.PackageRepositoryConfig, sOpts dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	var mounts []llb.RunOption
+	for _, data := range config.Data {
+		repoState, err := data.Spec.AsMount(data.Dest, sOpts, opts...)
+		if err != nil {
+			return nil, err
+		}
+		mounts = append(mounts, llb.AddMount(data.Dest, repoState))
+	}
+
+	return dalec.WithRunOptions(mounts...), nil
+}
+
+// meant to return a run option for importing the config files for all repos (including keys)
+func importRepos(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	configStates := []llb.RunOption{}
+	for _, repo := range repos {
+		mnts, err := importRepo(repo, sOpt, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		configStates = append(configStates, mnts...)
+	}
+
+	return dalec.WithRunOptions(configStates...), nil
+}
+
+func importRepo(config dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.RunOption, error) {
+	repoConfigs := []llb.RunOption{}
+	keys := []llb.RunOption{}
+
+	for name, repoConfig := range config.Config {
+		// each of these sources represent a repo config file
+		// TODO: need to handle file vs. dir case
+		repoConfigSt, err := repoConfig.AsState(name, sOpt, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		repoConfigs = append(repoConfigs,
+			llb.AddMount(filepath.Join("/etc/yum.repos.d", name), repoConfigSt, llb.SourcePath(name)))
+	}
+
+	for name, repoKey := range config.Keys {
+		// each of these sources represent a gpg key file for a particular repo
+		gpgKey, err := repoKey.AsState(name, sOpt)
+		if err != nil {
+			return nil, err
+		}
+
+		keys = append(keys, llb.AddMount(filepath.Join("/etc/pki/rpm-gpg", name), gpgKey, llb.SourcePath(name)))
+	}
+
+	return append(repoConfigs, keys...), nil
 }
 
 func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
@@ -97,20 +169,33 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 		return func(in llb.State) llb.State { return in }, nil
 	}
 
+	repos := spec.GetBuildRepos(targetKey)
+
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, err
 	}
 
-	opts = append(opts, dalec.ProgressGroup("Install build deps"))
+	repoOpts := append(opts, dalec.ProgressGroup("Install build repos"))
+	repoMounts, err := getRepoMounts(repos, sOpt, repoOpts...)
+	if err != nil {
+		return nil, err
+	}
 
-	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps, installWithConstraints(opts))(ctx, client, sOpt)
+	importRepo, err := importRepos(repos, sOpt, repoOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	opts = append(opts, dalec.ProgressGroup("Install build deps"))
+	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps, importRepo, installWithConstraints(opts))(ctx, client, sOpt)
 	if err != nil {
 		return nil, err
 	}
 
 	return func(in llb.State) llb.State {
-		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
+		return in.
+			Run(importRepo, repoMounts, installOpt, dalec.ShArgs("echo 'OPT REPO:'; ls -lrt /opt/repo"), dalec.ShArgs("ls /etc/yum.repos.d/"), dalec.WithConstraints(opts...)).Root()
 	}, nil
 }
 
