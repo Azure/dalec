@@ -312,6 +312,10 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 		} else {
 			out = cmdSt.AddMount(subPath, out)
 		}
+
+		// Update the base state so that changes to the rootfs propagate between
+		// steps.
+		st = cmdSt.Root()
 	}
 
 	return out, nil
