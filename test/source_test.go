@@ -44,6 +44,15 @@ func TestSourceCmd(t *testing.T) {
 								{
 									Command: `cat /output/foo | grep "foo bar"`,
 								},
+
+								// Make sure changes to the rootfs (as opposed to the output dir)
+								// persist across steps.
+								{
+									Command: `echo "hello world" > /tmp/hello`,
+								},
+								{
+									Command: `grep "hello world" /tmp/hello`,
+								},
 							},
 						},
 					},
