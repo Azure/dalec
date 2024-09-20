@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -327,4 +328,18 @@ func readDefaultPlatform(ctx context.Context, t *testing.T, gwc gwclient.Client)
 	err := json.Unmarshal(dt, &p)
 	assert.NilError(t, err)
 	return p
+}
+
+func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expected os.FileMode) error {
+	stat, err := ref.StatFile(ctx, gwclient.StatRequest{Path: path})
+	if err != nil {
+		return err
+	}
+
+	got := os.FileMode(stat.Mode).Perm()
+
+	if expected != got {
+		return fmt.Errorf("expected permissions %v to equal expected %v", got, expected)
+	}
+	return nil
 }

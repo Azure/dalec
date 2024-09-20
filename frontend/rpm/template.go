@@ -534,6 +534,13 @@ func (w *specWrapper) Install() fmt.Stringer {
 		copyArtifact(root, l, &cfg)
 	}
 
+	libs := dalec.SortMapKeys(w.Spec.Artifacts.Libs)
+	for _, l := range libs {
+		cfg := w.Spec.Artifacts.Libs[l]
+		root := filepath.Join(`%{buildroot}/%{_libdir}`, w.Name)
+		copyArtifact(root, l, &cfg)
+	}
+
 	b.WriteString("\n")
 	return b
 }
@@ -632,15 +639,14 @@ func (w *specWrapper) Files() fmt.Stringer {
 				fmt.Fprintln(b, file)
 			}
 		}
-
 	}
+
 	docKeys := dalec.SortMapKeys(w.Spec.Artifacts.Docs)
 	for _, d := range docKeys {
 		cfg := w.Spec.Artifacts.Docs[d]
 		path := filepath.Join(`%{_docdir}`, w.Name, cfg.SubPath, cfg.ResolveName(d))
 		fullDirective := strings.Join([]string{`%doc`, path}, " ")
 		fmt.Fprintln(b, fullDirective)
-
 	}
 
 	licenseKeys := dalec.SortMapKeys(w.Spec.Artifacts.Licenses)
@@ -649,6 +655,13 @@ func (w *specWrapper) Files() fmt.Stringer {
 		path := filepath.Join(`%{_licensedir}`, w.Name, cfg.SubPath, cfg.ResolveName(l))
 		fullDirective := strings.Join([]string{`%license`, path}, " ")
 		fmt.Fprintln(b, fullDirective)
+	}
+
+	libKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libs)
+	for _, l := range libKeys {
+		cfg := w.Spec.Artifacts.Libs[l]
+		path := filepath.Join(`%{_libdir}`, w.Name, cfg.SubPath, cfg.ResolveName(l))
+		fmt.Fprintln(b, path)
 	}
 
 	b.WriteString("\n")

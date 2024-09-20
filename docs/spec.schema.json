@@ -104,6 +104,13 @@
 				"systemd": {
 					"$ref": "#/$defs/SystemdConfiguration",
 					"description": "Systemd is the list of systemd units and dropin files for the package"
+				},
+				"libraries": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "Libs is the list of library files to be installed.\nOn linux this would typically be installed to /usr/lib/\u003cpackage name\u003e"
 				}
 			},
 			"additionalProperties": false,

@@ -431,6 +431,16 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 		}
 	}
 
+	if len(spec.Artifacts.Libs) > 0 {
+		sorted := dalec.SortMapKeys(spec.Artifacts.Libs)
+		for _, key := range sorted {
+			cfg := spec.Artifacts.Libs[key]
+			resolved := cfg.ResolveName(key)
+
+			writeInstall(key, filepath.Join("/usr/lib", spec.Name, cfg.SubPath), resolved)
+		}
+	}
+
 	if installBuf.Len() > 0 {
 		states = append(states, base.File(llb.Mkfile(filepath.Join(dir, spec.Name+".install"), 0o700, installBuf.Bytes())))
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	"gotest.tools/v3/assert"
 )
 
 var azlinuxConstraints = constraintsSymbols{
@@ -1185,6 +1185,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testPinnedBuildDeps(ctx, t, testConfig)
 	})
+
+	t.Run("test library artifacts", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testLinuxLibArtirfacts(ctx, t, testConfig)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -1400,18 +1406,172 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 			})
 		})
 	}
+
 }
 
-func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expected os.FileMode) error {
-	stat, err := ref.StatFile(ctx, gwclient.StatRequest{Path: path})
-	if err != nil {
-		return err
-	}
+func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	t.Run("file", func(t *testing.T) {
+		t.Parallel()
 
-	got := os.FileMode(stat.Mode).Perm()
+		ctx := startTestSpan(ctx, t)
 
-	if expected != got {
-		return fmt.Errorf("expected permissions %v to equal expected %v", got, expected)
-	}
-	return nil
+		spec := &dalec.Spec{
+			Name:        "test-library-files",
+			Version:     "0.0.1",
+			Revision:    "42",
+			Description: "Testing library files",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"lib1": {Contents: "this is lib1"},
+								"lib2": {Contents: "this is lib2"},
+							},
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Libs: map[string]dalec.ArtifactConfig{
+					"src/lib1": {},
+					"src/lib2": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check that lib files exist under package dir",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/lib/test-library-files/lib1": {CheckOutput: dalec.CheckOutput{
+							Equals: "this is lib1",
+						}},
+						"/usr/lib/test-library-files/lib2": {CheckOutput: dalec.CheckOutput{
+							Equals: "this is lib2",
+						}},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			res := solveT(ctx, t, gwc, sr)
+			_, err := res.SingleRef()
+			assert.NilError(t, err)
+		})
+	})
+
+	t.Run("dir", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := startTestSpan(ctx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-library-files",
+			Version:     "0.0.1",
+			Revision:    "42",
+			Description: "Testing library files",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"lib1": {Contents: "this is lib1"},
+								"lib2": {Contents: "this is lib2"},
+							},
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Libs: map[string]dalec.ArtifactConfig{
+					"src/*": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check that lib files exist under package dir",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/lib/test-library-files/lib1": {CheckOutput: dalec.CheckOutput{
+							Equals: "this is lib1",
+						}},
+						"/usr/lib/test-library-files/lib2": {CheckOutput: dalec.CheckOutput{
+							Equals: "this is lib2",
+						}},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			res := solveT(ctx, t, gwc, sr)
+			_, err := res.SingleRef()
+			assert.NilError(t, err)
+		})
+	})
+
+	t.Run("mixed", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := startTestSpan(ctx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-library-files",
+			Version:     "0.0.1",
+			Revision:    "42",
+			Description: "Testing library files",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"lib1": {Contents: "this is lib1"},
+								"lib2": {Contents: "this is lib2"},
+							},
+						},
+					},
+				},
+				"lib3": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "this is lib3",
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Libs: map[string]dalec.ArtifactConfig{
+					"src/*": {},
+					"lib3":  {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check that lib files exist under package dir",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/lib/test-library-files/lib1": {CheckOutput: dalec.CheckOutput{
+							Equals: "this is lib1",
+						}},
+						"/usr/lib/test-library-files/lib2": {CheckOutput: dalec.CheckOutput{
+							Equals: "this is lib2",
+						}},
+						"/usr/lib/test-library-files/lib3": {CheckOutput: dalec.CheckOutput{
+							Equals: "this is lib3",
+						}},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			res := solveT(ctx, t, gwc, sr)
+			_, err := res.SingleRef()
+			assert.NilError(t, err)
+		})
+	})
 }
