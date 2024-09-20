@@ -53,6 +53,20 @@
 			"type": "object",
 			"description": "ArtifactDirConfig contains information about the directory to be created"
 		},
+		"ArtifactSymlinkConfig": {
+			"properties": {
+				"source": {
+					"type": "string",
+					"description": "Source is the path that is being linked to\nExample:\n  If you want a symlink in /usr/bin/foo that is linking to /usr/bin/foo/foo\n  then the `Source` is `/usr/bin/foo/foo`"
+				},
+				"dest": {
+					"type": "string",
+					"description": "Dest is the path where the symlink will be installed"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object"
+		},
 		"Artifacts": {
 			"properties": {
 				"binaries": {
@@ -111,6 +125,13 @@
 					},
 					"type": "object",
 					"description": "Libs is the list of library files to be installed.\nOn linux this would typically be installed to /usr/lib/\u003cpackage name\u003e"
+				},
+				"links": {
+					"items": {
+						"$ref": "#/$defs/ArtifactSymlinkConfig"
+					},
+					"type": "array",
+					"description": "Links is the list of symlinks to be installed with the package\nLinks should only be used if the *package* should contain the link.\nFor making a container compatible with another image, use [PostInstall] in\nthe [ImageConfig]."
 				}
 			},
 			"additionalProperties": false,
