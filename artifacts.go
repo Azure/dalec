@@ -26,6 +26,11 @@ type Artifacts struct {
 	Licenses map[string]ArtifactConfig `yaml:"licenses,omitempty" json:"licenses,omitempty"`
 	// Systemd is the list of systemd units and dropin files for the package
 	Systemd *SystemdConfiguration `yaml:"systemd,omitempty" json:"systemd,omitempty"`
+
+	// Libs is the list of library files to be installed.
+	// On linux this would typically be installed to /usr/lib/<package name>
+	Libs map[string]ArtifactConfig `yaml:"libs,omitempty" json:"libraries,omitempty"`
+
 	// TODO: other types of artifacts (libexec, etc)
 }
 
@@ -106,6 +111,9 @@ func (a *Artifacts) IsEmpty() bool {
 		return false
 	}
 	if len(a.Licenses) > 0 {
+		return false
+	}
+	if len(a.Libs) > 0 {
 		return false
 	}
 	return true
