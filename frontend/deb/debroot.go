@@ -143,6 +143,17 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, targ
 		states = append(states, pls...)
 	}
 
+	if len(spec.Artifacts.Links) > 0 {
+		buf := bytes.NewBuffer(nil)
+		for _, l := range spec.Artifacts.Links {
+			src := strings.TrimPrefix(l.Source, "/")
+			dst := strings.TrimPrefix(l.Dest, "/")
+			fmt.Fprintln(buf, src, dst)
+		}
+
+		states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, spec.Name+".links"), 0o644, buf.Bytes()), opts...))
+	}
+
 	return dalec.MergeAtPath(in, states, "/"), nil
 }
 

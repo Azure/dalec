@@ -1191,6 +1191,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testLinuxLibArtirfacts(ctx, t, testConfig)
 	})
+	t.Run("test symlink artifacts", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testLinuxSymlinkArtifacts(ctx, t, testConfig)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -1573,5 +1578,48 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 			_, err := res.SingleRef()
 			assert.NilError(t, err)
 		})
+	})
+}
+
+func testLinuxSymlinkArtifacts(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	spec := &dalec.Spec{
+		Name:        "test-symlinks",
+		Version:     "0.0.1",
+		Revision:    "42",
+		Description: "Testing symlinks",
+		License:     "MIT",
+
+		Dependencies: &dalec.PackageDependencies{
+			Runtime: map[string]dalec.PackageConstraints{
+				"bash": {},
+			},
+		},
+
+		Artifacts: dalec.Artifacts{
+			Links: []dalec.ArtifactSymlinkConfig{
+				{
+					Source: "/bin/sh",
+					Dest:   "/bin/dalecsh",
+				},
+			},
+		},
+		Tests: []*dalec.TestSpec{
+			{
+				Name: "Test symlink works",
+				Steps: []dalec.TestStep{
+					{
+						Command: "/bin/dalecsh -c 'echo -n hello world'",
+						Stdout:  dalec.CheckOutput{Equals: "hello world"},
+					},
+				},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+		res := solveT(ctx, t, client, sr)
+		_, err := res.SingleRef()
+		assert.NilError(t, err)
 	})
 }

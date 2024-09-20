@@ -541,6 +541,11 @@ func (w *specWrapper) Install() fmt.Stringer {
 		copyArtifact(root, l, &cfg)
 	}
 
+	for _, l := range w.Spec.Artifacts.Links {
+		fmt.Fprintln(b, "mkdir -p", filepath.Dir(filepath.Join("%{buildroot}", l.Dest)))
+		fmt.Fprintln(b, "ln -sf", l.Source, "%{buildroot}/"+l.Dest)
+	}
+
 	b.WriteString("\n")
 	return b
 }
@@ -662,6 +667,10 @@ func (w *specWrapper) Files() fmt.Stringer {
 		cfg := w.Spec.Artifacts.Libs[l]
 		path := filepath.Join(`%{_libdir}`, w.Name, cfg.SubPath, cfg.ResolveName(l))
 		fmt.Fprintln(b, path)
+	}
+
+	for _, l := range w.Spec.Artifacts.Links {
+		fmt.Fprintln(b, l.Dest)
 	}
 
 	b.WriteString("\n")

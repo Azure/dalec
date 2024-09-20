@@ -31,7 +31,23 @@ type Artifacts struct {
 	// On linux this would typically be installed to /usr/lib/<package name>
 	Libs map[string]ArtifactConfig `yaml:"libs,omitempty" json:"libraries,omitempty"`
 
+	// Links is the list of symlinks to be installed with the package
+	// Links should only be used if the *package* should contain the link.
+	// For making a container compatible with another image, use [PostInstall] in
+	// the [ImageConfig].
+	Links []ArtifactSymlinkConfig `yaml:"links,omitempty" json:"links,omitempty"`
+
 	// TODO: other types of artifacts (libexec, etc)
+}
+
+type ArtifactSymlinkConfig struct {
+	// Source is the path that is being linked to
+	// Example:
+	//   If you want a symlink in /usr/bin/foo that is linking to /usr/bin/foo/foo
+	//   then the `Source` is `/usr/bin/foo/foo`
+	Source string `yaml:"source,omitempty" json:"source,omitempty"`
+	// Dest is the path where the symlink will be installed
+	Dest string `yaml:"dest,omitempty" json:"dest,omitempty"`
 }
 
 // CreateArtifactDirectories describes various directories that should be created on install.
@@ -114,6 +130,9 @@ func (a *Artifacts) IsEmpty() bool {
 		return false
 	}
 	if len(a.Libs) > 0 {
+		return false
+	}
+	if len(a.Links) > 0 {
 		return false
 	}
 	return true
