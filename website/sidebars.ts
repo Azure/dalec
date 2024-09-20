@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
         'sources',
         'targets',
         'testing',
+        'artifacts',
       ],
     },
     {
