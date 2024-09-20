@@ -198,6 +198,8 @@ artifacts:
       subpath: man8
 ```
 
+For more information, please see [Artifacts](artifacts.md)
+
 ## Tests section
 
 Tests section is used to define the tests for the spec. These tests can be used to define the test cases, steps, or any other tests needed for the package.
