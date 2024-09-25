@@ -1313,12 +1313,32 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 		getTestPackageSpec("1.3.0"),
 	}
 
-	spec := &dalec.Spec{
-		Name:        "dalec-test-pinned-build-deps",
-		Version:     "0.0.1",
-		Revision:    "1",
-		Description: "Testing allowing custom worker images to be provided",
-		License:     "MIT",
+	// getTestPinnedSpec returns a spec that has a build dependency on the package with the given constraints.
+	// and with an included test in the build steps which ensures that the correct version of the
+	// package was used.
+	getPinnedTestSpec := func(constraints string, expectVersion string) *dalec.Spec {
+		return &dalec.Spec{
+			Name:        "dalec-test-pinned-build-deps",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "Testing allowing custom worker images to be provided",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					pkgName: {
+						Version: []string{constraints},
+					},
+				},
+			},
+
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{
+						Command: fmt.Sprintf(`set -x; [ "$(cat /usr/share/doc/%s/version.txt)" = "version: %s" ]`, pkgName, expectVersion),
+					},
+				},
+			},
+		}
 	}
 
 	formatEqualForDistro := func(v, rev string) string {
@@ -1369,26 +1389,13 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 	}
 
 	for _, tt := range tests {
-		tt := tt
+		spec := getPinnedTestSpec(tt.constraints, tt.want)
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 				worker := getWorker(ctx, gwc)
-				spec.Dependencies = &dalec.PackageDependencies{
-					Build: map[string]dalec.PackageConstraints{
-						pkgName: {
-							Version: []string{tt.constraints},
-						},
-					},
-				}
-
-				spec.Build.Steps = []dalec.BuildStep{
-					{
-						Command: fmt.Sprintf(`set -x; [ "$(cat /usr/share/doc/%s/version.txt)" = "version: %s" ]`, pkgName, tt.want),
-					},
-				}
 
 				sr := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, cfg.Worker.ContextName, worker), withBuildTarget(cfg.Target.Container))
 				res := solveT(ctx, t, gwc, sr)
