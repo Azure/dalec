@@ -39,7 +39,7 @@ target "frontend" {
 target "lint" {
     context = "."
     dockerfile-inline = <<EOT
-    FROM golangci/golangci-lint:v1.54
+    FROM golangci/golangci-lint:v1.61
     WORKDIR /build
     RUN \
         --mount=type=cache,target=/go/pkg/mod \
@@ -198,7 +198,7 @@ dependencies:
     runtime:
         patch: {}
         bash: {}
-    EOT 
+    EOT
     args = {
         "BUILDKIT_SYNTAX" = FRONTEND_REF
     }
