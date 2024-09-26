@@ -141,7 +141,7 @@ func do(in io.Reader, out io.Writer, modName string) (bool, error) {
 		}
 
 		if err := buf.Flush(); err != nil {
-			slog.Error("%v", err)
+			slog.Error(err.Error())
 		}
 	}
 

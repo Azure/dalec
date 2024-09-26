@@ -11,6 +11,7 @@ import (
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/pkg/errors"
+	"golang.org/x/exp/maps"
 )
 
 func knownArg(key string) bool {
@@ -46,8 +47,19 @@ func platformArg(key string) bool {
 
 const DefaultPatchStrip int = 1
 
+type envGetterMap map[string]string
+
+func (m envGetterMap) Get(key string) (string, bool) {
+	v, ok := m[key]
+	return v, ok
+}
+
+func (m envGetterMap) Keys() []string {
+	return maps.Keys(m)
+}
+
 func expandArgs(lex *shell.Lex, s string, args map[string]string) (string, error) {
-	result, err := lex.ProcessWordWithMatches(s, args)
+	result, err := lex.ProcessWordWithMatches(s, envGetterMap(args))
 	if err != nil {
 		return "", err
 	}
@@ -613,7 +625,7 @@ func (g *SourceGenerator) Validate() error {
 
 func (s *PackageSigner) processBuildArgs(lex *shell.Lex, args map[string]string) error {
 	for k, v := range s.Args {
-		updated, err := lex.ProcessWordWithMap(v, args)
+		updated, err := expandArgs(lex, v, args)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
 		}
