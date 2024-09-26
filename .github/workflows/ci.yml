@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache: false
       # Use the golang-ci lint action which automattically sets up GHA caching and other things
       # Note: There is also a "lint" target in docker-bake.hcl for local linting
@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache: false
 
       - name: Expose GitHub tokens for caching
@@ -112,7 +112,7 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           cache: false
       - name: download deps
         run: go mod download
