@@ -1,7 +1,9 @@
 package test
 
 import (
+	"bytes"
 	"context"
+	"debug/elf"
 	"errors"
 	"fmt"
 	"os"
@@ -10,9 +12,16 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/azlinux"
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+)
+
+var (
+	linuxAmd64 = ocispecs.Platform{OS: "linux", Architecture: "amd64"}
+	linuxArm64 = ocispecs.Platform{OS: "linux", Architecture: "arm64"}
 )
 
 var azlinuxConstraints = constraintsSymbols{
@@ -53,6 +62,7 @@ func TestMariner2(t *testing.T) {
 			ID:        "mariner",
 			VersionID: "2.0",
 		},
+		SupportedPlatforms: platforms.Any(linuxAmd64, linuxArm64),
 	})
 }
 
@@ -83,6 +93,7 @@ func TestAzlinux3(t *testing.T) {
 			ID:        "azurelinux",
 			VersionID: "3.0",
 		},
+		SupportedPlatforms: platforms.Any(linuxAmd64, linuxArm64),
 	})
 }
 
@@ -154,8 +165,9 @@ type testLinuxConfig struct {
 		Units   string
 		Targets string
 	}
-	Worker  workerConfig
-	Release OSRelease
+	Worker             workerConfig
+	Release            OSRelease
+	SupportedPlatforms platforms.Matcher
 }
 
 type OSRelease struct {
@@ -633,6 +645,7 @@ WantedBy=multi-user.target
 						Dir: &dalec.SourceInlineDir{
 
 							Files: map[string]*dalec.SourceInlineFile{
+
 								"foo.service": {
 									Contents: `
 [Unit]
@@ -1174,6 +1187,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("platform", func(t *testing.T) {
+		ctx := startTestSpan(ctx, t)
+		testPlatforms(ctx, t, testConfig)
+	})
+
 	t.Run("custom worker", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
@@ -1276,6 +1294,131 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 		// Unfortunately it seems like there is an issue with the gateway client passing
 		// in source policies.
 	})
+
+}
+
+func testPlatforms(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
+	if testConfig.SupportedPlatforms == nil {
+		t.Skip("List of supported platforms not provided for distro")
+	}
+	t.Run("build against different platform", func(t *testing.T) {
+		t.Parallel()
+
+		ls, err := testEnv.Platforms(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(ls) <= 1 {
+			t.Skipf("builder does not support multiple platforms: %s", platformsAsStringer(ls))
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			p := readDefaultPlatform(ctx, t, client)
+
+			matcher := platforms.OnlyStrict(p)
+			var testPlatform *ocispecs.Platform
+			for _, p2 := range ls {
+				// Get the first platform that is not the host platform that matches a supported distro platform
+				if !matcher.Match(p2) && testConfig.SupportedPlatforms.Match(p2) {
+					testPlatform = &p2
+					break
+				}
+			}
+
+			if testPlatform == nil {
+				msg := "could not find a platform suitable for testing, host platform: %s, available: %s"
+				ps := platformStringer(p)
+				workerPlatforms := platformsAsStringer(ls)
+				if os.Getenv("DALEC_CI") != "" {
+					t.Fatalf(msg, ps, workerPlatforms)
+				}
+				t.Skipf(msg, ps, workerPlatforms)
+			}
+
+			spec := &dalec.Spec{
+				Name:        "test-platforms",
+				Version:     "0.0.1",
+				Revision:    "1",
+				Description: "Testing building on platform different from host platform",
+				License:     "MIT",
+				Dependencies: &dalec.PackageDependencies{
+					Build: map[string]dalec.PackageConstraints{
+						"golang": {},
+					},
+				},
+				Sources: map[string]dalec.Source{
+					"src": {
+						Inline: &dalec.SourceInline{
+							Dir: &dalec.SourceInlineDir{
+								Files: map[string]*dalec.SourceInlineFile{
+									"go.mod": {
+										Contents: "module test\n\ngo 1.21.6",
+									},
+									"main.go": {
+										Contents: "package main\n\nfunc main() {}\n",
+									},
+								},
+							},
+						},
+					},
+				},
+				Build: dalec.ArtifactBuild{
+					Steps: []dalec.BuildStep{
+						{Command: "cd src; go build -o /tmp/test"},
+					},
+				},
+				Artifacts: dalec.Artifacts{
+					Binaries: map[string]dalec.ArtifactConfig{
+						"/tmp/test": {},
+					},
+				},
+			}
+
+			tp := *testPlatform
+			req := newSolveRequest(withPlatform(tp), withSpec(ctx, t, spec), withBuildTarget(testConfig.Target.Container))
+			res := solveT(ctx, t, client, req)
+
+			imgPlatforms := readResultPlatforms(t, res)
+			if len(imgPlatforms) != 1 {
+				t.Fatal("expected image output to contain 1 platform")
+			}
+
+			if !platforms.OnlyStrict(tp).Match(imgPlatforms[0]) {
+				t.Errorf("Expected image platform %q, got: %q", platformStringer(tp), platformStringer(imgPlatforms[0]))
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ref == nil {
+				t.Fatal("got empty reference -- most likely an empty (scratch) state was returned")
+			}
+
+			// Read the ELF header so we can determine what the target architecture is.
+			dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+				Filename: "/usr/bin/test",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			f, err := elf.NewFile(bytes.NewReader(dt))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			check := ocispecs.Platform{
+				OS: "linux",
+			}
+			elfToPlatform(f, &check)
+
+			if !platforms.OnlyStrict(*testPlatform).Match(check) {
+				t.Fatalf("output binary has unexpected platform, expected: %s, got: %s", platformStringer(*testPlatform), platformStringer(check))
+			}
+		})
+	})
+
 }
 
 func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig) {

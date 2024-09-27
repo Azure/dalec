@@ -117,7 +117,7 @@ func (m *BuildMux) describe() (*gwclient.Result, error) {
 }
 
 func (m *BuildMux) handleSubrequest(ctx context.Context, client gwclient.Client, opts map[string]string) (*gwclient.Result, bool, error) {
-	switch opts[requestIDKey] {
+	switch opts[KeyRequestID] {
 	case "":
 		return nil, false, nil
 	case subrequests.RequestSubrequestsDescribe:
@@ -135,7 +135,7 @@ func (m *BuildMux) handleSubrequest(ctx context.Context, client gwclient.Client,
 		res, err := handleDefaultPlatform()
 		return res, true, err
 	default:
-		return nil, false, errors.Errorf("unsupported subrequest %q", opts[requestIDKey])
+		return nil, false, errors.Errorf("unsupported subrequest %q", opts[KeyRequestID])
 	}
 }
 
@@ -369,7 +369,7 @@ func (m *BuildMux) Handle(ctx context.Context, client gwclient.Client) (_ *gwcli
 		WithFields(logrus.Fields{
 			"handlers":  maps.Keys(m.handlers),
 			"target":    opts[keyTarget],
-			"requestid": opts[requestIDKey],
+			"requestid": opts[KeyRequestID],
 			"targetKey": GetTargetKey(client),
 		}))
 
@@ -403,7 +403,7 @@ func (m *BuildMux) Handle(ctx context.Context, client gwclient.Client) (_ *gwcli
 
 	// If this request was a request to list targets, we need to modify the response a bit
 	// Otherwise we can just return the result as is.
-	if opts[requestIDKey] == bktargets.SubrequestsTargetsDefinition.Name {
+	if opts[KeyRequestID] == bktargets.SubrequestsTargetsDefinition.Name {
 		return m.fixupListResult(matched, res)
 	}
 	return res, nil

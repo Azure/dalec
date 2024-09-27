@@ -11,7 +11,7 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-type WorkerFunc func(resolver llb.ImageMetaResolver, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error)
+type WorkerFunc func(resolver llb.ImageMetaResolver, spec *dalec.Spec, targetKey string, platform *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error)
 
 func HandleBuildroot(wf WorkerFunc) gwclient.BuildFunc {
 	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -21,7 +21,9 @@ func HandleBuildroot(wf WorkerFunc) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			worker, err := wf(sOpt.Resolver, spec, targetKey)
+			// Note, we are not passing platform down here because everything should
+			// be able to work regardless of platform, so prefer the native platform.
+			worker, err := wf(sOpt.Resolver, spec, targetKey, platform)
 			if err != nil {
 				return nil, nil, err
 			}

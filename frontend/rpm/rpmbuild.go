@@ -16,7 +16,7 @@ import (
 // It is expected to have rpmbuild and any other necessary build dependencies installed
 //
 // `specPath` is the path to the spec file to build relative to `topDir`
-func Build(topDir, workerImg llb.State, specPath string, opts ...llb.ConstraintsOpt) llb.State {
+func Build(topDir, workerImg llb.State, specPath string, runOpts []llb.RunOption, opts ...llb.ConstraintsOpt) llb.State {
 	opts = append(opts, dalec.ProgressGroup("Build RPM"))
 	return workerImg.Run(
 		// some notes on these args:
@@ -35,6 +35,11 @@ func Build(topDir, workerImg llb.State, specPath string, opts ...llb.Constraints
 		llb.Dir("/build/top"),
 		llb.Network(llb.NetModeNone),
 		dalec.WithConstraints(opts...),
+		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			for _, opt := range runOpts {
+				opt.SetRunOption(ei)
+			}
+		}),
 	).
 		AddMount("/build/out", llb.Scratch())
 }

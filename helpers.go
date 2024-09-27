@@ -12,6 +12,7 @@ import (
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 var disableDiffMerge atomic.Bool
@@ -412,4 +413,13 @@ func (s *Spec) GetPackageDeps(target string) *PackageDependencies {
 		return deps.Dependencies
 	}
 	return s.Dependencies
+}
+
+// WithPlatform sets the platform in the constraints opts
+// This is similar to [llb.Platform] except this takes a pointer so you don't
+// need to worry about dereferencing a potentially nil pointer.
+func WithPlatform(p *ocispecs.Platform) llb.ConstraintsOpt {
+	return constraintsOptFunc(func(c *llb.Constraints) {
+		c.Platform = p
+	})
 }
