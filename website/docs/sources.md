@@ -70,11 +70,30 @@ You can override this behavior by setting `keepGitDir: true` in the git configur
 
 Git repositories are considered to be "directory" sources.
 
-Authentication will be handled using some defaults:
+Authentication will be handled using some default secret names which are fetched
+from the client:
 
-1. Local SSH agent
+1. Default SSH agent
 2. Providing a build secret called `GIT_AUTH_HEADER` for header based auth
 3. Providing a build secret called `GIT_AUTH_TOKEN` for token based auth
+
+You can customize each of these by setting the appropriate field in the
+git auth section (shown below with default values):
+
+```yaml
+  someSource1:
+    git:
+      # This uses an SSH style git URL.
+      url: git@github.com:myOrg/myRepo.git
+      commit: 1234567890abcdef
+      auth:
+        header: GIT_AUTH_HEADER # Default header secret used
+        token: GIT_AUTH_TOKEN # Default token secret used
+        ssh: default # Default SSH secret used
+```
+
+Note: These are secret names which are used to reference the secrets provided
+by the client, not the actual secret values.
 
 ### HTTP
 

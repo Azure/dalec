@@ -137,6 +137,7 @@ func (src *SourceGit) AsState(opts ...llb.ConstraintsOpt) (llb.State, error) {
 		gOpts = append(gOpts, llb.KeepGitDir())
 	}
 	gOpts = append(gOpts, withConstraints(opts))
+	gOpts = append(gOpts, src.Auth.LLBOpt())
 
 	st := llb.Git(ref.Remote, src.Commit, gOpts...)
 	return st, nil

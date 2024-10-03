@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moby/buildkit/client/llb"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -141,9 +142,50 @@ type SourceDockerImage struct {
 }
 
 type SourceGit struct {
-	URL        string `yaml:"url" json:"url"`
-	Commit     string `yaml:"commit" json:"commit"`
-	KeepGitDir bool   `yaml:"keepGitDir" json:"keepGitDir"`
+	URL        string  `yaml:"url" json:"url"`
+	Commit     string  `yaml:"commit" json:"commit"`
+	KeepGitDir bool    `yaml:"keepGitDir" json:"keepGitDir"`
+	Auth       GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+}
+
+type GitAuth struct {
+	// Header is the name of the secret which contains the git auth header.
+	// when using git auth header based authentication.
+	// Note: This should not have the *actual* secret value, just the name of
+	// the secret which was specified as a build secret.
+	Header string `yaml:"header,omitempty" json:"header,omitempty"`
+	// Token is the name of the secret which contains a git auth token when using
+	// token based authentication.
+	// Note: This should not have the *actual* secret value, just the name of
+	// the secret which was specified as a build secret.
+	Token string `yaml:"token,omitempty" json:"token,omitempty"`
+	// SSH is the name of the secret which contains the ssh auth into when using
+	// ssh based auth.
+	// Note: This should not have the *actual* secret value, just the name of
+	// the secret which was specified as a build secret.
+	SSH string `yaml:"ssh,omitempty" json:"ssh,omitempty"`
+}
+
+// LLBOpt returns an [llb.GitOption] which sets the auth header and token secret
+// values in LLB if they are set.
+func (a *GitAuth) LLBOpt() llb.GitOption {
+	return gitOptionFunc(func(gi *llb.GitInfo) {
+		if a == nil {
+			return
+		}
+
+		if a.Header != "" {
+			gi.AuthHeaderSecret = a.Header
+		}
+
+		if a.Token != "" {
+			gi.AuthTokenSecret = a.Token
+		}
+
+		if a.SSH != "" {
+			gi.MountSSHSock = a.SSH
+		}
+	})
 }
 
 // SourceHTTP is used to download a file from an HTTP(s) URL.
