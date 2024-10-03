@@ -87,6 +87,19 @@ func TestSourceGitSSH(t *testing.T) {
 
 		checkFilter(t, ops2[1].GetFile(), &src)
 	})
+
+	t.Run("auth", func(t *testing.T) {
+		src := Source{
+			Git: &SourceGit{
+				URL:    fmt.Sprintf("user@%s:test.git", addr),
+				Commit: t.Name(),
+			},
+		}
+
+		ops := getSourceOp(ctx, t, src)
+		checkGitOp(t, ops, &src)
+	})
+
 }
 
 func TestSourceGitHTTP(t *testing.T) {
@@ -147,6 +160,22 @@ func TestSourceGitHTTP(t *testing.T) {
 		}
 
 		checkFilter(t, ops2[1].GetFile(), &src)
+	})
+
+	t.Run("auth", func(t *testing.T) {
+		src := Source{
+			Git: &SourceGit{
+				URL:    "https://localhost/test.git",
+				Commit: t.Name(),
+				Auth: GitAuth{
+					Header: "some header",
+					Token:  "some token",
+				},
+			},
+		}
+
+		ops := getSourceOp(ctx, t, src)
+		checkGitOp(t, ops, &src)
 	})
 }
 
@@ -875,6 +904,33 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 
 	if op.Attrs["git.fullurl"] != src.Git.URL {
 		t.Errorf("expected git.fullurl %q, got %q", src.Git.URL, op.Attrs["git.fullurl"])
+	}
+
+	const (
+		defaultAuthHeader = "GIT_AUTH_HEADER"
+		defaultAuthToken  = "GIT_AUTH_TOKEN"
+		defaultAuthSSH    = "default"
+	)
+
+	hdr := defaultAuthHeader
+	if src.Git.Auth.Header != "" {
+		hdr = src.Git.Auth.Header
+	}
+	assert.Check(t, cmp.Equal(op.Attrs["git.authheadersecret"], hdr), op.Attrs)
+
+	token := defaultAuthToken
+	if src.Git.Auth.Token != "" {
+		token = src.Git.Auth.Token
+	}
+	assert.Check(t, cmp.Equal(op.Attrs["git.authtokensecret"], token), op.Attrs)
+
+	if !strings.HasPrefix(src.Git.URL, "http") {
+		// ssh settings are only set when using ssh based auth
+		ssh := defaultAuthSSH
+		if src.Git.Auth.SSH != "" {
+			ssh = src.Git.Auth.SSH
+		}
+		assert.Check(t, cmp.Equal(op.Attrs["git.mountsshsock"], ssh), op)
 	}
 }
 

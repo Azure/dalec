@@ -413,3 +413,9 @@ func (s *Spec) GetPackageDeps(target string) *PackageDependencies {
 	}
 	return s.Dependencies
 }
+
+type gitOptionFunc func(*llb.GitInfo)
+
+func (f gitOptionFunc) SetGitOption(gi *llb.GitInfo) {
+	f(gi)
+}
