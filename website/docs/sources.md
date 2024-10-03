@@ -70,6 +70,11 @@ You can override this behavior by setting `keepGitDir: true` in the git configur
 
 Git repositories are considered to be "directory" sources.
 
+Authentication will be handled using some defaults:
+
+1. Local SSH agent
+2. Providing a build secret called `GIT_AUTH_HEADER` for header based auth
+3. Providing a build secret called `GIT_AUTH_TOKEN` for token based auth
 
 ### HTTP
 
