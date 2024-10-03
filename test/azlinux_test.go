@@ -508,7 +508,6 @@ echo "$BAR" > bar.txt
 				"src": {
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
-
 							Files: map[string]*dalec.SourceInlineFile{
 								"simple.service": {
 									Contents: `
@@ -523,7 +522,8 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-`},
+`,
+								},
 							},
 						},
 					},
@@ -544,7 +544,7 @@ WantedBy=multi-user.target
 					Files: map[string]dalec.FileCheckOutput{
 						filepath.Join(testConfig.SystemdDir.Units, "system/simple.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 						// symlinked file in multi-user.target.wants should point to simple.service.
 						filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/simple.service"): {
@@ -572,7 +572,7 @@ WantedBy=multi-user.target
 				Files: map[string]dalec.FileCheckOutput{
 					filepath.Join(testConfig.SystemdDir.Units, "system/simple.service"): {
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
-						Permissions: 0644,
+						Permissions: 0o644,
 					},
 					filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/simple.service"): {
 						NotExist: true,
@@ -601,7 +601,7 @@ WantedBy=multi-user.target
 				Files: map[string]dalec.FileCheckOutput{
 					filepath.Join(testConfig.SystemdDir.Units, "system/phony.service"): {
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
-						Permissions: 0644,
+						Permissions: 0o644,
 					},
 					filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/phony.service"): {
 						NotExist: true,
@@ -631,7 +631,6 @@ WantedBy=multi-user.target
 				"src": {
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
-
 							Files: map[string]*dalec.SourceInlineFile{
 								"foo.service": {
 									Contents: `
@@ -647,7 +646,8 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-`},
+`,
+								},
 
 								"foo.socket": {
 									Contents: `
@@ -703,7 +703,7 @@ Environment="FOO_ARGS=--some-foo-args"
 					Files: map[string]dalec.FileCheckOutput{
 						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/foo"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 						filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/foo.service"): {
 							NotExist: true,
@@ -713,11 +713,11 @@ Environment="FOO_ARGS=--some-foo-args"
 						},
 						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 						filepath.Join(testConfig.SystemdDir.Units, "system/foo.socket.d/env.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 					},
 				},
@@ -745,7 +745,6 @@ Environment="FOO_ARGS=--some-foo-args"
 				"src": {
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
-
 							Files: map[string]*dalec.SourceInlineFile{
 								"foo.conf": {
 									Contents: `
@@ -773,7 +772,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					Files: map[string]dalec.FileCheckOutput{
 						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 					},
 				},
@@ -1059,7 +1058,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
-	t.Run("docs and licenses are handled correctly", func(t *testing.T) {
+	t.Run("docs and headers and licenses are handled correctly", func(t *testing.T) {
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-docs-handled",
@@ -1103,6 +1102,30 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						},
 					},
 				},
+				"src5": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"header.h": {
+									Contents:    "message=hello",
+									Permissions: 0o644,
+								},
+							},
+						},
+					},
+				},
+				"src6": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"header.h": {
+									Contents:    "message=hello",
+									Permissions: 0o644,
+								},
+							},
+						},
+					},
+				},
 			},
 			Artifacts: dalec.Artifacts{
 				Docs: map[string]dalec.ArtifactConfig{
@@ -1117,15 +1140,37 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						SubPath: "license-subpath",
 					},
 				},
+				Headers: map[string]dalec.ArtifactConfig{
+					// Files with and without ArtifactConfig
+					"src1": {
+						Name:    "renamed-src1",
+						SubPath: "header-subpath-src1",
+					},
+					"src2": {},
+					// Directories with and without ArtifactConfig
+					"src5": {
+						Name:    "renamed-src5",
+						SubPath: "header-subpath-src5",
+					},
+					"src6": {},
+				},
 			},
 			Tests: []*dalec.TestSpec{
 				{
-					Name: "Doc files should be created in correct place",
+					Name: "Doc and lib and header files should be created in correct place",
 					Files: map[string]dalec.FileCheckOutput{
 						"/usr/share/doc/test-docs-handled/src1":                                        {},
 						"/usr/share/doc/test-docs-handled/subpath/src2":                                {},
 						filepath.Join(testConfig.LicenseDir, "test-docs-handled/src3"):                 {},
 						filepath.Join(testConfig.LicenseDir, "test-docs-handled/license-subpath/src4"): {},
+						"/usr/include/header-subpath-src1/renamed-src1":                                {},
+						"/usr/include/src2": {},
+						"/usr/include/header-subpath-src5/renamed-src5": {
+							IsDir: true,
+						},
+						"/usr/include/src6": {
+							IsDir: true,
+						},
 					},
 				},
 			},
@@ -1290,7 +1335,7 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 }
 
 func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
-	var pkgName = "dalec-test-package"
+	pkgName := "dalec-test-package"
 
 	getTestPackageSpec := func(version string) *dalec.Spec {
 		depSpec := &dalec.Spec{
@@ -1411,14 +1456,12 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 				sr := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, cfg.Worker.ContextName, worker), withBuildTarget(cfg.Target.Container))
 				res := solveT(ctx, t, gwc, sr)
 				_, err := res.SingleRef()
-
 				if err != nil {
 					t.Fatal(err)
 				}
 			})
 		})
 	}
-
 }
 
 func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConfig) {

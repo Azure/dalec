@@ -373,6 +373,47 @@ fi
 		assert.Equal(t, want, got)
 	})
 
+	t.Run("test headers templating using defaults", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				Headers: map[string]dalec.ArtifactConfig{
+					"test-headers": {},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%{_includedir}/test-headers
+
+`
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test headers templating using ArtifactConfig", func(t *testing.T) {
+		t.Parallel()
+		w := &specWrapper{Spec: &dalec.Spec{
+			Name: "test-pkg",
+			Artifacts: dalec.Artifacts{
+				Headers: map[string]dalec.ArtifactConfig{
+					"test-headers": {
+						Name:    "sub-module-headers",
+						SubPath: "sub-module",
+					},
+				},
+			},
+		}}
+
+		got := w.Files().String()
+		want := `%files
+%{_includedir}/sub-module/sub-module-headers
+
+`
+		assert.Equal(t, want, got)
+	})
+
 	t.Run("test config file templating using ArtifactConfig", func(t *testing.T) {
 		t.Parallel()
 		w := &specWrapper{Spec: &dalec.Spec{
