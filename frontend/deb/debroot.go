@@ -388,6 +388,15 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 		}
 	}
 
+	if len(spec.Artifacts.Headers) > 0 {
+		sorted := dalec.SortMapKeys(spec.Artifacts.Headers)
+		for _, key := range sorted {
+			cfg := spec.Artifacts.Headers[key]
+			resolved := cfg.ResolveName(key)
+			writeInstall(key, filepath.Join("/usr/include", cfg.SubPath), resolved)
+		}
+	}
+
 	if units := spec.Artifacts.Systemd.GetUnits(); len(units) > 0 {
 		// deb-systemd will look for service files in DEBIAN/<package-name>[.<service-name>].<unit-type>
 		// To handle this we'll create symlinks to the actual unit files in the source.
