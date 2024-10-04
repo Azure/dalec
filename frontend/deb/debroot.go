@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	_ "embed"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	_ "embed"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
@@ -24,6 +25,9 @@ const customSystemdPostinstFile = "custom_systemd_postinst.sh.partial"
 
 //go:embed templates/patch-header.txt
 var patchHeader []byte
+
+//go:embed templates/debian_install_header.sh
+var debianInstall []byte
 
 // This creates a directory in the debian root directory for each patch, and copies the patch files into it.
 // The format for each patch dir matches what would normaly be under `debian/patches`, just that this is a separate dir for every source we are patching
@@ -276,13 +280,12 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 		return nil
 	}
 
-	states := make([]llb.State, 0, len(spec.Artifacts.Binaries)+len(spec.Artifacts.Manpages))
+	states := make([]llb.State, 1)
 	base := llb.Scratch().File(llb.Mkdir(dir, 0o755, llb.WithParents(true)))
 
 	installBuf := bytes.NewBuffer(nil)
 	writeInstallHeader := sync.OnceFunc(func() {
-		fmt.Fprintln(installBuf, "#!/usr/bin/dh-exec")
-		fmt.Fprintln(installBuf)
+		fmt.Fprintln(installBuf, string(debianInstall))
 	})
 
 	writeInstall := func(src, dir, name string) {
@@ -290,12 +293,10 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 		// first time it is called.
 		writeInstallHeader()
 
-		if filepath.Base(src) != name {
-			fmt.Fprintln(installBuf, src, "=>", filepath.Join(dir, name))
-			return
-		}
+		name = strings.TrimSuffix(name, "*")
+		dest := filepath.Join("debian", spec.Name, dir, name)
+		fmt.Fprintln(installBuf, "do_install", filepath.Dir(dest), dest, src)
 
-		fmt.Fprintln(installBuf, src, dir+"/")
 	}
 
 	if len(spec.Artifacts.Binaries) > 0 {
