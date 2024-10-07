@@ -198,7 +198,7 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 			Warnf(ctx, client, st, "Root signing spec overridden by target signing spec: target %q", targetKey)
 		}
 
-		return forwardToSigner(ctx, client, cfg, st)
+		return st.Async(forwardToSigner(client, cfg)), nil
 	}
 
 	configCtxName := getSignContextNameWithDefault(client)
@@ -211,7 +211,7 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 		return llb.Scratch(), err
 	}
 
-	return forwardToSigner(ctx, client, cfg, st)
+	return st.Async(forwardToSigner(client, cfg)), nil
 }
 
 func getSignContextNameWithDefault(client gwclient.Client) string {
@@ -245,63 +245,73 @@ func getSignConfigCtxName(client gwclient.Client) string {
 	return client.BuildOpts().Opts["build-arg:"+buildArgDalecSigningConfigContextName]
 }
 
-func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
-	const (
-		sourceKey  = "source"
-		contextKey = "context"
-		inputKey   = "input"
-	)
+type asyncStateFunc func(context.Context, llb.State, *llb.Constraints) (llb.State, error)
 
-	opts := client.BuildOpts().Opts
+func forwardToSigner(client gwclient.Client, cfg *dalec.PackageSigner) asyncStateFunc {
+	return func(ctx context.Context, st llb.State, constraints *llb.Constraints) (llb.State, error) {
+		const (
+			sourceKey  = "source"
+			contextKey = "context"
+			inputKey   = "input"
+		)
 
-	req, err := newSolveRequest(toFrontend(cfg.Frontend), withBuildArgs(cfg.Args))
-	if err != nil {
-		return llb.Scratch(), err
-	}
+		opts := client.BuildOpts().Opts
 
-	for k, v := range opts {
-		if k == "source" || k == "cmdline" {
-			continue
-		}
-		req.FrontendOpt[k] = v
-	}
-
-	inputs, err := client.Inputs(ctx)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	m := make(map[string]*pb.Definition)
-
-	for k, st := range inputs {
-		def, err := st.Marshal(ctx)
+		req, err := newSolveRequest(toFrontend(cfg.Frontend), withBuildArgs(cfg.Args))
 		if err != nil {
 			return llb.Scratch(), err
 		}
-		m[k] = def.ToPB()
+
+		for k, v := range opts {
+			if k == "source" || k == "cmdline" {
+				continue
+			}
+			req.FrontendOpt[k] = v
+		}
+
+		inputs, err := client.Inputs(ctx)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		m := make(map[string]*pb.Definition)
+
+		withConstraints := dalec.ConstraintsOptFunc(func(c *llb.Constraints) {
+			if constraints != nil {
+				*c = *constraints
+			}
+		})
+
+		for k, st := range inputs {
+			def, err := st.Marshal(ctx, withConstraints)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+			m[k] = def.ToPB()
+		}
+		req.FrontendInputs = m
+
+		stateDef, err := st.Marshal(ctx, withConstraints)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		req.FrontendOpt[contextKey] = compound(inputKey, contextKey)
+		req.FrontendInputs[contextKey] = stateDef.ToPB()
+		req.FrontendOpt["dalec.target"] = opts["dalec.target"]
+
+		res, err := client.Solve(ctx, req)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		ref, err := res.SingleRef()
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		return ref.ToState()
 	}
-	req.FrontendInputs = m
-
-	stateDef, err := s.Marshal(ctx)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	req.FrontendOpt[contextKey] = compound(inputKey, contextKey)
-	req.FrontendInputs[contextKey] = stateDef.ToPB()
-	req.FrontendOpt["dalec.target"] = opts["dalec.target"]
-
-	res, err := client.Solve(ctx, req)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	ref, err := res.SingleRef()
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return ref.ToState()
 }
 
 func compound(k, v string) string {
