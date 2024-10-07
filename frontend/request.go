@@ -247,6 +247,14 @@ func getSignConfigCtxName(client gwclient.Client) string {
 
 type asyncStateFunc func(context.Context, llb.State, *llb.Constraints) (llb.State, error)
 
+func withConstraints(in *llb.Constraints) dalec.ConstraintsOptFunc {
+	return func(c *llb.Constraints) {
+		if in != nil {
+			*c = *in
+		}
+	}
+}
+
 func forwardToSigner(client gwclient.Client, cfg *dalec.PackageSigner) asyncStateFunc {
 	return func(ctx context.Context, st llb.State, constraints *llb.Constraints) (llb.State, error) {
 		const (
@@ -276,14 +284,8 @@ func forwardToSigner(client gwclient.Client, cfg *dalec.PackageSigner) asyncStat
 
 		m := make(map[string]*pb.Definition)
 
-		withConstraints := dalec.ConstraintsOptFunc(func(c *llb.Constraints) {
-			if constraints != nil {
-				*c = *constraints
-			}
-		})
-
 		for k, st := range inputs {
-			def, err := st.Marshal(ctx, withConstraints)
+			def, err := st.Marshal(ctx, withConstraints(constraints))
 			if err != nil {
 				return llb.Scratch(), err
 			}
@@ -291,7 +293,7 @@ func forwardToSigner(client gwclient.Client, cfg *dalec.PackageSigner) asyncStat
 		}
 		req.FrontendInputs = m
 
-		stateDef, err := st.Marshal(ctx, withConstraints)
+		stateDef, err := st.Marshal(ctx, withConstraints(constraints))
 		if err != nil {
 			return llb.Scratch(), err
 		}

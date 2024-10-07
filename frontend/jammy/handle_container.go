@@ -84,7 +84,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		if err := frontend.RunTests(ctx, client, spec, ref, installTestDeps(spec, targetKey, opt), targetKey); err != nil {
+		if err := frontend.RunTests(ctx, client, spec, ref, installTestDeps(spec, targetKey, opt), targetKey, opt); err != nil {
 			return nil, nil, err
 		}
 
