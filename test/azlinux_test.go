@@ -316,6 +316,14 @@ index 0000000..5260cb1
 						Name: src2Patch3ContextName,
 					},
 				},
+				"src3": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho goodbye",
+							Permissions: 0o700,
+						},
+					},
+				},
 			},
 			Patches: map[string][]dalec.PatchSpec{
 				"src2": {
@@ -394,6 +402,7 @@ echo "$BAR" > bar.txt
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
 						"/usr/bin/src1": {Path: "/src1"},
+						"/usr/bin/src3": {Path: "/non/existing/dir/src3"},
 					},
 				},
 			},
@@ -402,6 +411,7 @@ echo "$BAR" > bar.txt
 				Binaries: map[string]dalec.ArtifactConfig{
 					"src1":       {},
 					"src2/file2": {},
+					"src3":       {},
 					// These are files we created in the build step
 					// They aren't really binaries but we want to test that they are created and have the right content
 					"foo0.txt": {},
@@ -437,12 +447,14 @@ echo "$BAR" > bar.txt
 				{
 					Name: "Post-install symlinks should be created",
 					Files: map[string]dalec.FileCheckOutput{
-						"/src1": {},
+						"/src1":                  {},
+						"/non/existing/dir/src3": {},
 					},
 					Steps: []dalec.TestStep{
 						{Command: "/bin/bash -c 'test -L /src1'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
 						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
+						{Command: "/non/existing/dir/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 					},
 				},
 				{
