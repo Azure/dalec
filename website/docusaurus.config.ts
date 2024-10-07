@@ -85,6 +85,11 @@ const config: Config = {
       id: 'announcementBar-1', // Increment on change
       content: `⭐️ If you like Dalec, please give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/Azure/dalec">GitHub</a>!</a>`,
     },
+    algolia: {
+      appId: 'QB3RJK7I77',
+      apiKey: '2889aa0d888bd13d73eeb460f7b0f479',
+      indexName: 'azureio',
+    },
   } satisfies Preset.ThemeConfig,
 };
 
