@@ -3,6 +3,7 @@ package frontend
 import (
 	"context"
 	stderrors "errors"
+	"fmt"
 	"io/fs"
 	"path"
 	"path/filepath"
@@ -171,6 +172,40 @@ type frontendClient interface {
 	CurrentFrontend() (*llb.State, error)
 }
 
+func checkFile(ctx context.Context, client gwclient.Client, ref gwclient.Reference, p string, check dalec.FileCheckOutput) error {
+	stat, err := ref.StatFile(ctx, gwclient.StatRequest{
+		Path: p,
+	})
+	if err != nil {
+		if check.NotExist {
+			// TODO: buildkit just gives a generic error here (with grpc code `Unknown`)
+			// There's not really a good way to determine if the error is because the file is missing or something else.
+			return nil
+		}
+
+		return errors.Wrap(err, "stat failed")
+	}
+
+	if stat != nil && check.NotExist {
+		return errors.Wrap(err, "file exists but should not")
+	}
+
+	var dt []byte
+	if !check.CheckOutput.IsEmpty() {
+		dt, err = ref.ReadFile(ctx, gwclient.ReadRequest{
+			Filename: p,
+		})
+		if err != nil {
+			return errors.Wrap(err, "read failed")
+		}
+	}
+
+	if err := check.Check(string(dt), fs.FileMode(stat.Mode), stat.IsDir(), p); err != nil {
+		return errors.WithStack(err)
+	}
+	return nil
+}
+
 func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]llb.State, client gwclient.Client) error {
 	def, err := st.Marshal(ctx)
 	if err != nil {
@@ -192,33 +227,8 @@ func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]l
 
 	var outErr error
 	for p, check := range t.Files {
-		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: p,
-		})
-		if err != nil {
-			if check.NotExist {
-				// TODO: buildkit just gives a generic error here (with grpc code `Unknown`)
-				// There's not really a good way to determine if the error is because the file is missing or something else.
-				continue
-			}
-			return errors.Wrapf(err, "stat failed: %s", p)
-		}
-
-		if stat != nil && check.NotExist {
-			return errors.Errorf("file %s exists but should not", p)
-		}
-
-		var dt []byte
-		if !check.CheckOutput.IsEmpty() {
-			dt, err = ref.ReadFile(ctx, gwclient.ReadRequest{
-				Filename: p,
-			})
-			if err != nil {
-				outErr = stderrors.Join(errors.Wrapf(err, "read failed: %s", p))
-			}
-		}
-		if err := check.Check(string(dt), fs.FileMode(stat.Mode), stat.IsDir(), p); err != nil {
-			outErr = stderrors.Join(errors.WithStack(err))
+		if err := checkFile(ctx, client, ref, p, check); err != nil {
+			outErr = stderrors.Join(outErr, fmt.Errorf("%s: %w", p, err))
 		}
 	}
 
