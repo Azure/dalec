@@ -133,5 +133,5 @@ func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *d
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 	st := rpm.Build(br, base, specPath, opts...)
 
-	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
+	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt, opts...)
 }

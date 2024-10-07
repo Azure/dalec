@@ -96,7 +96,7 @@ func buildDeb(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 		return llb.Scratch(), err
 	}
 
-	signed, err := frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
+	signed, err := frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
