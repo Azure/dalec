@@ -75,12 +75,12 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 	if err := validateSpec(spec); err != nil {
 		return llb.Scratch(), err
 	}
-	dr, err := Debroot(sOpt, spec, worker, llb.Scratch(), targetKey, "", distroVersionID)
+	dr, err := Debroot(sOpt, spec, worker, llb.Scratch(), targetKey, "", distroVersionID, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	sources, err := dalec.Sources(spec, sOpt)
+	sources, err := dalec.Sources(spec, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -95,7 +95,7 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 	}
 
 	patches := createPatches(spec, sources, worker, dr, opts...)
-	debSources := debSources(worker, sources)
+	debSources := debSources(worker, sources, opts...)
 
 	work := worker.Run(
 		dalec.ShArgs("set -e; ls -lh; dpkg-buildpackage -S -us -uc; mkdir -p /tmp/out; ls -lh; cp -r /work/"+spec.Name+"_"+spec.Version+"* /tmp/out; ls -lh /tmp/out"),
@@ -119,7 +119,7 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 }
 
 func BuildDeb(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	srcPkg, err := SourcePackage(sOpt, worker, spec, targetKey, distroVersionID)
+	srcPkg, err := SourcePackage(sOpt, worker, spec, targetKey, distroVersionID, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error creating debian source package")
 	}
@@ -135,7 +135,7 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, targetK
 			dalec.WithConstraints(opts...),
 		).AddMount("/tmp/out", llb.Scratch())
 
-	return dalec.MergeAtPath(llb.Scratch(), []llb.State{st, srcPkg}, "/"), nil
+	return dalec.MergeAtPath(llb.Scratch(), []llb.State{st, srcPkg}, "/", opts...), nil
 }
 
 func sanitizeSourceKey(key string) string {

@@ -157,7 +157,7 @@ func DuplicateMap[K comparable, V any](m map[K]V) map[K]V {
 }
 
 // MergeAtPath merges the given states into the given destination path in the given input state.
-func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
+func MergeAtPath(input llb.State, states []llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	if disableDiffMerge.Load() {
 		output := input
 		for _, st := range states {
@@ -174,11 +174,11 @@ func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
 		st := src
 		if dest != "" && dest != "/" {
 			st = llb.Scratch().
-				File(llb.Copy(src, "/", dest, WithCreateDestPath()))
+				File(llb.Copy(src, "/", dest, WithCreateDestPath()), opts...)
 		}
-		diffs = append(diffs, llb.Diff(input, st))
+		diffs = append(diffs, llb.Diff(input, st, opts...))
 	}
-	return llb.Merge(diffs)
+	return llb.Merge(diffs, opts...)
 }
 
 type localOptionFunc func(*llb.LocalInfo)

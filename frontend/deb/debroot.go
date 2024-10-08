@@ -154,7 +154,7 @@ func Debroot(sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, targ
 		states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, spec.Name+".links"), 0o644, buf.Bytes()), opts...))
 	}
 
-	return dalec.MergeAtPath(in, states, "/"), nil
+	return dalec.MergeAtPath(in, states, "/", opts...), nil
 }
 
 func fixupArtifactPerms(spec *dalec.Spec) []byte {

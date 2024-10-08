@@ -65,5 +65,5 @@ func SpecToBuildrootLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpt
 		return llb.Scratch(), err
 	}
 
-	return Dalec2SpecLLB(spec, dalec.MergeAtPath(llb.Scratch(), sources, "SOURCES"), targetKey, "", opts...)
+	return Dalec2SpecLLB(spec, dalec.MergeAtPath(llb.Scratch(), sources, "SOURCES", opts...), targetKey, "", opts...)
 }
