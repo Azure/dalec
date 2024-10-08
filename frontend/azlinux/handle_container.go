@@ -79,7 +79,7 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				).AddMount("/tmp/rootfs", in)
 			}
 
-			if err := frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey); err != nil {
+			if err := frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey, pg); err != nil {
 				return nil, nil, err
 			}
 

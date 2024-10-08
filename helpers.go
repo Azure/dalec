@@ -68,7 +68,7 @@ func WithMountedAptCache(namePrefix string) llb.RunOption {
 		// To resolve that we delete the file.
 		ei.State = ei.State.File(
 			llb.Rm("/etc/apt/apt.conf.d/docker-clean", llb.WithAllowNotFound(true)),
-			constraintsOptFunc(func(c *llb.Constraints) {
+			ConstraintsOptFunc(func(c *llb.Constraints) {
 				*c = ei.Constraints
 			}),
 		)
@@ -95,38 +95,38 @@ func WithRunOptions(opts ...llb.RunOption) llb.RunOption {
 	})
 }
 
-type constraintsOptFunc func(*llb.Constraints)
+type ConstraintsOptFunc func(*llb.Constraints)
 
-func (f constraintsOptFunc) SetConstraintsOption(c *llb.Constraints) {
+func (f ConstraintsOptFunc) SetConstraintsOption(c *llb.Constraints) {
 	f(c)
 }
 
-func (f constraintsOptFunc) SetRunOption(ei *llb.ExecInfo) {
+func (f ConstraintsOptFunc) SetRunOption(ei *llb.ExecInfo) {
 	f(&ei.Constraints)
 }
 
-func (f constraintsOptFunc) SetLocalOption(li *llb.LocalInfo) {
+func (f ConstraintsOptFunc) SetLocalOption(li *llb.LocalInfo) {
 	f(&li.Constraints)
 }
 
-func (f constraintsOptFunc) SetOCILayoutOption(oi *llb.OCILayoutInfo) {
+func (f ConstraintsOptFunc) SetOCILayoutOption(oi *llb.OCILayoutInfo) {
 	f(&oi.Constraints)
 }
 
-func (f constraintsOptFunc) SetHTTPOption(hi *llb.HTTPInfo) {
+func (f ConstraintsOptFunc) SetHTTPOption(hi *llb.HTTPInfo) {
 	f(&hi.Constraints)
 }
 
-func (f constraintsOptFunc) SetImageOption(ii *llb.ImageInfo) {
+func (f ConstraintsOptFunc) SetImageOption(ii *llb.ImageInfo) {
 	f(&ii.Constraints)
 }
 
-func (f constraintsOptFunc) SetGitOption(gi *llb.GitInfo) {
+func (f ConstraintsOptFunc) SetGitOption(gi *llb.GitInfo) {
 	f(&gi.Constraints)
 }
 
 func WithConstraints(ls ...llb.ConstraintsOpt) llb.ConstraintsOpt {
-	return constraintsOptFunc(func(c *llb.Constraints) {
+	return ConstraintsOptFunc(func(c *llb.Constraints) {
 		for _, opt := range ls {
 			opt.SetConstraintsOption(c)
 		}
@@ -157,7 +157,7 @@ func DuplicateMap[K comparable, V any](m map[K]V) map[K]V {
 }
 
 // MergeAtPath merges the given states into the given destination path in the given input state.
-func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
+func MergeAtPath(input llb.State, states []llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
 	if disableDiffMerge.Load() {
 		output := input
 		for _, st := range states {
@@ -174,11 +174,11 @@ func MergeAtPath(input llb.State, states []llb.State, dest string) llb.State {
 		st := src
 		if dest != "" && dest != "/" {
 			st = llb.Scratch().
-				File(llb.Copy(src, "/", dest, WithCreateDestPath()))
+				File(llb.Copy(src, "/", dest, WithCreateDestPath()), opts...)
 		}
-		diffs = append(diffs, llb.Diff(input, st))
+		diffs = append(diffs, llb.Diff(input, st, opts...))
 	}
-	return llb.Merge(diffs)
+	return llb.Merge(diffs, opts...)
 }
 
 type localOptionFunc func(*llb.LocalInfo)
@@ -251,7 +251,7 @@ func (f RunOptFunc) SetRunOption(ei *llb.ExecInfo) {
 // If a progress group is already set in the constraints the id is reused.
 // If no progress group is set a new id is generated.
 func ProgressGroup(name string) llb.ConstraintsOpt {
-	return constraintsOptFunc(func(c *llb.Constraints) {
+	return ConstraintsOptFunc(func(c *llb.Constraints) {
 		if c.Metadata.ProgressGroup != nil {
 			id := c.Metadata.ProgressGroup.Id
 			llb.ProgressGroup(id, name, false).SetConstraintsOption(c)
