@@ -47,9 +47,37 @@ func handleRPM(w worker) gwclient.BuildFunc {
 			if err != nil {
 				return nil, nil, err
 			}
+
+			withDeps, err := withTestDeps(w, spec, sOpt, targetKey)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := frontend.RunTests(ctx, client, spec, ref, withDeps, targetKey); err != nil {
+				return nil, nil, err
+			}
+
 			return ref, &dalec.DockerImageSpec{}, nil
 		})
 	}
+}
+
+func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	base, err := w.Base(sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return func(in llb.State) llb.State {
+		deps := spec.GetTestDeps(targetKey)
+		if len(deps) == 0 {
+			return in
+		}
+		return base.Run(
+			w.Install(spec.GetTestDeps(targetKey), atRoot("/tmp/rootfs")),
+			dalec.WithConstraints(opts...),
+			dalec.ProgressGroup("Install test dependencies"),
+		).AddMount("/tmp/rootfs", in)
+
+	}, nil
 }
 
 // Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
