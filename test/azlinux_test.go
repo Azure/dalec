@@ -1262,6 +1262,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testImageConfig(ctx, t, testConfig.Target.Container)
 	})
+
+	t.Run("test package tests cause build to fail", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testLinuxPackageTestsFail(ctx, t, testConfig)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -1772,5 +1778,85 @@ func testImageConfig(ctx context.Context, t *testing.T, target string, opts ...s
 		assert.Check(t, cmp.Equal(img.Config.WorkingDir, spec.Image.WorkingDir))
 		assert.Check(t, cmp.Equal(img.Config.StopSignal, spec.Image.StopSignal))
 		assert.Check(t, cmp.Equal(img.Config.User, spec.Image.User))
+	})
+}
+
+func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	t.Run("negative test", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-package-tests",
+			Version:     "0.0.1",
+			Revision:    "42",
+			Description: "Testing package tests",
+			License:     "MIT",
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Test that tests fail the build",
+					Files: map[string]dalec.FileCheckOutput{
+						"/non-existing-file": {},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
+			_, err := client.Solve(ctx, sr)
+			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			_, err = client.Solve(ctx, sr)
+			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+		})
+	})
+
+	t.Run("positive test", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-package-tests",
+			Version:     "0.0.1",
+			Revision:    "42",
+			Description: "Testing package tests",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"test-file": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "hello world",
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				DataDirs: map[string]dalec.ArtifactConfig{
+					"test-file": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Test that tests fail the build",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/share/test-file": {},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
+			res := solveT(ctx, t, client, sr)
+			_, err := res.SingleRef()
+			assert.NilError(t, err)
+
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			res = solveT(ctx, t, client, sr)
+			_, err = res.SingleRef()
+			assert.NilError(t, err)
+		})
 	})
 }

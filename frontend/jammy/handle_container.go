@@ -3,12 +3,10 @@ package jammy
 import (
 	"context"
 	"encoding/json"
-	"io/fs"
 	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -37,57 +35,12 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		worker, err := workerBase(sOpt, opt)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		var includeTestRepo bool
-
-		workerFS, err := bkfs.FromState(ctx, &worker, client)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Check if there there is a test repo in the worker image.
-		// We'll mount that into the target container while installing packages.
-		_, repoErr := fs.Stat(workerFS, testRepoPath[1:])
-		_, listErr := fs.Stat(workerFS, testRepoSourceListPath[1:])
-		if listErr == nil && repoErr == nil {
-			// This is a test and we need to include the repo from the worker image
-			// into target container.
-			includeTestRepo = true
-			frontend.Warn(ctx, client, worker, "Including test repo from worker image")
-		}
-
-		st := buildImageRootfs(worker, spec, sOpt, deb, targetKey, includeTestRepo, opt)
-
-		def, err := st.Marshal(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		img, err := buildImageConfig(ctx, client, spec, platform, targetKey)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		res, err := client.Solve(ctx, gwclient.SolveRequest{
-			Definition: def.ToPB(),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ref, err := res.SingleRef()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if err := frontend.RunTests(ctx, client, spec, ref, installTestDeps(spec, targetKey, opt), targetKey); err != nil {
-			return nil, nil, err
-		}
-
+		ref, err := runTests(ctx, client, spec, sOpt, deb, targetKey, opt)
 		return ref, img, err
 	})
 }

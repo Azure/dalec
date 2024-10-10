@@ -31,12 +31,7 @@ func handleDepsOnly(w worker) gwclient.BuildFunc {
 			).
 				AddMount("/tmp/rpms", llb.Scratch())
 
-			files, err := readRPMs(ctx, client, rpmDir)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, files, sOpt, pg)
+			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, sOpt, pg)
 			if err != nil {
 				return nil, nil, err
 			}
