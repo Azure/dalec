@@ -62,24 +62,12 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			base, err := w.Base(sOpt, pg)
+			withDeps, err := withTestDeps(w, spec, sOpt, targetKey)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			withTestDeps := func(in llb.State) llb.State {
-				deps := spec.GetTestDeps(targetKey)
-				if len(deps) == 0 {
-					return in
-				}
-				return base.Run(
-					w.Install(spec.GetTestDeps(targetKey), atRoot("/tmp/rootfs")),
-					pg,
-					dalec.ProgressGroup("Install test dependencies"),
-				).AddMount("/tmp/rootfs", in)
-			}
-
-			if err := frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey); err != nil {
+			if err := frontend.RunTests(ctx, client, spec, ref, withDeps, targetKey); err != nil {
 				return nil, nil, err
 			}
 

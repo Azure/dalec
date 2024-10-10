@@ -24,7 +24,8 @@ func handleDeb(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, err
 		}
 
-		st, err := buildDeb(ctx, client, spec, sOpt, targetKey, dalec.ProgressGroup("Building Jammy deb package: "+spec.Name))
+		opt := dalec.ProgressGroup("Building Jammy deb package: " + spec.Name)
+		st, err := buildDeb(ctx, client, spec, sOpt, targetKey, opt)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -45,6 +46,11 @@ func handleDeb(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		if err != nil {
 			return nil, nil, err
 		}
+
+		if err := frontend.RunTests(ctx, client, spec, ref, installTestDeps(spec, targetKey, opt), targetKey); err != nil {
+			return nil, nil, err
+		}
+
 		if platform == nil {
 			p := platforms.DefaultSpec()
 			platform = &p

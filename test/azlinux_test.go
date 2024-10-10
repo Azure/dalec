@@ -1253,6 +1253,13 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testLinuxSymlinkArtifacts(ctx, t, testConfig)
 	})
+
+	t.Run("test package tests cause build to fail", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testLinuxPackageTestsFail(ctx, t, testConfig)
+	})
+
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -1683,5 +1690,33 @@ func testLinuxSymlinkArtifacts(ctx context.Context, t *testing.T, cfg testLinuxC
 		res := solveT(ctx, t, client, sr)
 		_, err := res.SingleRef()
 		assert.NilError(t, err)
+	})
+}
+
+func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	spec := &dalec.Spec{
+		Name:        "test-package-tests",
+		Version:     "0.0.1",
+		Revision:    "42",
+		Description: "Testing package tests",
+		License:     "MIT",
+		Tests: []*dalec.TestSpec{
+			{
+				Name: "Test that tests fail the build",
+				Files: map[string]dalec.FileCheckOutput{
+					"/non-existing-file": {},
+				},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
+		_, err := client.Solve(ctx, sr)
+		assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+		_, err = client.Solve(ctx, sr)
+		assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
 	})
 }
