@@ -178,10 +178,11 @@ func installTestDeps(spec *dalec.Spec, targetKey string, opts ...llb.Constraints
 			return in
 		}
 
+		depsList := dalec.SortMapKeys(deps)
 		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
 
 		return in.Run(
-			dalec.ShArgs("apt-get update && apt-get install -y --no-install-recommends "+strings.Join(deps, " ")),
+			dalec.ShArgs("apt-get update && apt-get install -y --no-install-recommends "+strings.Join(depsList, " ")),
 			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
 			dalec.WithMountedAptCache(AptCachePrefix),
 		).Root()

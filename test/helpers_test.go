@@ -209,6 +209,15 @@ func withBuildArg(k, v string) srOpt {
 	}
 }
 
+func withYaml(ctx context.Context, t *testing.T, specYaml string) srOpt {
+	spec, err := dalec.LoadSpec([]byte(specYaml))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return withSpec(ctx, t, spec)
+}
+
 func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {
 	return func(cfg *newSolveRequestConfig) {
 		if spec != nil && !cfg.noFillSpecFields {

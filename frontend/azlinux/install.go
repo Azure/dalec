@@ -16,6 +16,10 @@ type installConfig struct {
 	// this is needed when installing unsigned RPMs.
 	noGPGCheck bool
 
+	// path for gpg keys to import for using a repo. These keys
+	// must also be added as mounts
+	keys []string
+
 	// Sets the root path to install rpms too.
 	// this acts like installing to a chroot.
 	root string
@@ -30,6 +34,14 @@ type installOpt func(*installConfig)
 
 func noGPGCheck(cfg *installConfig) {
 	cfg.noGPGCheck = true
+}
+
+func importKeys(keys []string) installOpt {
+	return func(cfg *installConfig) {
+		for _, key := range keys {
+			cfg.keys = append(cfg.keys, key)
+		}
+	}
 }
 
 func withMounts(opts ...llb.RunOption) installOpt {
@@ -109,13 +121,32 @@ rm -rf `+rpmdbDir+`
 `)), opts...)
 }
 
+func importScript(keyPaths []string) string {
+	keyRoot := "/etc/pki/rpm-gpg"
+
+	var importScript string = "#!/usr/bin/env sh\nset -u\n"
+	for _, keyPath := range keyPaths {
+		keyName := filepath.Base(keyPath)
+		importScript += fmt.Sprintf("gpg --import %s\n", filepath.Join(keyRoot, keyName))
+	}
+
+	return importScript
+}
+
 const manifestSh = "manifest.sh"
 
 func tdnfInstall(cfg *installConfig, relVer string, pkgs []string) llb.RunOption {
 	cmdFlags := tdnfInstallFlags(cfg)
-	cmdArgs := fmt.Sprintf("set -ex; tdnf install -y --refresh --releasever=%s %s %s", relVer, cmdFlags, strings.Join(pkgs, " "))
+	cmdArgs := fmt.Sprintf("set -ex; tdnf makecache; tdnf repolist; tdnf install -y --refresh --releasever=%s %s %s", relVer, cmdFlags, strings.Join(pkgs, " "))
 
 	var runOpts []llb.RunOption
+
+	if len(cfg.keys) > 0 {
+		importScript := importScript(cfg.keys)
+		cmdArgs = "/tmp/import-keys.sh; " + cmdArgs
+		runOpts = append(runOpts, llb.AddMount("/tmp/import-keys.sh", llb.Scratch().File(llb.Mkfile("/import-keys.sh", 0755, []byte(importScript))),
+			llb.SourcePath("/import-keys.sh")))
+	}
 
 	if cfg.manifest {
 		mfstScript := manifestScript(cfg.root, cfg.constraints...)

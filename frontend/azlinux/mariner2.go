@@ -46,15 +46,15 @@ func (w mariner2) Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.S
 	}
 
 	return base.Run(
-		w.Install([]string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, dalec.NoOption(), installWithConstraints(opts)),
+		w.Install([]string{"rpm-build", "mariner-rpm-macros", "build-essential", "ca-certificates"}, installWithConstraints(opts)),
 		dalec.WithConstraints(opts...),
 	).Root(), nil
 }
 
-func (w mariner2) Install(pkgs []string, repoOpts llb.RunOption, opts ...installOpt) llb.RunOption {
+func (w mariner2) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 	var cfg installConfig
 	setInstallOptions(&cfg, opts)
-	return dalec.WithRunOptions(repoOpts, tdnfInstall(&cfg, "2.0", pkgs), w.tdnfCacheMount(cfg.root))
+	return dalec.WithRunOptions(tdnfInstall(&cfg, "2.0", pkgs), w.tdnfCacheMount(cfg.root))
 }
 
 func (w mariner2) BasePackages() []string {

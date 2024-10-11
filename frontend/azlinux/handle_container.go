@@ -67,13 +67,31 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
+			testRepos := spec.GetTestRepos(targetKey)
+			withRepos, err := withRepoConfig(testRepos, sOpt, pg)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			withData, err := withRepoData(testRepos, sOpt, pg)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			keyMounts, keyPaths, err := withRepoKeys(testRepos, sOpt, pg)
+			if err != nil {
+				return nil, nil, err
+			}
+
 			withTestDeps := func(in llb.State) llb.State {
 				deps := spec.GetTestDeps(targetKey)
 				if len(deps) == 0 {
 					return in
 				}
+
+				testDeps := dalec.SortMapKeys(spec.GetTestDeps(targetKey))
 				return base.Run(
-					w.Install(spec.GetTestDeps(targetKey), dalec.NoOption(), atRoot("/tmp/rootfs")),
+					w.Install(testDeps, atRoot("/tmp/rootfs"), withMounts(withRepos, withData, keyMounts), importKeys(keyPaths)),
 					pg,
 					dalec.ProgressGroup("Install test dependencies"),
 				).AddMount("/tmp/rootfs", in)
@@ -149,6 +167,22 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 		rootfs = llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	}
 
+	installTimeRepos := spec.GetInstallRepos(targetKey)
+	repoOpts, err := withRepoConfig(installTimeRepos, sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	repoDataOpts, err := withRepoData(installTimeRepos, sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	keyMounts, keyPaths, err := withRepoKeys(installTimeRepos, sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
 	if len(files) > 0 {
 		rpmMountDir := "/tmp/rpms"
 		updated := w.BasePackages()
@@ -157,7 +191,7 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 		}
 
 		rootfs = builderImg.Run(
-			w.Install(updated, dalec.NoOption(), atRoot(workPath), noGPGCheck, withManifests, installWithConstraints(opts)),
+			w.Install(updated, atRoot(workPath), withMounts(repoOpts, repoDataOpts, keyMounts), importKeys(keyPaths), noGPGCheck, withManifests, installWithConstraints(opts)),
 			llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
 			dalec.WithConstraints(opts...),
 		).AddMount(workPath, rootfs)

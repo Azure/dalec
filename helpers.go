@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"slices"
 	"sort"
 	"sync/atomic"
 
@@ -112,6 +111,14 @@ func (f NoRunOption) SetRunOption(ei *llb.ExecInfo) {
 
 func NoOption() llb.RunOption {
 	return NoRunOption(func(*llb.ExecInfo) {})
+}
+
+type MaybeRunOption func(*llb.ExecInfo)
+
+func (f MaybeRunOption) SetRunOption(ei *llb.ExecInfo) {
+	if f != nil {
+		f(ei)
+	}
 }
 
 func WithCopyAction(opts ...llb.CopyOption) llb.CopyOption {
@@ -340,7 +347,31 @@ func (s *Spec) GetBuildRepos(targetKey string) []PackageRepositoryConfig {
 	return deps.GetExtraRepos("build")
 }
 
-func (s *Spec) GetTestDeps(targetKey string) []string {
+func (s *Spec) GetInstallRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("install")
+}
+
+func (s *Spec) GetTestRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("test")
+}
+
+func (s *Spec) GetTestDeps(targetKey string) map[string]PackageConstraints {
 	var deps *PackageDependencies
 	if t, ok := s.Targets[targetKey]; ok {
 		deps = t.Dependencies
@@ -353,9 +384,7 @@ func (s *Spec) GetTestDeps(targetKey string) []string {
 		}
 	}
 
-	out := slices.Clone(deps.Test)
-	slices.Sort(out)
-	return out
+	return deps.Test
 }
 
 func (s *Spec) GetImagePost(target string) *PostInstall {

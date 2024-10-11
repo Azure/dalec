@@ -306,7 +306,7 @@ type PackageDependencies struct {
 	// These packages are only installed for tests which have steps that require
 	// running a command in the built container.
 	// See [TestSpec] for more information.
-	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
+	Test map[string]PackageConstraints `yaml:"test,omitempty" json:"test,omitempty"`
 
 	// ExtraRepos is used to inject extra package repositories that may be used to
 	// satisfy package dependencies in various stages.

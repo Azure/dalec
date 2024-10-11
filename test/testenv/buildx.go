@@ -255,6 +255,27 @@ func WithSolveStatusFn(f func(*SolveStatus)) TestRunnerOpt {
 	}
 }
 
+func (b *BuildxEnv) RunTestExpecting(ctx context.Context, t *testing.T, f TestFunc, pattern string) {
+	found := false
+	handleStatus := func(status *client.SolveStatus) {
+		if found {
+			return
+		}
+
+		for _, w := range status.Logs {
+			if strings.Contains(string(w.Data), "Plugin error: repogpgcheck plugin error: failed to verify signature") {
+				found = true
+				return
+			}
+		}
+	}
+	b.RunTest(ctx, t, f, WithSolveStatusFn(handleStatus))
+
+	if !found {
+		t.Fatalf("expected pattern '%q' not found in solve status logs", pattern)
+	}
+}
+
 func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts ...TestRunnerOpt) {
 	var cfg TestRunnerConfig
 
