@@ -367,6 +367,13 @@ echo "$BAR" > bar.txt
 			solveT(ctx, t, client, req)
 		})
 	})
+
+	t.Run("test image configs", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := startTestSpan(baseCtx, t)
+		testImageConfig(ctx, t, buildTarget, withWindowsAmd64)
+	})
 }
 
 func runBuild(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, srOpts ...srOpt) {

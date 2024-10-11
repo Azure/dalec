@@ -2,14 +2,18 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/azlinux"
+	"github.com/google/go-cmp/cmp"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 	"gotest.tools/v3/assert"
@@ -1253,6 +1257,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testLinuxSymlinkArtifacts(ctx, t, testConfig)
 	})
+	t.Run("test image configs", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testImageConfig(ctx, t, testConfig.Target.Container)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -1683,5 +1692,85 @@ func testLinuxSymlinkArtifacts(ctx context.Context, t *testing.T, cfg testLinuxC
 		res := solveT(ctx, t, client, sr)
 		_, err := res.SingleRef()
 		assert.NilError(t, err)
+	})
+}
+
+func testImageConfig(ctx context.Context, t *testing.T, target string, opts ...srOpt) {
+	spec := &dalec.Spec{
+		Name:        "test-image-config",
+		Version:     "0.0.1",
+		Revision:    "42",
+		Description: "Test to make sure image configs are copied over",
+		License:     "MIT",
+		Image: &dalec.ImageConfig{
+			Entrypoint: "some-entrypoint",
+			Cmd:        "some-cmd",
+			Env: []string{
+				"ENV1=VAL1",
+				"ENV2=VAL2",
+			},
+			Labels: map[string]string{
+				"label.1": "value1",
+				"label.2": "value2",
+			},
+			Volumes: map[string]struct{}{
+				"/some/volume": {},
+			},
+			WorkingDir: "/some/work/dir",
+			StopSignal: "SOME-SIG",
+			User:       "some-user",
+		},
+	}
+
+	envToMap := func(envs []string) map[string]string {
+		out := make(map[string]string, len(envs))
+		for _, env := range envs {
+			k, v, _ := strings.Cut(env, "=")
+			out[k] = v
+		}
+		return out
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		opts = append(opts, withSpec(ctx, t, spec))
+		opts = append(opts, withBuildTarget(target))
+		sr := newSolveRequest(opts...)
+		res := solveT(ctx, t, gwc, sr)
+
+		dt, ok := res.Metadata[exptypes.ExporterImageConfigKey]
+		assert.Assert(t, ok, "missing image config in result metadata")
+
+		var img dalec.DockerImageSpec
+		err := json.Unmarshal(dt, &img)
+		assert.NilError(t, err)
+
+		assert.Check(t, cmp.Equal(strings.Join(img.Config.Entrypoint, " "), spec.Image.Entrypoint))
+		assert.Check(t, cmp.Equal(strings.Join(img.Config.Cmd, " "), spec.Image.Cmd))
+
+		// Envs are merged together with the base image
+		// So we need to validate that the values we've set are what we expect
+		// Often there will be at least one other env for `PATH` we won't check
+		expectEnv := envToMap(spec.Image.Env)
+		actualEnv := envToMap(img.Config.Env)
+		for k, v := range expectEnv {
+			assert.Check(t, cmp.Equal(actualEnv[k], v))
+		}
+
+		// Labels are merged with the base image
+		// So we need to check that the labels we've set are added
+		for k, v := range spec.Image.Labels {
+			assert.Check(t, cmp.Equal(v, img.Config.Labels[k]))
+		}
+
+		// Volumes are merged with the base image
+		// So we need to check that the volumes we've set are added
+		for k := range spec.Image.Volumes {
+			_, ok := img.Config.Volumes[k]
+			assert.Check(t, ok, k)
+		}
+
+		assert.Check(t, cmp.Equal(img.Config.WorkingDir, spec.Image.WorkingDir))
+		assert.Check(t, cmp.Equal(img.Config.StopSignal, spec.Image.StopSignal))
+		assert.Check(t, cmp.Equal(img.Config.User, spec.Image.User))
 	})
 }

@@ -101,5 +101,19 @@ func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
 		dst.User = src.User
 	}
 
+	for k, v := range src.Volumes {
+		if dst.Volumes == nil {
+			dst.Volumes = make(map[string]struct{}, len(src.Volumes))
+		}
+		dst.Volumes[k] = v
+	}
+
+	for k, v := range src.Labels {
+		if dst.Labels == nil {
+			dst.Labels = make(map[string]string, len(src.Labels))
+		}
+		dst.Labels[k] = v
+	}
+
 	return nil
 }
