@@ -3,11 +3,13 @@ package jammy
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/deb"
+	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -24,7 +26,8 @@ func handleDeb(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, err
 		}
 
-		st, err := buildDeb(ctx, client, spec, sOpt, targetKey, dalec.ProgressGroup("Building Jammy deb package: "+spec.Name))
+		opt := dalec.ProgressGroup("Building Jammy deb package: " + spec.Name)
+		st, err := buildDeb(ctx, client, spec, sOpt, targetKey, opt)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -45,12 +48,65 @@ func handleDeb(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 		if err != nil {
 			return nil, nil, err
 		}
+
+		if ref, err := runTests(ctx, client, spec, sOpt, st, targetKey, opt); err != nil {
+			cfg, _ := buildImageConfig(ctx, client, spec, platform, targetKey)
+			return ref, cfg, err
+		}
+
 		if platform == nil {
 			p := platforms.DefaultSpec()
 			platform = &p
 		}
 		return ref, &dalec.DockerImageSpec{Image: ocispecs.Image{Platform: *platform}}, nil
 	})
+}
+
+func runTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, targetKey string, opts ...llb.ConstraintsOpt) (gwclient.Reference, error) {
+	worker, err := workerBase(sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	var includeTestRepo bool
+
+	workerFS, err := bkfs.FromState(ctx, &worker, client)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if there there is a test repo in the worker image.
+	// We'll mount that into the target container while installing packages.
+	_, repoErr := fs.Stat(workerFS, testRepoPath[1:])
+	_, listErr := fs.Stat(workerFS, testRepoSourceListPath[1:])
+	if listErr == nil && repoErr == nil {
+		// This is a test and we need to include the repo from the worker image
+		// into target container.
+		includeTestRepo = true
+		frontend.Warn(ctx, client, worker, "Including test repo from worker image")
+	}
+
+	st := buildImageRootfs(worker, spec, sOpt, deb, targetKey, includeTestRepo, opts...)
+
+	def, err := st.Marshal(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Solve(ctx, gwclient.SolveRequest{
+		Definition: def.ToPB(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, err
+	}
+
+	err = frontend.RunTests(ctx, client, spec, ref, installTestDeps(spec, targetKey, opts...), targetKey)
+	return ref, err
 }
 
 func installPackages(ls ...string) llb.RunOption {

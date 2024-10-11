@@ -11,6 +11,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
 func handleRPM(w worker) gwclient.BuildFunc {
@@ -47,9 +48,68 @@ func handleRPM(w worker) gwclient.BuildFunc {
 			if err != nil {
 				return nil, nil, err
 			}
+
+			if imgRef, err := runTests(ctx, client, w, spec, sOpt, st, targetKey, pg); err != nil {
+				// return the container ref in case of error so it can be used to debug
+				// the installed package state.
+				cfg, _ := resolveBaseConfig(ctx, w, client, platform, spec, targetKey)
+				return imgRef, cfg, err
+			}
+
 			return ref, &dalec.DockerImageSpec{}, nil
 		})
 	}
+}
+
+// runTests runs the package tests
+// The returned reference is the solved container state
+func runTests(ctx context.Context, client gwclient.Client, w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, rpmDir llb.State, targetKey string, opts ...llb.ConstraintsOpt) (gwclient.Reference, error) {
+	withDeps, err := withTestDeps(w, spec, sOpt, targetKey)
+	if err != nil {
+		return nil, err
+	}
+
+	imgSt, err := specToContainerLLB(w, spec, targetKey, rpmDir, sOpt, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating container image state")
+	}
+
+	def, err := imgSt.Marshal(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Solve(ctx, gwclient.SolveRequest{Definition: def.ToPB()})
+	if err != nil {
+		return nil, errors.Wrap(err, "error solving container state")
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, err
+	}
+
+	err = frontend.RunTests(ctx, client, spec, ref, withDeps, targetKey)
+	return ref, errors.Wrap(err, "TESTS FAILED")
+}
+
+func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	base, err := w.Base(sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return func(in llb.State) llb.State {
+		deps := spec.GetTestDeps(targetKey)
+		if len(deps) == 0 {
+			return in
+		}
+		return base.Run(
+			w.Install(spec.GetTestDeps(targetKey), atRoot("/tmp/rootfs")),
+			dalec.WithConstraints(opts...),
+			dalec.ProgressGroup("Install test dependencies"),
+		).AddMount("/tmp/rootfs", in)
+
+	}, nil
 }
 
 // Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
