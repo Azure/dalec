@@ -1749,7 +1749,7 @@ func testImageConfig(ctx context.Context, t *testing.T, target string, opts ...s
 
 		// Envs are merged together with the base image
 		// So we need to validate that the values we've set are what we expect
-		// Often there will at least one other env for `PATH` we won't check
+		// Often there will be at least one other env for `PATH` we won't check
 		expectEnv := envToMap(spec.Image.Env)
 		actualEnv := envToMap(img.Config.Env)
 		for k, v := range expectEnv {
@@ -1762,7 +1762,7 @@ func testImageConfig(ctx context.Context, t *testing.T, target string, opts ...s
 			assert.Check(t, cmp.Equal(v, img.Config.Labels[k]))
 		}
 
-		// volumes are merged with the base image
+		// Volumes are merged with the base image
 		// So we need to check that the volumes we've set are added
 		for k := range spec.Image.Volumes {
 			_, ok := img.Config.Volumes[k]
