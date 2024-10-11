@@ -750,8 +750,7 @@
 			"type": "object",
 			"required": [
 				"url",
-				"commit",
-				"keepGitDir"
+				"commit"
 			]
 		},
 		"SourceHTTP": {

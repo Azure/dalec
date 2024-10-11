@@ -144,7 +144,7 @@ type SourceDockerImage struct {
 type SourceGit struct {
 	URL        string  `yaml:"url" json:"url"`
 	Commit     string  `yaml:"commit" json:"commit"`
-	KeepGitDir bool    `yaml:"keepGitDir" json:"keepGitDir"`
+	KeepGitDir bool    `yaml:"keepGitDir,omitempty" json:"keepGitDir,omitempty"`
 	Auth       GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
 }
 
