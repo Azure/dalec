@@ -1195,6 +1195,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 
 	t.Run("custom repo", func(t *testing.T) {
 		t.Parallel()
+
 		ctx := startTestSpan(baseCtx, t)
 		testCustomRepo(ctx, t, testConfig)
 	})
@@ -1362,6 +1363,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 				},
 			},
 		},
+
 		Artifacts: dalec.Artifacts{
 			Docs: map[string]dalec.ArtifactConfig{
 				"version.txt": {},
@@ -1403,7 +1405,6 @@ repo_gpgcheck=1
 priority=0
 enabled=1
 gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
-gpgcheck=1
 	`,
 									},
 								},
@@ -1435,9 +1436,11 @@ gpgcheck=1
 			Tests: []*dalec.TestSpec{
 				{
 					Name: "Check test dependency installed from custom repo",
+					// Dummy command here to force test steps to run and install test stage dependency
+					// from custom repo
 					Steps: []dalec.TestStep{
 						{
-							Command: `ls -lrt`,
+							Command: "ls -lrt",
 						},
 					},
 				},
@@ -1449,25 +1452,27 @@ gpgcheck=1
 	getRepoState := func(ctx context.Context, client gwclient.Client, w llb.State, key llb.State) llb.State {
 		sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(cfg.Target.Package))
 		pkg := reqToState(ctx, client, sr, t)
+
+		// create a repo using our existing worker
 		workerWithRepo := w.With(cfg.Worker.CreateRepo(pkg, signRepo(key)))
 
+		// copy out just the contents of the repo
 		return llb.Scratch().File(llb.Copy(workerWithRepo, "/opt/repo", "/", &llb.CopyInfo{CopyDirContentsOnly: true}))
 	}
 
-	// testNoPublicKey := func(ctx context.Context, gwc gwclient.Client) {
-	// 	sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
-	// 	w := reqToState(ctx, gwc, sr, t)
+	testNoPublicKey := func(ctx context.Context, gwc gwclient.Client) {
+		sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
+		w := reqToState(ctx, gwc, sr, t)
 
-	// 	// generate a gpg key to sign the repo
-	// 	// under /public.key
-	// 	gpgKey := generateGPGKey(w)
+		// generate a gpg public/private key pair
+		gpgKey := generateGPGKey(w)
 
-	// 	repoState := getRepoState(ctx, gwc, w, gpgKey)
+		repoState := getRepoState(ctx, gwc, w, gpgKey)
 
-	// 	sr = newSolveRequest(withSpec(ctx, t, getSpec(nil)), withBuildContext(ctx, t, "test-repo", repoState), withBuildTarget(cfg.Target.Container))
-	// 	// deliberately ignore the result
-	// 	_, _ = gwc.Solve(ctx, sr)
-	// }
+		sr = newSolveRequest(withSpec(ctx, t, getSpec(nil)), withBuildContext(ctx, t, "test-repo", repoState), withBuildTarget(cfg.Target.Container))
+		// deliberately ignore the result
+		_, _ = gwc.Solve(ctx, sr)
+	}
 
 	testWithPublicKey := func(ctx context.Context, gwc gwclient.Client) {
 		sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
@@ -1479,6 +1484,7 @@ gpgcheck=1
 		repoState := getRepoState(ctx, gwc, w, gpgKey)
 
 		spec := getSpec(map[string]dalec.Source{
+			// in the dalec spec, the public key will be passed in via build context
 			"PUBLIC-RPM-GPG-KEY": {
 				Context: &dalec.SourceContext{
 					Name: "repo-public-key",
@@ -1496,19 +1502,10 @@ gpgcheck=1
 		if err != nil {
 			t.Fatal(err)
 		}
-
 	}
 
-	// t.Run("no public key", func(t *testing.T) {
-	// 	t.Parallel()
-	// 	testEnv.RunTestExpecting(ctx, t, testNoPublicKey, "Plugin error: repogpgcheck plugin error: failed to verify signature")
-	// })
-
+	testEnv.RunTestExpecting(ctx, t, testNoPublicKey, "Plugin error: repogpgcheck plugin error: failed to verify signature")
 	testEnv.RunTest(ctx, t, testWithPublicKey)
-	// t.Run("with public key", func(t *testing.T) {
-	// 	t.Parallel()
-	// 	// in this case, we expect the solve to succeed
-	// })
 }
 
 func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
@@ -1562,35 +1559,6 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 						Version: []string{constraints},
 					},
 				},
-
-				// 			ExtraRepos: []dalec.PackageRepositoryConfig{
-				// 				{
-				// 					Config: map[string]dalec.Source{
-				// 						"local.repo": dalec.Source{
-				// 							Inline: &dalec.SourceInline{
-				// 								File: &dalec.SourceInlineFile{
-				// 									Contents: `[Local]
-				// name=Local Repository
-				// baseurl=file:///opt/repo
-				// gpgcheck=0
-				// priority=0
-				// enabled=1
-				// `,
-				// 								},
-				// 							},
-				// 						},
-				// 					},
-				// 					Data: []dalec.SourceMount{
-				// 						{
-				// 							Dest: "/opt/repo",
-				// 							Spec: dalec.Source{
-				// 								Context: &dalec.SourceContext{
-				// 									Name: "test-repo",
-				// 								},
-				// 							},
-				// 						},
-				// 					},
-				// 				},
 			},
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
@@ -1646,22 +1614,6 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 
 		return w.With(cfg.Worker.CreateRepo(llb.Merge(pkgs)))
 	}
-
-	// getWorker := func(ctx context.Context, client gwclient.Client) llb.State {
-	// 	// Build the worker target, this will give us the worker image as an output.
-	// 	// Note: Currently we need to provide a dalec spec just due to how the router is setup.
-	// 	//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
-	// 	sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
-	// 	w := reqToState(ctx, client, sr, t)
-
-	// 	var pkgs []llb.State
-	// 	for _, depSpec := range depSpecs {
-	// 		sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(cfg.Target.Package))
-	// 		pkg := reqToState(ctx, client, sr, t)
-	// 		pkgs = append(pkgs, pkg)
-	// 	}
-	// 	return w.With(cfg.Worker.CreateRepo(llb.Merge(pkgs)))
-	// }
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

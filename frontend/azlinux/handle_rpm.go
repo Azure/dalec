@@ -142,7 +142,7 @@ func withRepoKeys(configs []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts
 	for _, config := range configs {
 		for name, repoKey := range config.Keys {
 			// each of these sources represent a gpg key file for a particular repo
-			gpgKey, err := repoKey.AsState(name, sOpt, dalec.ProgressGroup("Importing repo key: "+name))
+			gpgKey, err := repoKey.AsState(name, sOpt, append(opts, dalec.ProgressGroup("Importing repo key: "+name))...)
 			if err != nil {
 				return nil, nil, err
 			}

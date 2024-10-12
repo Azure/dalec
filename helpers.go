@@ -94,41 +94,6 @@ func WithRunOptions(opts ...llb.RunOption) llb.RunOption {
 	})
 }
 
-func WithFileActions(actions ...*llb.FileAction) llb.StateOption {
-	return func(s llb.State) llb.State {
-		for _, act := range actions {
-			s = s.File(act)
-		}
-
-		return s
-	}
-}
-
-type NoRunOption func(*llb.ExecInfo)
-
-func (f NoRunOption) SetRunOption(ei *llb.ExecInfo) {
-}
-
-func NoOption() llb.RunOption {
-	return NoRunOption(func(*llb.ExecInfo) {})
-}
-
-type MaybeRunOption func(*llb.ExecInfo)
-
-func (f MaybeRunOption) SetRunOption(ei *llb.ExecInfo) {
-	if f != nil {
-		f(ei)
-	}
-}
-
-func WithCopyAction(opts ...llb.CopyOption) llb.CopyOption {
-	return copyOptionFunc(func(fa *llb.CopyInfo) {
-		for _, opt := range opts {
-			opt.SetCopyOption(fa)
-		}
-	})
-}
-
 type constraintsOptFunc func(*llb.Constraints)
 
 func (f constraintsOptFunc) SetConstraintsOption(c *llb.Constraints) {
