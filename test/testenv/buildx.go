@@ -263,7 +263,7 @@ func (b *BuildxEnv) RunTestExpecting(ctx context.Context, t *testing.T, f TestFu
 		}
 
 		for _, w := range status.Logs {
-			if strings.Contains(string(w.Data), "Plugin error: repogpgcheck plugin error: failed to verify signature") {
+			if strings.Contains(string(w.Data), pattern) {
 				found = true
 				return
 			}

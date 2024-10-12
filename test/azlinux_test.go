@@ -1312,13 +1312,9 @@ func signRepo(gpgKey llb.State) llb.StateOption {
 			llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
 			dalec.ProgressGroup("Importing gpg key")).
 			Run(
-				dalec.ShArgs("gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2"), dalec.ProgressGroup("Listing keys")).
-			Run(
-				dalec.ShArgs("gpg --list-keys --keyid-format LONG"), dalec.ProgressGroup("Listing ALL keys")).
-			Run(
-				dalec.ShArgs(`ls -lrt /opt/repo; ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2) && \
-				echo "id is: $ID" && gpg --list-keys --keyid-format LONG && \
-gpg --detach-sign --default-key "$ID" --armor --yes /opt/repo/repodata/repomd.xml`),
+				dalec.ShArgs(`ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2) && \
+					gpg --list-keys --keyid-format LONG && \
+					gpg --detach-sign --default-key "$ID" --armor --yes /opt/repo/repodata/repomd.xml`),
 				llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
 			).Root()
 	}
@@ -1470,7 +1466,8 @@ gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
 		repoState := getRepoState(ctx, gwc, w, gpgKey)
 
 		sr = newSolveRequest(withSpec(ctx, t, getSpec(nil)), withBuildContext(ctx, t, "test-repo", repoState), withBuildTarget(cfg.Target.Container))
-		// deliberately ignore the result
+		// don't error here, the logs are intended to be checked by
+		// RunTestExpecting
 		_, _ = gwc.Solve(ctx, sr)
 	}
 
