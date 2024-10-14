@@ -171,6 +171,15 @@ func fillDefaults(s *Source) {
 		fillDefaults(&s.Build.Source)
 	case s.Inline != nil:
 	}
+
+	// Fill in default paths for gomod generators
+	for _, generator := range s.Generate {
+		if generator.Gomod != nil {
+			if generator.Gomod.Paths == nil {
+				generator.Gomod.Paths = []string{"."}
+			}
+		}
+	}
 }
 
 func (s *Source) validate(failContext ...string) (retErr error) {
