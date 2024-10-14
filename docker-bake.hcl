@@ -134,9 +134,9 @@ target "test-fixture" {
     matrix = {
         f = DALEC_DISABLE_NESTED == "1" ? (
             ["http-src", "frontend", "local-context", "cmd-src-ref"]
-         ) : (
-            ["http-src", "frontend", "local-context", "cmd-src-ref", "nested"]
-         )
+        ) : (
+            ["http-src", "frontend", "local-context", "cmd-src-ref", "nested", "multi-go-modules"]
+        )
         tgt = ["mariner2/container"]
     }
     dockerfile = "test/fixtures/${f}.yml"
@@ -238,4 +238,3 @@ target "frontend-ci-full" {
     cache-to = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE},mode=max"]
     platforms = ["linux/amd64", "linux/arm64"]
 }
-

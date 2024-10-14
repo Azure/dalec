@@ -1,0 +1,46 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-test-multi-go-modules-build
+description: A test fixture which tests multi go modules
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+noarch: true
+sources:
+  src:
+    path: test/fixtures/multi-modules/project
+    context: {}
+    generate:
+      - gomod:
+          paths:
+            - module1
+            - module2
+
+dependencies:
+  build:
+    golang:
+
+build:
+  steps:
+    - command: |
+        set -ex
+        cd src/module1
+        go run ./main.go >> ../logfile 2>&1
+        cd ../module2
+        go run ./main.go >> ../logfile 2>&1
+
+artifacts:
+  binaries:
+    src/logfile: {}
+
+tests:
+  - name: package files
+    files:
+      /usr/bin/logfile:
+        contains:
+        - Hello from module1
+        - test from module2
