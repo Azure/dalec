@@ -395,7 +395,15 @@
 			"description": "Frontend encapsulates the configuration for a frontend to forward a build target to."
 		},
 		"GeneratorGomod": {
-			"properties": {},
+			"properties": {
+				"paths": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Paths is the list of paths to run the generator on. Used to generate multi-module in a single source."
+				}
+			},
 			"additionalProperties": false,
 			"type": "object",
 			"description": "GeneratorGomod is used to generate a go module cache from go module sources"

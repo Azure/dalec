@@ -247,6 +247,39 @@ github.com/cpuguy83/tar2go v0.3.1 h1:DMWlaIyoh9FBWR4hyfZSOEDA7z8rmCiGF1IJIzlTlR8
 github.com/cpuguy83/tar2go v0.3.1/go.mod h1:2Ys2/Hu+iPHQRa4DjIVJ7UAaKnDhAhNACeK3A0Rr5rM=
 `
 
+const alternativeGomodFixtureMain = `package main
+
+import (
+	"github.com/sirupsen/logrus"
+)
+
+func main() {
+	logrus.Info("Hello from alternative module")
+}
+`
+
+const alternativeGomodFixtureMod = `module faketestgopack
+
+go 1.23.1
+
+require github.com/sirupsen/logrus v1.8.1
+
+require golang.org/x/sys v0.0.0-20191026070338-33540a1f6037 // indirect
+`
+
+const alternativeGomodFixtureSum = `
+github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/sirupsen/logrus v1.8.1 h1:dJKuHgqk1NNQlqoA6BTlM1Wf9DOH3NBjQyu0h9+AZZE=
+github.com/sirupsen/logrus v1.8.1/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
+github.com/stretchr/testify v1.2.2 h1:bSDNvY7ZPG5RlJ8otE/7V6gMiyenm9RtJ7IUVIAoJ1w=
+github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
+golang.org/x/sys v0.0.0-20191026070338-33540a1f6037 h1:YyJpGZS1sBuBCzLAR1VEpK193GlqGZbnPFnPV/5Rsb4=
+golang.org/x/sys v0.0.0-20191026070338-33540a1f6037/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+`
+
 func TestSourceWithGomod(t *testing.T) {
 	t.Parallel()
 
@@ -297,8 +330,29 @@ index ea874f5..ba38f84 100644
 	}
 
 	const srcName = "src1"
-	baseSpec := func() *dalec.Spec {
-		return &dalec.Spec{
+
+	mainGoModuleDir := dalec.SourceInline{
+		Dir: &dalec.SourceInlineDir{
+			Files: map[string]*dalec.SourceInlineFile{
+				"main.go": {Contents: gomodFixtureMain},
+				"go.mod":  {Contents: gomodFixtureMod},
+				"go.sum":  {Contents: gomodFixtureSum},
+			},
+		},
+	}
+
+	secondGoModuleDir := dalec.SourceInline{
+		Dir: &dalec.SourceInlineDir{
+			Files: map[string]*dalec.SourceInlineFile{
+				"main.go": {Contents: alternativeGomodFixtureMain},
+				"go.mod":  {Contents: alternativeGomodFixtureMod},
+				"go.sum":  {Contents: alternativeGomodFixtureSum},
+			},
+		},
+	}
+
+	emptySpec := func(inlineSrc *dalec.SourceInline) dalec.Spec {
+		return dalec.Spec{
 			Sources: map[string]dalec.Source{
 				srcName: {
 					Generate: []*dalec.SourceGenerator{
@@ -306,24 +360,34 @@ index ea874f5..ba38f84 100644
 							Gomod: &dalec.GeneratorGomod{},
 						},
 					},
-					Inline: &dalec.SourceInline{
-						Dir: &dalec.SourceInlineDir{
-							Files: map[string]*dalec.SourceInlineFile{
-								"main.go": {Contents: gomodFixtureMain},
-								"go.mod":  {Contents: gomodFixtureMod},
-								"go.sum":  {Contents: gomodFixtureSum},
-							},
-						},
-					},
+					Inline: inlineSrc,
 				},
 			},
 		}
+	}
+
+	baseSpec := func() *dalec.Spec {
+		spec := emptySpec(&mainGoModuleDir)
+		return &spec
+	}
+
+	multiModuleSpec := func() *dalec.Spec {
+		spec := emptySpec(&secondGoModuleDir)
+		return &spec
 	}
 
 	t.Run("no patch", func(t *testing.T) {
 		t.Parallel()
 		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.1", baseSpec())
+		})
+	})
+
+	t.Run("with multi modules generation", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := multiModuleSpec()
+			checkModule(ctx, gwc, "github.com/sirupsen/logrus@v1.8.1", spec)
 		})
 	})
 

@@ -34,14 +34,21 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 	return func(in llb.State) llb.State {
 		workDir := "/work/src"
 		joinedWorkDir := filepath.Join(workDir, g.Subpath)
+
 		var srcMount llb.RunOption
 		if g.Subpath != "" {
 			srcMount = llb.AddMount(workDir, srcSt, llb.SourcePath(g.Subpath))
 		} else {
 			srcMount = llb.AddMount(workDir, srcSt)
 		}
-		states := make([]llb.State, 0, len(g.Gomod.Paths))
-		for _, path := range g.Gomod.Paths {
+
+		paths := g.Gomod.Paths
+		if g.Gomod.Paths == nil {
+			paths = []string{"."}
+		}
+		states := make([]llb.State, 0, len(paths))
+
+		for _, path := range paths {
 			currentState := worker.Run(
 				ShArgs("go mod download"),
 				llb.AddEnv("GOMODCACHE", gomodCacheDir),
