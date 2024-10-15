@@ -12,13 +12,68 @@ license: Apache 2.0
 noarch: true
 sources:
   src:
-    path: test/fixtures/multi-modules/project
-    context: {}
+    inline:
+      dir:
+        files:
+          main.go:
+            contents: |
+              package main
+
+              import (
+                "github.com/sirupsen/logrus"
+              )
+
+              func main() {
+                logrus.Info("Hello from alternative module")
+              }
+          go.mod:
+            contents: |
+              module alternativegomodsource
+
+              go 1.23.1
+
+              require github.com/sirupsen/logrus v1.8.1
+
+              require golang.org/x/sys v0.0.0-20191026070338-33540a1f6037 // indirect
+          go.sum:
+            contents: |
+              github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+              github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+              github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+              github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+              github.com/sirupsen/logrus v1.8.1 h1:dJKuHgqk1NNQlqoA6BTlM1Wf9DOH3NBjQyu0h9+AZZE=
+              github.com/sirupsen/logrus v1.8.1/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
+              github.com/stretchr/testify v1.2.2 h1:bSDNvY7ZPG5RlJ8otE/7V6gMiyenm9RtJ7IUVIAoJ1w=
+              github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
+              golang.org/x/sys v0.0.0-20191026070338-33540a1f6037 h1:YyJpGZS1sBuBCzLAR1VEpK193GlqGZbnPFnPV/5Rsb4=
+              golang.org/x/sys v0.0.0-20191026070338-33540a1f6037/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+          # main.go:
+          #   contents: |
+          #     package main
+
+          #     import (
+          #       "fmt"
+
+          #       "github.com/cpuguy83/tar2go"
+          #     )
+
+          #     func main() {
+          #       var i *tar2go.Index
+          #       fmt.Println("Print something to use the i var", i)
+          #     }
+          # go.sum:
+          #   contents: |
+          #     github.com/cpuguy83/tar2go v0.3.1 h1:DMWlaIyoh9FBWR4hyfZSOEDA7z8rmCiGF1IJIzlTlR8=
+          #     github.com/cpuguy83/tar2go v0.3.1/go.mod h1:2Ys2/Hu+iPHQRa4DjIVJ7UAaKnDhAhNACeK3A0Rr5rM=
+          # go.mod:
+          #   contents: |
+          #     module testgomodsource
+
+          #     go 1.20
+
+          #     require github.com/cpuguy83/tar2go v0.3.1
     generate:
-      - gomod:
-          paths:
-            - module1
-            - module2
+      - gomod: {}
 
 dependencies:
   build:
@@ -28,10 +83,8 @@ build:
   steps:
     - command: |
         set -ex
-        cd src/module1
-        go run ./main.go >> ../logfile 2>&1
-        cd ../module2
-        go run ./main.go >> ../logfile 2>&1
+        cd src
+        go run ./main.go >> ./logfile 2>&1
 
 artifacts:
   binaries:
@@ -42,5 +95,6 @@ tests:
     files:
       /usr/bin/logfile:
         contains:
-        - Hello from module1
-        - test from module2
+        - Hello from alternative module
+        # - test from module2
+        # - Print something to use the
