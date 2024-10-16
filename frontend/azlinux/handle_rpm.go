@@ -49,6 +49,10 @@ func handleRPM(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
+			if err := ref.Evaluate(ctx); err != nil {
+				return ref, nil, err
+			}
+
 			if imgRef, err := runTests(ctx, client, w, spec, sOpt, st, targetKey, pg); err != nil {
 				// return the container ref in case of error so it can be used to debug
 				// the installed package state.
