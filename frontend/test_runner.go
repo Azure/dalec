@@ -41,6 +41,14 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		return nil
 	}
 
+	if err := ref.Evaluate(ctx); err != nil {
+		// Force evaluation here so that any errors for the build itself can surface
+		// more cleanly.
+		// Otherwise an error for something wrong in the build (e.g. a failed compilation)
+		// will look like an error in a test (or all tests).
+		return err
+	}
+
 	ctr, err := ref.ToState()
 	if err != nil {
 		return err
