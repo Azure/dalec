@@ -296,8 +296,7 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 	}
 
 	return func(in llb.State) llb.State {
-		return in.
-			Run(installOpt, dalec.WithConstraints(opts...)).Root()
+		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
 	}, nil
 }
 

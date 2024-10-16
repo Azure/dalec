@@ -556,17 +556,17 @@
 		"PackageRepositoryConfig": {
 			"properties": {
 				"keys": {
-					"items": {
+					"additionalProperties": {
 						"$ref": "#/$defs/Source"
 					},
-					"type": "array",
+					"type": "object",
 					"description": "Keys are the list of keys that need to be imported to use the configured\nrepositories"
 				},
 				"config": {
-					"items": {
+					"additionalProperties": {
 						"$ref": "#/$defs/Source"
 					},
-					"type": "array",
+					"type": "object",
 					"description": "Config list of repo configs to to add to the environment.  The format of\nthese configs are distro specific (e.g. apt/yum configs)."
 				},
 				"data": {

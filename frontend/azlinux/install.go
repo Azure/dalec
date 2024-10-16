@@ -124,7 +124,7 @@ func importGPGScript(keyPaths []string) string {
 	// all keys that are included should be mounted under this path
 	keyRoot := "/etc/pki/rpm-gpg"
 
-	var importScript string = "#!/usr/bin/env sh\nset -u\n"
+	var importScript string = "#!/usr/bin/env sh\nset -eux\n"
 	for _, keyPath := range keyPaths {
 		keyName := filepath.Base(keyPath)
 		importScript += fmt.Sprintf("gpg --import %s\n", filepath.Join(keyRoot, keyName))
@@ -147,7 +147,8 @@ func tdnfInstall(cfg *installConfig, relVer string, pkgs []string) llb.RunOption
 	// This is an unfortunate consequence of a bug in tdnf (see https://github.com/vmware/tdnf/issues/471).
 	// The keys *should* be imported automatically by tdnf as long as the repo config references them correctly and
 	// we mount the key files themselves under the right path. However, tdnf does NOT do this
-	// currently and we must manually import the keys as well.
+	// currently if the keys are referenced via a `file:///` type url,
+	// and we must manually import the keys as well.
 	if len(cfg.keys) > 0 {
 		importScript := importGPGScript(cfg.keys)
 		cmdArgs = "/tmp/import-keys.sh; " + cmdArgs
