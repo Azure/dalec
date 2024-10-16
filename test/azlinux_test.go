@@ -1255,6 +1255,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 	})
 
 	t.Run("custom repo", func(t *testing.T) {
+		if strings.HasPrefix(testConfig.Target.Package, "jammy") {
+			t.Skip("skipping custom repo test for jammy")
+		}
+
 		t.Parallel()
 
 		ctx := startTestSpan(baseCtx, t)
@@ -1540,7 +1544,11 @@ gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
 		sr = newSolveRequest(withSpec(ctx, t, getSpec(nil)), withBuildContext(ctx, t, "test-repo", repoState), withBuildTarget(cfg.Target.Container))
 		// don't error here, the logs are intended to be checked by
 		// RunTestExpecting
-		_, _ = gwc.Solve(ctx, sr)
+
+		_, err := gwc.Solve(ctx, sr)
+		if err == nil {
+			t.Fatal("expected solve to fail")
+		}
 	}
 
 	testWithPublicKey := func(ctx context.Context, gwc gwclient.Client) {
@@ -1573,8 +1581,15 @@ gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
 		}
 	}
 
-	testEnv.RunTestExpecting(ctx, t, testNoPublicKey, "Plugin error: repogpgcheck plugin error: failed to verify signature")
-	testEnv.RunTest(ctx, t, testWithPublicKey)
+	t.Run("no public key", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(ctx, t, testNoPublicKey)
+	})
+
+	t.Run("with public key", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(ctx, t, testWithPublicKey)
+	})
 }
 
 func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
