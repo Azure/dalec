@@ -39,9 +39,7 @@ func noGPGCheck(cfg *installConfig) {
 // see comment in tdnfInstall for why this additional option is needed
 func importKeys(keys []string) installOpt {
 	return func(cfg *installConfig) {
-		for _, key := range keys {
-			cfg.keys = append(cfg.keys, key)
-		}
+		cfg.keys = append(cfg.keys, keys...)
 	}
 }
 

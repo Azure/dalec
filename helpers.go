@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync/atomic"
 
@@ -336,7 +337,7 @@ func (s *Spec) GetTestRepos(targetKey string) []PackageRepositoryConfig {
 	return deps.GetExtraRepos("test")
 }
 
-func (s *Spec) GetTestDeps(targetKey string) map[string]PackageConstraints {
+func (s *Spec) GetTestDeps(targetKey string) []string {
 	var deps *PackageDependencies
 	if t, ok := s.Targets[targetKey]; ok {
 		deps = t.Dependencies
@@ -349,7 +350,9 @@ func (s *Spec) GetTestDeps(targetKey string) map[string]PackageConstraints {
 		}
 	}
 
-	return deps.Test
+	out := slices.Clone(deps.Test)
+	slices.Sort(out)
+	return out
 }
 
 func (s *Spec) GetImagePost(target string) *PostInstall {

@@ -1454,10 +1454,10 @@ func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 					"dalec-test-package": {},
 				},
 
-				Test: map[string]dalec.PackageConstraints{
-					"dalec-test-package": {},
-					"bash":               {},
-					"coreutils":          {},
+				Test: []string{
+					"dalec-test-package",
+					"bash",
+					"coreutils",
 				},
 
 				ExtraRepos: []dalec.PackageRepositoryConfig{

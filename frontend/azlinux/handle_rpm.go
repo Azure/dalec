@@ -93,6 +93,26 @@ func runTests(ctx context.Context, client gwclient.Client, w worker, spec *dalec
 	return ref, errors.Wrap(err, "TESTS FAILED")
 }
 
+func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
+	withRepos, err := withRepoConfig(repos, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	withData, err := withRepoData(repos, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	keyMounts, keyPaths, err := getRepoKeys(repos, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	repoMounts := dalec.WithRunOptions(withRepos, withData, keyMounts)
+	return []installOpt{withMounts(repoMounts), importKeys(keyPaths)}, nil
+}
+
 func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
 	base, err := w.Base(sOpt, opts...)
 	if err != nil {
@@ -100,22 +120,10 @@ func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey s
 	}
 
 	testRepos := spec.GetTestRepos(targetKey)
-	withRepos, err := withRepoConfig(testRepos, sOpt, opts...)
+	importRepos, err := repoMountInstallOpts(testRepos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
-
-	withData, err := withRepoData(testRepos, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	keyMounts, keyPaths, err := withRepoKeys(testRepos, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	repoMounts := dalec.WithRunOptions(withRepos, withData, keyMounts)
 
 	return func(in llb.State) llb.State {
 		deps := spec.GetTestDeps(targetKey)
@@ -123,12 +131,9 @@ func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey s
 			return in
 		}
 
-		depNames := dalec.SortMapKeys(deps)
+		installOpts := []installOpt{atRoot("/tmp/rootfs")}
 		return base.Run(
-			w.Install(depNames, atRoot("/tmp/rootfs"),
-				withMounts(repoMounts),
-				importKeys(keyPaths),
-			),
+			w.Install(deps, append(installOpts, importRepos...)...),
 			dalec.WithConstraints(opts...),
 			dalec.ProgressGroup("Install test dependencies"),
 		).AddMount("/tmp/rootfs", in)
@@ -137,7 +142,7 @@ func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey s
 }
 
 // Creates and installs an rpm meta-package that requires the passed in deps as runtime-dependencies
-func installBuildDepsPackage(target string, packageName string, w worker, deps map[string]dalec.PackageConstraints, keyPaths []string, repoMounts llb.RunOption, installOpts ...installOpt) installFunc {
+func installBuildDepsPackage(target string, packageName string, w worker, deps map[string]dalec.PackageConstraints, installOpts ...installOpt) installFunc {
 	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
 	depsOnly := dalec.Spec{
 		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
@@ -167,8 +172,6 @@ func installBuildDepsPackage(target string, packageName string, w worker, deps m
 		installOpts = append([]installOpt{
 			noGPGCheck,
 			withMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
-			withMounts(repoMounts),
-			importKeys(keyPaths),
 			installWithConstraints(opts),
 		}, installOpts...)
 
@@ -220,7 +223,7 @@ func withRepoConfig(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts
 	return dalec.WithRunOptions(configStates...), nil
 }
 
-func withRepoKeys(configs []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
+func getRepoKeys(configs []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
 	keys := []llb.RunOption{}
 	names := []string{}
 	for _, config := range configs {
@@ -280,24 +283,14 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 		return nil, err
 	}
 
-	importRepo, err := withRepoConfig(repos, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	repoData, err := withRepoData(repos, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	repoKeys, keyNames, err := withRepoKeys(repos, sOpt)
+	importRepos, err := repoMountInstallOpts(repos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	opts = append(opts, dalec.ProgressGroup("Install build deps"))
-	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps, keyNames, dalec.WithRunOptions(importRepo, repoData, repoKeys),
-		installWithConstraints(opts))(ctx, client, sOpt)
+	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps,
+		append(importRepos, installWithConstraints(opts))...)(ctx, client, sOpt)
 	if err != nil {
 		return nil, err
 	}
