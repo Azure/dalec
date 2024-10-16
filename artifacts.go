@@ -37,6 +37,10 @@ type Artifacts struct {
 	// the [ImageConfig].
 	Links []ArtifactSymlinkConfig `yaml:"links,omitempty" json:"links,omitempty"`
 
+	// Headers is a list of header files and/or folders to be installed.
+	// On linux this would typically be installed to /usr/include/.
+	Headers map[string]ArtifactConfig `yaml:"headers,omitempty" json:"headers,omitempty"`
+
 	// TODO: other types of artifacts (libexec, etc)
 }
 
@@ -133,6 +137,9 @@ func (a *Artifacts) IsEmpty() bool {
 		return false
 	}
 	if len(a.Links) > 0 {
+		return false
+	}
+	if len(a.Headers) > 0 {
 		return false
 	}
 	return true

@@ -2,14 +2,18 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/azlinux"
+	"github.com/google/go-cmp/cmp"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 	"gotest.tools/v3/assert"
@@ -323,6 +327,14 @@ index 0000000..5260cb1
 						Name: src2Patch3ContextName,
 					},
 				},
+				"src3": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho goodbye",
+							Permissions: 0o700,
+						},
+					},
+				},
 			},
 			Patches: map[string][]dalec.PatchSpec{
 				"src2": {
@@ -401,6 +413,7 @@ echo "$BAR" > bar.txt
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
 						"/usr/bin/src1": {Path: "/src1"},
+						"/usr/bin/src3": {Path: "/non/existing/dir/src3"},
 					},
 				},
 			},
@@ -409,6 +422,7 @@ echo "$BAR" > bar.txt
 				Binaries: map[string]dalec.ArtifactConfig{
 					"src1":       {},
 					"src2/file2": {},
+					"src3":       {},
 					// These are files we created in the build step
 					// They aren't really binaries but we want to test that they are created and have the right content
 					"foo0.txt": {},
@@ -444,12 +458,14 @@ echo "$BAR" > bar.txt
 				{
 					Name: "Post-install symlinks should be created",
 					Files: map[string]dalec.FileCheckOutput{
-						"/src1": {},
+						"/src1":                  {},
+						"/non/existing/dir/src3": {},
 					},
 					Steps: []dalec.TestStep{
 						{Command: "/bin/bash -c 'test -L /src1'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
 						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
+						{Command: "/non/existing/dir/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 					},
 				},
 				{
@@ -515,7 +531,6 @@ echo "$BAR" > bar.txt
 				"src": {
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
-
 							Files: map[string]*dalec.SourceInlineFile{
 								"simple.service": {
 									Contents: `
@@ -530,7 +545,8 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-`},
+`,
+								},
 							},
 						},
 					},
@@ -551,7 +567,7 @@ WantedBy=multi-user.target
 					Files: map[string]dalec.FileCheckOutput{
 						filepath.Join(testConfig.SystemdDir.Units, "system/simple.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 						// symlinked file in multi-user.target.wants should point to simple.service.
 						filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/simple.service"): {
@@ -579,7 +595,7 @@ WantedBy=multi-user.target
 				Files: map[string]dalec.FileCheckOutput{
 					filepath.Join(testConfig.SystemdDir.Units, "system/simple.service"): {
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
-						Permissions: 0644,
+						Permissions: 0o644,
 					},
 					filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/simple.service"): {
 						NotExist: true,
@@ -608,7 +624,7 @@ WantedBy=multi-user.target
 				Files: map[string]dalec.FileCheckOutput{
 					filepath.Join(testConfig.SystemdDir.Units, "system/phony.service"): {
 						CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/service"}},
-						Permissions: 0644,
+						Permissions: 0o644,
 					},
 					filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/phony.service"): {
 						NotExist: true,
@@ -638,7 +654,6 @@ WantedBy=multi-user.target
 				"src": {
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
-
 							Files: map[string]*dalec.SourceInlineFile{
 								"foo.service": {
 									Contents: `
@@ -654,7 +669,8 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-`},
+`,
+								},
 
 								"foo.socket": {
 									Contents: `
@@ -710,7 +726,7 @@ Environment="FOO_ARGS=--some-foo-args"
 					Files: map[string]dalec.FileCheckOutput{
 						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"ExecStart=/usr/bin/foo"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 						filepath.Join(testConfig.SystemdDir.Targets, "multi-user.target.wants/foo.service"): {
 							NotExist: true,
@@ -720,11 +736,11 @@ Environment="FOO_ARGS=--some-foo-args"
 						},
 						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 						filepath.Join(testConfig.SystemdDir.Units, "system/foo.socket.d/env.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 					},
 				},
@@ -752,7 +768,6 @@ Environment="FOO_ARGS=--some-foo-args"
 				"src": {
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
-
 							Files: map[string]*dalec.SourceInlineFile{
 								"foo.conf": {
 									Contents: `
@@ -780,7 +795,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					Files: map[string]dalec.FileCheckOutput{
 						filepath.Join(testConfig.SystemdDir.Units, "system/foo.service.d/foo.conf"): {
 							CheckOutput: dalec.CheckOutput{Contains: []string{"Environment"}},
-							Permissions: 0644,
+							Permissions: 0o644,
 						},
 					},
 				},
@@ -1066,7 +1081,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
-	t.Run("docs and licenses are handled correctly", func(t *testing.T) {
+	t.Run("docs and headers and licenses are handled correctly", func(t *testing.T) {
 		t.Parallel()
 		spec := &dalec.Spec{
 			Name:        "test-docs-handled",
@@ -1110,6 +1125,30 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						},
 					},
 				},
+				"src5": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"header.h": {
+									Contents:    "message=hello",
+									Permissions: 0o644,
+								},
+							},
+						},
+					},
+				},
+				"src6": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"header.h": {
+									Contents:    "message=hello",
+									Permissions: 0o644,
+								},
+							},
+						},
+					},
+				},
 			},
 			Artifacts: dalec.Artifacts{
 				Docs: map[string]dalec.ArtifactConfig{
@@ -1124,15 +1163,37 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						SubPath: "license-subpath",
 					},
 				},
+				Headers: map[string]dalec.ArtifactConfig{
+					// Files with and without ArtifactConfig
+					"src1": {
+						Name:    "renamed-src1",
+						SubPath: "header-subpath-src1",
+					},
+					"src2": {},
+					// Directories with and without ArtifactConfig
+					"src5": {
+						Name:    "renamed-src5",
+						SubPath: "header-subpath-src5",
+					},
+					"src6": {},
+				},
 			},
 			Tests: []*dalec.TestSpec{
 				{
-					Name: "Doc files should be created in correct place",
+					Name: "Doc and lib and header files should be created in correct place",
 					Files: map[string]dalec.FileCheckOutput{
 						"/usr/share/doc/test-docs-handled/src1":                                        {},
 						"/usr/share/doc/test-docs-handled/subpath/src2":                                {},
 						filepath.Join(testConfig.LicenseDir, "test-docs-handled/src3"):                 {},
 						filepath.Join(testConfig.LicenseDir, "test-docs-handled/license-subpath/src4"): {},
+						"/usr/include/header-subpath-src1/renamed-src1":                                {},
+						"/usr/include/src2": {},
+						"/usr/include/header-subpath-src5/renamed-src5": {
+							IsDir: true,
+						},
+						"/usr/include/src6": {
+							IsDir: true,
+						},
 					},
 				},
 			},
@@ -1209,6 +1270,17 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 		testLinuxSymlinkArtifacts(ctx, t, testConfig)
+	})
+	t.Run("test image configs", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testImageConfig(ctx, t, testConfig.Target.Container)
+	})
+
+	t.Run("test package tests cause build to fail", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testLinuxPackageTestsFail(ctx, t, testConfig)
 	})
 }
 
@@ -1506,7 +1578,7 @@ gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
 }
 
 func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
-	var pkgName = "dalec-test-package"
+	pkgName := "dalec-test-package"
 
 	getTestPackageSpec := func(version string) *dalec.Spec {
 		depSpec := &dalec.Spec{
@@ -1623,7 +1695,6 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 				sr := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, "test-repo", repoState), withBuildTarget(cfg.Target.Container))
 				res := solveT(ctx, t, gwc, sr)
 				_, err := res.SingleRef()
-
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1839,5 +1910,165 @@ func testLinuxSymlinkArtifacts(ctx context.Context, t *testing.T, cfg testLinuxC
 		res := solveT(ctx, t, client, sr)
 		_, err := res.SingleRef()
 		assert.NilError(t, err)
+	})
+}
+
+func testImageConfig(ctx context.Context, t *testing.T, target string, opts ...srOpt) {
+	spec := &dalec.Spec{
+		Name:        "test-image-config",
+		Version:     "0.0.1",
+		Revision:    "42",
+		Description: "Test to make sure image configs are copied over",
+		License:     "MIT",
+		Image: &dalec.ImageConfig{
+			Entrypoint: "some-entrypoint",
+			Cmd:        "some-cmd",
+			Env: []string{
+				"ENV1=VAL1",
+				"ENV2=VAL2",
+			},
+			Labels: map[string]string{
+				"label.1": "value1",
+				"label.2": "value2",
+			},
+			Volumes: map[string]struct{}{
+				"/some/volume": {},
+			},
+			WorkingDir: "/some/work/dir",
+			StopSignal: "SOME-SIG",
+			User:       "some-user",
+		},
+	}
+
+	envToMap := func(envs []string) map[string]string {
+		out := make(map[string]string, len(envs))
+		for _, env := range envs {
+			k, v, _ := strings.Cut(env, "=")
+			out[k] = v
+		}
+		return out
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		opts = append(opts, withSpec(ctx, t, spec))
+		opts = append(opts, withBuildTarget(target))
+		sr := newSolveRequest(opts...)
+		res := solveT(ctx, t, gwc, sr)
+
+		dt, ok := res.Metadata[exptypes.ExporterImageConfigKey]
+		assert.Assert(t, ok, "missing image config in result metadata")
+
+		var img dalec.DockerImageSpec
+		err := json.Unmarshal(dt, &img)
+		assert.NilError(t, err)
+
+		assert.Check(t, cmp.Equal(strings.Join(img.Config.Entrypoint, " "), spec.Image.Entrypoint))
+		assert.Check(t, cmp.Equal(strings.Join(img.Config.Cmd, " "), spec.Image.Cmd))
+
+		// Envs are merged together with the base image
+		// So we need to validate that the values we've set are what we expect
+		// Often there will be at least one other env for `PATH` we won't check
+		expectEnv := envToMap(spec.Image.Env)
+		actualEnv := envToMap(img.Config.Env)
+		for k, v := range expectEnv {
+			assert.Check(t, cmp.Equal(actualEnv[k], v))
+		}
+
+		// Labels are merged with the base image
+		// So we need to check that the labels we've set are added
+		for k, v := range spec.Image.Labels {
+			assert.Check(t, cmp.Equal(v, img.Config.Labels[k]))
+		}
+
+		// Volumes are merged with the base image
+		// So we need to check that the volumes we've set are added
+		for k := range spec.Image.Volumes {
+			_, ok := img.Config.Volumes[k]
+			assert.Check(t, ok, k)
+		}
+
+		assert.Check(t, cmp.Equal(img.Config.WorkingDir, spec.Image.WorkingDir))
+		assert.Check(t, cmp.Equal(img.Config.StopSignal, spec.Image.StopSignal))
+		assert.Check(t, cmp.Equal(img.Config.User, spec.Image.User))
+	})
+}
+
+func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	t.Run("negative test", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-package-tests",
+			Version:     "0.0.1",
+			Revision:    "42",
+			Description: "Testing package tests",
+			License:     "MIT",
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Test that tests fail the build",
+					Files: map[string]dalec.FileCheckOutput{
+						"/non-existing-file": {},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
+			_, err := client.Solve(ctx, sr)
+			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			_, err = client.Solve(ctx, sr)
+			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+		})
+	})
+
+	t.Run("positive test", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-package-tests",
+			Version:     "0.0.1",
+			Revision:    "42",
+			Description: "Testing package tests",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"test-file": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "hello world",
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				DataDirs: map[string]dalec.ArtifactConfig{
+					"test-file": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Test that tests fail the build",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/share/test-file": {},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
+			res := solveT(ctx, t, client, sr)
+			_, err := res.SingleRef()
+			assert.NilError(t, err)
+
+			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			res = solveT(ctx, t, client, sr)
+			_, err = res.SingleRef()
+			assert.NilError(t, err)
+		})
 	})
 }

@@ -53,7 +53,7 @@ jobs:
       # Note: There is also a "lint" target in docker-bake.hcl for local linting
       # If you make changes to this, please make sure to also update the local linting target
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
+        uses: golangci/golangci-lint-action@971e284b6050e8a5849b72094c50ab08da042db8 # v6.1.1
         with:
           version: v1.61
           args: --timeout=30m
@@ -90,10 +90,10 @@ jobs:
       # The version of buildkit builtin to moby currently (v24) is too old
       # So we need to setup a custom builder.
       - name: Set up builder
-        uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3.6.1
+        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
       - name: download deps
         run: go mod download
-      - name: Run integaration tests
+      - name: Run integration tests
         run: go test -v -json ./test | go run ./cmd/test2json2gha
       - name: dump logs
         if: failure()

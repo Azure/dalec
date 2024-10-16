@@ -232,3 +232,32 @@ artifacts:
     - source: /usr/lib/golang/go
       dest: /usr/bin/go
 ```
+
+### Headers
+
+Headers are header to be included with the package. On Linux these typically go
+under `/usr/include/`.
+
+Headers are a mapping of file path to [artifact configuration](#artifact-configuration).
+The file path is the path to a file or directory that must be available after
+the build section has finished. This path is relative to the working directory
+of the build phase *before* any directory changes are made.
+
+```yaml
+artifacts:
+  headers:
+    src/my_header.h:
+```
+
+or for a directory:
+
+```yaml
+artifacts:
+  headers:
+    src/my_headers/:
+```
+
+Note that headers are not installed within a subdirectory of `/usr/include/`
+with the name of the package. They are installed directly into `/usr/include/`.
+For instance, for the above examples, the headers would be installed to
+`/usr/include/my_header.h` and `/usr/include/my_headers/` respectively.

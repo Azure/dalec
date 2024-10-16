@@ -546,6 +546,12 @@ func (w *specWrapper) Install() fmt.Stringer {
 		fmt.Fprintln(b, "ln -sf", l.Source, "%{buildroot}/"+l.Dest)
 	}
 
+	headersKeys := dalec.SortMapKeys(w.Spec.Artifacts.Headers)
+	for _, h := range headersKeys {
+		cfg := w.Spec.Artifacts.Headers[h]
+		copyArtifact(`%{buildroot}/%{_includedir}`, h, &cfg)
+	}
+
 	b.WriteString("\n")
 	return b
 }
@@ -671,6 +677,15 @@ func (w *specWrapper) Files() fmt.Stringer {
 
 	for _, l := range w.Spec.Artifacts.Links {
 		fmt.Fprintln(b, l.Dest)
+	}
+
+	if len(w.Spec.Artifacts.Headers) > 0 {
+		headersKeys := dalec.SortMapKeys(w.Spec.Artifacts.Headers)
+		for _, h := range headersKeys {
+			hf := w.Spec.Artifacts.Headers[h]
+			path := filepath.Join(`%{_includedir}`, hf.SubPath, hf.ResolveName(h))
+			fmt.Fprintln(b, path)
+		}
 	}
 
 	b.WriteString("\n")

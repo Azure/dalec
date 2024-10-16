@@ -30,130 +30,18 @@ func handleContainer(w worker) gwclient.BuildFunc {
 				return nil, nil, fmt.Errorf("error creating rpm: %w", err)
 			}
 
-			rpms, err := readRPMs(ctx, client, rpmDir)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			st, err := specToContainerLLB(w, spec, targetKey, rpmDir, rpms, sOpt, pg)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			def, err := st.Marshal(ctx, pg)
-			if err != nil {
-				return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
-			}
-
-			res, err := client.Solve(ctx, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-
 			img, err := resolveBaseConfig(ctx, w, client, platform, spec, targetKey)
 			if err != nil {
 				return nil, nil, errors.Wrap(err, "could not resolve base image config")
 			}
 
-			ref, err := res.SingleRef()
-			if err != nil {
-				return nil, nil, err
-			}
-
-			base, err := w.Base(sOpt, pg)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			testRepos := spec.GetTestRepos(targetKey)
-			withRepos, err := withRepoConfig(testRepos, sOpt, pg)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			withData, err := withRepoData(testRepos, sOpt, pg)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			keyMounts, keyPaths, err := withRepoKeys(testRepos, sOpt, pg)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			withTestDeps := func(in llb.State) llb.State {
-				deps := spec.GetTestDeps(targetKey)
-				if len(deps) == 0 {
-					return in
-				}
-
-				testDeps := dalec.SortMapKeys(spec.GetTestDeps(targetKey))
-				return base.Run(
-					w.Install(testDeps, atRoot("/tmp/rootfs"), withMounts(withRepos, withData, keyMounts), importKeys(keyPaths)),
-					pg,
-					dalec.ProgressGroup("Install test dependencies"),
-				).AddMount("/tmp/rootfs", in)
-			}
-
-			if err := frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey); err != nil {
-				return nil, nil, err
-			}
-
+			ref, err := runTests(ctx, client, w, spec, sOpt, rpmDir, targetKey)
 			return ref, img, err
 		})
 	}
 }
 
-func readRPMs(ctx context.Context, client gwclient.Client, st llb.State) ([]string, error) {
-	def, err := st.Marshal(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := client.Solve(ctx, gwclient.SolveRequest{
-		Definition: def.ToPB(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	ref, err := res.SingleRef()
-	if err != nil {
-		return nil, err
-	}
-
-	// Directory layout will have arch-specific sub-folders and/or `noarch`
-	// RPMs will be in those subdirectories.
-	arches, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-		Path: "/RPMS",
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "error reading output state")
-	}
-
-	var out []string
-
-	for _, arch := range arches {
-		files, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-			Path:           filepath.Join("/RPMS", arch.Path),
-			IncludePattern: "*.rpm",
-		})
-
-		if err != nil {
-			return nil, errors.Wrap(err, "could not read arch specific output dir")
-		}
-
-		for _, e := range files {
-			out = append(out, filepath.Join(arch.Path, e.Path))
-		}
-	}
-
-	return out, nil
-}
-
-func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb.State, files []string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
@@ -182,20 +70,18 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 	if err != nil {
 		return llb.Scratch(), err
 	}
+	rpmMountDir := "/tmp/rpms"
+	pkgs := w.BasePackages()
+	pkgs = append(pkgs, filepath.Join(rpmMountDir, "**/*.rpm"))
 
-	if len(files) > 0 {
-		rpmMountDir := "/tmp/rpms"
-		updated := w.BasePackages()
-		for _, f := range files {
-			updated = append(updated, filepath.Join(rpmMountDir, f))
-		}
-
-		rootfs = builderImg.Run(
-			w.Install(updated, atRoot(workPath), withMounts(repoOpts, repoDataOpts, keyMounts), importKeys(keyPaths), noGPGCheck, withManifests, installWithConstraints(opts)),
-			llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
-			dalec.WithConstraints(opts...),
-		).AddMount(workPath, rootfs)
-	}
+	rootfs = builderImg.Run(
+		w.Install(pkgs, atRoot(workPath),
+			withMounts(dalec.WithRunOptions(repoDataOpts, repoOpts, keyMounts)),
+			importKeys(keyPaths),
+			noGPGCheck, withManifests, installWithConstraints(opts)),
+		llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
+		dalec.WithConstraints(opts...),
+	).AddMount(workPath, rootfs)
 
 	if post := spec.GetImagePost(targetKey); post != nil && len(post.Symlinks) > 0 {
 		rootfs = builderImg.

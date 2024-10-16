@@ -132,6 +132,13 @@
 					},
 					"type": "array",
 					"description": "Links is the list of symlinks to be installed with the package\nLinks should only be used if the *package* should contain the link.\nFor making a container compatible with another image, use [PostInstall] in\nthe [ImageConfig]."
+				},
+				"headers": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "Headers is a list of header files and/or folders to be installed.\nOn linux this would typically be installed to /usr/include/."
 				}
 			},
 			"additionalProperties": false,
@@ -392,6 +399,24 @@
 			"additionalProperties": false,
 			"type": "object",
 			"description": "GeneratorGomod is used to generate a go module cache from go module sources"
+		},
+		"GitAuth": {
+			"properties": {
+				"header": {
+					"type": "string",
+					"description": "Header is the name of the secret which contains the git auth header.\nwhen using git auth header based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"token": {
+					"type": "string",
+					"description": "Token is the name of the secret which contains a git auth token when using\ntoken based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"ssh": {
+					"type": "string",
+					"description": "SSH is the name of the secret which contains the ssh auth into when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object"
 		},
 		"ImageConfig": {
 			"properties": {
@@ -767,14 +792,16 @@
 				},
 				"keepGitDir": {
 					"type": "boolean"
+				},
+				"auth": {
+					"$ref": "#/$defs/GitAuth"
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
 			"required": [
 				"url",
-				"commit",
-				"keepGitDir"
+				"commit"
 			]
 		},
 		"SourceHTTP": {
