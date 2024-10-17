@@ -2,16 +2,20 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/test/testenv"
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func runTest(t *testing.T, f testenv.TestFunc, opts ...testenv.TestRunnerOpt) {
@@ -66,7 +70,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 		t.Run("root config", func(t *testing.T) {
 			t.Parallel()
 			spec := newSigningSpec()
-			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package))
+			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package, testConfig))
 		})
 
 		t.Run("with target config", func(t *testing.T) {
@@ -82,7 +86,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 			}
 			spec.PackageConfig.Signer = nil
 
-			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package))
+			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package, testConfig))
 		})
 
 		t.Run("target config takes precedence when root config is there", func(t *testing.T) {
@@ -116,7 +120,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 			}
 
 			spec.PackageConfig.Signer.Image = "notexist"
-			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package), testenv.WithSolveStatusFn(handleStatus))
+			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package, testConfig), testenv.WithSolveStatusFn(handleStatus))
 
 			assert.Assert(t, found, "Spec signing override warning message not emitted")
 		})
@@ -129,7 +133,7 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 				"HELLO": "world",
 				"FOO":   "bar",
 			}
-			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package))
+			runTest(t, distroSigningTest(t, spec, testConfig.Target.Package, testConfig))
 		})
 
 		t.Run("with path build arg and build context", func(t *testing.T) {
@@ -146,6 +150,7 @@ signer:
 				t,
 				spec,
 				testConfig.Target.Package,
+				testConfig,
 				withBuildContext(ctx, t, "dalec_signing_config", signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"),
@@ -180,6 +185,7 @@ signer:
 					t,
 					spec,
 					testConfig.Target.Package,
+					testConfig,
 					withBuildContext(ctx, t, "dalec_signing_config", signConfig),
 					withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
 					withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"),
@@ -204,6 +210,7 @@ signer:
 				t,
 				spec,
 				testConfig.Target.Package,
+				testConfig,
 				withBuildContext(ctx, t, "dalec_signing_config", signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_CONTEXT_NAME", "dalec_signing_config"),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/unusual_place.yml"),
@@ -225,6 +232,7 @@ signer:
 				t,
 				spec,
 				testConfig.Target.Package,
+				testConfig,
 				withMainContext(ctx, t, signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			))
@@ -257,6 +265,7 @@ signer:
 				t,
 				spec,
 				testConfig.Target.Package,
+				testConfig,
 				withMainContext(ctx, t, signConfig),
 				withBuildArg("DALEC_SIGNING_CONFIG_PATH", "/sign_config.yml"),
 			), testenv.WithSolveStatusFn(handleStatus))
@@ -361,7 +370,35 @@ signer:
 	}
 }
 
-func windowsSigningTests(t *testing.T) {
+func windowsSigningTests(t *testing.T, tcfg targetConfig) {
+	runBuild := func(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, srOpts ...srOpt) {
+		st := prepareWindowsSigningState(ctx, t, gwc, spec, srOpts...)
+
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res := solveT(ctx, t, gwc, gwclient.SolveRequest{
+			Definition: def.ToPB(),
+		})
+
+		tgt := readFile(ctx, t, "target", res)
+		cfg := readFile(ctx, t, "config.json", res)
+		mfst := readFile(ctx, t, "manifest.json", res)
+
+		assert.Check(t, cmp.Equal(string(tgt), "windowscross"))
+		assert.Check(t, cmp.Contains(string(cfg), "windows"))
+
+		var files []string
+		assert.NilError(t, json.Unmarshal(mfst, &files))
+		slices.Sort(files)
+
+		expectedFiles := tcfg.ListExpectedSignFiles(spec, platforms.DefaultSpec())
+		slices.Sort(expectedFiles)
+		assert.Assert(t, cmp.DeepEqual(files, expectedFiles))
+	}
+
 	t.Run("target spec config", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
@@ -462,7 +499,7 @@ signer:
 
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := newSimpleSpec()
-			st := prepareSigningState(ctx, t, gwc, spec, withBuildArg("DALEC_SKIP_SIGNING", "1"))
+			st := prepareWindowsSigningState(ctx, t, gwc, spec, withBuildArg("DALEC_SKIP_SIGNING", "1"))
 
 			def, err := st.Marshal(ctx)
 			if err != nil {
@@ -486,7 +523,7 @@ signer:
 	})
 }
 
-func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string, extraSrOpts ...srOpt) testenv.TestFunc {
+func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string, tcfg testLinuxConfig, extraSrOpts ...srOpt) testenv.TestFunc {
 	return func(ctx context.Context, gwc gwclient.Client) {
 		topTgt, _, _ := strings.Cut(buildTarget, "/")
 
@@ -501,6 +538,7 @@ func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string, extra
 
 		tgt := readFile(ctx, t, "/target", res)
 		cfg := readFile(ctx, t, "/config.json", res)
+		mfst := readFile(ctx, t, "/manifest.json", res)
 
 		if string(tgt) != topTgt {
 			t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
@@ -516,6 +554,19 @@ func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string, extra
 				assert.Equal(t, v, string(dt))
 			}
 		}
+
+		if tcfg.Target.ListExpectedSignFiles == nil {
+			t.Fatal("missing function to get list of expected files to sign")
+		}
+
+		expectedFiles := tcfg.Target.ListExpectedSignFiles(spec, platforms.DefaultSpec())
+		slices.Sort(expectedFiles)
+
+		var files []string
+		assert.NilError(t, json.Unmarshal(mfst, &files))
+		slices.Sort(files)
+
+		assert.Assert(t, cmp.DeepEqual(files, expectedFiles))
 	}
 }
 
