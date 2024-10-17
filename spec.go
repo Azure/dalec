@@ -307,6 +307,8 @@ type Source struct {
 
 // GeneratorGomod is used to generate a go module cache from go module sources
 type GeneratorGomod struct {
+	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
+	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 }
 
 // SourceGenerator holds the configuration for a source generator.
