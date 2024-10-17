@@ -49,6 +49,10 @@ func handleDeb(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, err
 		}
 
+		if err := ref.Evaluate(ctx); err != nil {
+			return ref, nil, err
+		}
+
 		if ref, err := runTests(ctx, client, spec, sOpt, st, targetKey, opt); err != nil {
 			cfg, _ := buildImageConfig(ctx, client, spec, platform, targetKey)
 			return ref, cfg, err
