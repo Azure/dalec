@@ -31,7 +31,7 @@ func TestJammy(t *testing.T) {
 		},
 		Worker: workerConfig{
 			ContextName: jammy.JammyWorkerContextName,
-			CreateRepo: func(pkg llb.State) llb.StateOption {
+			CreateRepo: func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
 				repoFile := []byte(`
 deb [trusted=yes] copy:/opt/testrepo/ /
 `)

@@ -301,6 +301,42 @@ func (s *Spec) GetBuildDeps(targetKey string) map[string]PackageConstraints {
 	return deps.Build
 }
 
+func (s *Spec) GetBuildRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("build")
+}
+
+func (s *Spec) GetInstallRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("install")
+}
+
+func (s *Spec) GetTestRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("test")
+}
+
 func (s *Spec) GetTestDeps(targetKey string) []string {
 	var deps *PackageDependencies
 	if t, ok := s.Targets[targetKey]; ok {
@@ -412,6 +448,7 @@ func (s *Spec) GetPackageDeps(target string) *PackageDependencies {
 	if deps := s.Targets[target]; deps.Dependencies != nil {
 		return deps.Dependencies
 	}
+
 	return s.Dependencies
 }
 
@@ -419,4 +456,89 @@ type gitOptionFunc func(*llb.GitInfo)
 
 func (f gitOptionFunc) SetGitOption(gi *llb.GitInfo) {
 	f(gi)
+}
+
+type RepoPlatformConfig struct {
+	ConfigRoot string
+	GPGKeyRoot string
+}
+
+// Returns a run option which mounts the data dirs for all specified repos
+func WithRepoData(repos []PackageRepositoryConfig, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	var repoMountsOpts []llb.RunOption
+	for _, repo := range repos {
+		rs, err := repoDataAsMount(repo, sOpts, opts...)
+		if err != nil {
+			return nil, err
+		}
+		repoMountsOpts = append(repoMountsOpts, rs)
+	}
+
+	return WithRunOptions(repoMountsOpts...), nil
+}
+
+// Returns a run option for mounting the state (i.e., packages/metadata) for a single repo
+func repoDataAsMount(config PackageRepositoryConfig, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	var mounts []llb.RunOption
+	for _, data := range config.Data {
+		repoState, err := data.Spec.AsMount(data.Dest, sOpts, opts...)
+		if err != nil {
+			return nil, err
+		}
+		mounts = append(mounts, llb.AddMount(data.Dest, repoState))
+	}
+
+	return WithRunOptions(mounts...), nil
+}
+
+func repoConfigAsMount(config PackageRepositoryConfig, platformCfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.RunOption, error) {
+	repoConfigs := []llb.RunOption{}
+
+	for name, repoConfig := range config.Config {
+		// each of these sources represent a repo config file
+		repoConfigSt, err := repoConfig.AsState(name, sOpt, append(opts, ProgressGroup("Importing repo config: "+name))...)
+		if err != nil {
+			return nil, err
+		}
+
+		repoConfigs = append(repoConfigs,
+			llb.AddMount(filepath.Join(platformCfg.ConfigRoot, name), repoConfigSt, llb.SourcePath(name)))
+	}
+
+	return repoConfigs, nil
+}
+
+// Returns a run option for importing the config files for all repos
+func WithRepoConfigs(repos []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	configStates := []llb.RunOption{}
+	for _, repo := range repos {
+		mnts, err := repoConfigAsMount(repo, cfg, sOpt, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		configStates = append(configStates, mnts...)
+	}
+
+	return WithRunOptions(configStates...), nil
+}
+
+func GetRepoKeys(configs []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
+	keys := []llb.RunOption{}
+	names := []string{}
+	for _, config := range configs {
+		for name, repoKey := range config.Keys {
+			// each of these sources represent a gpg key file for a particular repo
+			gpgKey, err := repoKey.AsState(name, sOpt, append(opts, ProgressGroup("Importing repo key: "+name))...)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			keys = append(keys,
+				llb.AddMount(filepath.Join(cfg.GPGKeyRoot, name), gpgKey, llb.SourcePath(name)))
+			names = append(names, name)
+		}
+	}
+
+	return WithRunOptions(keys...), names, nil
 }

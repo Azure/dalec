@@ -90,7 +90,7 @@ func TestAzlinux3(t *testing.T) {
 	})
 }
 
-func azlinuxWithRepo(rpms llb.State) llb.StateOption {
+func azlinuxWithRepo(rpms llb.State, opts ...llb.StateOption) llb.StateOption {
 	return func(in llb.State) llb.State {
 		localRepo := []byte(`
 [Local]
@@ -101,7 +101,7 @@ priority=0
 enabled=1
 `)
 		pg := dalec.ProgressGroup("Install local repo for test")
-		return in.
+		withRepos := in.
 			File(llb.Mkdir("/opt/repo/RPMS", 0o755, llb.WithParents(true)), pg).
 			File(llb.Mkdir("/opt/repo/SRPMS", 0o755), pg).
 			Run(dalec.ShArgs("tdnf install -y createrepo"), pg).
@@ -113,13 +113,20 @@ enabled=1
 			).
 			Run(dalec.ShArgs("createrepo --compatibility /opt/repo"), pg).
 			Root()
+
+		for _, opt := range opts {
+			withRepos = withRepos.With(opt)
+		}
+
+		return withRepos
 	}
 }
 
 type workerConfig struct {
 	// CreateRepo takes in a state which is the output of the sign target,
+	// as well as optional state options for additional configuration.
 	// the output [llb.StateOption] should install the repo into the worker image.
-	CreateRepo func(llb.State) llb.StateOption
+	CreateRepo func(llb.State, ...llb.StateOption) llb.StateOption
 	// ContextName is the name of the worker context that the build target will use
 	// to see if a custom worker is proivded in a context
 	ContextName string
@@ -1247,6 +1254,17 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		testPinnedBuildDeps(ctx, t, testConfig)
 	})
 
+	t.Run("custom repo", func(t *testing.T) {
+		if strings.HasPrefix(testConfig.Target.Package, "jammy") {
+			t.Skip("skipping custom repo test for jammy")
+		}
+
+		t.Parallel()
+
+		ctx := startTestSpan(baseCtx, t)
+		testCustomRepo(ctx, t, testConfig)
+	})
+
 	t.Run("test library artifacts", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
@@ -1358,6 +1376,219 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 		// TODO: we should have a test to make sure this also works with source policies.
 		// Unfortunately it seems like there is an issue with the gateway client passing
 		// in source policies.
+	})
+}
+
+func signRepo(gpgKey llb.State) llb.StateOption {
+	// key should be a state that has a public key under /public.key
+	return func(in llb.State) llb.State {
+		return in.Run(
+			dalec.ShArgs("gpg --import < /tmp/gpg/PUBLIC-RPM-GPG-KEY"),
+			dalec.ShArgs("gpg --import < /tmp/gpg/private.key"),
+			llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
+			dalec.ProgressGroup("Importing gpg key")).
+			Run(
+				dalec.ShArgs(`ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2) && \
+					gpg --list-keys --keyid-format LONG && \
+					gpg --detach-sign --default-key "$ID" --armor --yes /opt/repo/repodata/repomd.xml`),
+				llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
+			).Root()
+	}
+}
+
+func generateGPGKey(worker llb.State) llb.State {
+	pg := dalec.ProgressGroup("Generate GPG Key for Testing")
+
+	st := worker.
+		Run(dalec.ShArgs(`gpg --batch --gen-key <<EOF
+Key-Type: RSA
+Key-Length: 2048
+Subkey-Type: RSA
+Subkey-Length: 2048
+Name-Real: Test User
+Name-Comment: Test Key
+Name-Email: test@example.com
+Expire-Date: 0
+%no-protection
+%commit
+EOF
+		`), pg).
+		Run(dalec.ShArgs("gpg --export --armor test@example.com > /tmp/gpg/PUBLIC-RPM-GPG-KEY; gpg --export-secret-keys --armor test@example.com > /tmp/gpg/private.key"), pg).
+		AddMount("/tmp/gpg", llb.Scratch())
+
+	return st
+}
+
+func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	depSpec := &dalec.Spec{
+		Name:        "dalec-test-package",
+		Version:     "0.0.1",
+		Revision:    "1",
+		Description: "A basic package for various testing uses",
+		License:     "MIT",
+		Sources: map[string]dalec.Source{
+			"version.txt": {
+				Inline: &dalec.SourceInline{
+					File: &dalec.SourceInlineFile{
+						Contents: "version: " + "0.0.1",
+					},
+				},
+			},
+		},
+
+		Artifacts: dalec.Artifacts{
+			Docs: map[string]dalec.ArtifactConfig{
+				"version.txt": {},
+			},
+		},
+	}
+
+	getSpec := func(keyConfig map[string]dalec.Source) *dalec.Spec {
+		return &dalec.Spec{
+			Name:        "dalec-test-custom-repo",
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "Testing allowing a custom repo to be provided",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					"dalec-test-package": {},
+				},
+				Runtime: map[string]dalec.PackageConstraints{
+					"dalec-test-package": {},
+				},
+
+				Test: []string{
+					"dalec-test-package",
+					"bash",
+					"coreutils",
+				},
+
+				ExtraRepos: []dalec.PackageRepositoryConfig{
+					{
+						Config: map[string]dalec.Source{
+							"local.repo": {
+								Inline: &dalec.SourceInline{
+									File: &dalec.SourceInlineFile{
+										Contents: `[Local]
+name=Local Repository
+baseurl=file:///opt/repo
+repo_gpgcheck=1
+priority=0
+enabled=1
+gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
+	`,
+									},
+								},
+							},
+						},
+						Data: []dalec.SourceMount{
+							{
+								Dest: "/opt/repo",
+								Spec: dalec.Source{
+									Context: &dalec.SourceContext{
+										Name: "test-repo",
+									},
+								},
+							},
+						},
+						Keys: keyConfig,
+						Envs: []string{"build", "install", "test"},
+					},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{
+						Command: `set -x; [ "$(cat /usr/share/doc/dalec-test-package/version.txt)" = "version: 0.0.1" ]`,
+					},
+				},
+			},
+
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check test dependency installed from custom repo",
+					// Dummy command here to force test steps to run and install test stage dependency
+					// from custom repo
+					Steps: []dalec.TestStep{
+						{
+							Command: "ls -lrt",
+						},
+					},
+				},
+			},
+		}
+
+	}
+
+	getRepoState := func(ctx context.Context, client gwclient.Client, w llb.State, key llb.State) llb.State {
+		sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(cfg.Target.Package))
+		pkg := reqToState(ctx, client, sr, t)
+
+		// create a repo using our existing worker
+		workerWithRepo := w.With(cfg.Worker.CreateRepo(pkg, signRepo(key)))
+
+		// copy out just the contents of the repo
+		return llb.Scratch().File(llb.Copy(workerWithRepo, "/opt/repo", "/", &llb.CopyInfo{CopyDirContentsOnly: true}))
+	}
+
+	testNoPublicKey := func(ctx context.Context, gwc gwclient.Client) {
+		sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
+		w := reqToState(ctx, gwc, sr, t)
+
+		// generate a gpg public/private key pair
+		gpgKey := generateGPGKey(w)
+
+		repoState := getRepoState(ctx, gwc, w, gpgKey)
+
+		sr = newSolveRequest(withSpec(ctx, t, getSpec(nil)), withBuildContext(ctx, t, "test-repo", repoState), withBuildTarget(cfg.Target.Container))
+		// don't error here, the logs are intended to be checked by
+		// RunTestExpecting
+
+		_, err := gwc.Solve(ctx, sr)
+		if err == nil {
+			t.Fatal("expected solve to fail")
+		}
+	}
+
+	testWithPublicKey := func(ctx context.Context, gwc gwclient.Client) {
+		sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
+		w := reqToState(ctx, gwc, sr, t)
+
+		// generate a gpg key to sign the repo
+		// under /PUBLIC-RPM-GPG-KEY
+		gpgKey := generateGPGKey(w)
+		repoState := getRepoState(ctx, gwc, w, gpgKey)
+
+		spec := getSpec(map[string]dalec.Source{
+			// in the dalec spec, the public key will be passed in via build context
+			"PUBLIC-RPM-GPG-KEY": {
+				Context: &dalec.SourceContext{
+					Name: "repo-public-key",
+				},
+				Path: "PUBLIC-RPM-GPG-KEY",
+			},
+		})
+
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, "test-repo", repoState),
+			withBuildContext(ctx, t, "repo-public-key", gpgKey),
+			withBuildTarget(cfg.Target.Container))
+
+		res := solveT(ctx, t, gwc, sr)
+		_, err := res.SingleRef()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("no public key", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(ctx, t, testNoPublicKey)
+	})
+
+	t.Run("with public key", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(ctx, t, testWithPublicKey)
 	})
 }
 
