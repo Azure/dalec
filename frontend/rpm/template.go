@@ -607,6 +607,15 @@ func (w *specWrapper) Files() fmt.Stringer {
 		}
 	}
 
+	if w.Spec.Artifacts.Libexec != nil {
+		dataKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libexec)
+		for _, k := range dataKeys {
+			df := w.Spec.Artifacts.Libexec[k]
+			fullPath := filepath.Join(`%{_libexecdir}`, df.SubPath, df.ResolveName(k))
+			fmt.Fprintln(b, fullPath)
+		}
+	}
+
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
