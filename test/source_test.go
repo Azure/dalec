@@ -363,42 +363,12 @@ index ea874f5..ba38f84 100644
 		}
 	}
 
-	tests := map[string]struct {
-		module       string
-		sourceInline *dalec.SourceInline
-	}{
-		"no patch": {
-			module: "github.com/cpuguy83/tar2go@v0.3.1",
-		},
-		"alternative go fixture": {
-			module: "github.com/stretchr/testify@v1.7.0",
-			sourceInline: &dalec.SourceInline{
-				Dir: &dalec.SourceInlineDir{
-					Files: map[string]*dalec.SourceInlineFile{
-						"main.go": {Contents: alternativeGomodFixtureMain},
-						"go.mod":  {Contents: alternativeGomodFixtureMod},
-						"go.sum":  {Contents: alternativeGomodFixtureSum},
-					},
-				},
-			},
-		},
-	}
-
-	for name, tt := range tests {
-
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			spec := baseSpec()
-			if tt.sourceInline != nil {
-				source := spec.Sources[srcName]
-				source.Inline = tt.sourceInline
-				spec.Sources[srcName] = source
-			}
-			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
-				checkModule(ctx, gwc, tt.module, spec)
-			})
+	t.Run("no patch", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+			checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.1", baseSpec())
 		})
-	}
+	})
 
 	t.Run("with patch", func(t *testing.T) {
 		t.Run("file", func(t *testing.T) {
@@ -446,76 +416,76 @@ index ea874f5..ba38f84 100644
 			})
 		})
 	})
-}
 
-func TestMultiGoModuleGen(t *testing.T) {
-	t.Parallel()
-	/*
-		dir/
-			module1/
-				go.mod
-				go.sum
-				main.go
-			module2/
-				go.mod
-				go.sum
-				main.go
-	*/
-	contextSt := llb.Scratch().File(llb.Mkdir("/dir", 0644)).
-		File(llb.Mkdir("/dir/module1", 0644)).
-		File(llb.Mkfile("/dir/module1/go.mod", 0644, []byte(alternativeGomodFixtureMod))).
-		File(llb.Mkfile("/dir/module1/go.sum", 0644, []byte(alternativeGomodFixtureSum))).
-		File(llb.Mkfile("/dir/module1/main.go", 0644, []byte(alternativeGomodFixtureMain))).
-		File(llb.Mkdir("/dir/module2", 0644)).
-		File(llb.Mkfile("/dir/module2/go.mod", 0644, []byte(gomodFixtureMod))).
-		File(llb.Mkfile("/dir/module2/go.sum", 0644, []byte(gomodFixtureSum))).
-		File(llb.Mkfile("/dir/module2/main.go", 0644, []byte(gomodFixtureMain)))
+	t.Run("multi-module", func(t *testing.T) {
+		t.Parallel()
+		/*
+			dir/
+				module1/
+					go.mod
+					go.sum
+					main.go
+				module2/
+					go.mod
+					go.sum
+					main.go
+		*/
+		contextSt := llb.Scratch().File(llb.Mkdir("/dir", 0644)).
+			File(llb.Mkdir("/dir/module1", 0644)).
+			File(llb.Mkfile("/dir/module1/go.mod", 0644, []byte(alternativeGomodFixtureMod))).
+			File(llb.Mkfile("/dir/module1/go.sum", 0644, []byte(alternativeGomodFixtureSum))).
+			File(llb.Mkfile("/dir/module1/main.go", 0644, []byte(alternativeGomodFixtureMain))).
+			File(llb.Mkdir("/dir/module2", 0644)).
+			File(llb.Mkfile("/dir/module2/go.mod", 0644, []byte(gomodFixtureMod))).
+			File(llb.Mkfile("/dir/module2/go.sum", 0644, []byte(gomodFixtureSum))).
+			File(llb.Mkfile("/dir/module2/main.go", 0644, []byte(gomodFixtureMain)))
 
-	const contextName = "multi-module"
-	spec := &dalec.Spec{
-		Name: "test-dalec-context-source",
-		Sources: map[string]dalec.Source{
-			"src": {
-				Context: &dalec.SourceContext{Name: contextName},
-				Generate: []*dalec.SourceGenerator{
-					{
-						Gomod: &dalec.GeneratorGomod{
-							Paths: []string{"./dir/module1", "./dir/module2"},
+		const contextName = "multi-module"
+		spec := &dalec.Spec{
+			Name: "test-dalec-context-source",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Context: &dalec.SourceContext{Name: contextName},
+					Generate: []*dalec.SourceGenerator{
+						{
+							Gomod: &dalec.GeneratorGomod{
+								Paths: []string{"./dir/module1", "./dir/module2"},
+							},
 						},
 					},
 				},
 			},
-		},
-		Dependencies: &dalec.PackageDependencies{
-			Build: map[string]dalec.PackageConstraints{
-				"golang": {
-					Version: []string{},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					"golang": {
+						Version: []string{},
+					},
 				},
 			},
-		},
-	}
-
-	runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-		req := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, contextName, contextSt), withBuildTarget("debug/gomods"))
-		res := solveT(ctx, t, gwc, req)
-		ref, err := res.SingleRef()
-		if err != nil {
-			t.Fatal(err)
 		}
-		deps := []string{"github.com/cpuguy83/tar2go@v0.3.1", "github.com/stretchr/testify@v1.7.0"}
-		for _, dep := range deps {
-			stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-				Path: dep,
-			})
 
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+			req := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, contextName, contextSt), withBuildTarget("debug/gomods"))
+			res := solveT(ctx, t, gwc, req)
+			ref, err := res.SingleRef()
 			if err != nil {
 				t.Fatal(err)
 			}
+			deps := []string{"github.com/cpuguy83/tar2go@v0.3.1", "github.com/stretchr/testify@v1.7.0"}
+			for _, dep := range deps {
+				stat, err := ref.StatFile(ctx, gwclient.StatRequest{
+					Path: dep,
+				})
 
-			if !fs.FileMode(stat.Mode).IsDir() {
-				t.Fatal("expected directory")
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if !fs.FileMode(stat.Mode).IsDir() {
+					t.Fatal("expected directory")
+				}
 			}
-		}
+		})
 	})
 }
 
