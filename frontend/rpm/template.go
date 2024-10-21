@@ -499,6 +499,14 @@ func (w *specWrapper) Install() fmt.Stringer {
 		}
 	}
 
+	if w.Spec.Artifacts.Libexec != nil {
+		libexecFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libexec)
+		for _, k := range libexecFileKeys {
+			le := w.Spec.Artifacts.Libexec[k]
+			copyArtifact(`%{buildroot}/%{_libexecdir}`, k, &le)
+		}
+	}
+
 	configKeys := dalec.SortMapKeys(w.Spec.Artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := w.Spec.Artifacts.ConfigFiles[c]
