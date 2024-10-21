@@ -45,6 +45,32 @@ artifacts:
 You may use a trailing wildcard to specify multiple binaries in a directory,
 though behavior may differ between different OS's/distros.
 
+### Libexec
+
+Libexec files are additional executable files that may be executed by one of
+the main package executables. On Linux these would typically get installed into
+`/usr/libexec/<package-name>`.
+
+Files under libexec are a mapping of file path to [artifact configuration](#artifact-configuration).
+If `subpath` is not supplied, it will default to the package name. The file
+path is the path to a file that must be available after the build section has
+finished. This path is relative to the working directory of the build phase
+*before* any directory changes are made.
+
+Example:
+
+```yaml
+name: my_package
+
+artifacts:
+  # the following config will install my_bin at /usr/libexec/my package/my_bin
+  libexec:
+    src/my_bin:
+```
+
+You may use a trailing wildcard to specify multiple binaries in a directory,
+though behavior may differ between different OS's/distros.
+
 ### Manpages
 
 Manpages is short for manual pages.
