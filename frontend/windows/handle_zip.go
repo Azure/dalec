@@ -38,12 +38,12 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, err
 		}
 
-		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey)
+		bin, err := buildBinaries(ctx, spec, worker, client, sOpt, targetKey, pg)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
 		}
 
-		st := getZipLLB(worker, spec.Name, bin)
+		st := getZipLLB(worker, spec.Name, bin, pg)
 
 		def, err := st.Marshal(ctx)
 		if err != nil {
@@ -82,7 +82,7 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 	return out, nil
 }
 
-func installBuildDeps(deps []string) llb.StateOption {
+func installBuildDeps(deps []string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(s llb.State) llb.State {
 		if len(deps) == 0 {
 			return s
@@ -94,6 +94,7 @@ func installBuildDeps(deps []string) llb.StateOption {
 		return s.Run(
 			dalec.ShArgs("apt-get update && apt-get install -y "+strings.Join(sorted, " ")),
 			dalec.WithMountedAptCache(aptCachePrefix),
+			dalec.WithConstraints(opts...),
 		).Root()
 	}
 }
@@ -127,13 +128,13 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 	return dalec.WithRunOptions(ordered...)
 }
 
-func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string) (llb.State, error) {
+func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
 
 	// note: we do not yet support pinning build dependencies for windows workers
-	worker = worker.With(installBuildDeps(deps))
+	worker = worker.With(installBuildDeps(deps, opts...))
 
-	sources, err := specToSourcesLLB(worker, spec, sOpt)
+	sources, err := specToSourcesLLB(worker, spec, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "could not generate sources")
 	}
@@ -149,17 +150,19 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 		withSourcesMounted("/build", patched, spec.Sources),
 		llb.AddMount("/tmp/scripts", buildScript),
 		llb.Network(llb.NetModeNone),
+		dalec.WithConstraints(opts...),
 	).AddMount(outputDir, llb.Scratch())
 
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 }
 
-func getZipLLB(worker llb.State, name string, artifacts llb.State) llb.State {
+func getZipLLB(worker llb.State, name string, artifacts llb.State, opts ...llb.ConstraintsOpt) llb.State {
 	outName := filepath.Join(outputDir, name+".zip")
 	zipped := worker.Run(
 		dalec.ShArgs("zip "+outName+" *"),
 		llb.Dir("/tmp/artifacts"),
 		llb.AddMount("/tmp/artifacts", artifacts),
+		dalec.WithConstraints(opts...),
 	).AddMount(outputDir, llb.Scratch())
 	return zipped
 }
@@ -197,6 +200,7 @@ func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, er
 		Run(
 			dalec.ShArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip"),
 			dalec.WithMountedAptCache(aptCachePrefix),
+			dalec.WithConstraints(opts...),
 		).Root(), nil
 }
 
