@@ -84,7 +84,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 			if err != nil {
 				return err
 			}
-			opts = append(opts, llb.AddMount(sm.Dest, st, llb.SourcePath(sm.Dest)))
+			opts = append(opts, llb.AddMount(sm.Dest, st, llb.SourcePath(sm.Spec.Path)))
 		}
 
 		opts = append(opts, pg)

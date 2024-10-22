@@ -1832,6 +1832,11 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 					},
 				},
 			},
+			Dependencies: &dalec.PackageDependencies{
+				Test: []string{
+					"bash",
+				},
+			},
 			Artifacts: dalec.Artifacts{
 				DataDirs: map[string]dalec.ArtifactConfig{
 					"test-file": {},
@@ -1842,6 +1847,67 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 					Name: "Test that tests fail the build",
 					Files: map[string]dalec.FileCheckOutput{
 						"/usr/share/test-file": {},
+					},
+				},
+				{
+					Name: "Test that test mounts work",
+					Steps: []dalec.TestStep{
+						{
+							Command: "/bin/sh -c 'test -f /mount0'",
+						},
+						{
+							Command: "/bin/sh -c 'test -d /mount1'",
+						},
+						{
+							Command: `/bin/sh -c 'grep "some file" /mont1/some_file'`,
+						},
+						{
+							Command: "/bin/sh -c 'test -f /mount2'",
+						},
+						{
+							Command: `/bin/sh -c 'grep "some other file" /mount2'`,
+						},
+					},
+					Mounts: []dalec.SourceMount{
+						{
+							Dest: "/mount0",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									File: &dalec.SourceInlineFile{
+										Contents: "mount0",
+									},
+								},
+							},
+						},
+						{
+							Dest: "/mount1",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									Dir: &dalec.SourceInlineDir{
+										Files: map[string]*dalec.SourceInlineFile{
+											"some_file": &dalec.SourceInlineFile{
+												Contents: "some file",
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Dest: "/mount2",
+							Spec: dalec.Source{
+								Path: "another_file",
+								Inline: &dalec.SourceInline{
+									Dir: &dalec.SourceInlineDir{
+										Files: map[string]*dalec.SourceInlineFile{
+											"another_file": &dalec.SourceInlineFile{
+												Contents: "some other file",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
