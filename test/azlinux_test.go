@@ -1071,8 +1071,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						Name: "name_only",
 					},
 					"name_and_subpath": {
-						SubPath: "custom/subpath",
-						Name:    "custom_name",
+						SubPath:     "subpath",
+						Name:        "custom_name",
+						PackageName: "custom",
 					},
 					"subpath_only": dalec.ArtifactConfig{
 						SubPath: "custom",
@@ -1099,7 +1100,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath/custom_name", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath_only", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/custom/subpath_only", 0o755); err != nil {
 				t.Fatal(err)
 			}
 		})

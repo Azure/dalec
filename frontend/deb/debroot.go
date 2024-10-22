@@ -15,7 +15,6 @@ import (
 	_ "embed"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -457,9 +456,15 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 		sorted := dalec.SortMapKeys(spec.Artifacts.Libexec)
 		for _, key := range sorted {
 			cfg := spec.Artifacts.Libexec[key]
+
+			packageName := cfg.PackageName
+			if packageName == "" {
+				packageName = spec.Name
+			}
+
 			resolved := cfg.ResolveName(key)
-			subPath := frontend.DefaultLibexecSubpath(spec, key)
-			writeInstall(key, filepath.Join("/usr/libexec", subPath), resolved)
+			targetDir := filepath.Join(`/usr/libexec`, packageName, cfg.SubPath)
+			writeInstall(key, targetDir, resolved)
 		}
 	}
 

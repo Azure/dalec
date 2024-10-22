@@ -97,6 +97,9 @@ type ArtifactConfig struct {
 	// Name is file or dir name to use for the artifact in the package.
 	// If empty, the file or dir name from the produced artifact will be used.
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	// PackageName is the name of the package. This can be used to replace
+	// `spec.Name` when destination paths are generated.
+	PackageName string `yaml:"packageName,omitempty" json:"packageName,omitempty"`
 }
 
 func (a *ArtifactConfig) ResolveName(path string) string {

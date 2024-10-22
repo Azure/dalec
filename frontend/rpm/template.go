@@ -10,7 +10,6 @@ import (
 	"text/template"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
@@ -504,11 +503,23 @@ func (w *specWrapper) Install() fmt.Stringer {
 		libexecFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libexec)
 		for _, k := range libexecFileKeys {
 			le := w.Spec.Artifacts.Libexec[k]
-			leCopy := dalec.ArtifactConfig{
-				SubPath: frontend.DefaultLibexecSubpath(w.Spec, k),
-				Name:    le.Name,
+
+			packageName := le.PackageName
+			if packageName == "" {
+				packageName = w.Spec.Name
 			}
-			copyArtifact(`%{buildroot}/%{_libexecdir}`, k, &leCopy)
+
+			targetDir := filepath.Join(`%{buildroot}/%{_libexecdir}`, packageName, le.SubPath)
+			fmt.Fprintln(b, "mkdir -p", targetDir)
+
+			var targetPath string
+			file := le.ResolveName(k)
+			if !strings.Contains(file, "*") {
+				targetPath = filepath.Join(targetDir, file)
+			} else {
+				targetPath = targetDir + "/"
+			}
+			fmt.Fprintln(b, "cp -r", k, targetPath)
 		}
 	}
 
@@ -615,9 +626,14 @@ func (w *specWrapper) Files() fmt.Stringer {
 	if w.Spec.Artifacts.Libexec != nil {
 		dataKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libexec)
 		for _, k := range dataKeys {
-			df := w.Spec.Artifacts.Libexec[k]
-			subPath := frontend.DefaultLibexecSubpath(w.Spec, k)
-			fullPath := filepath.Join(`%{_libexecdir}`, subPath, df.ResolveName(k))
+			le := w.Spec.Artifacts.Libexec[k]
+			packageName := le.PackageName
+			if packageName == "" {
+				packageName = w.Spec.Name
+			}
+
+			targetDir := filepath.Join(`%{_libexecdir}`, packageName, le.SubPath)
+			fullPath := filepath.Join(targetDir, le.ResolveName(k))
 			fmt.Fprintln(b, fullPath)
 		}
 	}
