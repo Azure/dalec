@@ -537,10 +537,9 @@ func GetRepoKeys(worker llb.State, configs []PackageRepositoryConfig, cfg *RepoP
 			mountPath := filepath.Join(cfg.GPGKeyRoot, name)
 
 			opt := runOptionFunc(func(ei *llb.ExecInfo) {
-				keySt := gpgKey
 				inPath := filepath.Join("/tmp/in", name)
 				outPath := filepath.Join("/tmp/out", name)
-				keySt = worker.Run(
+				keySt := worker.Run(
 					// dearmor key if necessary
 					ShArgs(fmt.Sprintf("cat '%s' | gpg --dearmor --output '%s'", inPath, outPath)),
 					llb.AddMount(inPath, gpgKey, llb.SourcePath(name))).

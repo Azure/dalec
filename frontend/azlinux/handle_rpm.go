@@ -189,7 +189,7 @@ func installBuildDepsPackage(target string, packageName string, w worker, deps m
 	}
 }
 
-func installBuildDeps(ctx context.Context, w worker, sOpt dalec.SourceOpts, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
 	deps := spec.GetBuildDeps(targetKey)
 	if len(deps) == 0 {
 		return func(in llb.State) llb.State { return in }, nil
@@ -230,7 +230,7 @@ func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *d
 		return llb.Scratch(), err
 	}
 
-	installOpt, err := installBuildDeps(ctx, w, sOpt, client, spec, targetKey, opts...)
+	installOpt, err := installBuildDeps(ctx, w, client, spec, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}

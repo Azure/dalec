@@ -83,7 +83,7 @@ func getSpecWorker(ctx context.Context, w worker, client gwclient.Client, sOpt d
 				return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
 			}
 
-			installOpt, err := installBuildDeps(ctx, w, sOpt, client, spec, targetKey, opts...)
+			installOpt, err := installBuildDeps(ctx, w, client, spec, targetKey, opts...)
 			if err != nil {
 				return llb.Scratch(), err
 			}
