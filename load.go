@@ -445,13 +445,6 @@ func (s *Spec) FillDefaults() {
 			s.Patches[k][i].Strip = &strip
 		}
 	}
-
-	for k, ac := range s.Artifacts.Libexec {
-		if s.Artifacts.Libexec[k].SubPath == "" {
-			ac.SubPath = s.Name
-			s.Artifacts.Libexec[k] = ac
-		}
-	}
 }
 
 func (s Spec) Validate() error {

@@ -10,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
@@ -503,7 +504,11 @@ func (w *specWrapper) Install() fmt.Stringer {
 		libexecFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libexec)
 		for _, k := range libexecFileKeys {
 			le := w.Spec.Artifacts.Libexec[k]
-			copyArtifact(`%{buildroot}/%{_libexecdir}`, k, &le)
+			leCopy := dalec.ArtifactConfig{
+				SubPath: frontend.DefaultLibexecSubpath(w.Spec, k),
+				Name:    le.Name,
+			}
+			copyArtifact(`%{buildroot}/%{_libexecdir}`, k, &leCopy)
 		}
 	}
 
@@ -611,7 +616,8 @@ func (w *specWrapper) Files() fmt.Stringer {
 		dataKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libexec)
 		for _, k := range dataKeys {
 			df := w.Spec.Artifacts.Libexec[k]
-			fullPath := filepath.Join(`%{_libexecdir}`, df.SubPath, df.ResolveName(k))
+			subPath := frontend.DefaultLibexecSubpath(w.Spec, k)
+			fullPath := filepath.Join(`%{_libexecdir}`, subPath, df.ResolveName(k))
 			fmt.Fprintln(b, fullPath)
 		}
 	}
