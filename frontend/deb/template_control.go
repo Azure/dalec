@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"maps"
 	"strings"
 	"text/template"
 
@@ -57,13 +58,46 @@ func appendConstraints(deps map[string]dalec.PackageConstraints) []string {
 }
 
 func (w *controlWrapper) depends(buf io.Writer, depsSpec *dalec.PackageDependencies) {
-	if len(depsSpec.Runtime) == 0 {
-		return
+	var (
+		needsClone bool
+		rtDeps     map[string]dalec.PackageConstraints
+	)
+	if depsSpec == nil || depsSpec.Runtime == nil {
+		rtDeps = make(map[string]dalec.PackageConstraints)
+	} else {
+		rtDeps = depsSpec.Runtime
+		needsClone = true
 	}
 
-	deps := appendConstraints(depsSpec.Runtime)
-	fmt.Fprintln(buf, multiline("Depends", deps))
+	// Add in deps vars that will get resolved by debbuild
+	// In some cases these are not neccessary (maybe even most), but when they are
+	// it is important.
+	// When not needed lintian may throw warnings but that's ok.
+	// If these aren't actually needed they'll resolve to nothing and don't cause
+	// any changes.
+	const (
+		shlibsDeps = "${shlibs:Depends}"
+		miscDeps   = "${misc:Depends}"
+	)
 
+	if _, exists := rtDeps[shlibsDeps]; !exists {
+		if needsClone {
+			rtDeps = maps.Clone(rtDeps)
+			needsClone = false
+		}
+
+		rtDeps[shlibsDeps] = dalec.PackageConstraints{}
+	}
+
+	if _, exists := rtDeps[miscDeps]; !exists {
+		if needsClone {
+			rtDeps = maps.Clone(rtDeps)
+		}
+		rtDeps[miscDeps] = dalec.PackageConstraints{}
+	}
+
+	deps := appendConstraints(rtDeps)
+	fmt.Fprintln(buf, multiline("Depends", deps))
 }
 
 // multiline attempts to format a field with multiple values in a way that is more human readable
