@@ -56,7 +56,7 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 	}
 
 	installTimeRepos := spec.GetInstallRepos(targetKey)
-	importRepos, err := repoMountInstallOpts(installTimeRepos, sOpt, opts...)
+	importRepos, err := repoMountInstallOpts(builderImg, installTimeRepos, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}

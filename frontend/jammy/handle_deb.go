@@ -90,7 +90,10 @@ func runTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 		frontend.Warn(ctx, client, worker, "Including test repo from worker image")
 	}
 
-	st := buildImageRootfs(worker, spec, sOpt, deb, targetKey, includeTestRepo, opts...)
+	st, err := buildImageRootfs(worker, spec, sOpt, deb, targetKey, includeTestRepo, opts...)
+	if err != nil {
+		return nil, err
+	}
 
 	def, err := st.Marshal(ctx, opts...)
 	if err != nil {
@@ -109,19 +112,49 @@ func runTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 		return nil, err
 	}
 
-	err = frontend.RunTests(ctx, client, spec, ref, installTestDeps(spec, targetKey, opts...), targetKey)
+	withTestDeps, err := installTestDeps(worker, spec, sOpt, targetKey, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	err = frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey)
 	return ref, err
 }
 
-func installPackages(ls ...string) llb.RunOption {
+var jammyRepoPlatformCfg = dalec.RepoPlatformConfig{
+	ConfigRoot: "/etc/apt/sources.list.d",
+	GPGKeyRoot: "/usr/share/keyrings",
+}
+
+func customRepoMounts(worker llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	withRepos, err := dalec.WithRepoConfigs(repos, &jammyRepoPlatformCfg, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	withData, err := dalec.WithRepoData(repos, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	keyMounts, _, err := dalec.GetRepoKeys(worker, repos, &jammyRepoPlatformCfg, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return dalec.WithRunOptions(withRepos, withData, keyMounts), nil
+}
+
+func installPackages(ls []string, rOpts ...llb.RunOption) llb.RunOption {
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 		// This only runs apt-get update if the pkgcache is older than 10 minutes.
 		dalec.ShArgs(`set -ex; apt update; apt install -y ` + strings.Join(ls, " ")).SetRunOption(ei)
 		dalec.WithMountedAptCache(AptCachePrefix).SetRunOption(ei)
+		dalec.WithRunOptions(rOpts...).SetRunOption(ei)
 	})
 }
 
-func installWithConstraints(pkgPath string, pkgName string) llb.RunOption {
+func installWithConstraints(pkgPath string, pkgName string, rOpts ...llb.RunOption) llb.RunOption {
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 		// The apt solver always tries to select the latest package version even when constraints specify that an older version should be installed and that older version is available in a repo.
 		// This leads the solver to simply refuse to install our target package if the latest version of ANY dependency package is incompatible with the constraints.
@@ -131,6 +164,7 @@ func installWithConstraints(pkgPath string, pkgName string) llb.RunOption {
 		dalec.ShArgs(`set -ex; dpkg -i --force-depends ` + pkgPath +
 			fmt.Sprintf(`; apt update; aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject %s :UNINST"`, pkgName)).SetRunOption(ei)
 		dalec.WithMountedAptCache(AptCachePrefix).SetRunOption(ei)
+		dalec.WithRunOptions(rOpts...).SetRunOption(ei)
 	})
 }
 
@@ -181,14 +215,23 @@ func workerBase(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, e
 		return *base, nil
 	}
 
-	return llb.Image(jammyRef, llb.WithMetaResolver(sOpt.Resolver)).With(basePackages(opts...)), nil
+	return llb.Image(jammyRef, llb.WithMetaResolver(sOpt.Resolver)).With(basePackages(opts...)).
+		// This file prevents installation of things like docs in ubuntu
+		// containers We don't want to exclude this because tests want to
+		// check things for docs in the build container. But we also don't
+		// want to remove this completely from the base worker image in the
+		// frontend because we usually don't want such things in the build
+		// environment. This is only needed because certain tests (which
+		// are using this customized builder image) are checking for files
+		// that are being excluded by this config file.
+		File(llb.Rm("/etc/dpkg/dpkg.cfg.d/excludes", llb.WithAllowNotFound(true))), nil
 }
 
 func basePackages(opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		opts = append(opts, dalec.ProgressGroup("Install base packages"))
 		return in.Run(
-			installPackages("aptitude", "dpkg-dev", "devscripts", "equivs", "fakeroot", "dh-make", "build-essential", "dh-apparmor", "dh-make", "dh-exec", "debhelper-compat="+deb.DebHelperCompat),
+			installPackages([]string{"aptitude", "dpkg-dev", "devscripts", "equivs", "fakeroot", "dh-make", "build-essential", "dh-apparmor", "dh-make", "dh-exec", "debhelper-compat=" + deb.DebHelperCompat}),
 			dalec.WithConstraints(opts...),
 		).Root()
 	}
@@ -231,13 +274,18 @@ func buildDepends(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, tar
 		return nil, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
 	}
 
+	customRepoOpts, err := customRepoMounts(worker, spec.GetBuildRepos(targetKey), sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	return func(in llb.State) llb.State {
 		const (
 			debPath = "/tmp/dalec/internal/build/deps"
 		)
 
 		return in.Run(
-			installWithConstraints(debPath+"/*.deb", depsSpec.Name),
+			installWithConstraints(debPath+"/*.deb", depsSpec.Name, customRepoOpts),
 			llb.AddMount(debPath, pkg, llb.Readonly),
 			dalec.WithConstraints(opts...),
 		).Root()

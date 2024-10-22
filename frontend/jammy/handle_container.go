@@ -17,7 +17,7 @@ import (
 const (
 	jammyRef = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
 
-	testRepoPath           = "/opt/testrepo"
+	testRepoPath           = "/opt/repo"
 	testRepoSourceListPath = "/etc/apt/sources.list.d/test-dalec-local-repo.list"
 )
 
@@ -71,7 +71,7 @@ func buildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec 
 	return img, nil
 }
 
-func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, targetKey string, includeTestRepo bool, opts ...llb.ConstraintsOpt) llb.State {
+func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, targetKey string, includeTestRepo bool, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	base := dalec.GetBaseOutputImage(spec, targetKey)
 
 	installSymlinks := func(in llb.State) llb.State {
@@ -90,6 +90,11 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 			AddMount(workPath, in)
 	}
 
+	customRepoOpts, err := customRepoMounts(worker, spec.GetInstallRepos(targetKey), sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
 	if base == "" {
 		base = jammyRef
 	}
@@ -98,8 +103,10 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 
 	debug := llb.Scratch().File(llb.Mkfile("debug", 0o644, []byte(`debug=2`)), opts...)
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))
+
 	return baseImg.Run(
-		dalec.ShArgs("set -x; apt update && apt install -y /tmp/pkg/*.deb && exit 0; ls -lh /etc/apt/sources.list.d; ls -lh /etc/testrepo; mount; exit 42"),
+		dalec.ShArgs("set -x; apt update && apt install -y /tmp/pkg/*.deb"),
+		customRepoOpts,
 		llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
 		llb.AddMount("/tmp/pkg", deb, llb.Readonly),
 		dalec.WithMountedAptCache(AptCachePrefix),
@@ -121,22 +128,27 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
 		}),
 	).Root().
-		With(installSymlinks)
+		With(installSymlinks), nil
 }
 
-func installTestDeps(spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+func installTestDeps(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	deps := spec.GetTestDeps(targetKey)
+	if len(deps) == 0 {
+		return func(s llb.State) llb.State { return s }, nil
+	}
+
+	extraRepoOpts, err := customRepoMounts(worker, spec.GetTestRepos(targetKey), sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	return func(in llb.State) llb.State {
-		deps := spec.GetTestDeps(targetKey)
-		if len(deps) == 0 {
-			return in
-		}
-
 		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
-
 		return in.Run(
 			dalec.ShArgs("apt-get update && apt-get install -y --no-install-recommends "+strings.Join(deps, " ")),
 			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
+			extraRepoOpts,
 			dalec.WithMountedAptCache(AptCachePrefix),
 		).Root()
-	}
+	}, nil
 }

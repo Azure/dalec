@@ -102,7 +102,7 @@ var azLinuxRepoConfig = dalec.RepoPlatformConfig{
 	GPGKeyRoot: "/etc/pki/rpm-gpg",
 }
 
-func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
+func repoMountInstallOpts(worker llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
 	withRepos, err := dalec.WithRepoConfigs(repos, &azLinuxRepoConfig, sOpt, opts...)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.Sour
 		return nil, err
 	}
 
-	keyMounts, keyPaths, err := dalec.GetRepoKeys(repos, &azLinuxRepoConfig, sOpt, opts...)
+	keyMounts, keyPaths, err := dalec.GetRepoKeys(worker, repos, &azLinuxRepoConfig, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey s
 	}
 
 	testRepos := spec.GetTestRepos(targetKey)
-	importRepos, err := repoMountInstallOpts(testRepos, sOpt, opts...)
+	importRepos, err := repoMountInstallOpts(base, testRepos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func installBuildDepsPackage(target string, packageName string, w worker, deps m
 	}
 }
 
-func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+func installBuildDeps(ctx context.Context, w worker, sOpt dalec.SourceOpts, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
 	deps := spec.GetBuildDeps(targetKey)
 	if len(deps) == 0 {
 		return func(in llb.State) llb.State { return in }, nil
@@ -202,7 +202,12 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 		return nil, err
 	}
 
-	importRepos, err := repoMountInstallOpts(repos, sOpt, opts...)
+	base, err := w.Base(sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	importRepos, err := repoMountInstallOpts(base, repos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +230,7 @@ func specToRpmLLB(ctx context.Context, w worker, client gwclient.Client, spec *d
 		return llb.Scratch(), err
 	}
 
-	installOpt, err := installBuildDeps(ctx, w, client, spec, targetKey, opts...)
+	installOpt, err := installBuildDeps(ctx, w, sOpt, client, spec, targetKey, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
