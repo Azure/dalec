@@ -2030,6 +2030,18 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 						"/non-existing-file": {},
 					},
 				},
+				{
+					Name: "Test that permissions check fails the build",
+					Files: map[string]dalec.FileCheckOutput{
+						"/": {Permissions: 0o644, IsDir: true},
+					},
+				},
+				{
+					Name: "Test that dir check fails the build",
+					Files: map[string]dalec.FileCheckOutput{
+						"/": {IsDir: false},
+					},
+				},
 			},
 		}
 
@@ -2037,10 +2049,14 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
 			_, err := client.Solve(ctx, sr)
 			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+			assert.ErrorContains(t, err, "expected \"/\" permissions \"-rw-r--r--\", got \"-rwxr-xr-x\"")
+			assert.ErrorContains(t, err, "expected \"/\" mode \"ModeFile\", got \"ModeDir\"")
 
 			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
 			_, err = client.Solve(ctx, sr)
 			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+			assert.ErrorContains(t, err, "expected \"/\" permissions \"-rw-r--r--\", got \"-rwxr-xr-x\"")
+			assert.ErrorContains(t, err, "expected \"/\" mode \"ModeFile\", got \"ModeDir\"")
 		})
 	})
 
@@ -2073,6 +2089,8 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 					Name: "Test that tests fail the build",
 					Files: map[string]dalec.FileCheckOutput{
 						"/usr/share/test-file": {},
+						// Make sure dir permissions are chcked correctly.
+						"/usr/share": {IsDir: true, Permissions: 0o755},
 					},
 				},
 			},
