@@ -97,18 +97,52 @@ func runTests(ctx context.Context, client gwclient.Client, w worker, spec *dalec
 	return ref, errors.Wrap(err, "TESTS FAILED")
 }
 
+var azLinuxRepoConfig = dalec.RepoPlatformConfig{
+	ConfigRoot: "/etc/yum.repos.d",
+	GPGKeyRoot: "/etc/pki/rpm-gpg",
+}
+
+func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
+	withRepos, err := dalec.WithRepoConfigs(repos, &azLinuxRepoConfig, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	withData, err := dalec.WithRepoData(repos, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	keyMounts, keyPaths, err := dalec.GetRepoKeys(repos, &azLinuxRepoConfig, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	repoMounts := dalec.WithRunOptions(withRepos, withData, keyMounts)
+	return []installOpt{withMounts(repoMounts), importKeys(keyPaths)}, nil
+}
+
 func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
 	base, err := w.Base(sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
+
+	testRepos := spec.GetTestRepos(targetKey)
+	importRepos, err := repoMountInstallOpts(testRepos, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	return func(in llb.State) llb.State {
 		deps := spec.GetTestDeps(targetKey)
 		if len(deps) == 0 {
 			return in
 		}
+
+		installOpts := []installOpt{atRoot("/tmp/rootfs")}
 		return base.Run(
-			w.Install(spec.GetTestDeps(targetKey), atRoot("/tmp/rootfs")),
+			w.Install(deps, append(installOpts, importRepos...)...),
 			dalec.WithConstraints(opts...),
 			dalec.ProgressGroup("Install test dependencies"),
 		).AddMount("/tmp/rootfs", in)
@@ -161,14 +195,21 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 		return func(in llb.State) llb.State { return in }, nil
 	}
 
+	repos := spec.GetBuildRepos(targetKey)
+
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
 		return nil, err
 	}
 
-	opts = append(opts, dalec.ProgressGroup("Install build deps"))
+	importRepos, err := repoMountInstallOpts(repos, sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
 
-	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps, installWithConstraints(opts))(ctx, client, sOpt)
+	opts = append(opts, dalec.ProgressGroup("Install build deps"))
+	installOpt, err := installBuildDepsPackage(targetKey, spec.Name, w, deps,
+		append(importRepos, installWithConstraints(opts))...)(ctx, client, sOpt)
 	if err != nil {
 		return nil, err
 	}

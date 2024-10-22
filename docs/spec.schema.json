@@ -548,11 +548,62 @@
 					},
 					"type": "array",
 					"description": "Test lists any extra packages required for running tests\nThese packages are only installed for tests which have steps that require\nrunning a command in the built container.\nSee [TestSpec] for more information."
+				},
+				"extra_repos": {
+					"items": {
+						"$ref": "#/$defs/PackageRepositoryConfig"
+					},
+					"type": "array",
+					"description": "ExtraRepos is used to inject extra package repositories that may be used to\nsatisfy package dependencies in various stages."
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
 			"description": "PackageDependencies is a list of dependencies for a package."
+		},
+		"PackageRepositoryConfig": {
+			"properties": {
+				"keys": {
+					"additionalProperties": {
+						"$ref": "#/$defs/Source"
+					},
+					"type": "object",
+					"description": "Keys are the list of keys that need to be imported to use the configured\nrepositories"
+				},
+				"config": {
+					"additionalProperties": {
+						"$ref": "#/$defs/Source"
+					},
+					"type": "object",
+					"description": "Config list of repo configs to to add to the environment.  The format of\nthese configs are distro specific (e.g. apt/yum configs)."
+				},
+				"data": {
+					"items": {
+						"$ref": "#/$defs/SourceMount"
+					},
+					"type": "array",
+					"description": "Data lists all the extra data that needs to be made available for the\nprovided repository config to work.\nAs an example, if the provided config is referencing a file backed repository\nthen data would include the file data, assuming its not already available\nin the environment."
+				},
+				"envs": {
+					"items": {
+						"type": "string",
+						"enum": [
+							"build",
+							"test",
+							"install"
+						]
+					},
+					"type": "array",
+					"description": "Envs specifies the list of environments to make the repositories available\nduring.\nAcceptable values are:\n - \"build\"   - Repositories are added prior to installing build dependencies\n - \"test\"    - Repositories are added prior to installing test dependencies\n - \"install\" - Repositories are added prior to installing the output\n               package in a container build target."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"config",
+				"envs"
+			],
+			"description": "PackageRepositoryConfig"
 		},
 		"PackageSigner": {
 			"properties": {
@@ -860,7 +911,7 @@
 				"dest",
 				"spec"
 			],
-			"description": "SourceMount is used to take a [Source] and mount it into a build step."
+			"description": "SourceMount wraps a [Source] with a target mount point."
 		},
 		"Spec": {
 			"properties": {

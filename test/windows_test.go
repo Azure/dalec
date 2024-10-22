@@ -37,7 +37,7 @@ func TestWindows(t *testing.T) {
 			Worker:  "windowscross/worker",
 		}, workerConfig{
 			ContextName: windows.WindowscrossWorkerContextName,
-			CreateRepo: func(pkg llb.State) llb.StateOption {
+			CreateRepo: func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
 				return func(in llb.State) llb.State {
 					dt := []byte(`
 deb [trusted=yes] copy:/tmp/repo /

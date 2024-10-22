@@ -55,12 +55,22 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 		rootfs = llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	}
 
+	installTimeRepos := spec.GetInstallRepos(targetKey)
+	importRepos, err := repoMountInstallOpts(installTimeRepos, sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
 	rpmMountDir := "/tmp/rpms"
 	pkgs := w.BasePackages()
 	pkgs = append(pkgs, filepath.Join(rpmMountDir, "**/*.rpm"))
 
+	installOpts := []installOpt{atRoot(workPath)}
+	installOpts = append(installOpts, importRepos...)
+	installOpts = append(installOpts, []installOpt{noGPGCheck, withManifests, installWithConstraints(opts)}...)
+
 	rootfs = builderImg.Run(
-		w.Install(pkgs, atRoot(workPath), noGPGCheck, withManifests, installWithConstraints(opts)),
+		w.Install(pkgs, installOpts...),
 		llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
 		dalec.WithConstraints(opts...),
 	).AddMount(workPath, rootfs)

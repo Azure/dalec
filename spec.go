@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -350,6 +351,47 @@ type PackageDependencies struct {
 	// running a command in the built container.
 	// See [TestSpec] for more information.
 	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
+
+	// ExtraRepos is used to inject extra package repositories that may be used to
+	// satisfy package dependencies in various stages.
+	ExtraRepos []PackageRepositoryConfig `yaml:"extra_repos,omitempty" json:"extra_repos,omitempty"`
+}
+
+func (p *PackageDependencies) GetExtraRepos(env string) []PackageRepositoryConfig {
+	var repos []PackageRepositoryConfig
+	for _, repo := range p.ExtraRepos {
+		if slices.Contains(repo.Envs, env) {
+			repos = append(repos, repo)
+		}
+	}
+
+	return repos
+}
+
+// PackageRepositoryConfig
+type PackageRepositoryConfig struct {
+	// Keys are the list of keys that need to be imported to use the configured
+	// repositories
+	Keys map[string]Source `yaml:"keys,omitempty" json:"keys,omitempty"`
+
+	// Config list of repo configs to to add to the environment.  The format of
+	// these configs are distro specific (e.g. apt/yum configs).
+	Config map[string]Source `yaml:"config" json:"config"`
+
+	// Data lists all the extra data that needs to be made available for the
+	// provided repository config to work.
+	// As an example, if the provided config is referencing a file backed repository
+	// then data would include the file data, assuming its not already available
+	// in the environment.
+	Data []SourceMount `yaml:"data,omitempty" json:"data,omitempty"`
+	// Envs specifies the list of environments to make the repositories available
+	// during.
+	// Acceptable values are:
+	//  - "build"   - Repositories are added prior to installing build dependencies
+	//  - "test"    - Repositories are added prior to installing test dependencies
+	//  - "install" - Repositories are added prior to installing the output
+	//                package in a container build target.
+	Envs []string `yaml:"envs" json:"envs" jsonschema:"enum=build,enum=test,enum=install"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
@@ -370,7 +412,7 @@ type BuildStep struct {
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 }
 
-// SourceMount is used to take a [Source] and mount it into a build step.
+// SourceMount wraps a [Source] with a target mount point.
 type SourceMount struct {
 	// Dest is the destination directory to mount to
 	Dest string `yaml:"dest" json:"dest" jsonschema:"required"`
