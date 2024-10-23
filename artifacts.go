@@ -12,6 +12,8 @@ import (
 type Artifacts struct {
 	// Binaries is the list of binaries to include in the package.
 	Binaries map[string]ArtifactConfig `yaml:"binaries,omitempty" json:"binaries,omitempty"`
+	// Libexec is the list of additional binaries that may be invoked by the main package binary.
+	Libexec map[string]ArtifactConfig `yaml:"libexec,omitempty" json:"libexec,omitempty"`
 	// Manpages is the list of manpages to include in the package.
 	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
 	// DataDirs is a list of read-only architecture-independent data files, to be placed in /usr/share/

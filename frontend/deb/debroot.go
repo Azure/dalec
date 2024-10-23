@@ -452,6 +452,16 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 		}
 	}
 
+	if len(spec.Artifacts.Libexec) > 0 {
+		sorted := dalec.SortMapKeys(spec.Artifacts.Libexec)
+		for _, key := range sorted {
+			cfg := spec.Artifacts.Libexec[key]
+			resolved := cfg.ResolveName(key)
+			targetDir := filepath.Join(`/usr/libexec`, cfg.SubPath)
+			writeInstall(key, targetDir, resolved)
+		}
+	}
+
 	if len(spec.Artifacts.Libs) > 0 {
 		sorted := dalec.SortMapKeys(spec.Artifacts.Libs)
 		for _, key := range sorted {

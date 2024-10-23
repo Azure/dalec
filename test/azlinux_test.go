@@ -1022,6 +1022,110 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("test libexec file installation", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "libexec-test",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Should install specified data files",
+			Sources: map[string]dalec.Source{
+				"no_name_no_subpath": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+				"name_only": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+				"name_and_subpath": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+				"subpath_only": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+				"nested_subpath": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+			},
+			Build: dalec.ArtifactBuild{},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"no_name_no_subpath": {},
+				},
+				Libexec: map[string]dalec.ArtifactConfig{
+					"no_name_no_subpath": {},
+					"name_only": {
+						Name: "this_is_the_name_only",
+					},
+					"name_and_subpath": {
+						SubPath: "subpath",
+						Name:    "custom_name",
+					},
+					"subpath_only": dalec.ArtifactConfig{
+						SubPath: "custom",
+					},
+					"nested_subpath": dalec.ArtifactConfig{
+						SubPath: "libexec-test/abcdefg",
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/no_name_no_subpath", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/this_is_the_name_only", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/subpath/custom_name", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath_only", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/abcdefg/nested_subpath", 0o755); err != nil {
+				t.Fatal(err)
+			}
+		})
+	})
+
 	t.Run("test config files handled", func(t *testing.T) {
 		t.Parallel()
 		spec := &dalec.Spec{

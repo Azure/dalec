@@ -76,6 +76,13 @@
 					"type": "object",
 					"description": "Binaries is the list of binaries to include in the package."
 				},
+				"libexec": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "Libexec is the list of additional binaries that may be invoked by the main package binary."
+				},
 				"manpages": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactConfig"
