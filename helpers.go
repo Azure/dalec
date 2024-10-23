@@ -523,7 +523,7 @@ func WithRepoConfigs(repos []PackageRepositoryConfig, cfg *RepoPlatformConfig, s
 	return WithRunOptions(configStates...), nil
 }
 
-func GetRepoKeys(configs []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
+func GetRepoKeys(worker llb.State, configs []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
 	keys := []llb.RunOption{}
 	names := []string{}
 	for _, config := range configs {
@@ -534,8 +534,21 @@ func GetRepoKeys(configs []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOp
 				return nil, nil, err
 			}
 
-			keys = append(keys,
-				llb.AddMount(filepath.Join(cfg.GPGKeyRoot, name), gpgKey, llb.SourcePath(name)))
+			mountPath := filepath.Join(cfg.GPGKeyRoot, name)
+
+			opt := runOptionFunc(func(ei *llb.ExecInfo) {
+				inPath := filepath.Join("/tmp/in", name)
+				outPath := filepath.Join("/tmp/out", name)
+				keySt := worker.Run(
+					// dearmor key if necessary
+					ShArgs(fmt.Sprintf("cat '%s' | gpg --dearmor --output '%s'", inPath, outPath)),
+					llb.AddMount(inPath, gpgKey, llb.SourcePath(name))).
+					AddMount("/tmp/out/", llb.Scratch())
+
+				llb.AddMount(mountPath, keySt, llb.SourcePath(name)).SetRunOption(ei)
+			})
+
+			keys = append(keys, opt)
 			names = append(names, name)
 		}
 	}

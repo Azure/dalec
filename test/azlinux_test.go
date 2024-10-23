@@ -27,6 +27,23 @@ var azlinuxConstraints = constraintsSymbols{
 	LessThanOrEqual:    "<=",
 }
 
+var azlinuxTestRepoConfig = map[string]dalec.Source{
+	"local.repo": {
+		Inline: &dalec.SourceInline{
+			File: &dalec.SourceInlineFile{
+				Contents: `[Local]
+name=Local Repository
+baseurl=file:///opt/repo
+repo_gpgcheck=1
+priority=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/public.key
+	`,
+			},
+		},
+	},
+}
+
 func TestMariner2(t *testing.T) {
 	t.Parallel()
 
@@ -49,9 +66,11 @@ func TestMariner2(t *testing.T) {
 			Targets: "/etc/systemd/system",
 		},
 		Worker: workerConfig{
-			ContextName: azlinux.Mariner2WorkerContextName,
-			CreateRepo:  azlinuxWithRepo,
-			Constraints: azlinuxConstraints,
+			ContextName:    azlinux.Mariner2WorkerContextName,
+			CreateRepo:     azlinuxWithRepo,
+			SignRepo:       signRepoAzLinux,
+			TestRepoConfig: azlinuxTestRepoConfig,
+			Constraints:    azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "mariner",
@@ -79,9 +98,11 @@ func TestAzlinux3(t *testing.T) {
 			Targets: "/etc/systemd/system",
 		},
 		Worker: workerConfig{
-			ContextName: azlinux.Azlinux3WorkerContextName,
-			CreateRepo:  azlinuxWithRepo,
-			Constraints: azlinuxConstraints,
+			ContextName:    azlinux.Azlinux3WorkerContextName,
+			CreateRepo:     azlinuxWithRepo,
+			SignRepo:       signRepoAzLinux,
+			TestRepoConfig: azlinuxTestRepoConfig,
+			Constraints:    azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "azurelinux",
@@ -127,11 +148,12 @@ type workerConfig struct {
 	// as well as optional state options for additional configuration.
 	// the output [llb.StateOption] should install the repo into the worker image.
 	CreateRepo func(llb.State, ...llb.StateOption) llb.StateOption
+	SignRepo   func(llb.State) llb.StateOption
 	// ContextName is the name of the worker context that the build target will use
 	// to see if a custom worker is proivded in a context
-	ContextName string
-
-	Constraints constraintsSymbols
+	ContextName    string
+	TestRepoConfig map[string]dalec.Source
+	Constraints    constraintsSymbols
 }
 
 type constraintsSymbols struct {
@@ -1359,9 +1381,6 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 	})
 
 	t.Run("custom repo", func(t *testing.T) {
-		if strings.HasPrefix(testConfig.Target.Package, "jammy") {
-			t.Skip("skipping custom repo test for jammy")
-		}
 
 		t.Parallel()
 
@@ -1483,7 +1502,7 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 	})
 }
 
-func signRepo(gpgKey llb.State) llb.StateOption {
+func signRepoAzLinux(gpgKey llb.State) llb.StateOption {
 	// key should be a state that has a public key under /public.key
 	return func(in llb.State) llb.State {
 		return in.Run(
@@ -1517,7 +1536,7 @@ Expire-Date: 0
 %commit
 EOF
 		`), pg).
-		Run(dalec.ShArgs("gpg --export --armor test@example.com > /tmp/gpg/PUBLIC-RPM-GPG-KEY; gpg --export-secret-keys --armor test@example.com > /tmp/gpg/private.key"), pg).
+		Run(dalec.ShArgs("gpg --export --armor test@example.com > /tmp/gpg/public.key; gpg --export-secret-keys --armor test@example.com > /tmp/gpg/private.key"), pg).
 		AddMount("/tmp/gpg", llb.Scratch())
 
 	return st
@@ -1570,22 +1589,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 
 				ExtraRepos: []dalec.PackageRepositoryConfig{
 					{
-						Config: map[string]dalec.Source{
-							"local.repo": {
-								Inline: &dalec.SourceInline{
-									File: &dalec.SourceInlineFile{
-										Contents: `[Local]
-name=Local Repository
-baseurl=file:///opt/repo
-repo_gpgcheck=1
-priority=0
-enabled=1
-gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
-	`,
-									},
-								},
-							},
-						},
+						Config: cfg.Worker.TestRepoConfig,
 						Data: []dalec.SourceMount{
 							{
 								Dest: "/opt/repo",
@@ -1630,7 +1634,7 @@ gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
 		pkg := reqToState(ctx, client, sr, t)
 
 		// create a repo using our existing worker
-		workerWithRepo := w.With(cfg.Worker.CreateRepo(pkg, signRepo(key)))
+		workerWithRepo := w.With(cfg.Worker.CreateRepo(pkg, cfg.Worker.SignRepo(key)))
 
 		// copy out just the contents of the repo
 		return llb.Scratch().File(llb.Copy(workerWithRepo, "/opt/repo", "/", &llb.CopyInfo{CopyDirContentsOnly: true}))
@@ -1660,17 +1664,17 @@ gpgkey=file:///etc/pki/rpm/PUBLIC-RPM-GPG-KEY
 		w := reqToState(ctx, gwc, sr, t)
 
 		// generate a gpg key to sign the repo
-		// under /PUBLIC-RPM-GPG-KEY
+		// under /public.key
 		gpgKey := generateGPGKey(w)
 		repoState := getRepoState(ctx, gwc, w, gpgKey)
 
 		spec := getSpec(map[string]dalec.Source{
 			// in the dalec spec, the public key will be passed in via build context
-			"PUBLIC-RPM-GPG-KEY": {
+			"public.key": {
 				Context: &dalec.SourceContext{
 					Name: "repo-public-key",
 				},
-				Path: "PUBLIC-RPM-GPG-KEY",
+				Path: "public.key",
 			},
 		})
 

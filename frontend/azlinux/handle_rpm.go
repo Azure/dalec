@@ -102,7 +102,7 @@ var azLinuxRepoConfig = dalec.RepoPlatformConfig{
 	GPGKeyRoot: "/etc/pki/rpm-gpg",
 }
 
-func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
+func repoMountInstallOpts(worker llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
 	withRepos, err := dalec.WithRepoConfigs(repos, &azLinuxRepoConfig, sOpt, opts...)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.Sour
 		return nil, err
 	}
 
-	keyMounts, keyPaths, err := dalec.GetRepoKeys(repos, &azLinuxRepoConfig, sOpt, opts...)
+	keyMounts, keyPaths, err := dalec.GetRepoKeys(worker, repos, &azLinuxRepoConfig, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey s
 	}
 
 	testRepos := spec.GetTestRepos(targetKey)
-	importRepos, err := repoMountInstallOpts(testRepos, sOpt, opts...)
+	importRepos, err := repoMountInstallOpts(base, testRepos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +202,12 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 		return nil, err
 	}
 
-	importRepos, err := repoMountInstallOpts(repos, sOpt, opts...)
+	base, err := w.Base(sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	importRepos, err := repoMountInstallOpts(base, repos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
