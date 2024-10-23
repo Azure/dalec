@@ -503,23 +503,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		libexecFileKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libexec)
 		for _, k := range libexecFileKeys {
 			le := w.Spec.Artifacts.Libexec[k]
-
-			packageName := le.PackageName
-			if packageName == "" {
-				packageName = w.Spec.Name
-			}
-
-			targetDir := filepath.Join(`%{buildroot}/%{_libexecdir}`, packageName, le.SubPath)
-			fmt.Fprintln(b, "mkdir -p", targetDir)
-
-			var targetPath string
-			file := le.ResolveName(k)
-			if !strings.Contains(file, "*") {
-				targetPath = filepath.Join(targetDir, file)
-			} else {
-				targetPath = targetDir + "/"
-			}
-			fmt.Fprintln(b, "cp -r", k, targetPath)
+			copyArtifact(`%{buildroot}/%{_libexecdir}`, k, &le)
 		}
 	}
 
@@ -627,12 +611,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 		dataKeys := dalec.SortMapKeys(w.Spec.Artifacts.Libexec)
 		for _, k := range dataKeys {
 			le := w.Spec.Artifacts.Libexec[k]
-			packageName := le.PackageName
-			if packageName == "" {
-				packageName = w.Spec.Name
-			}
-
-			targetDir := filepath.Join(`%{_libexecdir}`, packageName, le.SubPath)
+			targetDir := filepath.Join(`%{_libexecdir}`, le.SubPath)
 			fullPath := filepath.Join(targetDir, le.ResolveName(k))
 			fmt.Fprintln(b, fullPath)
 		}

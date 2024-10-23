@@ -456,14 +456,8 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir string) []llb.
 		sorted := dalec.SortMapKeys(spec.Artifacts.Libexec)
 		for _, key := range sorted {
 			cfg := spec.Artifacts.Libexec[key]
-
-			packageName := cfg.PackageName
-			if packageName == "" {
-				packageName = spec.Name
-			}
-
 			resolved := cfg.ResolveName(key)
-			targetDir := filepath.Join(`/usr/libexec`, packageName, cfg.SubPath)
+			targetDir := filepath.Join(`/usr/libexec`, cfg.SubPath)
 			writeInstall(key, targetDir, resolved)
 		}
 	}

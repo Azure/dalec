@@ -1059,6 +1059,14 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						},
 					},
 				},
+				"nested_subpath": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
 			},
 			Build: dalec.ArtifactBuild{},
 			Artifacts: dalec.Artifacts{
@@ -1068,15 +1076,17 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				Libexec: map[string]dalec.ArtifactConfig{
 					"no_name_no_subpath": {},
 					"name_only": {
-						Name: "name_only",
+						Name: "this_is_the_name_only",
 					},
 					"name_and_subpath": {
-						SubPath:     "subpath",
-						Name:        "custom_name",
-						PackageName: "custom",
+						SubPath: "subpath",
+						Name:    "custom_name",
 					},
 					"subpath_only": dalec.ArtifactConfig{
 						SubPath: "custom",
+					},
+					"nested_subpath": dalec.ArtifactConfig{
+						SubPath: "libexec-test/abcdefg",
 					},
 				},
 			},
@@ -1091,16 +1101,19 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/no_name_no_subpath", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/no_name_no_subpath", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/name_only", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/this_is_the_name_only", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath/custom_name", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/subpath/custom_name", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/custom/subpath_only", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath_only", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/abcdefg/nested_subpath", 0o755); err != nil {
 				t.Fatal(err)
 			}
 		})

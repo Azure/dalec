@@ -36,10 +36,6 @@
 				"name": {
 					"type": "string",
 					"description": "Name is file or dir name to use for the artifact in the package.\nIf empty, the file or dir name from the produced artifact will be used."
-				},
-				"packageName": {
-					"type": "string",
-					"description": "PackageName is the name of the package. This can be used to replace\n`spec.Name` when destination paths are generated."
 				}
 			},
 			"additionalProperties": false,
