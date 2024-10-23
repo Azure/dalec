@@ -49,13 +49,13 @@ though behavior may differ between different OS's/distros.
 
 Libexec files are additional executable files that may be executed by one of
 the main package executables. On Linux these would typically get installed into
-`/usr/libexec/<package-name>`.
+`/usr/libexec/` or `/usr/libexec/<main-executable-name>`.
 
 Files under libexec are a mapping of file path to [artifact configuration](#artifact-configuration).
-If `subpath` is not supplied, it will default to the package name. The file
-path is the path to a file that must be available after the build section has
-finished. This path is relative to the working directory of the build phase
-*before* any directory changes are made.
+If `subpath` is not supplied, the artifact will be installed in `/usr/libexec`
+directly. The file path is the path to a file that must be available after the
+build section has finished. This path is relative to the working directory of
+the build phase *before* any directory changes are made.
 
 Example:
 
