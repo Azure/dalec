@@ -621,8 +621,9 @@ func (c FileCheckOutput) Check(dt string, mode fs.FileMode, isDir bool, p string
 		return &CheckOutputError{Kind: "mode", Expected: "ModeFile", Actual: "ModeDir", Path: p}
 	}
 
-	if c.Permissions != 0 && c.Permissions != mode {
-		return &CheckOutputError{Kind: "permissions", Expected: c.Permissions.String(), Actual: mode.String(), Path: p}
+	perm := mode.Perm()
+	if c.Permissions != 0 && c.Permissions != perm {
+		return &CheckOutputError{Kind: "permissions", Expected: c.Permissions.String(), Actual: perm.String(), Path: p}
 	}
 
 	return c.CheckOutput.Check(dt, p)
