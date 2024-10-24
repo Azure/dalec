@@ -448,7 +448,7 @@ func testCustomWindowscrossWorker(ctx context.Context, t *testing.T, targetCfg t
 	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		// base package that will be used as a build dependency of the main package.
 		depSpec := &dalec.Spec{
-			Name:        "dalec-test-package",
+			Name:        "dalec-test-package-windows-worker-dep",
 			Version:     "0.0.1",
 			Revision:    "1",
 			Description: "A basic package for various testing uses",
