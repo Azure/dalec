@@ -1250,5 +1250,8 @@
 			],
 			"description": "TestStep is a wrapper for [BuildStep] to include checks on stdio streams"
 		}
+	},
+	"patternProperties": {
+		"^x-": true
 	}
 }

@@ -17,6 +17,10 @@ func main() {
 	}
 
 	schema := r.Reflect(&dalec.Spec{})
+	if schema.PatternProperties == nil {
+		schema.PatternProperties = make(map[string]*jsonschema.Schema)
+	}
+	schema.PatternProperties["^x-"] = &jsonschema.Schema{}
 
 	dt, err := json.MarshalIndent(schema, "", "\t")
 	if err != nil {
