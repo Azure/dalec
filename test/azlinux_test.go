@@ -1415,7 +1415,7 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		// base package that will be used as a build dependency of the main package.
 		depSpec := &dalec.Spec{
-			Name:        "dalec-test-package",
+			Name:        "dalec-test-package-custom-worker-dep",
 			Version:     "0.0.1",
 			Revision:    "1",
 			Description: "A basic package for various testing uses",
@@ -1543,30 +1543,37 @@ EOF
 }
 
 func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
-	depSpec := &dalec.Spec{
-		Name:        "dalec-test-package",
-		Version:     "0.0.1",
-		Revision:    "1",
-		Description: "A basic package for various testing uses",
-		License:     "MIT",
-		Sources: map[string]dalec.Source{
-			"version.txt": {
-				Inline: &dalec.SourceInline{
-					File: &dalec.SourceInlineFile{
-						Contents: "version: " + "0.0.1",
+	// provide a unique suffix per test otherwise, depending on the test case,
+	// you can end up with a false positive result due to apt package caching.
+	// e.g. there may not be a public key for the repo under test, but if the
+	// package is already in the package cache (due to other tests that injected
+	// a public key) then apt may use that package anyway.
+	getDepSpec := func(suffix string) *dalec.Spec {
+		return &dalec.Spec{
+			Name:        "dalec-test-package" + suffix,
+			Version:     "0.0.1",
+			Revision:    "1",
+			Description: "A basic package for various testing uses",
+			License:     "MIT",
+			Sources: map[string]dalec.Source{
+				"version.txt": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: "version: " + "0.0.1",
+						},
 					},
 				},
 			},
-		},
 
-		Artifacts: dalec.Artifacts{
-			Docs: map[string]dalec.ArtifactConfig{
-				"version.txt": {},
+			Artifacts: dalec.Artifacts{
+				Docs: map[string]dalec.ArtifactConfig{
+					"version.txt": {},
+				},
 			},
-		},
+		}
 	}
 
-	getSpec := func(keyConfig map[string]dalec.Source) *dalec.Spec {
+	getSpec := func(dep *dalec.Spec, keyConfig map[string]dalec.Source) *dalec.Spec {
 		return &dalec.Spec{
 			Name:        "dalec-test-custom-repo",
 			Version:     "0.0.1",
@@ -1575,14 +1582,14 @@ func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 			License:     "MIT",
 			Dependencies: &dalec.PackageDependencies{
 				Build: map[string]dalec.PackageConstraints{
-					"dalec-test-package": {},
+					dep.Name: {},
 				},
 				Runtime: map[string]dalec.PackageConstraints{
-					"dalec-test-package": {},
+					dep.Name: {},
 				},
 
 				Test: []string{
-					"dalec-test-package",
+					dep.Name,
 					"bash",
 					"coreutils",
 				},
@@ -1608,7 +1615,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
 					{
-						Command: `set -x; [ "$(cat /usr/share/doc/dalec-test-package/version.txt)" = "version: 0.0.1" ]`,
+						Command: `set -x; [ "$(cat /usr/share/doc/` + dep.Name + `/version.txt)" = "version: 0.0.1" ]`,
 					},
 				},
 			},
@@ -1629,7 +1636,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 
 	}
 
-	getRepoState := func(ctx context.Context, client gwclient.Client, w llb.State, key llb.State) llb.State {
+	getRepoState := func(ctx context.Context, t *testing.T, client gwclient.Client, w llb.State, key llb.State, depSpec *dalec.Spec) llb.State {
 		sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(cfg.Target.Package))
 		pkg := reqToState(ctx, client, sr, t)
 
@@ -1640,68 +1647,77 @@ func testCustomRepo(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 		return llb.Scratch().File(llb.Copy(workerWithRepo, "/opt/repo", "/", &llb.CopyInfo{CopyDirContentsOnly: true}))
 	}
 
-	testNoPublicKey := func(ctx context.Context, gwc gwclient.Client) {
-		sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
-		w := reqToState(ctx, gwc, sr, t)
-
-		// generate a gpg public/private key pair
-		gpgKey := generateGPGKey(w)
-
-		repoState := getRepoState(ctx, gwc, w, gpgKey)
-
-		sr = newSolveRequest(withSpec(ctx, t, getSpec(nil)), withBuildContext(ctx, t, "test-repo", repoState), withBuildTarget(cfg.Target.Container))
-		// don't error here, the logs are intended to be checked by
-		// RunTestExpecting
-
-		_, err := gwc.Solve(ctx, sr)
-		if err == nil {
-			t.Fatal("expected solve to fail")
-		}
-	}
-
-	testWithPublicKey := func(ctx context.Context, gwc gwclient.Client) {
-		sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
-		w := reqToState(ctx, gwc, sr, t)
-
-		// generate a gpg key to sign the repo
-		// under /public.key
-		gpgKey := generateGPGKey(w)
-		repoState := getRepoState(ctx, gwc, w, gpgKey)
-
-		spec := getSpec(map[string]dalec.Source{
-			// in the dalec spec, the public key will be passed in via build context
-			"public.key": {
-				Context: &dalec.SourceContext{
-					Name: "repo-public-key",
-				},
-				Path: "public.key",
-			},
-		})
-
-		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, "test-repo", repoState),
-			withBuildContext(ctx, t, "repo-public-key", gpgKey),
-			withBuildTarget(cfg.Target.Container))
-
-		res := solveT(ctx, t, gwc, sr)
-		_, err := res.SingleRef()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
 	t.Run("no public key", func(t *testing.T) {
 		t.Parallel()
+
+		testNoPublicKey := func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
+			w := reqToState(ctx, gwc, sr, t)
+
+			// generate a gpg public/private key pair
+			gpgKey := generateGPGKey(w)
+
+			depSpec := getDepSpec("no-public-key")
+			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec)
+
+			sr = newSolveRequest(
+				withSpec(ctx, t, getSpec(depSpec, nil)),
+				withBuildContext(ctx, t, "test-repo", repoState),
+				withBuildTarget(cfg.Target.Container),
+			)
+
+			_, err := gwc.Solve(ctx, sr)
+			if err == nil {
+				t.Fatal("expected solve to fail")
+			}
+		}
+
 		testEnv.RunTest(ctx, t, testNoPublicKey)
 	})
 
 	t.Run("with public key", func(t *testing.T) {
 		t.Parallel()
+
+		testWithPublicKey := func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withBuildTarget(cfg.Target.Worker), withSpec(ctx, t, nil))
+			w := reqToState(ctx, gwc, sr, t)
+
+			// generate a gpg key to sign the repo
+			// under /public.key
+			gpgKey := generateGPGKey(w)
+			depSpec := getDepSpec("with-public-key")
+			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec)
+
+			spec := getSpec(depSpec, map[string]dalec.Source{
+				// in the dalec spec, the public key will be passed in via build context
+				"public.key": {
+					Context: &dalec.SourceContext{
+						Name: "repo-public-key",
+					},
+					Path: "public.key",
+				},
+			})
+
+			sr = newSolveRequest(
+				withSpec(ctx, t, spec),
+				withBuildContext(ctx, t, "test-repo", repoState),
+				withBuildContext(ctx, t, "repo-public-key", gpgKey),
+				withBuildTarget(cfg.Target.Container),
+			)
+
+			res := solveT(ctx, t, gwc, sr)
+			_, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
 		testEnv.RunTest(ctx, t, testWithPublicKey)
 	})
 }
 
 func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
-	pkgName := "dalec-test-package"
+	pkgName := "dalec-test-package-pinned"
 
 	getTestPackageSpec := func(version string) *dalec.Spec {
 		depSpec := &dalec.Spec{
@@ -1794,7 +1810,7 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 		},
 	}
 
-	getWorker := func(ctx context.Context, client gwclient.Client) llb.State {
+	getWorker := func(ctx context.Context, t *testing.T, client gwclient.Client) llb.State {
 		// Build the worker target, this will give us the worker image as an output.
 		// Note: Currently we need to provide a dalec spec just due to how the router is setup.
 		//       The spec can be nil, though, it just needs to be parsable by yaml unmarshaller.
@@ -1817,7 +1833,7 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 			t.Parallel()
 
 			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-				worker := getWorker(ctx, gwc)
+				worker := getWorker(ctx, t, gwc)
 
 				sr := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, cfg.Worker.ContextName, worker), withBuildTarget(cfg.Target.Container))
 				res := solveT(ctx, t, gwc, sr)
