@@ -39,19 +39,27 @@ func appendConstraints(deps map[string]dalec.PackageConstraints) []string {
 
 	for i, dep := range out {
 		constraints := deps[dep]
-		s := dep
+		var versionConstraints []string
 		// Format is specified in https://www.debian.org/doc/debian-policy/ch-relationships.html#syntax-of-relationship-fields
 		if len(constraints.Version) > 0 {
 			ls := constraints.Version
 			slices.Sort(ls)
-			s = fmt.Sprintf("%s (%s)", s, strings.Join(ls, ", "))
+			for _, v := range ls {
+				versionConstraints = append(versionConstraints, fmt.Sprintf("%s (%s)", dep, v))
+			}
+		} else {
+			versionConstraints = append(versionConstraints, dep)
 		}
+
 		if len(constraints.Arch) > 0 {
 			ls := constraints.Arch
 			slices.Sort(ls)
-			s = fmt.Sprintf("%s [%s]", s, strings.Join(ls, ", "))
+			for j, vc := range versionConstraints {
+				versionConstraints[j] = fmt.Sprintf("%s [%s]", vc, strings.Join(ls, " "))
+			}
 		}
-		out[i] = s
+
+		out[i] = strings.Join(versionConstraints, " | ")
 	}
 
 	return out
