@@ -2187,6 +2187,11 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 					},
 				},
 			},
+			Dependencies: &dalec.PackageDependencies{
+				Test: []string{
+					"bash",
+				},
+			},
 			Artifacts: dalec.Artifacts{
 				DataDirs: map[string]dalec.ArtifactConfig{
 					"test-file": {},
@@ -2199,6 +2204,67 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 						"/usr/share/test-file": {},
 						// Make sure dir permissions are chcked correctly.
 						"/usr/share": {IsDir: true, Permissions: 0o755},
+					},
+				},
+				{
+					Name: "Test that test mounts work",
+					Steps: []dalec.TestStep{
+						{
+							Command: "/bin/sh -c 'test -f /mount0'",
+						},
+						{
+							Command: "/bin/sh -c 'test -d /mount1'",
+						},
+						{
+							Command: `/bin/sh -c 'grep "some file" /mont1/some_file'`,
+						},
+						{
+							Command: "/bin/sh -c 'test -f /mount2'",
+						},
+						{
+							Command: `/bin/sh -c 'grep "some other file" /mount2'`,
+						},
+					},
+					Mounts: []dalec.SourceMount{
+						{
+							Dest: "/mount0",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									File: &dalec.SourceInlineFile{
+										Contents: "mount0",
+									},
+								},
+							},
+						},
+						{
+							Dest: "/mount1",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									Dir: &dalec.SourceInlineDir{
+										Files: map[string]*dalec.SourceInlineFile{
+											"some_file": &dalec.SourceInlineFile{
+												Contents: "some file",
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Dest: "/mount2",
+							Spec: dalec.Source{
+								Path: "another_file",
+								Inline: &dalec.SourceInline{
+									Dir: &dalec.SourceInlineDir{
+										Files: map[string]*dalec.SourceInlineFile{
+											"another_file": &dalec.SourceInlineFile{
+												Contents: "some other file",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
