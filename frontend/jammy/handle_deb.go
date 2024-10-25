@@ -2,7 +2,6 @@ package jammy
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"strings"
 
@@ -145,26 +144,59 @@ func customRepoMounts(worker llb.State, repos []dalec.PackageRepositoryConfig, s
 	return dalec.WithRunOptions(withRepos, withData, keyMounts), nil
 }
 
-func installPackages(ls []string, rOpts ...llb.RunOption) llb.RunOption {
+func installPackages(ls []string, opts ...llb.ConstraintsOpt) llb.RunOption {
+	script := llb.Scratch().File(
+		llb.Mkfile("install.sh", 0o755, []byte(`#!/usr/bin/env sh
+set -ex
+
+# Make sure any cached data from local repos is purged since this should not
+# be shared between builds.
+rm -f /var/lib/apt/lists/_*
+apt autoclean -y
+
+apt update
+apt install -y `+strings.Join(ls, " ")+`
+`,
+		)),
+		opts...)
+
+	p := "/tmp/dalec/internal/deb/install.sh"
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
-		// This only runs apt-get update if the pkgcache is older than 10 minutes.
-		dalec.ShArgs(`set -ex; apt update; apt install -y ` + strings.Join(ls, " ")).SetRunOption(ei)
+		llb.AddMount(p, script, llb.SourcePath("install.sh")).SetRunOption(ei)
+		dalec.ShArgs(p).SetRunOption(ei)
 		dalec.WithMountedAptCache(AptCachePrefix).SetRunOption(ei)
-		dalec.WithRunOptions(rOpts...).SetRunOption(ei)
 	})
 }
 
-func installWithConstraints(pkgPath string, pkgName string, rOpts ...llb.RunOption) llb.RunOption {
+func installWithConstraints(pkgPath string, pkgName string, opts ...llb.ConstraintsOpt) llb.RunOption {
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+		script := llb.Scratch().File(
+			llb.Mkfile("install.sh", 0o755, []byte(`#!/usr/bin/env sh
+set -ex
+
+# Make sure any cached data from local repos is purged since this should not
+# be shared between builds.
+rm -f /var/lib/apt/lists/_*
+apt autoclean -y
+
+dpkg -i --force-depends `+pkgPath+`
+
+apt update
+aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject `+pkgName+` :UNINST"
+`),
+			), opts...)
+
 		// The apt solver always tries to select the latest package version even when constraints specify that an older version should be installed and that older version is available in a repo.
 		// This leads the solver to simply refuse to install our target package if the latest version of ANY dependency package is incompatible with the constraints.
 		// To work around this we first install the .deb for the package with dpkg, specifically ignoring any dependencies so that we can avoid the constraints issue.
 		// We then use aptitude to fix the (possibly broken) install of the package, and we pass the aptitude solver a hint to REJECT any solution that involves uninstalling the package.
 		// This forces aptitude to find a solution that will respect the constraints even if the solution involves pinning dependency packages to older versions.
-		dalec.ShArgs(`set -ex; dpkg -i --force-depends ` + pkgPath +
-			fmt.Sprintf(`; apt update; aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject %s :UNINST"`, pkgName)).SetRunOption(ei)
 		dalec.WithMountedAptCache(AptCachePrefix).SetRunOption(ei)
-		dalec.WithRunOptions(rOpts...).SetRunOption(ei)
+
+		p := "/tmp/dalec/internal/deb/install-with-constraints.sh"
+		llb.AddMount(p, script, llb.SourcePath("install.sh")).SetRunOption(ei)
+		dalec.ShArgs(p).SetRunOption(ei)
+
 	})
 }
 
@@ -231,7 +263,7 @@ func basePackages(opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		opts = append(opts, dalec.ProgressGroup("Install base packages"))
 		return in.Run(
-			installPackages([]string{"aptitude", "dpkg-dev", "devscripts", "equivs", "fakeroot", "dh-make", "build-essential", "dh-apparmor", "dh-make", "dh-exec", "debhelper-compat=" + deb.DebHelperCompat}),
+			installPackages([]string{"aptitude", "dpkg-dev", "devscripts", "equivs", "fakeroot", "dh-make", "build-essential", "dh-apparmor", "dh-make", "dh-exec", "debhelper-compat=" + deb.DebHelperCompat}, opts...),
 			dalec.WithConstraints(opts...),
 		).Root()
 	}
@@ -285,7 +317,8 @@ func buildDepends(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, tar
 		)
 
 		return in.Run(
-			installWithConstraints(debPath+"/*.deb", depsSpec.Name, customRepoOpts),
+			installWithConstraints(debPath+"/*.deb", depsSpec.Name, opts...),
+			customRepoOpts,
 			llb.AddMount(debPath, pkg, llb.Readonly),
 			dalec.WithConstraints(opts...),
 		).Root()
