@@ -170,6 +170,11 @@ apt install -y `+strings.Join(ls, " ")+`
 
 func installWithConstraints(pkgPath string, pkgName string, opts ...llb.ConstraintsOpt) llb.RunOption {
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+		// The apt solver always tries to select the latest package version even when constraints specify that an older version should be installed and that older version is available in a repo.
+		// This leads the solver to simply refuse to install our target package if the latest version of ANY dependency package is incompatible with the constraints.
+		// To work around this we first install the .deb for the package with dpkg, specifically ignoring any dependencies so that we can avoid the constraints issue.
+		// We then use aptitude to fix the (possibly broken) install of the package, and we pass the aptitude solver a hint to REJECT any solution that involves uninstalling the package.
+		// This forces aptitude to find a solution that will respect the constraints even if the solution involves pinning dependency packages to older versions.
 		script := llb.Scratch().File(
 			llb.Mkfile("install.sh", 0o755, []byte(`#!/usr/bin/env sh
 set -ex
@@ -186,11 +191,6 @@ aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject `+pkgName+`
 `),
 			), opts...)
 
-		// The apt solver always tries to select the latest package version even when constraints specify that an older version should be installed and that older version is available in a repo.
-		// This leads the solver to simply refuse to install our target package if the latest version of ANY dependency package is incompatible with the constraints.
-		// To work around this we first install the .deb for the package with dpkg, specifically ignoring any dependencies so that we can avoid the constraints issue.
-		// We then use aptitude to fix the (possibly broken) install of the package, and we pass the aptitude solver a hint to REJECT any solution that involves uninstalling the package.
-		// This forces aptitude to find a solution that will respect the constraints even if the solution involves pinning dependency packages to older versions.
 		dalec.WithMountedAptCache(AptCachePrefix).SetRunOption(ei)
 
 		p := "/tmp/dalec/internal/deb/install-with-constraints.sh"

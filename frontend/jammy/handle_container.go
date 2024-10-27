@@ -104,24 +104,8 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 	debug := llb.Scratch().File(llb.Mkfile("debug", 0o644, []byte(`debug=2`)), opts...)
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))
 
-	script := llb.Scratch().File(
-		llb.Mkfile("install.sh", 0o755, []byte(`#!/usr/bin/env sh
-set -ex
-
-rm -f /var/lib/apt/lists/_*
-apt autoclean -y
-
-apt update
-apt install -y /tmp/pkg/*.deb
-		`)),
-		opts...,
-	)
-
-	p := "/tmp/dalec/internal/install/container.sh"
-
 	return baseImg.Run(
-		dalec.ShArgs(p),
-		llb.AddMount(p, script, llb.SourcePath("install.sh")),
+		installPackages([]string{"/tmp/pkg/*.deb"}, opts...),
 		customRepoOpts,
 		llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
 		llb.AddMount("/tmp/pkg", deb, llb.Readonly),
