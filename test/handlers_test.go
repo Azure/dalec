@@ -21,6 +21,8 @@ import (
 // TestHandlerTargetForwarding tests that targets are forwarded to the correct frontend.
 // We do this by registering a phony frontend and then forwarding a target to it and checking the outputs.
 func TestHandlerTargetForwarding(t *testing.T) {
+	t.Parallel()
+
 	runTest := func(t *testing.T, f testenv.TestFunc) {
 		t.Helper()
 		ctx := startTestSpan(baseCtx, t)
@@ -129,10 +131,12 @@ func TestHandlerTargetForwarding(t *testing.T) {
 
 func TestHandlerSubrequestResolve(t *testing.T) {
 	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
 
-	testPlatforms := func(t *testing.T, pls ...string) func(t *testing.T) {
+	testPlatforms := func(ctx context.Context, pls ...string) func(t *testing.T) {
 		return func(t *testing.T) {
 			t.Parallel()
+			startTestSpan(ctx, t)
 
 			runTest(t, func(ctx context.Context, gwc gwclient.Client) {
 				spec := &dalec.Spec{
@@ -190,7 +194,7 @@ func TestHandlerSubrequestResolve(t *testing.T) {
 		}
 	}
 
-	t.Run("no platform", testPlatforms(t))
-	t.Run("single platform", testPlatforms(t, "linux/amd64"))
-	t.Run("multi-platform", testPlatforms(t, "linux/amd64", "linux/arm64"))
+	t.Run("no platform", testPlatforms(ctx))
+	t.Run("single platform", testPlatforms(ctx, "linux/amd64"))
+	t.Run("multi-platform", testPlatforms(ctx, "linux/amd64", "linux/arm64"))
 }

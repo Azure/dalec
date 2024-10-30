@@ -16,9 +16,12 @@ import (
 )
 
 func TestStateWrapper_ReadAt(t *testing.T) {
+	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
+
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, &st, gwc)
 		assert.Nil(t, err)
 
@@ -45,8 +48,11 @@ func TestStateWrapper_ReadAt(t *testing.T) {
 }
 
 func TestStateWrapper_OpenInvalidPath(t *testing.T) {
+	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
+
 	st := llb.Scratch().File(llb.Mkfile("/bar", 0644, []byte("hello world")))
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, &st, gwc)
 		assert.Nil(t, err)
 
@@ -61,10 +67,13 @@ func TestStateWrapper_OpenInvalidPath(t *testing.T) {
 }
 
 func TestStateWrapper_Open(t *testing.T) {
+	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
+
 	st := llb.Scratch().
 		File(llb.Mkfile("/foo", 0644, []byte("hello world")))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		fs, err := bkfs.FromState(ctx, &st, gwc)
 		assert.Nil(t, err)
 
@@ -84,8 +93,11 @@ func TestStateWrapper_Open(t *testing.T) {
 }
 
 func TestStateWrapper_Stat(t *testing.T) {
+	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
+
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0755, []byte("contents")))
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, &st, gwc)
 		assert.Nil(t, err)
 
@@ -103,6 +115,9 @@ func TestStateWrapper_Stat(t *testing.T) {
 }
 
 func TestStateWrapper_ReadDir(t *testing.T) {
+	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
+
 	st := llb.Scratch().File(llb.Mkdir("/bar", 0644)).
 		File(llb.Mkfile("/bar/foo", 0644, []byte("file contents"))).
 		File(llb.Mkdir("/bar/baz", 0644))
@@ -124,7 +139,7 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 		},
 	}
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, &st, gwc)
 		assert.Nil(t, err)
 
@@ -148,6 +163,9 @@ func TestStateWrapper_ReadDir(t *testing.T) {
 }
 
 func TestStateWrapper_Walk(t *testing.T) {
+	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
+
 	// create a simple test file structure like so:
 	/*
 		dir/
@@ -216,7 +234,7 @@ func TestStateWrapper_Walk(t *testing.T) {
 		},
 	}
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, &st, gwc)
 		assert.Nil(t, err)
 		totalCalls := 0
@@ -259,6 +277,9 @@ func TestStateWrapper_Walk(t *testing.T) {
 }
 
 func TestStateWrapper_ReadPartial(t *testing.T) {
+	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
+
 	contents := []byte(`
 		This is a
 		multiline
@@ -266,7 +287,7 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 	`)
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, contents))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, &st, gwc)
 		assert.Nil(t, err)
 
@@ -308,6 +329,9 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 }
 
 func TestStateWrapper_ReadAll(t *testing.T) {
+	t.Parallel()
+	ctx := startTestSpan(baseCtx, t)
+
 	// purposefully exceed initial length of io.ReadAll buffer (512)
 	b := make([]byte, 520)
 	for i := 0; i < 520; i++ {
@@ -316,7 +340,7 @@ func TestStateWrapper_ReadAll(t *testing.T) {
 
 	st := llb.Scratch().File(llb.Mkfile("/file", 0644, b))
 
-	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		rfs, err := bkfs.FromState(ctx, &st, gwc)
 		assert.Nil(t, err)
 
