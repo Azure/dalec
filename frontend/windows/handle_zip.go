@@ -143,12 +143,12 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	binaries := maps.Keys(spec.Artifacts.Binaries)
 	script := generateInvocationScript(binaries)
 
-	st := worker.Run(
+	builder := worker.With(dalec.SetBuildNetworkMode(spec))
+	st := builder.Run(
 		dalec.ShArgs(script.String()),
 		llb.Dir("/build"),
 		withSourcesMounted("/build", patched, spec.Sources),
 		llb.AddMount("/tmp/scripts", buildScript),
-		llb.Network(llb.NetModeNone),
 	).AddMount(outputDir, llb.Scratch())
 
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)

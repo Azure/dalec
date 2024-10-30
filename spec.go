@@ -401,6 +401,11 @@ type ArtifactBuild struct {
 	Steps []BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+
+	// NetworkMode sets the network mode to use during the build phase.
+	// Accepted values: none, sandbox
+	// Default: none
+	NetworkMode string `yaml:"network_mode,omitempty" json:"network_mode,omitempty" jsonschema:"enum=none,enum=sandbox"`
 }
 
 // BuildStep is used to execute a command to build the artifact(s).

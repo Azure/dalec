@@ -2,6 +2,7 @@ package dalec
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -554,4 +555,25 @@ func GetRepoKeys(worker llb.State, configs []PackageRepositoryConfig, cfg *RepoP
 	}
 
 	return WithRunOptions(keys...), names, nil
+}
+
+const (
+	netModeNone    = "none"
+	netModeSandbox = "sandbox"
+)
+
+// SetBuildNetworkMode returns an [llb.StateOption] that determines which
+func SetBuildNetworkMode(spec *Spec) llb.StateOption {
+	switch spec.Build.NetworkMode {
+	case "", netModeNone:
+		return llb.Network(llb.NetModeNone)
+	case netModeSandbox:
+		return llb.Network(llb.NetModeSandbox)
+	default:
+		return func(in llb.State) llb.State {
+			return in.Async(func(context.Context, llb.State, *llb.Constraints) (llb.State, error) {
+				return in, fmt.Errorf("invalid build network mode %q", spec.Build.NetworkMode)
+			})
+		}
+	}
 }

@@ -216,8 +216,14 @@ func buildDeb(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 		return llb.Scratch(), errors.Wrap(err, "error creating deb for build dependencies")
 	}
 
-	worker = worker.With(installBuildDeps)
-	st, err := deb.BuildDeb(worker, spec, sOpt, targetKey, versionID, opts...)
+	builder := worker.With(installBuildDeps)
+	srcPkg, err := deb.SourcePackage(sOpt, builder, spec, targetKey, versionID, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	builder = builder.With(dalec.SetBuildNetworkMode(spec))
+	st, err := deb.BuildDeb(builder, spec, srcPkg, versionID, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -301,7 +307,13 @@ func buildDepends(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, tar
 
 	pg := dalec.ProgressGroup("Install build dependencies")
 	opts = append(opts, pg)
-	pkg, err := deb.BuildDeb(worker, depsSpec, sOpt, targetKey, "", append(opts, dalec.ProgressGroup("Create intermediate deb for build dependencies"))...)
+
+	srcPkg, err := deb.SourcePackage(sOpt, worker, depsSpec, targetKey, "", opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	pkg, err := deb.BuildDeb(worker, depsSpec, srcPkg, "", append(opts, dalec.ProgressGroup("Create intermediate deb for build dependnencies"))...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
 	}

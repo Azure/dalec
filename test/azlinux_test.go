@@ -228,41 +228,6 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 		})
 	})
 
-	t.Run("should not have internet access during build", func(t *testing.T) {
-		t.Parallel()
-		spec := dalec.Spec{
-			Name:        "test-no-internet-access",
-			Version:     "0.0.1",
-			Revision:    "1",
-			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
-			Vendor:      "Dalec",
-			Packager:    "Dalec",
-			Description: "Should not have internet access during build",
-			Dependencies: &dalec.PackageDependencies{
-				Build: map[string]dalec.PackageConstraints{"curl": {}},
-			},
-			Build: dalec.ArtifactBuild{
-				Steps: []dalec.BuildStep{
-					{
-						Command: fmt.Sprintf("curl --head -ksSf %s > /dev/null", externalTestHost),
-					},
-				},
-			},
-		}
-
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(testConfig.Target.Container))
-			sr.Evaluate = true
-
-			_, err := gwc.Solve(ctx, sr)
-			var xErr *moby_buildkit_v1_frontend.ExitError
-			if !errors.As(err, &xErr) {
-				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
-			}
-		})
-	})
-
 	t.Run("container", func(t *testing.T) {
 		const src2Patch3File = "patch3"
 		src2Patch3Content := []byte(`
@@ -1408,6 +1373,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 		testLinuxPackageTestsFail(ctx, t, testConfig)
+	})
+
+	t.Run("build network mode", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testBuildNetworkMode(ctx, t, testConfig.Target)
 	})
 }
 
