@@ -18,7 +18,10 @@ func TestWindows(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testWindows(ctx, t, "windowscross/container")
+	testWindows(ctx, t, targetConfig{
+		Package:   "windowscross/zip",
+		Container: "windowscross/container",
+	})
 
 	t.Run("custom worker", func(t *testing.T) {
 		t.Parallel()
@@ -75,7 +78,7 @@ func withWindowsAmd64(cfg *newSolveRequestConfig) {
 	cfg.req.FrontendOpt["platform"] = "windows/amd64"
 }
 
-func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
+func testWindows(ctx context.Context, t *testing.T, cfg targetConfig) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -97,7 +100,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(cfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -107,37 +110,6 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		})
 	})
 
-	t.Run("should not have internet access during build", func(t *testing.T) {
-		t.Parallel()
-		spec := dalec.Spec{
-			Name:        "test-no-internet-access",
-			Version:     "0.0.1",
-			Revision:    "1",
-			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
-			Vendor:      "Dalec",
-			Packager:    "Dalec",
-			Description: "Should not have internet access during build",
-			Build: dalec.ArtifactBuild{
-				Steps: []dalec.BuildStep{
-					{
-						Command: fmt.Sprintf("curl --head -ksSf %s > /dev/null", externalTestHost),
-					},
-				},
-			},
-		}
-
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
-			sr.Evaluate = true
-
-			_, err := gwc.Solve(ctx, sr)
-			var xErr *moby_buildkit_v1_frontend.ExitError
-			if !errors.As(err, &xErr) {
-				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
-			}
-		})
-	})
 	t.Run("container", func(t *testing.T) {
 		spec := dalec.Spec{
 			Name:        "test-container-build",
@@ -272,7 +244,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(cfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 			res := solveT(ctx, t, gwc, sr)
 
@@ -363,7 +335,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec), withWindowsAmd64)
+			req := newSolveRequest(withBuildTarget(cfg.Container), withSpec(ctx, t, spec), withWindowsAmd64)
 			solveT(ctx, t, client, req)
 		})
 	})
@@ -372,7 +344,13 @@ echo "$BAR" > bar.txt
 		t.Parallel()
 
 		ctx := startTestSpan(baseCtx, t)
-		testImageConfig(ctx, t, buildTarget, withWindowsAmd64)
+		testImageConfig(ctx, t, cfg.Container, withWindowsAmd64)
+	})
+
+	t.Run("build network mode", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testBuildNetworkMode(ctx, t, cfg)
 	})
 }
 

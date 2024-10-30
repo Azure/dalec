@@ -316,6 +316,14 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 		s.Build.Env[k] = updated
 	}
 
+	if s.Build.NetworkMode != "" {
+		updated, err := expandArgs(lex, s.Build.NetworkMode, args)
+		if err != nil {
+			appendErr(fmt.Errorf("error performing shell expansion on build network mode: %s: %w", s.Build.NetworkMode, err))
+		}
+		s.Build.NetworkMode = updated
+	}
+
 	for i, step := range s.Build.Steps {
 		bs := &step
 		if err := bs.processBuildArgs(lex, args, i); err != nil {
@@ -448,18 +456,20 @@ func (s *Spec) FillDefaults() {
 }
 
 func (s Spec) Validate() error {
+	var outErr error
+
 	for name, src := range s.Sources {
 		if strings.ContainsRune(name, os.PathSeparator) {
-			return &InvalidSourceError{Name: name, Err: sourceNamePathSeparatorError}
+			outErr = goerrors.Join(outErr, &InvalidSourceError{Name: name, Err: sourceNamePathSeparatorError})
 		}
 		if err := src.validate(); err != nil {
-			return &InvalidSourceError{Name: name, Err: fmt.Errorf("error validating source ref %q: %w", name, err)}
+			outErr = goerrors.Join(&InvalidSourceError{Name: name, Err: fmt.Errorf("error validating source ref %q: %w", name, err)})
 		}
 
 		if src.DockerImage != nil && src.DockerImage.Cmd != nil {
 			for p, cfg := range src.DockerImage.Cmd.CacheDirs {
 				if _, err := sharingMode(cfg.Mode); err != nil {
-					return &InvalidSourceError{Name: name, Err: errors.Wrapf(err, "invalid sharing mode for source %q with cache mount at path %q", name, p)}
+					outErr = goerrors.Join(&InvalidSourceError{Name: name, Err: errors.Wrapf(err, "invalid sharing mode for source %q with cache mount at path %q", name, p)})
 				}
 			}
 		}
@@ -468,30 +478,32 @@ func (s Spec) Validate() error {
 	for _, t := range s.Tests {
 		for p, cfg := range t.CacheDirs {
 			if _, err := sharingMode(cfg.Mode); err != nil {
-				return errors.Wrapf(err, "invalid sharing mode for test %q with cache mount at path %q", t.Name, p)
+				outErr = goerrors.Join(errors.Wrapf(err, "invalid sharing mode for test %q with cache mount at path %q", t.Name, p))
 			}
 		}
 	}
 
-	var patchErr error
 	for src, patches := range s.Patches {
 		for _, patch := range patches {
 			patchSrc, ok := s.Sources[patch.Source]
 			if !ok {
-				patchErr = goerrors.Join(patchErr, &InvalidPatchError{Source: src, PatchSpec: &patch, Err: errMissingSource})
+				outErr = goerrors.Join(outErr, &InvalidPatchError{Source: src, PatchSpec: &patch, Err: errMissingSource})
 				continue
 			}
 
 			if err := validatePatch(patch, patchSrc); err != nil {
-				patchErr = goerrors.Join(patchErr, &InvalidPatchError{Source: src, PatchSpec: &patch, Err: err})
+				outErr = goerrors.Join(outErr, &InvalidPatchError{Source: src, PatchSpec: &patch, Err: err})
 			}
 		}
 	}
-	if patchErr != nil {
-		return patchErr
+
+	switch s.Build.NetworkMode {
+	case "", netModeNone, netModeSandbox:
+	default:
+		outErr = goerrors.Join(outErr, fmt.Errorf("invalid network mode: %q: valid values %s", s.Build.NetworkMode, []string{netModeNone, netModeSandbox}))
 	}
 
-	return nil
+	return outErr
 }
 
 func validatePatch(patch PatchSpec, patchSrc Source) error {

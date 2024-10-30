@@ -18,6 +18,14 @@
 					},
 					"type": "object",
 					"description": "Env is the list of environment variables to set for all commands in this step group."
+				},
+				"network_mode": {
+					"type": "string",
+					"enum": [
+						"none",
+						"sandbox"
+					],
+					"description": "NetworkMode sets the network mode to use during the build phase.\nAccepted values: none, sandbox\nDefault: none"
 				}
 			},
 			"additionalProperties": false,

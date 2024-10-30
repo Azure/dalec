@@ -180,9 +180,14 @@ build:
 
 - `env`: The environment variables for the build.
 - `steps`: The build steps for the package.
+- `network_mode`: Set the network mode to use for build steps (accepts: empty, `none`, `sandbox`)
 
 :::tip
 TARGETOS is a built-in argument that Dalec will substitute with the target OS value. For more information, please see [Args section](#args-section).
+:::
+
+:::tip
+Set `network_mode` to `sandbox` to allow internet access during build
 :::
 
 ## Artifacts section
