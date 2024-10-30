@@ -184,6 +184,8 @@ func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 		})
 	})
 	t.Run("container", func(t *testing.T) {
+		t.Parallel()
+
 		spec := dalec.Spec{
 			Name:        "test-container-build",
 			Version:     "0.0.1",

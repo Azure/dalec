@@ -260,6 +260,8 @@ func (cfg *testLinuxConfig) GetPackage(name string) string {
 func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
 		spec := dalec.Spec{
 			Name:        "test-build-commands-fail",
 			Version:     "0.0.1",
@@ -290,6 +292,9 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 	})
 
 	t.Run("container", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		const src2Patch3File = "patch3"
 		src2Patch3Content := []byte(`
 diff --git a/file3 b/file3
@@ -647,6 +652,8 @@ echo "$BAR" > bar.txt
 
 	t.Run("test systemd unit single", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
 			Description: "Test systemd unit",
@@ -770,6 +777,8 @@ WantedBy=multi-user.target
 
 	t.Run("test systemd unit multiple components", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
 			Description: "Test systemd unit",
@@ -884,6 +893,8 @@ Environment="FOO_ARGS=--some-foo-args"
 
 	t.Run("test systemd with only config dropin", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
 			Description: "Test systemd unit",
@@ -993,6 +1004,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 
 	t.Run("test directory creation", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
 		spec := &dalec.Spec{
 			Name:        "test-directory-creation",
 			Version:     "0.0.1",
@@ -1059,6 +1072,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 
 	t.Run("test data file installation", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		spec := &dalec.Spec{
 			Name:        "test-data-file-installation",
 			Version:     "0.0.1",
@@ -1151,6 +1166,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 
 	t.Run("test libexec file installation", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		spec := &dalec.Spec{
 			Name:        "libexec-test",
 			Version:     "0.0.1",
@@ -1255,6 +1272,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 
 	t.Run("test config files handled", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		spec := &dalec.Spec{
 			Name:        "test-config-files-work",
 			Version:     "0.0.1",
@@ -1314,6 +1333,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 
 	t.Run("docs and headers and licenses are handled correctly", func(t *testing.T) {
 		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		spec := &dalec.Spec{
 			Name:        "test-docs-handled",
 			Version:     "0.0.1",
@@ -1486,9 +1507,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 	})
 
 	t.Run("custom repo", func(t *testing.T) {
-
 		t.Parallel()
-
 		ctx := startTestSpan(baseCtx, t)
 		testCustomRepo(ctx, t, testConfig.Worker, testConfig.Target)
 	})
@@ -1715,6 +1734,7 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx := startTestSpan(baseCtx, t)
 
 			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 				worker := getWorker(ctx, t, gwc)
