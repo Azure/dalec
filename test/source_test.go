@@ -65,16 +65,24 @@ func TestSourceCmd(t *testing.T) {
 		}
 	}
 
-	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-		spec := testSpec()
-		req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
-		res := solveT(ctx, t, gwc, req)
+	t.Run("base", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
 
-		checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar\n"))
-		checkFile(ctx, t, filepath.Join(sourceName, "hello"), res, []byte("hello\n"))
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := testSpec()
+			req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, gwc, req)
+
+			checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar\n"))
+			checkFile(ctx, t, filepath.Join(sourceName, "hello"), res, []byte("hello\n"))
+		})
 	})
 
 	t.Run("with mounted file", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			spec := testSpec()
 			spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
@@ -139,6 +147,7 @@ func TestSourceBuild(t *testing.T) {
 	}
 
 	t.Run("inline", func(t *testing.T) {
+		t.Parallel()
 		fileSrc := func() dalec.Source {
 			return dalec.Source{
 				Inline: &dalec.SourceInline{
@@ -165,16 +174,19 @@ func TestSourceBuild(t *testing.T) {
 		}
 
 		t.Run("unspecified build file path", func(t *testing.T) {
+			t.Parallel()
 			doBuildTest(t, "file", newBuildSpec("", fileSrc))
 			doBuildTest(t, "dir", newBuildSpec("", dirSrc("Dockerfile")))
 		})
 
 		t.Run("Dockerfile as build file path", func(t *testing.T) {
+			t.Parallel()
 			doBuildTest(t, "file", newBuildSpec("Dockerfile", fileSrc))
 			doBuildTest(t, "dir", newBuildSpec("Dockerfile", dirSrc("Dockerfile")))
 		})
 
 		t.Run("non-standard build file path", func(t *testing.T) {
+			t.Parallel()
 			doBuildTest(t, "file", newBuildSpec("foo", fileSrc))
 			doBuildTest(t, "dir", newBuildSpec("foo", dirSrc("foo")))
 		})
@@ -371,6 +383,7 @@ index ea874f5..ba38f84 100644
 	})
 
 	t.Run("with patch", func(t *testing.T) {
+		t.Parallel()
 		t.Run("file", func(t *testing.T) {
 			t.Parallel()
 			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {

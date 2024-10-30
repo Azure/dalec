@@ -54,6 +54,9 @@ func newSimpleSpec() *dalec.Spec {
 
 func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*testing.T) {
 	return func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
 		newSigningSpec := func() *dalec.Spec {
 			spec := newSimpleSpec()
 			spec.PackageConfig = &dalec.PackageConfig{
@@ -137,6 +140,8 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 		})
 
 		t.Run("with path build arg and build context", func(t *testing.T) {
+			t.Parallel()
+
 			spec := newSigningSpec()
 			spec.PackageConfig.Signer = nil
 
@@ -158,6 +163,8 @@ signer:
 		})
 
 		t.Run("path build arg takes precedence over spec config", func(t *testing.T) {
+			t.Parallel()
+
 			spec := newSigningSpec()
 			spec.PackageConfig.Signer.Frontend.Image = "notexist"
 
@@ -197,6 +204,8 @@ signer:
 		})
 
 		t.Run("with path build arg and build context", func(t *testing.T) {
+			t.Parallel()
+
 			spec := newSigningSpec()
 			spec.PackageConfig.Signer = nil
 
@@ -218,6 +227,8 @@ signer:
 		})
 
 		t.Run("with no build context and config path build arg", func(t *testing.T) {
+			t.Parallel()
+
 			spec := newSigningSpec()
 			spec.PackageConfig.Signer = nil
 
@@ -239,6 +250,8 @@ signer:
 		})
 
 		t.Run("local context with config path takes precedence over spec", func(t *testing.T) {
+			t.Parallel()
+
 			spec := newSigningSpec()
 			spec.PackageConfig.Signer.Frontend.Image = "notexist"
 
@@ -371,6 +384,7 @@ signer:
 }
 
 func windowsSigningTests(t *testing.T, tcfg targetConfig) {
+	t.Parallel()
 	runBuild := func(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, srOpts ...srOpt) {
 		st := prepareWindowsSigningState(ctx, t, gwc, spec, srOpts...)
 
@@ -398,7 +412,6 @@ func windowsSigningTests(t *testing.T, tcfg targetConfig) {
 		slices.Sort(expectedFiles)
 		assert.Assert(t, cmp.DeepEqual(files, expectedFiles))
 	}
-
 	t.Run("target spec config", func(t *testing.T) {
 		t.Parallel()
 		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
