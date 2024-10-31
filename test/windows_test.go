@@ -8,11 +8,15 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/jammy"
 	"github.com/Azure/dalec/frontend/windows"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
+
+var windowsAmd64 = ocispecs.Platform{OS: "windows", Architecture: "amd64"}
 
 func TestWindows(t *testing.T) {
 	t.Parallel()
@@ -23,46 +27,81 @@ func TestWindows(t *testing.T) {
 		Container: "windowscross/container",
 	})
 
+	tcfg := targetConfig{
+		Container: "windowscross/container",
+		// The way the test uses the package target is to generate a package which
+		// it then feeds back into a custom repo and adds that package as a build dep
+		// to another package.
+		// We don't build system packages for the windowscross base image.
+		// So... use jammy to create a deb which we'll use to create a repo.
+		Package: "jammy/deb",
+		Worker:  "windowscross/worker",
+		FormatDepEqual: func(ver, rev string) string {
+			return ver + "-ubuntu22.04u" + rev
+		},
+	}
+
+	wcfg := workerConfig{
+		ContextName:    windows.WindowscrossWorkerContextName,
+		SignRepo:       signRepoJammy,
+		TestRepoConfig: jammyTestRepoConfig,
+		Platform:       &windowsAmd64,
+		Constraints: constraintsSymbols{
+			Equal:              "=",
+			GreaterThan:        ">>",
+			GreaterThanOrEqual: ">=",
+			LessThan:           "<<",
+			LessThanOrEqual:    "<=",
+		},
+		CreateRepo: func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
+			return func(in llb.State) llb.State {
+				repoFile := []byte(`
+deb [trusted=yes] copy:/opt/repo/ /
+`)
+				withRepo := in.Run(
+					dalec.ShArgs("apt-get update && apt-get install -y apt-utils gnupg2"),
+					dalec.WithMountedAptCache(jammy.AptCachePrefix),
+				).File(llb.Copy(pkg, "/", "/opt/repo")).
+					Run(
+						llb.Dir("/opt/repo"),
+						dalec.ShArgs("apt-ftparchive packages . > Packages"),
+					).
+					Run(
+						llb.Dir("/opt/repo"),
+						dalec.ShArgs("apt-ftparchive release . > Release"),
+					).Root()
+
+				for _, opt := range opts {
+					withRepo = opt(withRepo)
+				}
+
+				return withRepo.
+					File(llb.Mkfile("/etc/apt/sources.list.d/test-dalec-local-repo.list", 0o644, repoFile))
+
+			}
+		},
+	}
+
+	t.Run("custom repo", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testCustomRepo(ctx, t, wcfg, tcfg)
+	})
+
 	t.Run("custom worker", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
-		testCustomWindowscrossWorker(ctx, t, targetConfig{
-			Container: "windowscross/container",
-			// The way the test uses the package target is to generate a package which
-			// it then feeds back into a custom repo and adds that package as a build dep
-			// to another package.
-			// We don't build system packages for the windowscross base image.
-			// There's also no .deb support (currently)
-			// So... use a mariner2 rpm and then in CreateRepo, convert the rpm to a deb package
-			// which we'll use to create the repo...
-			// We can switch to this jammy/deb when that is available.
-			Package: "mariner2/rpm",
-			Worker:  "windowscross/worker",
-		}, workerConfig{
-			ContextName: windows.WindowscrossWorkerContextName,
-			CreateRepo: func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
-				return func(in llb.State) llb.State {
-					dt := []byte(`
-deb [trusted=yes] copy:/tmp/repo /
-`)
+		testCustomWindowscrossWorker(ctx, t, tcfg, wcfg)
+	})
 
-					repo := in.
-						Run(
-							dalec.ShArgs("apt-get update && apt-get install -y apt-utils alien"),
-							dalec.WithMountedAptCache("test-windowscross"),
-						).
-						Run(
-							llb.Dir("/tmp/repo"),
-							dalec.ShArgs("set -e; for i in ./RPMS/*/*.rpm; do alien --to-deb \"$i\"; done; rm -rf ./RPMS; rm -rf ./SRPMS; apt-ftparchive packages . | gzip -1 > Packages.gz"),
-						).
-						AddMount("/tmp/repo", pkg)
-
-					return in.
-						File(llb.Mkfile("/etc/apt/sources.list.d/windowscross.list", 0o644, dt)).
-						File(llb.Copy(repo, "/", "/tmp/repo"))
-				}
-			},
-		})
+	t.Run("pinned build dependencies", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testConfig := testLinuxConfig{
+			Worker: wcfg,
+			Target: tcfg,
+		}
+		testPinnedBuildDeps(ctx, t, testConfig)
 	})
 }
 
@@ -72,10 +111,7 @@ deb [trusted=yes] copy:/tmp/repo /
 // being a bit janky and error prone.
 // I'd rather just let the test run since it will work when we set an explicit platform
 func withWindowsAmd64(cfg *newSolveRequestConfig) {
-	if cfg.req.FrontendOpt == nil {
-		cfg.req.FrontendOpt = make(map[string]string)
-	}
-	cfg.req.FrontendOpt["platform"] = "windows/amd64"
+	withPlatform(windowsAmd64)(cfg)
 }
 
 func testWindows(ctx context.Context, t *testing.T, cfg targetConfig) {

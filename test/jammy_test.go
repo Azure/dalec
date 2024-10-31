@@ -69,7 +69,7 @@ deb [trusted=yes] copy:/opt/repo/ /
 `)
 				return func(in llb.State) llb.State {
 					withRepo := in.Run(
-						dalec.ShArgs("apt-get update && apt-get install -y apt-utils gnupg"),
+						dalec.ShArgs("apt-get update && apt-get install -y apt-utils gnupg2"),
 						dalec.WithMountedAptCache(jammy.AptCachePrefix),
 					).File(llb.Copy(pkg, "/", "/opt/repo")).
 						Run(
