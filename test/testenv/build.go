@@ -1,6 +1,7 @@
 package testenv
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"io"
@@ -154,33 +155,22 @@ func displaySolveStatus(ctx context.Context, t *testing.T) (chan *client.SolveSt
 		}
 		defer f.Close()
 
-		if !t.Failed() {
-			return
-		}
-
-		sz, _ := f.Seek(0, io.SeekEnd)
 		_, err = f.Seek(0, io.SeekStart)
 		if err != nil {
 			t.Log(err)
 			return
 		}
-		_, err = io.CopyN(&testWriter{t}, f, sz)
-		if err != nil {
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			t.Log(scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
 			t.Log(err)
-			return
 		}
 	}()
 
 	return ch, done
-}
-
-type testWriter struct {
-	t *testing.T
-}
-
-func (t *testWriter) Write(p []byte) (n int, err error) {
-	t.t.Log(string(p))
-	return len(p), nil
 }
 
 // withProjectRoot adds the current project root as the build context for the solve request.
