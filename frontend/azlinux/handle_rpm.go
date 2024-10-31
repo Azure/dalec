@@ -102,7 +102,15 @@ var azLinuxRepoConfig = dalec.RepoPlatformConfig{
 	GPGKeyRoot: "/etc/pki/rpm-gpg",
 }
 
-func repoMountInstallOpts(worker llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
+func repoMountInstallOpts(w worker, base llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
+	worker := base.Run(
+		w.Install(
+			[]string{"gnupg2"},
+			installWithConstraints(opts),
+		),
+		dalec.WithConstraints(opts...),
+	).Root()
+
 	withRepos, err := dalec.WithRepoConfigs(repos, &azLinuxRepoConfig, sOpt, opts...)
 	if err != nil {
 		return nil, err
@@ -129,7 +137,7 @@ func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey s
 	}
 
 	testRepos := spec.GetTestRepos(targetKey)
-	importRepos, err := repoMountInstallOpts(base, testRepos, sOpt, opts...)
+	importRepos, err := repoMountInstallOpts(w, base, testRepos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +215,7 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 		return nil, err
 	}
 
-	importRepos, err := repoMountInstallOpts(base, repos, sOpt, opts...)
+	importRepos, err := repoMountInstallOpts(w, base, repos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}

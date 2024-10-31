@@ -126,6 +126,7 @@ var jammyRepoPlatformCfg = dalec.RepoPlatformConfig{
 }
 
 func customRepoMounts(worker llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	worker = worker.Run(installPackages([]string{"gnupg2"}, opts...), dalec.WithConstraints(opts...)).Root() // make sure we have gpg installed
 	withRepos, err := dalec.WithRepoConfigs(repos, &jammyRepoPlatformCfg, sOpt, opts...)
 	if err != nil {
 		return nil, err
