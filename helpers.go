@@ -134,6 +134,12 @@ func WithConstraints(ls ...llb.ConstraintsOpt) llb.ConstraintsOpt {
 	})
 }
 
+func WithConstraint(in *llb.Constraints) llb.ConstraintsOpt {
+	return constraintsOptFunc(func(c *llb.Constraints) {
+		*c = *in
+	})
+}
+
 func withConstraints(opts []llb.ConstraintsOpt) llb.ConstraintsOpt {
 	return WithConstraints(opts...)
 }
@@ -542,7 +548,7 @@ func GetRepoKeys(worker llb.State, configs []PackageRepositoryConfig, cfg *RepoP
 				outPath := filepath.Join("/tmp/out", name)
 				keySt := worker.Run(
 					// dearmor key if necessary
-					ShArgs(fmt.Sprintf("cat '%s' | gpg --dearmor --output '%s'", inPath, outPath)),
+					ShArgs(fmt.Sprintf("gpg --dearmor --output %q < %q", outPath, inPath)),
 					llb.AddMount(inPath, gpgKey, llb.SourcePath(name))).
 					AddMount("/tmp/out/", llb.Scratch())
 

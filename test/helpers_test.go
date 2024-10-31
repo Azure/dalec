@@ -199,7 +199,19 @@ func newSolveRequest(opts ...srOpt) gwclient.SolveRequest {
 
 func withPlatform(platform ocispecs.Platform) srOpt {
 	return func(cfg *newSolveRequestConfig) {
+		if cfg.req.FrontendOpt == nil {
+			cfg.req.FrontendOpt = make(map[string]string)
+		}
 		cfg.req.FrontendOpt["platform"] = platforms.Format(platform)
+	}
+}
+
+func withPlatformPtr(p *ocispecs.Platform) srOpt {
+	return func(cfg *newSolveRequestConfig) {
+		if p == nil {
+			return
+		}
+		withPlatform(*p)(cfg)
 	}
 }
 
