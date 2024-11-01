@@ -18,6 +18,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/tonistiigi/fsutil v0.0.0-20241121093142-31cf1f437184
+	github.com/vearutop/dynhist-go v1.2.3
 	go.opentelemetry.io/otel v1.28.0
 	go.opentelemetry.io/otel/sdk v1.28.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
