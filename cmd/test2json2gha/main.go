@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/vearutop/dynhist-go"
 )
 
 func main() {
@@ -22,6 +24,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	var slowThreshold time.Duration
+	flag.DurationVar(&slowThreshold, "slow", 500*time.Millisecond, "Threshold to mark test as slow")
+
+	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
@@ -38,7 +45,7 @@ func main() {
 
 	cleanup := func() { os.RemoveAll(tmp) }
 
-	anyFail, err := do(os.Stdin, os.Stdout, mod)
+	anyFail, err := do(os.Stdin, os.Stdout, mod, slowThreshold)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%+v", err)
 		cleanup()
@@ -53,31 +60,7 @@ func main() {
 	}
 }
 
-// TestEvent is the go test2json event data structure we receive from `go test`
-// This is defined in https://pkg.go.dev/cmd/test2json#hdr-Output_Format
-type TestEvent struct {
-	Time    time.Time
-	Action  string
-	Package string
-	Test    string
-	Elapsed float64 // seconds
-	Output  string
-}
-
-// TestResult is where we collect all the data about a test
-type TestResult struct {
-	output  *os.File
-	failed  bool
-	pkg     string
-	name    string
-	elapsed float64
-}
-
-func (r *TestResult) Close() {
-	r.output.Close()
-}
-
-func do(in io.Reader, out io.Writer, modName string) (bool, error) {
+func do(in io.Reader, out io.Writer, modName string, slowThreshold time.Duration) (bool, error) {
 	dec := json.NewDecoder(in)
 
 	te := &TestEvent{}
@@ -122,20 +105,42 @@ func do(in io.Reader, out io.Writer, modName string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if err := handlEvent(te, tr); err != nil {
+		if err := collectTestOutput(te, tr); err != nil {
 			slog.Error("Error handing event test event", "error", err)
 		}
 	}
 
 	buf := bufio.NewWriter(out)
-	var anyFail bool
+
+	summaryF := getSummaryFile()
+	defer summaryF.Close()
+
+	var failCount, skipCount int
+	var elapsed float64
+
+	failBuf := bytes.NewBuffer(nil)
+	hist := &dynhist.Collector{
+		PrintSum:     true,
+		WeightFunc:   dynhist.ExpWidth(1.2, 0.9),
+		BucketsLimit: 10,
+	}
+
+	slowBuf := bytes.NewBuffer(nil)
+	slow := slowThreshold.Seconds()
 
 	for _, tr := range outs {
-		if tr.failed {
-			anyFail = true
+		if tr.skipped {
+			skipCount++
 		}
 
-		if err := writeResult(tr, buf, modName); err != nil {
+		if tr.failed {
+			failCount++
+		}
+
+		hist.Add(tr.elapsed)
+		elapsed += tr.elapsed
+
+		if err := writeResult(tr, buf, failBuf, slowBuf, slow, modName); err != nil {
 			slog.Error("Error writing result", "error", err)
 			continue
 		}
@@ -145,28 +150,43 @@ func do(in io.Reader, out io.Writer, modName string) (bool, error) {
 		}
 	}
 
-	return anyFail, nil
-}
+	fmt.Fprintln(summaryF, "## Test metrics")
+	separator := strings.Repeat("&nbsp;", 4)
+	fmt.Fprintln(summaryF, mdBold("Skipped:"), skipCount, separator, mdBold("Failed:"), failCount, separator, mdBold("Total:"), len(outs), separator, mdBold("Elapsed:"), fmt.Sprintf("%.3fs", elapsed))
 
-func handlEvent(te *TestEvent, tr *TestResult) error {
-	if te.Output != "" {
-		_, err := tr.output.Write([]byte(te.Output))
-		if err != nil {
-			return errors.Wrap(err, "error collecting test event output")
-		}
+	fmt.Fprintln(summaryF, mdPreformat(hist.String()))
+
+	if failBuf.Len() > 0 {
+		fmt.Fprintln(summaryF, "## Failures")
+		fmt.Fprintln(summaryF, failBuf.String())
 	}
 
-	tr.pkg = te.Package
-	tr.name = te.Test
-	tr.elapsed = te.Elapsed
-
-	if te.Action == "fail" {
-		tr.failed = true
+	if slowBuf.Len() > 0 {
+		fmt.Fprintln(summaryF, "## Slow Tests")
+		fmt.Fprintln(summaryF, slowBuf.String())
 	}
-	return nil
+
+	return failCount > 0, nil
 }
 
-func writeResult(tr *TestResult, out io.Writer, modName string) error {
+func (c *nopWriteCloser) Close() error { return nil }
+
+func getSummaryFile() io.WriteCloser {
+	// https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#adding-a-job-summary
+	v := os.Getenv("GITHUB_STEP_SUMMARY")
+	if v == "" {
+		return &nopWriteCloser{io.Discard}
+	}
+
+	f, err := os.OpenFile(v, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		slog.Error("Error opening step summary file", "error", err)
+		return &nopWriteCloser{io.Discard}
+	}
+	return f
+}
+
+func writeResult(tr *TestResult, out, failBuf, slowBuf io.Writer, slow float64, modName string) error {
 	if tr.name == "" {
 		return nil
 	}
@@ -190,31 +210,44 @@ func writeResult(tr *TestResult, out io.Writer, modName string) error {
 		prefix = "\u274c "
 	}
 
-	dur := time.Duration(tr.elapsed * float64(time.Second))
-	fmt.Fprintln(out, "::group::"+prefix+group, dur)
+	fmt.Fprintf(out, "::group::%s %.3fs\n", prefix+group, tr.elapsed)
 	defer func() {
 		fmt.Fprintln(out, "::endgroup::")
 	}()
 
-	dt, err := io.ReadAll(tr.output)
-	if err != nil {
-		return fmt.Errorf("error reading test output: %w", err)
+	var rdr io.Reader = tr.output
+
+	if tr.elapsed > slow {
+		buf := bytes.NewBuffer(nil)
+		rdr = io.TeeReader(rdr, buf)
+		defer func() {
+			if buf.Len() > 0 {
+				fmt.Fprintln(slowBuf, mdLog(fmt.Sprintf("%s %.3fs", tr.name, tr.elapsed), buf))
+			}
+		}()
 	}
 
 	if !tr.failed {
-		if _, err := out.Write(dt); err != nil {
+		if _, err := io.Copy(out, rdr); err != nil {
 			return fmt.Errorf("error writing test output to output stream: %w", err)
 		}
 		return nil
 	}
 
-	scanner := bufio.NewScanner(bytes.NewReader(dt))
+	failLog := bytes.NewBuffer(nil)
+	rdr = io.TeeReader(rdr, failLog)
+	defer func() {
+		fmt.Fprintln(failBuf, mdLog(tr.name+fmt.Sprintf(" %3.fs", tr.elapsed), failLog))
+	}()
+
+	scanner := bufio.NewScanner(rdr)
 
 	var (
 		file, line string
 	)
 
 	buf := bytes.NewBuffer(nil)
+
 	for scanner.Scan() {
 		txt := scanner.Text()
 		f, l, ok := getTestOutputLoc(txt)
@@ -235,6 +268,7 @@ func writeResult(tr *TestResult, out io.Writer, modName string) error {
 
 	file = filepath.Join(pkg, file)
 	fmt.Fprintf(out, "::error file=%s,line=%s::%s\n", file, line, buf)
+
 	return nil
 }
 
