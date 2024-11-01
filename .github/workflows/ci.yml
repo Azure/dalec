@@ -88,11 +88,10 @@ jobs:
       - name: download deps
         run: go mod download
       - name: Run integration tests
-        run: go test -v -json ./test | go run ./cmd/test2json2gha
+        run: go test -v -json ./test | go run ./cmd/test2json2gha --slow 5s
       - name: dump logs
         if: failure()
         run: sudo journalctl -u docker
-
 
   unit:
     runs-on: ubuntu-22.04
