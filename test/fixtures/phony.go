@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	goModCache   = llb.AddMount("/go/pkg/mod", llb.Scratch(), llb.AsPersistentCacheDir("dalec-go-mod-cache", llb.CacheMountShared))
-	goBuildCache = llb.AddMount("/root/.cache/go-build", llb.Scratch(), llb.AsPersistentCacheDir("dalec-go-build-cache", llb.CacheMountShared))
+	goModCache   = llb.AddMount("/go/pkg/mod", llb.Scratch(), llb.AsPersistentCacheDir("/go/pkg/mod", llb.CacheMountShared))
+	goBuildCache = llb.AddMount("/root/.cache/go-build", llb.Scratch(), llb.AsPersistentCacheDir("/root/.cache/go-build", llb.CacheMountShared))
 )
 
 func PhonyFrontend(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
