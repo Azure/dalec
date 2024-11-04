@@ -80,11 +80,36 @@ jobs:
 
       - name: Expose GitHub tokens for caching
         uses: crazy-max/ghaction-github-runtime@b3a9207c0e1ef41f4cf215303c976869d0c2c1c4 # v3.0.0
+      - name: Setup jaeger
+        run: |
+          set -e
+          docker run -d --net=host --restart=always --name jaeger -e COLLECTOR_OTLP_ENABLED=true jaegertracing/all-in-one:1.62.0
+          docker0_ip="$(ip -f inet addr show docker0 | grep -Po 'inet \K[\d.]+')"
+          echo "OTEL_EXPORTER_OTLP_ENDPOINT=http://${docker0_ip}:4318" >> "${GITHUB_ENV}"
+          echo "OTEL_SERVICE_NAME=dalec-integration-test" >> "${GITHUB_ENV}"
+
+          tmp="$(mktemp)"
+          echo "Environment=\"OTEL_EXPORTER_OTLP_ENDPOINT=http://${docker0_ip}:4318\"" > "${tmp}"
+          sudo mkdir -p /etc/systemd/system/docker.service.d
+          sudo mkdir -p /etc/systemd/system/containerd.service.d
+          sudo cp "${tmp}" /etc/systemd/system/docker.service.d/otlp.conf
+          sudo cp "${tmp}" /etc/systemd/system/containerd.service.d/otlp.conf
+
+          sudo systemctl daemon-reload
+          sudo systemctl restart containerd
+          sudo systemctl restart docker
+
       # Tests currently require buildkit v0.12.0 or higher
       # The version of buildkit builtin to moby currently (v24) is too old
       # So we need to setup a custom builder.
       - name: Set up builder
-        uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.8.0
+        uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.7.1
+        with:
+          driver-opts: |
+            network=host
+            env.OTLP_EXPORTER_OPTELP_ENDPOINT=http://127.0.0.1:4318
+            env.OTEL_SERVICE_NAME=buildkitd
+
       - name: download deps
         run: go mod download
       - name: Run integration tests
@@ -92,6 +117,22 @@ jobs:
       - name: dump logs
         if: failure()
         run: sudo journalctl -u docker
+      - name: Get traces
+        if: always()
+        run: |
+          set -ex
+          mkdir -p /tmp/reports
+          curl -sSLf localhost:16686/api/traces?service=${OTEL_SERVICE_NAME} > /tmp/reports/jaeger-tests.json
+          curl -sSLf localhost:16686/api/traces?service=containerd > /tmp/reports/jaeger-containerd.json
+          curl -sSLf localhost:16686/api/traces?service=buildkitd > /tmp/reports/jaeger-buildkitd.json
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports
+          path: /tmp/reports/*
+          retention-days: 1
+
 
   unit:
     runs-on: ubuntu-22.04
