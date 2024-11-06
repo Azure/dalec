@@ -123,7 +123,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 
 	t.Run("no public key", func(t *testing.T) {
 		t.Parallel()
-		ctx := startTestSpan(baseCtx, t)
+		ctx := startTestSpan(ctx, t)
 
 		testNoPublicKey := func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))
@@ -153,7 +153,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 
 	t.Run("with public key", func(t *testing.T) {
 		t.Parallel()
-		ctx := startTestSpan(baseCtx, t)
+		ctx := startTestSpan(ctx, t)
 
 		testWithPublicKey := func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))

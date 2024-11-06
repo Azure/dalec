@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/moby/buildkit/frontend/dockerui"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -602,6 +603,41 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["BAR"], bar))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["REGULAR"], plainOleValue))
+}
+
+func TestCustomRepoFillDefaults(t *testing.T) {
+	// In this case, the context source for the repo config and provided public key are not set,
+	// so they should be set to the default context per source default-filling conventions.
+
+	// Also, the env field should be set to all build stages, "build", "install", and "test", as it is
+	// unspecified
+	dt := []byte(`
+dependencies:
+  extra_repos: 
+    - config:
+        custom.repo:
+          context: {}
+      keys:
+        public.gpg:
+          context: {}
+          path: "public.gpg"
+	`)
+
+	spec, err := LoadSpec(dt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = spec.SubstituteArgs(map[string]string{})
+
+	extraRepo := spec.Dependencies.ExtraRepos[0]
+	assert.Equal(t, extraRepo.Config["custom.repo"].Context.Name,
+		dockerui.DefaultLocalNameContext)
+
+	assert.Equal(t, extraRepo.Keys["public.gpg"].Context.Name,
+		dockerui.DefaultLocalNameContext)
+
+	assert.DeepEqual(t, extraRepo.Envs, []string{"build", "install", "test"})
 }
 
 func TestBuildArgSubst(t *testing.T) {
