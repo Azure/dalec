@@ -453,6 +453,34 @@ func (s *Spec) FillDefaults() {
 			s.Patches[k][i].Strip = &strip
 		}
 	}
+
+	for i := range len(s.Dependencies.ExtraRepos) {
+		fillExtraRepoDefaults(&s.Dependencies.ExtraRepos[i])
+	}
+}
+
+func fillExtraRepoDefaults(extraRepo *PackageRepositoryConfig) {
+	if len(extraRepo.Envs) == 0 {
+		// default to all stages for the extra repo if unspecified
+		extraRepo.Envs = []string{"build", "install", "test"}
+	}
+
+	for configName := range extraRepo.Config {
+		configSource := extraRepo.Config[configName]
+		fillDefaults(&configSource)
+		extraRepo.Config[configName] = configSource
+	}
+
+	for keyName := range extraRepo.Keys {
+		keySource := extraRepo.Keys[keyName]
+		fillDefaults(&keySource)
+		extraRepo.Keys[keyName] = keySource
+	}
+
+	for _, mount := range extraRepo.Data {
+		fillDefaults(&mount.Spec)
+	}
+
 }
 
 func (s Spec) Validate() error {
