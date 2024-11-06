@@ -162,6 +162,13 @@ dependencies:
     - libbar
 ```
 
+Sometimes you may need to add extra repositories in order to fulfill the
+specified dependencies.
+You can do this by adding these to the `extra_repos` field.
+The `extra_repos` field takes a list of repository configurations with optional
+public key data and optional repo data (e.g. the actual data of a repository).
+See [repositories](repositories.md) for more details on repository configs
+
 ## Build section
 
 Build section is used to define the build steps for the spec. These build steps can be used to define the build commands, environment variables, or any other build configuration needed for the package.
