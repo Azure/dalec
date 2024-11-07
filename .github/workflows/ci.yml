@@ -8,28 +8,22 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-        - "*.go"
-        - "**/*.go"
-        - Dockerfile
-        - docker-bake.hcl
-        - .github/workflows/ci.yml
-        - frontend/mariner2/Dockerfile
-        - "test/fixtures/*"
-        - go.mod
-        - go.sum
+    paths-ignore:
+      - 'website/**'
+      - 'docs/**'
+      - '*.md'
+      - 'CODEOWNERS'
+      - 'LICENSE'
+
   push:
     branches:
       - main
-    paths:
-      - "*.go"
-      - "**/*.go"
-      - Dockerfile
-      - docker-bake.hcl
-      - .github/workflows/ci.yml
-      - frontend/mariner2/Dockerfile
-      - go.mod
-      - go.sum
+    paths-ignore:
+      - 'website/**'
+      - 'docs/**'
+      - '*.md'
+      - 'CODEOWNERS'
+      - 'LICENSE'
 
 permissions:
   contents: read
