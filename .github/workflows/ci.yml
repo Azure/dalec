@@ -78,8 +78,6 @@ jobs:
           go-version: '1.22'
           cache: false
 
-      - name: Expose GitHub tokens for caching
-        uses: crazy-max/ghaction-github-runtime@b3a9207c0e1ef41f4cf215303c976869d0c2c1c4 # v3.0.0
       - name: Setup jaeger
         run: |
           set -e

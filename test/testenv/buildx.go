@@ -290,7 +290,6 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 
 	var so client.SolveOpt
 	withProjectRoot(t, &so)
-	withGHCache(t, &so)
 	withResolveLocal(&so)
 
 	_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
