@@ -61,7 +61,7 @@ func (w azlinux3) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 }
 
 func (w azlinux3) BasePackages() []string {
-	return []string{"distroless-packages-minimal"}
+	return []string{"distroless-packages-minimal", "prebuilt-ca-certificates"}
 }
 
 func (azlinux3) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {
