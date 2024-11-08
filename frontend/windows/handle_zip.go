@@ -83,7 +83,6 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 }
 
 func installBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-
 	return func(in llb.State) llb.State {
 		deps := spec.GetBuildDeps(targetKey)
 		if len(deps) == 0 {
@@ -127,47 +126,12 @@ func installBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string,
 			)
 
 			return in.Run(
-				installWithConstraints(debPath+"/*.deb", depsSpec.Name, opts...),
-				llb.AddMount(debPath, pkg, llb.Readonly),
-				customRepoOpts,
 				dalec.WithConstraints(opts...),
+				customRepoOpts,
+				deb.InstallLocalPkg(pkg),
 			).Root(), nil
 		})
 	}
-}
-
-func installWithConstraints(pkgPath string, pkgName string, opts ...llb.ConstraintsOpt) llb.RunOption {
-	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
-		// The apt solver always tries to select the latest package version even when constraints specify that an older version should be installed and that older version is available in a repo.
-		// This leads the solver to simply refuse to install our target package if the latest version of ANY dependency package is incompatible with the constraints.
-		// To work around this we first install the .deb for the package with dpkg, specifically ignoring any dependencies so that we can avoid the constraints issue.
-		// We then use aptitude to fix the (possibly broken) install of the package, and we pass the aptitude solver a hint to REJECT any solution that involves uninstalling the package.
-		// This forces aptitude to find a solution that will respect the constraints even if the solution involves pinning dependency packages to older versions.
-		script := llb.Scratch().File(
-			llb.Mkfile("install.sh", 0o755, []byte(`#!/usr/bin/env sh
-# Make sure any cached data from local repos is purged since this should not
-# be shared between builds.
-rm -f /var/lib/apt/lists/_*
-apt autoclean -y
-
-dpkg -i --force-depends `+pkgPath+`
-
-apt update
-
-
-set +e
-aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject `+pkgName+` :UNINST" && exit
-ls -lh /etc/apt/sources.list.d
-exit 42
-`),
-			), opts...)
-
-		dalec.WithMountedAptCache(aptCachePrefix).SetRunOption(ei)
-
-		p := "/tmp/dalec/internal/deb/install-with-constraints.sh"
-		llb.AddMount(p, script, llb.SourcePath("install.sh")).SetRunOption(ei)
-		dalec.ShArgs(p).SetRunOption(ei)
-	})
 }
 
 func withSourcesMounted(dst string, states map[string]llb.State, sources map[string]dalec.Source) llb.RunOption {
@@ -265,9 +229,22 @@ func workerImg(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, er
 	}
 
 	return llb.Image(workerImgRef, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...)).Run(
-		dalec.ShArgs("apt-get update && apt-get install -y build-essential binutils-mingw-w64 g++-mingw-w64-x86-64 gcc git make pkg-config quilt zip aptitude dpkg-dev debhelper-compat="+deb.DebHelperCompat),
-		dalec.WithMountedAptCache(aptCachePrefix),
 		dalec.WithConstraints(opts...),
+		dalec.WithMountedAptCache(aptCachePrefix),
+		deb.AptInstall(
+			"build-essential",
+			"binutils-mingw-w64",
+			"g++-mingw-w64-x86-64",
+			"gcc",
+			"git",
+			"make",
+			"pkg-config",
+			"quilt",
+			"zip",
+			"aptitude",
+			"dpkg-dev",
+			"debhelper-compat="+deb.DebHelperCompat,
+		),
 	).
 		// This file prevents installation of things like docs in ubuntu
 		// containers We don't want to exclude this because tests want to

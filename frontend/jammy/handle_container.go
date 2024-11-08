@@ -3,10 +3,10 @@ package jammy
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/deb"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -71,7 +71,7 @@ func buildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec 
 	return img, nil
 }
 
-func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, targetKey string, includeTestRepo bool, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, debSt llb.State, targetKey string, includeTestRepo bool, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	base := dalec.GetBaseOutputImage(spec, targetKey)
 
 	installSymlinks := func(in llb.State) llb.State {
@@ -105,10 +105,9 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))
 
 	return baseImg.Run(
-		installPackages([]string{"/tmp/pkg/*.deb"}, opts...),
+		dalec.WithConstraints(opts...),
 		customRepoOpts,
 		llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
-		llb.AddMount("/tmp/pkg", deb, llb.Readonly),
 		dalec.WithMountedAptCache(AptCachePrefix),
 		dalec.RunOptFunc(func(cfg *llb.ExecInfo) {
 			if includeTestRepo {
@@ -116,7 +115,6 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 				llb.AddMount(testRepoSourceListPath, worker, llb.SourcePath(testRepoSourceListPath)).SetRunOption(cfg)
 			}
 		}),
-		dalec.WithConstraints(opts...),
 		llb.AddMount("/etc/dpkg/dpkg.cfg.d/99-dalec-debug", debug, llb.SourcePath("debug"), llb.Readonly),
 		dalec.RunOptFunc(func(cfg *llb.ExecInfo) {
 			tmp := llb.Scratch().File(llb.Mkfile("tmp", 0o644, nil))
@@ -127,6 +125,7 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 			// passes (as it is looking at these files).
 			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
 		}),
+		deb.InstallLocalPkg(debSt),
 	).Root().
 		With(installSymlinks), nil
 }
@@ -145,8 +144,8 @@ func installTestDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, 
 	return func(in llb.State) llb.State {
 		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
 		return in.Run(
-			dalec.ShArgs("apt-get update && apt-get install -y --no-install-recommends "+strings.Join(deps, " ")),
-			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
+			dalec.WithConstraints(opts...),
+			deb.AptInstall(deps...),
 			extraRepoOpts,
 			dalec.WithMountedAptCache(AptCachePrefix),
 		).Root()
