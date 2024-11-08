@@ -10,8 +10,6 @@ import (
 )
 
 type installConfig struct {
-	// Tells the installer to create the distroless rpm manifest.
-	manifest bool
 	// Disables GPG checking when installing RPMs.
 	// this is needed when installing unsigned RPMs.
 	noGPGCheck bool
@@ -82,40 +80,6 @@ func setInstallOptions(cfg *installConfig, opts []installOpt) {
 	}
 }
 
-func manifestScript(workPath string, opts ...llb.ConstraintsOpt) llb.State {
-	mfstDir := filepath.Join(workPath, "var/lib/rpmmanifest")
-	mfst1 := filepath.Join(mfstDir, "container-manifest-1")
-	mfst2 := filepath.Join(mfstDir, "container-manifest-2")
-	rpmdbDir := filepath.Join(workPath, "var/lib/rpm")
-
-	chrootedPaths := []string{
-		filepath.Join(workPath, "/usr/local/bin"),
-		filepath.Join(workPath, "/usr/local/sbin"),
-		filepath.Join(workPath, "/usr/bin"),
-		filepath.Join(workPath, "/usr/sbin"),
-		filepath.Join(workPath, "/bin"),
-		filepath.Join(workPath, "/sbin"),
-	}
-	chrootedPathEnv := strings.Join(chrootedPaths, ":")
-
-	return llb.Scratch().File(llb.Mkfile("manifest.sh", 0o700, []byte(`
-#!/usr/bin/env sh
-
-# If the rpm command is in the rootfs then we don't need to do anything
-# If not then this is a distroless image and we need to generate manifests of the installed rpms and cleanup the rpmdb.
-
-PATH="`+chrootedPathEnv+`" command -v rpm && exit 0
-
-set -e
-
-mkdir -p `+mfstDir+`
-
-rpm --dbpath=`+rpmdbDir+` -qa > `+mfst1+`
-rpm --dbpath=`+rpmdbDir+` -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\t%{INSTALLTIME}\t%{BUILDTIME}\t%{VENDOR}\t(none)\t%{SIZE}\t%{ARCH}\t%{EPOCHNUM}\t%{SOURCERPM}\n" > `+mfst2+`
-rm -rf `+rpmdbDir+`
-`)), opts...)
-}
-
 func importGPGScript(keyPaths []string) string {
 	// all keys that are included should be mounted under this path
 	keyRoot := "/etc/pki/rpm-gpg"
@@ -128,8 +92,6 @@ func importGPGScript(keyPaths []string) string {
 
 	return importScript
 }
-
-const manifestSh = "manifest.sh"
 
 func tdnfInstall(cfg *installConfig, relVer string, pkgs []string) llb.RunOption {
 	cmdFlags := tdnfInstallFlags(cfg)
