@@ -58,7 +58,7 @@ func (w mariner2) Install(pkgs []string, opts ...installOpt) llb.RunOption {
 }
 
 func (w mariner2) BasePackages() []string {
-	return []string{"distroless-packages-minimal"}
+	return []string{"distroless-packages-minimal", "prebuilt-ca-certificates"}
 }
 
 func (mariner2) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {
