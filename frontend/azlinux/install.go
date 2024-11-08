@@ -49,10 +49,6 @@ func withMounts(opts ...llb.RunOption) installOpt {
 	}
 }
 
-func withManifests(cfg *installConfig) {
-	cfg.manifest = true
-}
-
 func atRoot(root string) installOpt {
 	return func(cfg *installConfig) {
 		cfg.root = root
@@ -155,15 +151,6 @@ func tdnfInstall(cfg *installConfig, relVer string, pkgs []string) llb.RunOption
 		runOpts = append(runOpts, llb.AddMount("/tmp/import-keys.sh",
 			llb.Scratch().File(llb.Mkfile("/import-keys.sh", 0755, []byte(importScript))),
 			llb.SourcePath("/import-keys.sh")))
-	}
-
-	if cfg.manifest {
-		mfstScript := manifestScript(cfg.root, cfg.constraints...)
-
-		manifestPath := filepath.Join("/tmp", manifestSh)
-		runOpts = append(runOpts, llb.AddMount(manifestPath, mfstScript, llb.SourcePath(manifestSh)))
-
-		cmdArgs += "; " + manifestPath
 	}
 
 	runOpts = append(runOpts, dalec.ShArgs(cmdArgs))

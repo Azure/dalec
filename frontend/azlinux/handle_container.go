@@ -67,7 +67,7 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 
 	installOpts := []installOpt{atRoot(workPath)}
 	installOpts = append(installOpts, importRepos...)
-	installOpts = append(installOpts, []installOpt{noGPGCheck, withManifests, installWithConstraints(opts)}...)
+	installOpts = append(installOpts, []installOpt{noGPGCheck, installWithConstraints(opts)}...)
 
 	rootfs = builderImg.Run(
 		w.Install(pkgs, installOpts...),
