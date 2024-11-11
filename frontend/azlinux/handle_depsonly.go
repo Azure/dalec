@@ -25,6 +25,7 @@ func handleDepsOnly(w worker) gwclient.BuildFunc {
 			if err != nil {
 				return nil, nil, err
 			}
+
 			rpmDir := baseImg.Run(
 				dalec.ShArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(spec.GetRuntimeDeps(targetKey), " ")),
 				pg,

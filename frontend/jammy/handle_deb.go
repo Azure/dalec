@@ -180,24 +180,14 @@ func buildDeb(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 }
 
 func workerBase(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	base, err := sOpt.GetContext(jammyRef, dalec.WithConstraints(opts...))
+	worker, err := sOpt.GetContext(JammyWorkerContextName, dalec.WithConstraints(opts...))
 	if err != nil {
 		return llb.Scratch(), err
 	}
-	if base != nil {
-		return *base, nil
+	if worker != nil {
+		return *worker, nil
 	}
-
-	base, err = sOpt.GetContext(JammyWorkerContextName, dalec.WithConstraints(opts...))
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	if base != nil {
-		return *base, nil
-	}
-
-	return llb.Image(jammyRef, llb.WithMetaResolver(sOpt.Resolver)).With(basePackages(opts...)).
+	return frontend.GetBaseImage(sOpt, jammyRef).
 		// This file prevents installation of things like docs in ubuntu
 		// containers We don't want to exclude this because tests want to
 		// check things for docs in the build container. But we also don't
@@ -206,7 +196,8 @@ func workerBase(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, e
 		// environment. This is only needed because certain tests (which
 		// are using this customized builder image) are checking for files
 		// that are being excluded by this config file.
-		File(llb.Rm("/etc/dpkg/dpkg.cfg.d/excludes", llb.WithAllowNotFound(true))), nil
+		File(llb.Rm("/etc/dpkg/dpkg.cfg.d/excludes", llb.WithAllowNotFound(true))).
+		With(basePackages(opts...)), nil
 }
 
 func basePackages(opts ...llb.ConstraintsOpt) llb.StateOption {

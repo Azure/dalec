@@ -71,6 +71,7 @@ func getSpecWorker(ctx context.Context, w worker, client gwclient.Client, sOpt d
 		if err != nil {
 			return llb.Scratch(), err
 		}
+
 		if spec.HasGomods() {
 			deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
 
