@@ -77,20 +77,6 @@ func (mariner2) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaRe
 	return &cfg, nil
 }
 
-func (mariner2) WorkerImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, platform *ocispecs.Platform) (*dalec.DockerImageSpec, error) {
-	_, _, dt, err := resolver.ResolveImageConfig(ctx, Mariner2Ref, sourceresolver.Opt{Platform: platform})
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg dalec.DockerImageSpec
-	if err := json.Unmarshal(dt, &cfg); err != nil {
-		return nil, err
-	}
-
-	return &cfg, nil
-}
-
 func (mariner2) tdnfCacheMount(root string) llb.RunOption {
 	return llb.AddMount(filepath.Join(root, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheNameMariner2, llb.CacheMountLocked))
 }
