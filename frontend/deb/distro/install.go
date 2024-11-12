@@ -148,3 +148,27 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 		})
 	}
 }
+
+func (d *Config) InstallTestDeps(sOpt dalec.SourceOpts, targetKey string, spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOption {
+	deps := spec.GetTestDeps(targetKey)
+	if len(deps) == 0 {
+		return func(s llb.State) llb.State { return s }
+	}
+
+	return func(in llb.State) llb.State {
+		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
+			withRepos, err := d.RepoMounts(spec.GetTestRepos(targetKey), sOpt, opts...)
+			if err != nil {
+				return in, err
+			}
+
+			opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
+			return in.Run(
+				dalec.WithConstraints(opts...),
+				AptInstall(deps...),
+				withRepos,
+				dalec.WithMountedAptCache(d.AptCachePrefix),
+			).Root(), nil
+		})
+	}
+}
