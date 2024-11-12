@@ -2,23 +2,13 @@ package jammy
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/deb"
+	"github.com/Azure/dalec/frontend/deb/distro"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/pkg/errors"
-)
-
-const (
-	jammyRef = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
-
-	testRepoPath           = "/opt/repo"
-	testRepoSourceListPath = "/etc/apt/sources.list.d/test-dalec-local-repo.list"
 )
 
 func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -28,47 +18,21 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		opt := dalec.ProgressGroup("Building Jammy container: " + spec.Name)
+		pg := dalec.ProgressGroup("Building Jammy container: " + spec.Name)
 
-		deb, err := buildDeb(ctx, client, spec, sOpt, targetKey, opt)
+		deb, err := distroConfig.BuildDeb(ctx, sOpt, client, spec, targetKey, pg)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		img, err := buildImageConfig(ctx, client, spec, platform, targetKey)
+		img, err := distroConfig.BuildImageConfig(ctx, client, spec, platform, targetKey)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		ref, err := runTests(ctx, client, spec, sOpt, deb, targetKey, opt)
+		ref, err := runTests(ctx, client, spec, sOpt, deb, targetKey, pg)
 		return ref, img, err
 	})
-}
-
-func buildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
-	ref := dalec.GetBaseOutputImage(spec, targetKey)
-	if ref == "" {
-		ref = jammyRef
-	}
-
-	_, _, dt, err := resolver.ResolveImageConfig(ctx, ref, sourceresolver.Opt{
-		Platform: platform,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var i dalec.DockerImageSpec
-	if err := json.Unmarshal(dt, &i); err != nil {
-		return nil, errors.Wrap(err, "error unmarshalling base image config")
-	}
-	img := &i
-
-	if err := dalec.BuildImageConfig(spec, targetKey, img); err != nil {
-		return nil, err
-	}
-
-	return img, nil
 }
 
 func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, debSt llb.State, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -90,7 +54,7 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 			AddMount(workPath, in)
 	}
 
-	customRepoOpts, err := customRepoMounts(spec.GetInstallRepos(targetKey), sOpt, opts...)
+	customRepoOpts, err := distroConfig.RepoMounts(spec.GetInstallRepos(targetKey), sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -119,7 +83,7 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 			// passes (as it is looking at these files).
 			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
 		}),
-		deb.InstallLocalPkg(debSt),
+		distro.InstallLocalPkg(debSt),
 	).Root().
 		With(installSymlinks), nil
 }
@@ -130,7 +94,7 @@ func installTestDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, 
 		return func(s llb.State) llb.State { return s }, nil
 	}
 
-	extraRepoOpts, err := customRepoMounts(spec.GetTestRepos(targetKey), sOpt, opts...)
+	extraRepoOpts, err := distroConfig.RepoMounts(spec.GetTestRepos(targetKey), sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +103,7 @@ func installTestDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, 
 		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
 		return in.Run(
 			dalec.WithConstraints(opts...),
-			deb.AptInstall(deps...),
+			distro.AptInstall(deps...),
 			extraRepoOpts,
 			dalec.WithMountedAptCache(AptCachePrefix),
 		).Root()

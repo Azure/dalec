@@ -6,6 +6,8 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/deb"
+	"github.com/Azure/dalec/frontend/deb/distro"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -14,8 +16,33 @@ import (
 )
 
 const (
-	DefaultTargetKey = "windowscross"
-	outputKey        = "windows"
+	DefaultTargetKey              = "windowscross"
+	outputKey                     = "windows"
+	workerImgRef                  = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
+	WindowscrossWorkerContextName = "dalec-windowscross-worker"
+)
+
+var (
+	distroConfig = &distro.Config{
+		ImageRef:       workerImgRef,
+		AptCachePrefix: aptCachePrefix,
+		VersionID:      "ubuntu22.04",
+		ContextRef:     WindowscrossWorkerContextName,
+		BuilderPackages: []string{
+			"aptitude",
+			"build-essential",
+			"binutils-mingw-w64",
+			"g++-mingw-w64-x86-64",
+			"gcc",
+			"git",
+			"make",
+			"pkg-config",
+			"zip",
+			"aptitude",
+			"dpkg-dev",
+			"debhelper-compat=" + deb.DebHelperCompat,
+		},
+	}
 )
 
 func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -52,7 +79,7 @@ func handleWorker(ctx context.Context, client gwclient.Client) (*gwclient.Result
 			opts = append(opts, llb.Platform(*platform))
 		}
 
-		st, err := workerImg(sOpt, opts...)
+		st, err := distroConfig.Worker(sOpt, opts...)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -6,6 +6,8 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/deb"
+	"github.com/Azure/dalec/frontend/deb/distro"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
@@ -17,6 +19,31 @@ import (
 const (
 	DefaultTargetKey = "jammy"
 	AptCachePrefix   = "jammy"
+
+	jammyRef  = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
+	versionID = "ubuntu22.04"
+)
+
+var (
+	distroConfig = &distro.Config{
+		ImageRef:       jammyRef,
+		AptCachePrefix: AptCachePrefix,
+		VersionID:      versionID,
+		ContextRef:     JammyWorkerContextName,
+		BuilderPackages: []string{
+			"aptitude",
+			"dpkg-dev",
+			"devscripts",
+			"equivs",
+			"fakeroot",
+			"dh-make",
+			"build-essential",
+			"dh-apparmor",
+			"dh-make",
+			"dh-exec",
+			"debhelper-compat=" + deb.DebHelperCompat,
+		},
+	}
 )
 
 func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -59,7 +86,7 @@ func handleWorker(ctx context.Context, client gwclient.Client) (*gwclient.Result
 		}
 		pOpt := llb.Platform(p)
 
-		st, err := workerBase(sOpt, pOpt)
+		st, err := distroConfig.Worker(sOpt, pOpt)
 		if err != nil {
 			return nil, nil, err
 		}

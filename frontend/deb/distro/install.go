@@ -1,10 +1,13 @@
-package deb
+package distro
 
 import (
+	"context"
 	"path/filepath"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/deb"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/pkg/errors"
 )
 
 // AptInstall returns an [llb.RunOption] that uses apt to install the provided
@@ -98,4 +101,50 @@ aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject ${pkg_name}
 		args := []string{p, filepath.Join(debPath, "*.deb")}
 		llb.Args(args).SetRunOption(ei)
 	})
+}
+
+func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(in llb.State) llb.State {
+		buildDeps := spec.GetBuildDeps(targetKey)
+		if len(buildDeps) == 0 {
+			return in
+		}
+
+		depsSpec := &dalec.Spec{
+			Name:     spec.Name + "-build-deps",
+			Packager: "Dalec",
+			Version:  spec.Version,
+			Revision: spec.Revision,
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: buildDeps,
+			},
+			Description: "Build dependencies for " + spec.Name,
+		}
+
+		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
+			opts := append(opts, dalec.ProgressGroup("Insall build dependencies"))
+			opts = append([]llb.ConstraintsOpt{dalec.WithConstraint(c)}, opts...)
+
+			srcPkg, err := deb.SourcePackage(sOpt, in, depsSpec, targetKey, "", opts...)
+			if err != nil {
+				return in, err
+			}
+
+			pkg, err := deb.BuildDeb(in, depsSpec, srcPkg, "", opts...)
+			if err != nil {
+				return in, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
+			}
+
+			customRepos, err := d.RepoMounts(spec.GetBuildRepos(targetKey), sOpt, opts...)
+			if err != nil {
+				return in, err
+			}
+
+			return in.Run(
+				dalec.WithConstraints(opts...),
+				customRepos,
+				InstallLocalPkg(pkg),
+			).Root(), nil
+		})
+	}
 }
