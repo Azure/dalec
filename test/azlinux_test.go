@@ -1466,9 +1466,6 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 				Build: map[string]dalec.PackageConstraints{
 					depSpec.Name: {},
 				},
-				Runtime: map[string]dalec.PackageConstraints{
-					depSpec.Name: {},
-				},
 			},
 		}
 
@@ -1502,17 +1499,7 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 		// Now build again with our custom worker
 		// Note, we are solving the main spec, not depSpec here.
 		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, workerCfg.ContextName, worker), withBuildTarget(targetCfg.Container))
-		res := solveT(ctx, t, gwc, sr)
-		ref, err := res.SingleRef()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Since we also added the dep as a runtime dep, the file in the base package should be installed in the output container.
-		_, err = ref.StatFile(ctx, gwclient.StatRequest{Path: "/usr/share/doc/" + depSpec.Name + "/hello.txt"})
-		if err != nil {
-			t.Fatal(err)
-		}
+		solveT(ctx, t, gwc, sr)
 
 		// TODO: we should have a test to make sure this also works with source policies.
 		// Unfortunately it seems like there is an issue with the gateway client passing

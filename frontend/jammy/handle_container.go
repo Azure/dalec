@@ -71,7 +71,7 @@ func buildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec 
 	return img, nil
 }
 
-func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, debSt llb.State, targetKey string, includeTestRepo bool, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, debSt llb.State, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	base := dalec.GetBaseOutputImage(spec, targetKey)
 
 	installSymlinks := func(in llb.State) llb.State {
@@ -109,12 +109,6 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		customRepoOpts,
 		llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
 		dalec.WithMountedAptCache(AptCachePrefix),
-		dalec.RunOptFunc(func(cfg *llb.ExecInfo) {
-			if includeTestRepo {
-				llb.AddMount(testRepoPath, worker, llb.SourcePath(testRepoPath)).SetRunOption(cfg)
-				llb.AddMount(testRepoSourceListPath, worker, llb.SourcePath(testRepoSourceListPath)).SetRunOption(cfg)
-			}
-		}),
 		llb.AddMount("/etc/dpkg/dpkg.cfg.d/99-dalec-debug", debug, llb.SourcePath("debug"), llb.Readonly),
 		dalec.RunOptFunc(func(cfg *llb.ExecInfo) {
 			tmp := llb.Scratch().File(llb.Mkfile("tmp", 0o644, nil))

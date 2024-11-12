@@ -2,12 +2,10 @@ package jammy
 
 import (
 	"context"
-	"io/fs"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/deb"
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -70,25 +68,7 @@ func runTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 		return nil, err
 	}
 
-	var includeTestRepo bool
-
-	workerFS, err := bkfs.FromState(ctx, &worker, client)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if there there is a test repo in the worker image.
-	// We'll mount that into the target container while installing packages.
-	_, repoErr := fs.Stat(workerFS, testRepoPath[1:])
-	_, listErr := fs.Stat(workerFS, testRepoSourceListPath[1:])
-	if listErr == nil && repoErr == nil {
-		// This is a test and we need to include the repo from the worker image
-		// into target container.
-		includeTestRepo = true
-		frontend.Warn(ctx, client, worker, "Including test repo from worker image")
-	}
-
-	st, err := buildImageRootfs(worker, spec, sOpt, deb, targetKey, includeTestRepo, opts...)
+	st, err := buildImageRootfs(worker, spec, sOpt, deb, targetKey, opts...)
 	if err != nil {
 		return nil, err
 	}
