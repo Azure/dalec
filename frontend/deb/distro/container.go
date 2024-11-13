@@ -48,7 +48,7 @@ func (c *Config) BuildContainer(worker llb.State, sOpt dalec.SourceOpts, client 
 			// passes (as it is looking at these files).
 			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
 		}),
-		InstallLocalPkg(debSt),
+		InstallLocalPkg(debSt, opts...),
 	).Root().
 		With(c.createSymlinks(worker, spec, targetKey, opts...)), nil
 }

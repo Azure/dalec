@@ -14,9 +14,9 @@ import (
 // packages.
 //
 // This returns an [llb.RunOption] but it does create some things internally,
-// so any [llb.ConstraintsOpt] you want to pass in should come before this option
-// in a call to [llb.State.Run].
-func AptInstall(packages ...string) llb.RunOption {
+// This is what the constraints opts are used for.
+// The constraints are applied after any constraint set on the [llb.ExecInfo]
+func AptInstall(packages []string, opts ...llb.ConstraintsOpt) llb.RunOption {
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 		const installScript = `#!/usr/bin/env sh
 set -ex
@@ -27,11 +27,12 @@ rm -f /var/lib/apt/lists/_*
 apt autoclean -y
 
 apt update
-apt install -y $@
+apt install -y "$@"
 `
 		script := llb.Scratch().File(
 			llb.Mkfile("install.sh", 0o755, []byte(installScript)),
 			dalec.WithConstraint(&ei.Constraints),
+			dalec.WithConstraints(opts...),
 		)
 
 		p := "/tmp/dalec/internal/deb/install.sh"
@@ -48,15 +49,22 @@ apt install -y $@
 // currently unable to handle strict constraints.
 //
 // This returns an [llb.RunOption] but it does create some things internally,
-// so any [llb.ConstraintsOpt] you want to pass in should come before this option
-// in a call to [llb.State.Run].
-func InstallLocalPkg(pkg llb.State) llb.RunOption {
+// This is what the constraints opts are used for.
+// The constraints are applied after any constraint set on the [llb.ExecInfo]
+func InstallLocalPkg(pkg llb.State, opts ...llb.ConstraintsOpt) llb.RunOption {
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
-		// The apt solver always tries to select the latest package version even when constraints specify that an older version should be installed and that older version is available in a repo.
-		// This leads the solver to simply refuse to install our target package if the latest version of ANY dependency package is incompatible with the constraints.
-		// To work around this we first install the .deb for the package with dpkg, specifically ignoring any dependencies so that we can avoid the constraints issue.
-		// We then use aptitude to fix the (possibly broken) install of the package, and we pass the aptitude solver a hint to REJECT any solution that involves uninstalling the package.
-		// This forces aptitude to find a solution that will respect the constraints even if the solution involves pinning dependency packages to older versions.
+		// The apt solver always tries to select the latest package version even
+		// when constraints specify that an older version should be installed and
+		// that older version is available in a repo. This leads the solver to
+		// simply refuse to install our target package if the latest version of ANY
+		// dependency package is incompatible with the constraints. To work around
+		// this we first install the .deb for the package with dpkg, specifically
+		// ignoring any dependencies so that we can avoid the constraints issue.
+		// We then use aptitude to fix the (possibly broken) install of the
+		// package, and we pass the aptitude solver a hint to REJECT any solution
+		// that involves uninstalling the package. This forces aptitude to find a
+		// solution that will respect the constraints even if the solution involves
+		// pinning dependency packages to older versions.
 		const installScript = `#!/usr/bin/env sh
 set -ex
 
@@ -89,6 +97,7 @@ aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject ${pkg_name}
 		script := llb.Scratch().File(
 			llb.Mkfile("install.sh", 0o755, []byte(installScript)),
 			dalec.WithConstraint(&ei.Constraints),
+			dalec.WithConstraints(opts...),
 		)
 
 		p := "/tmp/dalec/internal/deb/install-with-constraints.sh"
@@ -143,7 +152,7 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 			return in.Run(
 				dalec.WithConstraints(opts...),
 				customRepos,
-				InstallLocalPkg(pkg),
+				InstallLocalPkg(pkg, opts...),
 			).Root(), nil
 		})
 	}
@@ -165,7 +174,7 @@ func (d *Config) InstallTestDeps(sOpt dalec.SourceOpts, targetKey string, spec *
 			opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
 			return in.Run(
 				dalec.WithConstraints(opts...),
-				AptInstall(deps...),
+				AptInstall(deps, opts...),
 				withRepos,
 				dalec.WithMountedAptCache(d.AptCachePrefix),
 			).Root(), nil

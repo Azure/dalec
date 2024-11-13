@@ -78,7 +78,7 @@ func (cfg *Config) Worker(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (ll
 	base := frontend.GetBaseImage(sOpt, cfg.ImageRef).
 		Run(
 			dalec.WithConstraints(opts...),
-			AptInstall(cfg.BuilderPackages...),
+			AptInstall(cfg.BuilderPackages, opts...),
 		).
 		// This file prevents installation of things like docs in ubuntu
 		// containers We don't want to exclude this because tests want to
