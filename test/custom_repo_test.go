@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -40,7 +41,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 		}
 	}
 
-	getSpec := func(dep *dalec.Spec, keyConfig map[string]dalec.Source) *dalec.Spec {
+	getSpec := func(dep *dalec.Spec, keyConfig map[string]dalec.Source, keyPath string) *dalec.Spec {
 		spec := &dalec.Spec{
 			Name:        "dalec-test-custom-repo",
 			Version:     "0.0.1",
@@ -63,7 +64,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 
 				ExtraRepos: []dalec.PackageRepositoryConfig{
 					{
-						Config: workerCfg.TestRepoConfig,
+						Config: workerCfg.TestRepoConfig(keyPath),
 						Data: []dalec.SourceMount{
 							{
 								Dest: "/opt/repo",
@@ -130,13 +131,13 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 			w := reqToState(ctx, gwc, sr, t)
 
 			// generate a gpg public/private key pair
-			gpgKey := generateGPGKey(w)
+			gpgKey := generateGPGKey(w, false)
 
 			depSpec := getDepSpec("no-public-key")
 			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec)
 
 			sr = newSolveRequest(
-				withSpec(ctx, t, getSpec(depSpec, nil)),
+				withSpec(ctx, t, getSpec(depSpec, nil, "public.key")),
 				withBuildContext(ctx, t, "test-repo", repoState),
 				withBuildTarget(targetCfg.Container),
 				withPlatformPtr(workerCfg.Platform),
@@ -151,30 +152,37 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 		testEnv.RunTest(ctx, t, testNoPublicKey)
 	})
 
-	t.Run("with public key", func(t *testing.T) {
-		t.Parallel()
-		ctx := startTestSpan(ctx, t)
-
-		testWithPublicKey := func(ctx context.Context, gwc gwclient.Client) {
+	testWithPublicKey := func(t *testing.T, armored bool) func(context.Context, gwclient.Client) {
+		return func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withBuildTarget(targetCfg.Worker), withSpec(ctx, t, nil))
 			w := reqToState(ctx, gwc, sr, t)
 
+			packageNameSuffix := "with-public-key"
+			if armored {
+				packageNameSuffix += "-armored"
+			}
+
 			// generate a gpg key to sign the repo
-			// under /public.key
-			gpgKey := generateGPGKey(w)
-			depSpec := getDepSpec("with-public-key")
+			// under /public.gpg or /public.asc, depending on armored flag
+			gpgKey := generateGPGKey(w, armored)
+			depSpec := getDepSpec(packageNameSuffix)
 			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec)
 
-			keyName := "public.asc"
+			ext := ".gpg"
+			if armored {
+				ext = ".asc"
+			}
+			keyName := "public" + ext
+
 			spec := getSpec(depSpec, map[string]dalec.Source{
 				// in the dalec spec, the public key will be passed in via build context
 				keyName: {
 					Context: &dalec.SourceContext{
 						Name: "repo-public-key",
 					},
-					Path: "public.asc",
+					Path: keyName,
 				},
-			})
+			}, keyName)
 
 			sr = newSolveRequest(
 				withSpec(ctx, t, spec),
@@ -190,13 +198,37 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 				t.Fatal(err)
 			}
 		}
+	}
 
-		testEnv.RunTest(ctx, t, testWithPublicKey)
+	t.Run("with public key armored", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		publicKeyArmored := testWithPublicKey(t, true)
+		testEnv.RunTest(ctx, t, publicKeyArmored)
+	})
+
+	t.Run("with public key dearmored", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		publicKeyDearmored := testWithPublicKey(t, false)
+		testEnv.RunTest(ctx, t, publicKeyDearmored)
 	})
 }
 
-func generateGPGKey(worker llb.State) llb.State {
+func generateGPGKey(worker llb.State, armored bool) llb.State {
 	pg := dalec.ProgressGroup("Generate GPG Key for Testing")
+
+	publicKeyExportCmd := "gpg --export"
+	if armored {
+		publicKeyExportCmd += " --armor"
+	}
+
+	ext := ".gpg"
+	if armored {
+		ext = ".asc"
+	}
 
 	st := worker.
 		Run(dalec.ShArgs(`gpg --batch --gen-key <<EOF
@@ -212,7 +244,11 @@ Expire-Date: 0
 %commit
 EOF
 		`), pg).
-		Run(dalec.ShArgs("gpg --export --armor test@example.com > /tmp/gpg/public.asc; gpg --export-secret-keys --armor test@example.com > /tmp/gpg/private.key"), pg).
+		Run(dalec.ShArgs(fmt.Sprintf(
+			"set +ex; %s test@example.com > /tmp/gpg/public%s; gpg --export-secret-keys --armor test@example.com > /tmp/gpg/private.key",
+			publicKeyExportCmd,
+			ext)),
+			pg).
 		AddMount("/tmp/gpg", llb.Scratch())
 
 	return st
