@@ -14,7 +14,7 @@ structure:
   A map of keys required to enable the configured repositories. Each key in
   this map is associated with a specific source and must be imported to allow
   the repositories to function as expected. The content of this is a
-  [source](sources.md) just like in the sources section.
+  [source](sources.md) just like in the sources section. 
 
 - **`config`**
   A collection of repository configurations to add to the environment. The
@@ -42,6 +42,11 @@ structure:
     container build target.
 
 These configurations are highly distribution specific.
+
+:::tip
+Be careful to name the key files properly depending on whether they are ascii armored (`*.asc`) or binary (`*.gpg`). 
+Some package managers such as `apt` do not handle keys properly if they are not named with the correct extension.
+:::
 
 ### Examples:
 
