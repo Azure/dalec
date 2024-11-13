@@ -205,7 +205,6 @@ type testLinuxConfig struct {
 		Units   string
 		Targets string
 	}
-
 	Worker  workerConfig
 	Release OSRelease
 }

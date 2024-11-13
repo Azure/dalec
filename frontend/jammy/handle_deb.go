@@ -120,14 +120,14 @@ func runTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 	return ref, err
 }
 
-var RepoPlatform = dalec.RepoPlatformConfig{
+var jammyRepoPlatform = dalec.RepoPlatformConfig{
 	ConfigRoot: "/etc/apt/sources.list.d",
 	GPGKeyRoot: "/usr/share/keyrings",
 	ConfigExt:  ".list",
 }
 
 func customRepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
-	withRepos, err := dalec.WithRepoConfigs(repos, &RepoPlatform, sOpt, opts...)
+	withRepos, err := dalec.WithRepoConfigs(repos, &jammyRepoPlatform, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func customRepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOp
 		return nil, err
 	}
 
-	keyMounts, _, err := dalec.GetRepoKeys(repos, &RepoPlatform, sOpt, opts...)
+	keyMounts, _, err := dalec.GetRepoKeys(repos, &jammyRepoPlatform, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,6 @@ apt autoclean -y
 
 dpkg -i --force-depends `+pkgPath+`
 
-ls -lrt /usr/share/keyrings
 apt update
 aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject `+pkgName+` :UNINST"
 `),
