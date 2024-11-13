@@ -28,21 +28,23 @@ var azlinuxConstraints = constraintsSymbols{
 	LessThanOrEqual:    "<=",
 }
 
-var azlinuxTestRepoConfig = map[string]dalec.Source{
-	"local.repo": {
-		Inline: &dalec.SourceInline{
-			File: &dalec.SourceInlineFile{
-				Contents: `[Local]
+var azlinuxTestRepoConfig = func(keyPath string) map[string]dalec.Source {
+	return map[string]dalec.Source{
+		"local.repo": {
+			Inline: &dalec.SourceInline{
+				File: &dalec.SourceInlineFile{
+					Contents: fmt.Sprintf(`[Local]
 name=Local Repository
 baseurl=file:///opt/repo
 repo_gpgcheck=1
 priority=0
 enabled=1
-gpgkey=file:///etc/pki/rpm-gpg/public.key
-	`,
+gpgkey=file:///etc/pki/rpm-gpg/%s
+	`, keyPath),
+				},
 			},
 		},
-	},
+	}
 }
 
 func TestMariner2(t *testing.T) {
@@ -169,7 +171,7 @@ type workerConfig struct {
 	// ContextName is the name of the worker context that the build target will use
 	// to see if a custom worker is proivded in a context
 	ContextName    string
-	TestRepoConfig map[string]dalec.Source
+	TestRepoConfig func(string) map[string]dalec.Source
 	Constraints    constraintsSymbols
 	Platform       *ocispecs.Platform
 }

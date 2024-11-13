@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -28,14 +29,16 @@ func signRepoJammy(gpgKey llb.State) llb.StateOption {
 	}
 }
 
-var jammyTestRepoConfig = map[string]dalec.Source{
-	"local.list": {
-		Inline: &dalec.SourceInline{
-			File: &dalec.SourceInlineFile{
-				Contents: `deb [signed-by=/usr/share/keyrings/public.asc] copy:/opt/repo/ /`,
+var jammyTestRepoConfig = func(name string) map[string]dalec.Source {
+	return map[string]dalec.Source{
+		"local.list": {
+			Inline: &dalec.SourceInline{
+				File: &dalec.SourceInlineFile{
+					Contents: fmt.Sprintf(`deb [signed-by=/usr/share/keyrings/%s] copy:/opt/repo/ /`, name),
+				},
 			},
 		},
-	},
+	}
 }
 
 func TestJammy(t *testing.T) {
