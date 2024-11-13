@@ -489,7 +489,6 @@ func fillExtraRepoDefaults(extraRepo *PackageRepositoryConfig) {
 	for _, mount := range extraRepo.Data {
 		fillDefaults(&mount.Spec)
 	}
-
 }
 
 func (s Spec) Validate() error {
