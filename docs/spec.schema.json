@@ -836,6 +836,10 @@
 				"digest": {
 					"type": "string",
 					"description": "Digest is the digest of the file to download.\nThis is used to verify the integrity of the file.\nForm: \u003calgorithm\u003e:\u003cdigest\u003e"
+				},
+				"permissions": {
+					"type": "integer",
+					"description": "Permissions is the octal file permissions to set on the file."
 				}
 			},
 			"additionalProperties": false,
