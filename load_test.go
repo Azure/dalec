@@ -629,6 +629,9 @@ dependencies:
 	}
 
 	err = spec.SubstituteArgs(map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	extraRepo := spec.Dependencies.ExtraRepos[0]
 	assert.Equal(t, extraRepo.Config["custom.repo"].Context.Name,
