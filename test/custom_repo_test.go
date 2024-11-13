@@ -165,13 +165,14 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 			depSpec := getDepSpec("with-public-key")
 			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec)
 
+			keyName := "public.asc"
 			spec := getSpec(depSpec, map[string]dalec.Source{
 				// in the dalec spec, the public key will be passed in via build context
-				"public.key": {
+				keyName: {
 					Context: &dalec.SourceContext{
 						Name: "repo-public-key",
 					},
-					Path: "public.key",
+					Path: "public.asc",
 				},
 			})
 
@@ -211,7 +212,7 @@ Expire-Date: 0
 %commit
 EOF
 		`), pg).
-		Run(dalec.ShArgs("gpg --export --armor test@example.com > /tmp/gpg/public.key; gpg --export-secret-keys --armor test@example.com > /tmp/gpg/private.key"), pg).
+		Run(dalec.ShArgs("gpg --export --armor test@example.com > /tmp/gpg/public.asc; gpg --export-secret-keys --armor test@example.com > /tmp/gpg/private.key"), pg).
 		AddMount("/tmp/gpg", llb.Scratch())
 
 	return st

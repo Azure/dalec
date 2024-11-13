@@ -164,6 +164,11 @@ func (src *SourceHTTP) AsState(name string, opts ...llb.ConstraintsOpt) (llb.Sta
 	if src.Digest != "" {
 		httpOpts = append(httpOpts, llb.Checksum(src.Digest))
 	}
+
+	if src.Permissions != 0 {
+		httpOpts = append(httpOpts, llb.Chmod(src.Permissions))
+	}
+
 	st := llb.HTTP(src.URL, httpOpts...)
 	return st, nil
 }

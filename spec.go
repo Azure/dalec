@@ -197,6 +197,8 @@ type SourceHTTP struct {
 	// This is used to verify the integrity of the file.
 	// Form: <algorithm>:<digest>
 	Digest digest.Digest `yaml:"digest,omitempty" json:"digest,omitempty"`
+	// Permissions is the octal file permissions to set on the file.
+	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
 }
 
 // SourceContext is used to generate a source from a build context. The path to
