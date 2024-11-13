@@ -117,7 +117,7 @@ func installBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string)
 				return in, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
 			}
 
-			customRepoOpts, err := customRepoMounts(in, spec.GetBuildRepos(targetKey), sOpt, opts...)
+			customRepoOpts, err := customRepoMounts(spec.GetBuildRepos(targetKey), sOpt, opts...)
 			if err != nil {
 				return in, err
 			}
@@ -315,13 +315,7 @@ var jammyRepoPlatformCfg = dalec.RepoPlatformConfig{
 	GPGKeyRoot: "/usr/share/keyrings",
 }
 
-func customRepoMounts(worker llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
-	worker = worker.Run(
-		dalec.ShArgs("apt update && apt install -y gnupg2"),
-		dalec.WithMountedAptCache(aptCachePrefix),
-		dalec.WithConstraints(opts...),
-	).Root() // make sure we have gpg installed
-
+func customRepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
 	withRepos, err := dalec.WithRepoConfigs(repos, &jammyRepoPlatformCfg, sOpt, opts...)
 	if err != nil {
 		return nil, err
@@ -332,7 +326,7 @@ func customRepoMounts(worker llb.State, repos []dalec.PackageRepositoryConfig, s
 		return nil, err
 	}
 
-	keyMounts, _, err := dalec.GetRepoKeys(worker, repos, &jammyRepoPlatformCfg, sOpt, opts...)
+	keyMounts, _, err := dalec.GetRepoKeys(repos, &jammyRepoPlatformCfg, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}

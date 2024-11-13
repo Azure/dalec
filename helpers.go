@@ -468,6 +468,7 @@ func (f gitOptionFunc) SetGitOption(gi *llb.GitInfo) {
 type RepoPlatformConfig struct {
 	ConfigRoot string
 	GPGKeyRoot string
+	ConfigExt  string
 }
 
 // Returns a run option which mounts the data dirs for all specified repos
@@ -508,8 +509,13 @@ func repoConfigAsMount(config PackageRepositoryConfig, platformCfg *RepoPlatform
 			return nil, err
 		}
 
+		var normalized string = name
+		if filepath.Ext(normalized) != platformCfg.ConfigExt {
+			normalized += platformCfg.ConfigExt
+		}
+
 		repoConfigs = append(repoConfigs,
-			llb.AddMount(filepath.Join(platformCfg.ConfigRoot, name), repoConfigSt, llb.SourcePath(name)))
+			llb.AddMount(filepath.Join(platformCfg.ConfigRoot, normalized), repoConfigSt, llb.SourcePath(name)))
 	}
 
 	return repoConfigs, nil
@@ -530,32 +536,19 @@ func WithRepoConfigs(repos []PackageRepositoryConfig, cfg *RepoPlatformConfig, s
 	return WithRunOptions(configStates...), nil
 }
 
-func GetRepoKeys(worker llb.State, configs []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
+func GetRepoKeys(configs []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
 	keys := []llb.RunOption{}
 	names := []string{}
 	for _, config := range configs {
 		for name, repoKey := range config.Keys {
-			// each of these sources represent a gpg key file for a particular repo
-			gpgKey, err := repoKey.AsState(name, sOpt, append(opts, ProgressGroup("Importing repo key: "+name))...)
+			gpgKey, err := repoKey.AsState(name, sOpt, append(opts, ProgressGroup("Fetching repo key: "+name))...)
 			if err != nil {
 				return nil, nil, err
 			}
 
 			mountPath := filepath.Join(cfg.GPGKeyRoot, name)
 
-			opt := runOptionFunc(func(ei *llb.ExecInfo) {
-				inPath := filepath.Join("/tmp/in", name)
-				outPath := filepath.Join("/tmp/out", name)
-				keySt := worker.Run(
-					// dearmor key if necessary
-					ShArgs(fmt.Sprintf("gpg --dearmor --output %q < %q", outPath, inPath)),
-					llb.AddMount(inPath, gpgKey, llb.SourcePath(name))).
-					AddMount("/tmp/out/", llb.Scratch())
-
-				llb.AddMount(mountPath, keySt, llb.SourcePath(name)).SetRunOption(ei)
-			})
-
-			keys = append(keys, opt)
+			keys = append(keys, llb.AddMount(mountPath, gpgKey, llb.SourcePath(name)))
 			names = append(names, name)
 		}
 	}

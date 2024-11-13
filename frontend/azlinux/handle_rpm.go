@@ -97,21 +97,14 @@ func runTests(ctx context.Context, client gwclient.Client, w worker, spec *dalec
 	return ref, errors.Wrap(err, "TESTS FAILED")
 }
 
-var azLinuxRepoConfig = dalec.RepoPlatformConfig{
+var azlinuxRepoPlatform = dalec.RepoPlatformConfig{
 	ConfigRoot: "/etc/yum.repos.d",
 	GPGKeyRoot: "/etc/pki/rpm-gpg",
+	ConfigExt:  ".repo",
 }
 
-func repoMountInstallOpts(w worker, base llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
-	worker := base.Run(
-		w.Install(
-			[]string{"gnupg2"},
-			installWithConstraints(opts),
-		),
-		dalec.WithConstraints(opts...),
-	).Root()
-
-	withRepos, err := dalec.WithRepoConfigs(repos, &azLinuxRepoConfig, sOpt, opts...)
+func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
+	withRepos, err := dalec.WithRepoConfigs(repos, &azlinuxRepoPlatform, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +114,7 @@ func repoMountInstallOpts(w worker, base llb.State, repos []dalec.PackageReposit
 		return nil, err
 	}
 
-	keyMounts, keyPaths, err := dalec.GetRepoKeys(worker, repos, &azLinuxRepoConfig, sOpt, opts...)
+	keyMounts, keyPaths, err := dalec.GetRepoKeys(repos, &azlinuxRepoPlatform, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +130,7 @@ func withTestDeps(w worker, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey s
 	}
 
 	testRepos := spec.GetTestRepos(targetKey)
-	importRepos, err := repoMountInstallOpts(w, base, testRepos, sOpt, opts...)
+	importRepos, err := repoMountInstallOpts(testRepos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -210,12 +203,7 @@ func installBuildDeps(ctx context.Context, w worker, client gwclient.Client, spe
 		return nil, err
 	}
 
-	base, err := w.Base(sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	importRepos, err := repoMountInstallOpts(w, base, repos, sOpt, opts...)
+	importRepos, err := repoMountInstallOpts(repos, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}

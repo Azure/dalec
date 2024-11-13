@@ -14,7 +14,6 @@ func signRepoJammy(gpgKey llb.State) llb.StateOption {
 		// assuming in is the state that has the repo files under / including
 		// Release file
 		return in.Run(
-			dalec.ShArgs("gpg --import < /tmp/gpg/public.key"),
 			dalec.ShArgs("gpg --import < /tmp/gpg/private.key"),
 			llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
 			dalec.ProgressGroup("Importing gpg key")).
@@ -33,7 +32,7 @@ var jammyTestRepoConfig = map[string]dalec.Source{
 	"local.list": {
 		Inline: &dalec.SourceInline{
 			File: &dalec.SourceInlineFile{
-				Contents: `deb [signed-by=/usr/share/keyrings/public.key] copy:/opt/repo/ /`,
+				Contents: `deb [signed-by=/usr/share/keyrings/public.asc] copy:/opt/repo/ /`,
 			},
 		},
 	},

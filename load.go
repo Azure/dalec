@@ -454,8 +454,10 @@ func (s *Spec) FillDefaults() {
 		}
 	}
 
-	for i := range len(s.Dependencies.ExtraRepos) {
-		fillExtraRepoDefaults(&s.Dependencies.ExtraRepos[i])
+	if s.Dependencies != nil {
+		for i := range len(s.Dependencies.ExtraRepos) {
+			fillExtraRepoDefaults(&s.Dependencies.ExtraRepos[i])
+		}
 	}
 }
 
@@ -474,6 +476,13 @@ func fillExtraRepoDefaults(extraRepo *PackageRepositoryConfig) {
 	for keyName := range extraRepo.Keys {
 		keySource := extraRepo.Keys[keyName]
 		fillDefaults(&keySource)
+
+		// Default to 0644 permissions for gpg keys. This is because apt will will only import
+		// keys with a particular permission set.
+		if keySource.HTTP != nil {
+			keySource.HTTP.Permissions = 0644
+		}
+
 		extraRepo.Keys[keyName] = keySource
 	}
 

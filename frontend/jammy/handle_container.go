@@ -90,7 +90,7 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 			AddMount(workPath, in)
 	}
 
-	customRepoOpts, err := customRepoMounts(worker, spec.GetInstallRepos(targetKey), sOpt, opts...)
+	customRepoOpts, err := customRepoMounts(spec.GetInstallRepos(targetKey), sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -131,13 +131,13 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		With(installSymlinks), nil
 }
 
-func installTestDeps(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+func installTestDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
 	deps := spec.GetTestDeps(targetKey)
 	if len(deps) == 0 {
 		return func(s llb.State) llb.State { return s }, nil
 	}
 
-	extraRepoOpts, err := customRepoMounts(worker, spec.GetTestRepos(targetKey), sOpt, opts...)
+	extraRepoOpts, err := customRepoMounts(spec.GetTestRepos(targetKey), sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}

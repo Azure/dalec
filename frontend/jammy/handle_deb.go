@@ -111,7 +111,7 @@ func runTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 		return nil, err
 	}
 
-	withTestDeps, err := installTestDeps(worker, spec, sOpt, targetKey, opts...)
+	withTestDeps, err := installTestDeps(spec, sOpt, targetKey, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -120,14 +120,14 @@ func runTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOp
 	return ref, err
 }
 
-var jammyRepoPlatformCfg = dalec.RepoPlatformConfig{
+var RepoPlatform = dalec.RepoPlatformConfig{
 	ConfigRoot: "/etc/apt/sources.list.d",
 	GPGKeyRoot: "/usr/share/keyrings",
+	ConfigExt:  ".list",
 }
 
-func customRepoMounts(worker llb.State, repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
-	worker = worker.Run(installPackages([]string{"gnupg2"}, opts...), dalec.WithConstraints(opts...)).Root() // make sure we have gpg installed
-	withRepos, err := dalec.WithRepoConfigs(repos, &jammyRepoPlatformCfg, sOpt, opts...)
+func customRepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	withRepos, err := dalec.WithRepoConfigs(repos, &RepoPlatform, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func customRepoMounts(worker llb.State, repos []dalec.PackageRepositoryConfig, s
 		return nil, err
 	}
 
-	keyMounts, _, err := dalec.GetRepoKeys(worker, repos, &jammyRepoPlatformCfg, sOpt, opts...)
+	keyMounts, _, err := dalec.GetRepoKeys(repos, &RepoPlatform, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -187,6 +187,7 @@ apt autoclean -y
 
 dpkg -i --force-depends `+pkgPath+`
 
+ls -lrt /usr/share/keyrings
 apt update
 aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject `+pkgName+` :UNINST"
 `),
@@ -319,7 +320,7 @@ func buildDepends(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, tar
 		return nil, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
 	}
 
-	customRepoOpts, err := customRepoMounts(worker, spec.GetBuildRepos(targetKey), sOpt, opts...)
+	customRepoOpts, err := customRepoMounts(spec.GetBuildRepos(targetKey), sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
