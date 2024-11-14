@@ -728,7 +728,7 @@
 						"$ref": "#/$defs/SourceGenerator"
 					},
 					"type": "array",
-					"description": "Generate is the list generators to run on the source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `godmod` generator can be used to generate a go module cache from a go source.\nHow a genator operates is dependent on the actual generator.\nGeneators may also cauuse modifications to the build environment.\n\nCurrently only one generator is supported: \"gomod\""
+					"description": "Generate is the list generators to run on the source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `gomod` generator can be used to generate a go module cache from a go source.\nHow a generator operates is dependent on the actual generator.\nGenerators may also cauuse modifications to the build environment.\n\nCurrently only one generator is supported: \"gomod\""
 				}
 			},
 			"additionalProperties": false,

@@ -300,8 +300,8 @@ type Source struct {
 	// Generate is the list generators to run on the source.
 	//
 	// Generators are used to generate additional sources from this source.
-	// As an example the `godmod` generator can be used to generate a go module cache from a go source.
-	// How a genator operates is dependent on the actual generator.
+	// As an example the `gomod` generator can be used to generate a go module cache from a go source.
+	// How a generator operates is dependent on the actual generator.
 	// Generators may also cauuse modifications to the build environment.
 	//
 	// Currently only one generator is supported: "gomod"
