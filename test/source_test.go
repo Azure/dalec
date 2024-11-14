@@ -247,6 +247,48 @@ github.com/cpuguy83/tar2go v0.3.1 h1:DMWlaIyoh9FBWR4hyfZSOEDA7z8rmCiGF1IJIzlTlR8
 github.com/cpuguy83/tar2go v0.3.1/go.mod h1:2Ys2/Hu+iPHQRa4DjIVJ7UAaKnDhAhNACeK3A0Rr5rM=
 `
 
+const alternativeGomodFixtureMain = `package main
+
+import (
+	"fmt"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func main() {
+	msg := "This is a dummy test from module2"
+	fmt.Println(msg)
+	assert.True(nil, true, msg)
+}
+`
+
+const alternativeGomodFixtureMod = `module example.com/module2
+
+go 1.20
+
+require github.com/stretchr/testify v1.7.0
+
+require (
+	github.com/davecgh/go-spew v1.1.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
+)
+`
+
+const alternativeGomodFixtureSum = `
+github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
+github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
+github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
+github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c h1:dUUwHk2QECo/6vqA44rthZ8ie2QXMNeKRTHCNY2nXvo=
+gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+`
+
 func TestSourceWithGomod(t *testing.T) {
 	t.Parallel()
 
@@ -297,6 +339,7 @@ index ea874f5..ba38f84 100644
 	}
 
 	const srcName = "src1"
+
 	baseSpec := func() *dalec.Spec {
 		return &dalec.Spec{
 			Sources: map[string]dalec.Source{
@@ -371,6 +414,77 @@ index ea874f5..ba38f84 100644
 
 				checkModule(ctx, gwc, "github.com/cpuguy83/tar2go@v0.3.0", spec)
 			})
+		})
+	})
+
+	t.Run("multi-module", func(t *testing.T) {
+		t.Parallel()
+		/*
+			dir/
+				module1/
+					go.mod
+					go.sum
+					main.go
+				module2/
+					go.mod
+					go.sum
+					main.go
+		*/
+		contextSt := llb.Scratch().File(llb.Mkdir("/dir", 0644)).
+			File(llb.Mkdir("/dir/module1", 0644)).
+			File(llb.Mkfile("/dir/module1/go.mod", 0644, []byte(alternativeGomodFixtureMod))).
+			File(llb.Mkfile("/dir/module1/go.sum", 0644, []byte(alternativeGomodFixtureSum))).
+			File(llb.Mkfile("/dir/module1/main.go", 0644, []byte(alternativeGomodFixtureMain))).
+			File(llb.Mkdir("/dir/module2", 0644)).
+			File(llb.Mkfile("/dir/module2/go.mod", 0644, []byte(gomodFixtureMod))).
+			File(llb.Mkfile("/dir/module2/go.sum", 0644, []byte(gomodFixtureSum))).
+			File(llb.Mkfile("/dir/module2/main.go", 0644, []byte(gomodFixtureMain)))
+
+		const contextName = "multi-module"
+		spec := &dalec.Spec{
+			Name: "test-dalec-context-source",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Context: &dalec.SourceContext{Name: contextName},
+					Generate: []*dalec.SourceGenerator{
+						{
+							Gomod: &dalec.GeneratorGomod{
+								Paths: []string{"./dir/module1", "./dir/module2"},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					"golang": {
+						Version: []string{},
+					},
+				},
+			},
+		}
+
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+			req := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, contextName, contextSt), withBuildTarget("debug/gomods"))
+			res := solveT(ctx, t, gwc, req)
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+			deps := []string{"github.com/cpuguy83/tar2go@v0.3.1", "github.com/stretchr/testify@v1.7.0"}
+			for _, dep := range deps {
+				stat, err := ref.StatFile(ctx, gwclient.StatRequest{
+					Path: dep,
+				})
+
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if !fs.FileMode(stat.Mode).IsDir() {
+					t.Fatal("expected directory")
+				}
+			}
 		})
 	})
 }

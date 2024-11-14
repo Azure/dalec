@@ -8,28 +8,22 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-        - "*.go"
-        - "**/*.go"
-        - Dockerfile
-        - docker-bake.hcl
-        - .github/workflows/ci.yml
-        - frontend/mariner2/Dockerfile
-        - "test/fixtures/*"
-        - go.mod
-        - go.sum
+    paths-ignore:
+      - 'website/**'
+      - 'docs/**'
+      - '*.md'
+      - 'CODEOWNERS'
+      - 'LICENSE'
+
   push:
     branches:
       - main
-    paths:
-      - "*.go"
-      - "**/*.go"
-      - Dockerfile
-      - docker-bake.hcl
-      - .github/workflows/ci.yml
-      - frontend/mariner2/Dockerfile
-      - go.mod
-      - go.sum
+    paths-ignore:
+      - 'website/**'
+      - 'docs/**'
+      - '*.md'
+      - 'CODEOWNERS'
+      - 'LICENSE'
 
 permissions:
   contents: read
@@ -44,8 +38,8 @@ jobs:
           egress-policy: audit
 
       - name: checkout
-        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
-      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version: '1.22'
           cache: false
@@ -78,8 +72,8 @@ jobs:
           egress-policy: audit
 
       - name: checkout
-        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
-      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version: '1.22'
           cache: false
@@ -93,7 +87,7 @@ jobs:
         uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
       - name: download deps
         run: go mod download
-      - name: Run integaration tests
+      - name: Run integration tests
         run: go test -v -json ./test | go run ./cmd/test2json2gha
       - name: dump logs
         if: failure()
@@ -109,8 +103,8 @@ jobs:
           egress-policy: audit
 
       - name: checkout
-        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
-      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version: '1.22'
           cache: false
@@ -136,7 +130,7 @@ jobs:
           egress-policy: audit
 
       - name: checkout
-        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           # We need to fetch all commits so that we can diff against the base branch
           fetch-depth: 0

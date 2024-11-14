@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -144,7 +145,7 @@ type SourceDockerImage struct {
 type SourceGit struct {
 	URL        string  `yaml:"url" json:"url"`
 	Commit     string  `yaml:"commit" json:"commit"`
-	KeepGitDir bool    `yaml:"keepGitDir" json:"keepGitDir"`
+	KeepGitDir bool    `yaml:"keepGitDir,omitempty" json:"keepGitDir,omitempty"`
 	Auth       GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
 }
 
@@ -196,6 +197,8 @@ type SourceHTTP struct {
 	// This is used to verify the integrity of the file.
 	// Form: <algorithm>:<digest>
 	Digest digest.Digest `yaml:"digest,omitempty" json:"digest,omitempty"`
+	// Permissions is the octal file permissions to set on the file.
+	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
 }
 
 // SourceContext is used to generate a source from a build context. The path to
@@ -307,6 +310,8 @@ type Source struct {
 
 // GeneratorGomod is used to generate a go module cache from go module sources
 type GeneratorGomod struct {
+	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
+	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 }
 
 // SourceGenerator holds the configuration for a source generator.
@@ -348,6 +353,47 @@ type PackageDependencies struct {
 	// running a command in the built container.
 	// See [TestSpec] for more information.
 	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
+
+	// ExtraRepos is used to inject extra package repositories that may be used to
+	// satisfy package dependencies in various stages.
+	ExtraRepos []PackageRepositoryConfig `yaml:"extra_repos,omitempty" json:"extra_repos,omitempty"`
+}
+
+func (p *PackageDependencies) GetExtraRepos(env string) []PackageRepositoryConfig {
+	var repos []PackageRepositoryConfig
+	for _, repo := range p.ExtraRepos {
+		if slices.Contains(repo.Envs, env) {
+			repos = append(repos, repo)
+		}
+	}
+
+	return repos
+}
+
+// PackageRepositoryConfig
+type PackageRepositoryConfig struct {
+	// Keys are the list of keys that need to be imported to use the configured
+	// repositories
+	Keys map[string]Source `yaml:"keys,omitempty" json:"keys,omitempty"`
+
+	// Config list of repo configs to to add to the environment.  The format of
+	// these configs are distro specific (e.g. apt/yum configs).
+	Config map[string]Source `yaml:"config" json:"config"`
+
+	// Data lists all the extra data that needs to be made available for the
+	// provided repository config to work.
+	// As an example, if the provided config is referencing a file backed repository
+	// then data would include the file data, assuming its not already available
+	// in the environment.
+	Data []SourceMount `yaml:"data,omitempty" json:"data,omitempty"`
+	// Envs specifies the list of environments to make the repositories available
+	// during.
+	// Acceptable values are:
+	//  - "build"   - Repositories are added prior to installing build dependencies
+	//  - "test"    - Repositories are added prior to installing test dependencies
+	//  - "install" - Repositories are added prior to installing the output
+	//                package in a container build target.
+	Envs []string `yaml:"envs" json:"envs" jsonschema:"enum=build,enum=test,enum=install"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
@@ -357,6 +403,11 @@ type ArtifactBuild struct {
 	Steps []BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+
+	// NetworkMode sets the network mode to use during the build phase.
+	// Accepted values: none, sandbox
+	// Default: none
+	NetworkMode string `yaml:"network_mode,omitempty" json:"network_mode,omitempty" jsonschema:"enum=none,enum=sandbox"`
 }
 
 // BuildStep is used to execute a command to build the artifact(s).
@@ -368,7 +419,7 @@ type BuildStep struct {
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 }
 
-// SourceMount is used to take a [Source] and mount it into a build step.
+// SourceMount wraps a [Source] with a target mount point.
 type SourceMount struct {
 	// Dest is the destination directory to mount to
 	Dest string `yaml:"dest" json:"dest" jsonschema:"required"`
@@ -577,8 +628,9 @@ func (c FileCheckOutput) Check(dt string, mode fs.FileMode, isDir bool, p string
 		return &CheckOutputError{Kind: "mode", Expected: "ModeFile", Actual: "ModeDir", Path: p}
 	}
 
-	if c.Permissions != 0 && c.Permissions != mode {
-		return &CheckOutputError{Kind: "permissions", Expected: c.Permissions.String(), Actual: mode.String(), Path: p}
+	perm := mode.Perm()
+	if c.Permissions != 0 && c.Permissions != perm {
+		return &CheckOutputError{Kind: "permissions", Expected: c.Permissions.String(), Actual: perm.String(), Path: p}
 	}
 
 	return c.CheckOutput.Check(dt, p)

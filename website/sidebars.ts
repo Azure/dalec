@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
         'targets',
         'testing',
         'artifacts',
+        'repositories',
       ],
     },
     {

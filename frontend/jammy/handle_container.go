@@ -3,12 +3,10 @@ package jammy
 import (
 	"context"
 	"encoding/json"
-	"io/fs"
 	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -19,7 +17,7 @@ import (
 const (
 	jammyRef = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
 
-	testRepoPath           = "/opt/testrepo"
+	testRepoPath           = "/opt/repo"
 	testRepoSourceListPath = "/etc/apt/sources.list.d/test-dalec-local-repo.list"
 )
 
@@ -37,57 +35,12 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		worker, err := workerBase(sOpt, opt)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		var includeTestRepo bool
-
-		workerFS, err := bkfs.FromState(ctx, &worker, client)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Check if there there is a test repo in the worker image.
-		// We'll mount that into the target container while installing packages.
-		_, repoErr := fs.Stat(workerFS, testRepoPath[1:])
-		_, listErr := fs.Stat(workerFS, testRepoSourceListPath[1:])
-		if listErr == nil && repoErr == nil {
-			// This is a test and we need to include the repo from the worker image
-			// into target container.
-			includeTestRepo = true
-			frontend.Warn(ctx, client, worker, "Including test repo from worker image")
-		}
-
-		st := buildImageRootfs(worker, spec, sOpt, deb, targetKey, includeTestRepo, opt)
-
-		def, err := st.Marshal(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		img, err := buildImageConfig(ctx, client, spec, platform, targetKey)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		res, err := client.Solve(ctx, gwclient.SolveRequest{
-			Definition: def.ToPB(),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ref, err := res.SingleRef()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if err := frontend.RunTests(ctx, client, spec, ref, installTestDeps(spec, targetKey, opt), targetKey); err != nil {
-			return nil, nil, err
-		}
-
+		ref, err := runTests(ctx, client, spec, sOpt, deb, targetKey, opt)
 		return ref, img, err
 	})
 }
@@ -118,7 +71,7 @@ func buildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec 
 	return img, nil
 }
 
-func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, targetKey string, includeTestRepo bool, opts ...llb.ConstraintsOpt) llb.State {
+func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, deb llb.State, targetKey string, includeTestRepo bool, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	base := dalec.GetBaseOutputImage(spec, targetKey)
 
 	installSymlinks := func(in llb.State) llb.State {
@@ -137,6 +90,11 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 			AddMount(workPath, in)
 	}
 
+	customRepoOpts, err := customRepoMounts(spec.GetInstallRepos(targetKey), sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
 	if base == "" {
 		base = jammyRef
 	}
@@ -145,8 +103,10 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 
 	debug := llb.Scratch().File(llb.Mkfile("debug", 0o644, []byte(`debug=2`)), opts...)
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))
+
 	return baseImg.Run(
-		dalec.ShArgs("set -x; apt update && apt install -y /tmp/pkg/*.deb && exit 0; ls -lh /etc/apt/sources.list.d; ls -lh /etc/testrepo; mount; exit 42"),
+		installPackages([]string{"/tmp/pkg/*.deb"}, opts...),
+		customRepoOpts,
 		llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
 		llb.AddMount("/tmp/pkg", deb, llb.Readonly),
 		dalec.WithMountedAptCache(AptCachePrefix),
@@ -168,22 +128,27 @@ func buildImageRootfs(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
 		}),
 	).Root().
-		With(installSymlinks)
+		With(installSymlinks), nil
 }
 
-func installTestDeps(spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+func installTestDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	deps := spec.GetTestDeps(targetKey)
+	if len(deps) == 0 {
+		return func(s llb.State) llb.State { return s }, nil
+	}
+
+	extraRepoOpts, err := customRepoMounts(spec.GetTestRepos(targetKey), sOpt, opts...)
+	if err != nil {
+		return nil, err
+	}
+
 	return func(in llb.State) llb.State {
-		deps := spec.GetTestDeps(targetKey)
-		if len(deps) == 0 {
-			return in
-		}
-
 		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
-
 		return in.Run(
 			dalec.ShArgs("apt-get update && apt-get install -y --no-install-recommends "+strings.Join(deps, " ")),
 			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
+			extraRepoOpts,
 			dalec.WithMountedAptCache(AptCachePrefix),
 		).Root()
-	}
+	}, nil
 }

@@ -4,62 +4,110 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/jammy"
 	"github.com/Azure/dalec/frontend/windows"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/exp/maps"
 )
+
+var windowsAmd64 = ocispecs.Platform{OS: "windows", Architecture: "amd64"}
 
 func TestWindows(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testWindows(ctx, t, "windowscross/container")
+	testWindows(ctx, t, targetConfig{
+		Package:   "windowscross/zip",
+		Container: "windowscross/container",
+		ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
+			return maps.Keys(spec.Artifacts.Binaries)
+		},
+	})
+
+	tcfg := targetConfig{
+		Container: "windowscross/container",
+		// The way the test uses the package target is to generate a package which
+		// it then feeds back into a custom repo and adds that package as a build dep
+		// to another package.
+		// We don't build system packages for the windowscross base image.
+		// So... use jammy to create a deb which we'll use to create a repo.
+		Package: "jammy/deb",
+		Worker:  "windowscross/worker",
+		FormatDepEqual: func(ver, rev string) string {
+			return ver + "-ubuntu22.04u" + rev
+		},
+		ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
+			return maps.Keys(spec.Artifacts.Binaries)
+		},
+	}
+
+	wcfg := workerConfig{
+		ContextName:    windows.WindowscrossWorkerContextName,
+		SignRepo:       signRepoJammy,
+		TestRepoConfig: jammyTestRepoConfig,
+		Platform:       &windowsAmd64,
+		Constraints: constraintsSymbols{
+			Equal:              "=",
+			GreaterThan:        ">>",
+			GreaterThanOrEqual: ">=",
+			LessThan:           "<<",
+			LessThanOrEqual:    "<=",
+		},
+		CreateRepo: func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
+			return func(in llb.State) llb.State {
+				repoFile := []byte(`
+deb [trusted=yes] copy:/opt/repo/ /
+`)
+				withRepo := in.Run(
+					dalec.ShArgs("apt-get update && apt-get install -y apt-utils gnupg2"),
+					dalec.WithMountedAptCache(jammy.AptCachePrefix),
+				).File(llb.Copy(pkg, "/", "/opt/repo")).
+					Run(
+						llb.Dir("/opt/repo"),
+						dalec.ShArgs("apt-ftparchive packages . > Packages"),
+					).
+					Run(
+						llb.Dir("/opt/repo"),
+						dalec.ShArgs("apt-ftparchive release . > Release"),
+					).Root()
+
+				for _, opt := range opts {
+					withRepo = opt(withRepo)
+				}
+
+				return withRepo.
+					File(llb.Mkfile("/etc/apt/sources.list.d/test-dalec-local-repo.list", 0o644, repoFile))
+
+			}
+		},
+	}
+
+	t.Run("custom repo", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testCustomRepo(ctx, t, wcfg, tcfg)
+	})
 
 	t.Run("custom worker", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
-		testCustomWindowscrossWorker(ctx, t, targetConfig{
-			Container: "windowscross/container",
-			// The way the test uses the package target is to generate a package which
-			// it then feeds back into a custom repo and adds that package as a build dep
-			// to another package.
-			// We don't build system packages for the windowscross base image.
-			// There's also no .deb support (currently)
-			// So... use a mariner2 rpm and then in CreateRepo, convert the rpm to a deb package
-			// which we'll use to create the repo...
-			// We can switch to this jammy/deb when that is available.
-			Package: "mariner2/rpm",
-			Worker:  "windowscross/worker",
-		}, workerConfig{
-			ContextName: windows.WindowscrossWorkerContextName,
-			CreateRepo: func(pkg llb.State) llb.StateOption {
-				return func(in llb.State) llb.State {
-					dt := []byte(`
-deb [trusted=yes] copy:/tmp/repo /
-`)
+		testCustomWindowscrossWorker(ctx, t, tcfg, wcfg)
+	})
 
-					repo := in.
-						Run(
-							dalec.ShArgs("apt-get update && apt-get install -y apt-utils alien"),
-							dalec.WithMountedAptCache("test-windowscross"),
-						).
-						Run(
-							llb.Dir("/tmp/repo"),
-							dalec.ShArgs("set -e; for i in ./RPMS/*/*.rpm; do alien --to-deb \"$i\"; done; rm -rf ./RPMS; rm -rf ./SRPMS; apt-ftparchive packages . | gzip -1 > Packages.gz"),
-						).
-						AddMount("/tmp/repo", pkg)
-
-					return in.
-						File(llb.Mkfile("/etc/apt/sources.list.d/windowscross.list", 0o644, dt)).
-						File(llb.Copy(repo, "/", "/tmp/repo"))
-				}
-			},
-		})
+	t.Run("pinned build dependencies", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testConfig := testLinuxConfig{
+			Worker: wcfg,
+			Target: tcfg,
+		}
+		testPinnedBuildDeps(ctx, t, testConfig)
 	})
 }
 
@@ -69,13 +117,10 @@ deb [trusted=yes] copy:/tmp/repo /
 // being a bit janky and error prone.
 // I'd rather just let the test run since it will work when we set an explicit platform
 func withWindowsAmd64(cfg *newSolveRequestConfig) {
-	if cfg.req.FrontendOpt == nil {
-		cfg.req.FrontendOpt = make(map[string]string)
-	}
-	cfg.req.FrontendOpt["platform"] = "windows/amd64"
+	withPlatform(windowsAmd64)(cfg)
 }
 
-func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
+func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 	t.Run("Fail when non-zero exit code during build", func(t *testing.T) {
 		t.Parallel()
 		spec := dalec.Spec{
@@ -97,7 +142,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 			_, err := gwc.Solve(ctx, sr)
 			var xErr *moby_buildkit_v1_frontend.ExitError
@@ -128,7 +173,7 @@ func testWindows(ctx context.Context, t *testing.T, buildTarget string) {
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 
 			_, err := gwc.Solve(ctx, sr)
@@ -198,6 +243,14 @@ index 0000000..5260cb1
 						},
 					},
 				},
+				"src3": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho goodbye",
+							Permissions: 0o700,
+						},
+					},
+				},
 			},
 			Patches: map[string][]dalec.PatchSpec{
 				"src2": {
@@ -244,6 +297,7 @@ echo "$BAR" > bar.txt
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
 						"/Windows/System32/src1": {Path: "/src1"},
+						"/Windows/System32/src3": {Path: "/non/existing/dir/src3"},
 					},
 				},
 			},
@@ -252,6 +306,7 @@ echo "$BAR" > bar.txt
 				Binaries: map[string]dalec.ArtifactConfig{
 					"src1":       {},
 					"src2/file2": {},
+					"src3":       {},
 					// These are files we created in the build step
 					// They aren't really binaries but we want to test that they are created and have the right content
 					"foo0.txt": {},
@@ -262,7 +317,7 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(buildTarget), withWindowsAmd64)
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
 			sr.Evaluate = true
 			res := solveT(ctx, t, gwc, sr)
 
@@ -300,7 +355,9 @@ echo "$BAR" > bar.txt
 		})
 	})
 
-	t.Run("test signing", windowsSigningTests)
+	t.Run("signing", func(t *testing.T) {
+		windowsSigningTests(t, tcfg)
+	})
 
 	t.Run("go module", func(t *testing.T) {
 		t.Parallel()
@@ -353,41 +410,26 @@ echo "$BAR" > bar.txt
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			req := newSolveRequest(withBuildTarget(buildTarget), withSpec(ctx, t, spec), withWindowsAmd64)
+			req := newSolveRequest(withBuildTarget(tcfg.Container), withSpec(ctx, t, spec), withWindowsAmd64)
 			solveT(ctx, t, client, req)
 		})
 	})
-}
 
-func runBuild(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, srOpts ...srOpt) {
-	st := prepareSigningState(ctx, t, gwc, spec, srOpts...)
+	t.Run("test image configs", func(t *testing.T) {
+		t.Parallel()
 
-	def, err := st.Marshal(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	res := solveT(ctx, t, gwc, gwclient.SolveRequest{
-		Definition: def.ToPB(),
+		ctx := startTestSpan(baseCtx, t)
+		testImageConfig(ctx, t, tcfg.Container, withWindowsAmd64)
 	})
 
-	verifySigning(ctx, t, res)
+	t.Run("build network mode", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testBuildNetworkMode(ctx, t, tcfg)
+	})
 }
 
-func verifySigning(ctx context.Context, t *testing.T, res *gwclient.Result) {
-	tgt := readFile(ctx, t, "/target", res)
-	cfg := readFile(ctx, t, "/config.json", res)
-
-	if string(tgt) != "windowscross" {
-		t.Fatal(fmt.Errorf("target incorrect; either not sent to signer or not received back from signer"))
-	}
-
-	if !strings.Contains(string(cfg), "windows") {
-		t.Fatal(fmt.Errorf("configuration incorrect"))
-	}
-}
-
-func prepareSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
+func prepareWindowsSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
 	zipper := getZipperState(ctx, t, gwc)
 
 	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"), withWindowsAmd64}
@@ -431,7 +473,7 @@ func testCustomWindowscrossWorker(ctx context.Context, t *testing.T, targetCfg t
 	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		// base package that will be used as a build dependency of the main package.
 		depSpec := &dalec.Spec{
-			Name:        "dalec-test-package",
+			Name:        "dalec-test-package-windows-worker-dep",
 			Version:     "0.0.1",
 			Revision:    "1",
 			Description: "A basic package for various testing uses",

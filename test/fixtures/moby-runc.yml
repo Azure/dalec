@@ -42,15 +42,12 @@ x-azl: &azl
     - name: mariner rpm manifest files
       files:
         /var/lib/rpmmanifest/container-manifest-1:
-          contains:
-            - "moby-runc-${VERSION}-"
-            - "libseccomp-"
-        /var/lib/rpmmanifest/container-manifest-2:
-          contains:
-            - "moby-runc-${VERSION}-"
-            - "libseccomp-"
-        /var/lib/rpm:
           not_exist: true
+        /var/lib/rpmmanifest/container-manifest-2:
+          not_exist: true
+        /var/lib/rpm:
+          is_dir: true
+        /var/lib/rpm/rpmdb.sqlite:
 
 targets: # Distro specific build requirements
   azlinux3:

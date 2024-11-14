@@ -33,7 +33,6 @@ func Build(topDir, workerImg llb.State, specPath string, opts ...llb.Constraints
 		llb.AddMount("/build/top", topDir),
 		llb.AddMount("/build/tmp", llb.Scratch(), llb.Tmpfs()),
 		llb.Dir("/build/top"),
-		llb.Network(llb.NetModeNone),
 		dalec.WithConstraints(opts...),
 	).
 		AddMount("/build/out", llb.Scratch())

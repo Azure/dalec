@@ -7,7 +7,6 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
 )
 
@@ -103,7 +102,6 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 		llb.AddMount("/work/pkg/debian", dr, llb.SourcePath("debian")), // This cannot be readonly because the debian directory gets modified by dpkg-buildpackage
 		llb.AddMount("/work/pkg/debian/patches", patches, llb.Readonly),
 		llb.AddEnv("DH_VERBOSE", "1"),
-		llb.Network(pb.NetMode_NONE),
 		mountSources(sources, "/work/pkg", sanitizeSourceKey),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 			// Mount all the tar+gz'd sources into the build which will get picked p by debbuild
@@ -118,11 +116,7 @@ func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, ta
 	return work.AddMount("/tmp/out", llb.Scratch()), nil
 }
 
-func BuildDeb(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	srcPkg, err := SourcePackage(sOpt, worker, spec, targetKey, distroVersionID)
-	if err != nil {
-		return llb.Scratch(), errors.Wrap(err, "error creating debian source package")
-	}
+func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 
 	dirName := filepath.Join("/work", spec.Name+"_"+spec.Version+"-"+spec.Revision)
 	st := worker.
@@ -131,7 +125,6 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, targetK
 			llb.Dir(dirName),
 			llb.AddEnv("DH_VERBOSE", "1"),
 			llb.AddMount(dirName, srcPkg),
-			llb.Network(pb.NetMode_NONE),
 			dalec.WithConstraints(opts...),
 		).AddMount("/tmp/out", llb.Scratch())
 

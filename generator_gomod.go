@@ -1,6 +1,8 @@
 package dalec
 
 import (
+	"path/filepath"
+
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
@@ -30,20 +32,25 @@ func (s *Spec) HasGomods() bool {
 
 func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
-		const workDir = "/work/src"
-		var srcMount llb.RunOption
-		if g.Subpath != "" {
-			srcMount = llb.AddMount(workDir, srcSt, llb.SourcePath(g.Subpath))
-		} else {
-			srcMount = llb.AddMount(workDir, srcSt)
+		workDir := "/work/src"
+		joinedWorkDir := filepath.Join(workDir, g.Subpath)
+		srcMount := llb.AddMount(workDir, srcSt)
+
+		paths := g.Gomod.Paths
+		if g.Gomod.Paths == nil {
+			paths = []string{"."}
 		}
-		return worker.Run(
-			ShArgs("go mod download"),
-			llb.AddEnv("GOMODCACHE", gomodCacheDir),
-			llb.Dir(workDir),
-			srcMount,
-			WithConstraints(opts...),
-		).AddMount(gomodCacheDir, in)
+
+		for _, path := range paths {
+			in = worker.Run(
+				ShArgs("go mod download"),
+				llb.AddEnv("GOMODCACHE", gomodCacheDir),
+				llb.Dir(filepath.Join(joinedWorkDir, path)),
+				srcMount,
+				WithConstraints(opts...),
+			).AddMount(gomodCacheDir, in)
+		}
+		return in
 	}
 }
 

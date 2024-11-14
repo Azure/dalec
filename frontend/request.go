@@ -2,7 +2,6 @@ package frontend
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 
 	"github.com/Azure/dalec"
@@ -141,9 +140,9 @@ func marshalDockerfile(ctx context.Context, dt []byte, opts ...llb.ConstraintsOp
 	return st.Marshal(ctx)
 }
 
-func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cfgPath string, configCtxName string, sOpt dalec.SourceOpts) (*dalec.PackageSigner, error) {
+func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cfgPath string, configCtxName string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (*dalec.PackageSigner, error) {
 	sc := dalec.SourceContext{Name: configCtxName}
-	signConfigState, err := sc.AsState(cfgPath, []string{cfgPath}, nil, sOpt)
+	signConfigState, err := sc.AsState(cfgPath, []string{cfgPath}, nil, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +179,7 @@ func getSigningConfigFromContext(ctx context.Context, client gwclient.Client, cf
 	return pc.Signer, nil
 }
 
-func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string, sOpt dalec.SourceOpts) (llb.State, error) {
+func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *dalec.Spec, targetKey string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if signingDisabled(client) {
 		Warnf(ctx, client, st, "Signing disabled by build-arg %q", keySkipSigningArg)
 		return st, nil
@@ -198,7 +197,7 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 			Warnf(ctx, client, st, "Root signing spec overridden by target signing spec: target %q", targetKey)
 		}
 
-		return forwardToSigner(ctx, client, cfg, st)
+		return forwardToSigner(ctx, client, cfg, st, opts...)
 	}
 
 	configCtxName := getSignContextNameWithDefault(client)
@@ -211,7 +210,7 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 		return llb.Scratch(), err
 	}
 
-	return forwardToSigner(ctx, client, cfg, st)
+	return forwardToSigner(ctx, client, cfg, st, opts...)
 }
 
 func getSignContextNameWithDefault(client gwclient.Client) string {
@@ -245,21 +244,20 @@ func getSignConfigCtxName(client gwclient.Client) string {
 	return client.BuildOpts().Opts["build-arg:"+buildArgDalecSigningConfigContextName]
 }
 
-func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State) (llb.State, error) {
+func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.PackageSigner, s llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	const (
-		sourceKey  = "source"
-		contextKey = "context"
-		inputKey   = "input"
+		// See https://github.com/moby/buildkit/blob/d8d946b85c52095d34a52ce210960832f4e06775/frontend/dockerui/context.go#L29
+		contextKey = "contextkey"
 	)
 
-	opts := client.BuildOpts().Opts
+	bopts := client.BuildOpts().Opts
 
 	req, err := newSolveRequest(toFrontend(cfg.Frontend), withBuildArgs(cfg.Args))
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	for k, v := range opts {
+	for k, v := range bopts {
 		if k == "source" || k == "cmdline" {
 			continue
 		}
@@ -282,18 +280,19 @@ func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.Pac
 	}
 	req.FrontendInputs = m
 
-	stateDef, err := s.Marshal(ctx)
+	opts = append(opts, dalec.ProgressGroup("Sign package"))
+	stateDef, err := s.Marshal(ctx, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
 
-	req.FrontendOpt[contextKey] = compound(inputKey, contextKey)
-	req.FrontendInputs[contextKey] = stateDef.ToPB()
-	req.FrontendOpt["dalec.target"] = opts["dalec.target"]
+	req.FrontendOpt[contextKey] = dockerui.DefaultLocalNameContext
+	req.FrontendInputs[dockerui.DefaultLocalNameContext] = stateDef.ToPB()
+	req.FrontendOpt["dalec.target"] = bopts["dalec.target"]
 
 	res, err := client.Solve(ctx, req)
 	if err != nil {
-		return llb.Scratch(), err
+		return llb.Scratch(), errors.Wrap(err, "error signing packages")
 	}
 
 	ref, err := res.SingleRef()
@@ -302,8 +301,4 @@ func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.Pac
 	}
 
 	return ref.ToState()
-}
-
-func compound(k, v string) string {
-	return fmt.Sprintf("%s:%s", k, v)
 }

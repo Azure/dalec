@@ -2,6 +2,7 @@ package dalec
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -130,6 +131,12 @@ func WithConstraints(ls ...llb.ConstraintsOpt) llb.ConstraintsOpt {
 		for _, opt := range ls {
 			opt.SetConstraintsOption(c)
 		}
+	})
+}
+
+func WithConstraint(in *llb.Constraints) llb.ConstraintsOpt {
+	return constraintsOptFunc(func(c *llb.Constraints) {
+		*c = *in
 	})
 }
 
@@ -301,6 +308,42 @@ func (s *Spec) GetBuildDeps(targetKey string) map[string]PackageConstraints {
 	return deps.Build
 }
 
+func (s *Spec) GetBuildRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("build")
+}
+
+func (s *Spec) GetInstallRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("install")
+}
+
+func (s *Spec) GetTestRepos(targetKey string) []PackageRepositoryConfig {
+	deps := s.GetPackageDeps(targetKey)
+	if deps == nil {
+		deps = s.Dependencies
+		if deps == nil {
+			return nil
+		}
+	}
+
+	return deps.GetExtraRepos("test")
+}
+
 func (s *Spec) GetTestDeps(targetKey string) []string {
 	var deps *PackageDependencies
 	if t, ok := s.Targets[targetKey]; ok {
@@ -361,6 +404,7 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 		buf.WriteString("set -ex\n")
 
 		for src, tgt := range post.Symlinks {
+			fmt.Fprintf(buf, "mkdir -p %q\n", filepath.Join(rootfsPath, filepath.Dir(tgt.Path)))
 			fmt.Fprintf(buf, "ln -s %q %q\n", src, filepath.Join(rootfsPath, tgt.Path))
 		}
 
@@ -411,6 +455,7 @@ func (s *Spec) GetPackageDeps(target string) *PackageDependencies {
 	if deps := s.Targets[target]; deps.Dependencies != nil {
 		return deps.Dependencies
 	}
+
 	return s.Dependencies
 }
 
@@ -418,4 +463,116 @@ type gitOptionFunc func(*llb.GitInfo)
 
 func (f gitOptionFunc) SetGitOption(gi *llb.GitInfo) {
 	f(gi)
+}
+
+type RepoPlatformConfig struct {
+	ConfigRoot string
+	GPGKeyRoot string
+	ConfigExt  string
+}
+
+// Returns a run option which mounts the data dirs for all specified repos
+func WithRepoData(repos []PackageRepositoryConfig, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	var repoMountsOpts []llb.RunOption
+	for _, repo := range repos {
+		rs, err := repoDataAsMount(repo, sOpts, opts...)
+		if err != nil {
+			return nil, err
+		}
+		repoMountsOpts = append(repoMountsOpts, rs)
+	}
+
+	return WithRunOptions(repoMountsOpts...), nil
+}
+
+// Returns a run option for mounting the state (i.e., packages/metadata) for a single repo
+func repoDataAsMount(config PackageRepositoryConfig, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	var mounts []llb.RunOption
+	for _, data := range config.Data {
+		repoState, err := data.Spec.AsMount(data.Dest, sOpts, opts...)
+		if err != nil {
+			return nil, err
+		}
+		mounts = append(mounts, llb.AddMount(data.Dest, repoState))
+	}
+
+	return WithRunOptions(mounts...), nil
+}
+
+func repoConfigAsMount(config PackageRepositoryConfig, platformCfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.RunOption, error) {
+	repoConfigs := []llb.RunOption{}
+
+	for name, repoConfig := range config.Config {
+		// each of these sources represent a repo config file
+		repoConfigSt, err := repoConfig.AsState(name, sOpt, append(opts, ProgressGroup("Importing repo config: "+name))...)
+		if err != nil {
+			return nil, err
+		}
+
+		var normalized string = name
+		if filepath.Ext(normalized) != platformCfg.ConfigExt {
+			normalized += platformCfg.ConfigExt
+		}
+
+		repoConfigs = append(repoConfigs,
+			llb.AddMount(filepath.Join(platformCfg.ConfigRoot, normalized), repoConfigSt, llb.SourcePath(name)))
+	}
+
+	return repoConfigs, nil
+}
+
+// Returns a run option for importing the config files for all repos
+func WithRepoConfigs(repos []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+	configStates := []llb.RunOption{}
+	for _, repo := range repos {
+		mnts, err := repoConfigAsMount(repo, cfg, sOpt, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		configStates = append(configStates, mnts...)
+	}
+
+	return WithRunOptions(configStates...), nil
+}
+
+func GetRepoKeys(configs []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
+	keys := []llb.RunOption{}
+	names := []string{}
+	for _, config := range configs {
+		for name, repoKey := range config.Keys {
+			gpgKey, err := repoKey.AsState(name, sOpt, append(opts, ProgressGroup("Fetching repo key: "+name))...)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			mountPath := filepath.Join(cfg.GPGKeyRoot, name)
+
+			keys = append(keys, llb.AddMount(mountPath, gpgKey, llb.SourcePath(name)))
+			names = append(names, name)
+		}
+	}
+
+	return WithRunOptions(keys...), names, nil
+}
+
+const (
+	netModeNone    = "none"
+	netModeSandbox = "sandbox"
+)
+
+// SetBuildNetworkMode returns an [llb.StateOption] that determines which
+func SetBuildNetworkMode(spec *Spec) llb.StateOption {
+	switch spec.Build.NetworkMode {
+	case "", netModeNone:
+		return llb.Network(llb.NetModeNone)
+	case netModeSandbox:
+		return llb.Network(llb.NetModeSandbox)
+	default:
+		return func(in llb.State) llb.State {
+			return in.Async(func(context.Context, llb.State, *llb.Constraints) (llb.State, error) {
+				return in, fmt.Errorf("invalid build network mode %q", spec.Build.NetworkMode)
+			})
+		}
+	}
 }

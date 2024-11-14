@@ -97,18 +97,23 @@ by the client, not the actual secret values.
 
 ### HTTP
 
-HTTP sources fetch a file from an HTTP URL.
-HTTP content is not verified by digest today, but it is in the roadmap.
+HTTP sources fetch a file from an HTTP URL. The HTTP source type is considered to be a "file" source. 
+
+The fetched file can be verified against a digest
+if one is supplied. There is also a `permissions` field that can set the octal permissions
+of the fetched file.
 
 ```yaml
 sources:
   someSource1:
     http:
-      # No Digest verification
       url: https://example.com/someFile.txt
+      # optional digest field
+      digest: sha256:1234567890abcdef
+      # optional permissions field
+      permissions: 0644
 ```
 
-The HTTP source type is considered to be a "file" source.
 
 ### Build context
 

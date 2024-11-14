@@ -5,15 +5,18 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
-	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/bklog"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/grpclog"
 )
@@ -28,11 +31,6 @@ func main() {
 		bopts := c.BuildOpts().Opts
 		target := bopts["dalec.target"]
 
-		inputs, err := c.Inputs(ctx)
-		if err != nil {
-			return nil, err
-		}
-
 		type config struct {
 			OS string
 		}
@@ -46,23 +44,23 @@ func main() {
 			cfg.OS = "linux"
 		}
 
-		curFrontend, ok := c.(frontend.CurrentFrontend)
-		if !ok {
-			return nil, fmt.Errorf("cast to currentFrontend failed")
-		}
-
-		basePtr, err := curFrontend.CurrentFrontend()
-		if err != nil || basePtr == nil {
-			if err == nil {
-				err = fmt.Errorf("base frontend ptr was nil")
-			}
+		dc, err := dockerui.NewClient(c)
+		if err != nil {
 			return nil, err
 		}
 
-		inputId := strings.TrimPrefix(bopts["context"], "input:")
-		_, ok = inputs[inputId]
-		if !ok {
+		bctx, err := dc.MainContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if bctx == nil {
 			return nil, fmt.Errorf("no artifact state provided to signer")
+		}
+
+		artifactsFS, err := bkfs.FromState(ctx, bctx, c)
+		if err != nil {
+			return nil, err
 		}
 
 		configBytes, err := json.Marshal(&cfg)
@@ -70,9 +68,32 @@ func main() {
 			return nil, err
 		}
 
+		var files []string
+		err = fs.WalkDir(artifactsFS, ".", func(p string, info fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			files = append(files, p)
+			return nil
+		})
+		if err != nil {
+			return nil, errors.Wrap(err, "error walking artifacts")
+		}
+
+		mfst, err := json.Marshal(files)
+		if err != nil {
+			return nil, errors.Wrap(err, "error marshalling file manifest")
+		}
+
 		output := llb.Scratch().
 			File(llb.Mkfile("/target", 0o600, []byte(target))).
-			File(llb.Mkfile("/config.json", 0o600, configBytes))
+			File(llb.Mkfile("/config.json", 0o600, configBytes)).
+			File(llb.Mkfile("/manifest.json", 0o600, mfst))
 
 		// For any build-arg seen, write a file to /env/<KEY> with the contents
 		// being the value of the arg.

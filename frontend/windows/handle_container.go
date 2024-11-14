@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 	"runtime"
 
 	"github.com/Azure/dalec"
@@ -123,6 +124,7 @@ func copySymlinks(post *dalec.PostInstall) llb.StateOption {
 		for _, srcPath := range keys {
 			l := lm[srcPath]
 			dstPath := l.Path
+			s = s.File(llb.Mkdir(path.Dir(dstPath), 0755, llb.WithParents(true)))
 			s = s.File(llb.Copy(s, srcPath, dstPath))
 		}
 

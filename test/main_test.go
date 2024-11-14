@@ -13,7 +13,6 @@ import (
 	"github.com/Azure/dalec/test/fixtures"
 	"github.com/Azure/dalec/test/testenv"
 	"github.com/moby/buildkit/util/tracing/delegated"
-	_ "github.com/moby/buildkit/util/tracing/delegated"
 	"github.com/moby/buildkit/util/tracing/detect"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
