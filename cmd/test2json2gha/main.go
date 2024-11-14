@@ -113,7 +113,7 @@ func do(in io.Reader, out io.Writer, modName string) (bool, error) {
 		}
 
 		if te.Test == "" {
-			// Don't bother processing events that aren't specfically for a test
+			// Don't bother processing events that aren't specifically for a test
 			// Go adds extra events in for package level info that we don't need.
 			continue
 		}

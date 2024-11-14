@@ -30,7 +30,7 @@ var (
 // Buildkit treats the frontend ref (`#syntax=<ref>` or via the BUILDKIT_SYNTAX
 // var) as a docker image ref.
 // Buildkit will always check the remote registry for a new version of the image.
-// As of buildkit v0.12 you can use named contexts to ovewrite the frontend ref
+// As of buildkit v0.12 you can use named contexts to overwrite the frontend ref
 // with another type of ref.
 // This can be another docker-image, an oci-layout, or even a frontend "input"
 // (like feeding the output of a build into another build).
@@ -67,7 +67,7 @@ func supportsFrontendAsInput(info *client.Info) bool {
 
 // withGHCache adds the necessary cache export and import options to the solve request in order to use the GitHub Actions cache.
 // It uses the test name as a scope for the cache. Each test will have its own scope.
-// This means that caches are not shared between tests, but it also means that tests won't ovewrite each other's cache.
+// This means that caches are not shared between tests, but it also means that tests won't overwrite each other's cache.
 //
 // Github Actions sets some specific environment variables that we'll look for to even determine if we should configure the cache or not.
 //

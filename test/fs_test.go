@@ -261,7 +261,7 @@ func TestStateWrapper_Walk(t *testing.T) {
 func TestStateWrapper_ReadPartial(t *testing.T) {
 	contents := []byte(`
 		This is a
-		multline
+		multiline
 		file
 	`)
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, contents))

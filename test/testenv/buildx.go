@@ -42,7 +42,7 @@ func (b *BuildxEnv) WithBuilder(builder string) *BuildxEnv {
 	return b
 }
 
-// Load loads the output of the speecified [gwclient.BuildFunc] into the buildkit instance.
+// Load loads the output of the specified [gwclient.BuildFunc] into the buildkit instance.
 func (b *BuildxEnv) Load(ctx context.Context, id string, f gwclient.BuildFunc) error {
 	if b.refs == nil {
 		b.refs = make(map[string]gwclient.BuildFunc)
@@ -126,7 +126,7 @@ func (b *BuildxEnv) dialStdio(ctx context.Context) error {
 			err := cmd.Wait()
 			c1.Close()
 			// pkgerrors.Wrap will return nil if err is nil, otherwise it will give
-			// us a wrapped error with the buffered stderr fromt he command.
+			// us a wrapped error with the buffered stderr from he command.
 			w.CloseWithError(pkgerrors.Wrapf(err, "%s", errBuf))
 		}()
 
@@ -221,7 +221,7 @@ type FrontendSpec struct {
 }
 
 // withResolveLocal tells buildkit to prefer local images when resolving image references.
-// This prevents uneccessary API requests to registries.
+// This prevents unnecessary API requests to registries.
 func withResolveLocal(so *client.SolveOpt) {
 	if so.FrontendAttrs == nil {
 		so.FrontendAttrs = make(map[string]string)

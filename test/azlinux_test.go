@@ -117,7 +117,7 @@ type workerConfig struct {
 	// the output [llb.StateOption] should install the repo into the worker image.
 	CreateRepo func(llb.State) llb.StateOption
 	// ContextName is the name of the worker context that the build target will use
-	// to see if a custom worker is proivded in a context
+	// to see if a custom worker is provided in a context
 	ContextName string
 
 	Constraints constraintsSymbols
@@ -141,8 +141,8 @@ type targetConfig struct {
 	// Target is the build target for creating the worker image.
 	Worker string
 
-	// FormatDepEqual, when set, alters the provided depenedency version to match
-	// what is neccessary for the target distro to set a dependency for an equals
+	// FormatDepEqual, when set, alters the provided dependency version to match
+	// what is necessary for the target distro to set a dependency for an equals
 	// operator.
 	FormatDepEqual func(ver, rev string) string
 }
@@ -482,7 +482,7 @@ echo "$BAR" > bar.txt
 				},
 			})
 
-			// update the spec in the solve reuqest
+			// update the spec in the solve request
 			withSpec(ctx, t, &spec)(&newSolveRequestConfig{req: &sr})
 
 			if _, err := gwc.Solve(ctx, sr); err == nil {

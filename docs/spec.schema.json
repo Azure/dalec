@@ -262,7 +262,7 @@
 			},
 			"additionalProperties": false,
 			"type": "object",
-			"description": "CheckOutput is used to specify the exepcted output of a check, such as stdout/stderr or a file."
+			"description": "CheckOutput is used to specify the expected output of a check, such as stdout/stderr or a file."
 		},
 		"Command": {
 			"properties": {
@@ -497,7 +497,7 @@
 						"type": "string"
 					},
 					"type": "array",
-					"description": "Version is a list of version constraints for the package.\nThe format of these strings is depenendent on the package manager of the target system.\nExamples:\n  [\"\u003e=1.0.0\", \"\u003c2.0.0\"]"
+					"description": "Version is a list of version constraints for the package.\nThe format of these strings is dependent on the package manager of the target system.\nExamples:\n  [\"\u003e=1.0.0\", \"\u003c2.0.0\"]"
 				},
 				"arch": {
 					"items": {
@@ -776,11 +776,11 @@
 			"properties": {
 				"file": {
 					"$ref": "#/$defs/SourceInlineFile",
-					"description": "File is the inline file to generate.\nFile is treated as a literal single file.\n[SourceIsDir] will return false when this is set.\nThis is mutally exclusive with [Dir]"
+					"description": "File is the inline file to generate.\nFile is treated as a literal single file.\n[SourceIsDir] will return false when this is set.\nThis is mutually exclusive with [Dir]"
 				},
 				"dir": {
 					"$ref": "#/$defs/SourceInlineDir",
-					"description": "Dir creates a directory with the given files and directories.\n[SourceIsDir] will return true when this is set.\nThis is mutally exclusive with [File]"
+					"description": "Dir creates a directory with the given files and directories.\n[SourceIsDir] will return true when this is set.\nThis is mutually exclusive with [File]"
 				}
 			},
 			"additionalProperties": false,
@@ -984,7 +984,7 @@
 						"$ref": "#/$defs/TestSpec"
 					},
 					"type": "array",
-					"description": "Tests are the list of tests to run for the package that should work regardless of target OS\nEach item in this list is run with a separate rootfs and cannot interact with other tests.\nEach [TestSpec] is run with a separate rootfs, asyncronously from other [TestSpec]."
+					"description": "Tests are the list of tests to run for the package that should work regardless of target OS\nEach item in this list is run with a separate rootfs and cannot interact with other tests.\nEach [TestSpec] is run with a separate rootfs, asynchronously from other [TestSpec]."
 				}
 			},
 			"additionalProperties": false,

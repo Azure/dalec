@@ -38,7 +38,7 @@ You could also pass the dalec spec file via stdin `docker build -t my-package-im
 See [docker's documentation](https://docs.docker.com/engine/reference/commandline/build/) for more details on how you can pass the spec file to docker.
 :::
 
-This will produce a container image named `my-package-image:1.0.0` that has the `my-package` virtual package installed along with its runtime dependencies. By default, the produced container image is a [`scratch`](https://hub.docker.com/_/scratch/) container image that only contains the package and its dependencies. You can customize the base image to use for the prooduced container. Below is an example that uses the Azure Linux `core` image as the base image which includes a shell and other tools.
+This will produce a container image named `my-package-image:1.0.0` that has the `my-package` virtual package installed along with its runtime dependencies. By default, the produced container image is a [`scratch`](https://hub.docker.com/_/scratch/) container image that only contains the package and its dependencies. You can customize the base image to use for the produced container. Below is an example that uses the Azure Linux `core` image as the base image which includes a shell and other tools.
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest

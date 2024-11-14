@@ -228,14 +228,14 @@ func Warn(ctx context.Context, client gwclient.Client, st llb.State, msg string)
 
 	def, err := st.Marshal(ctx)
 	if err != nil {
-		bklog.G(ctx).WithError(err).WithField("warn", msg).Warn("Error marshalling state for outputing warning message")
+		bklog.G(ctx).WithError(err).WithField("warn", msg).Warn("Error marshalling state for outputting warning message")
 	}
 
 	var dgst digest.Digest
 	if def != nil {
 		dgst, err = def.Head()
 		if err != nil {
-			bklog.G(ctx).WithError(err).WithField("warn", msg).Warn("Could not get state digest for outputing warning message")
+			bklog.G(ctx).WithError(err).WithField("warn", msg).Warn("Could not get state digest for outputting warning message")
 		}
 	}
 

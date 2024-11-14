@@ -76,15 +76,15 @@ func TestMain(m *testing.M) {
 
 		go func() {
 			<-ctx.Done()
-			// The context was cancelled due to interupt
+			// The context was cancelled due to interrupt
 			// This _should_ trigger builds to cancel naturally and exit the program,
 			// but in some cases it may not (due to timing, bugs in buildkit, uninteruptable operations, etc.).
 			// Cancel our signal handler so the normal handler takes over from here.
-			// This allows subsequent interupts to use the default behavior (exit the program)
+			// This allows subsequent interrupts to use the default behavior (exit the program)
 			done()
 
 			<-time.After(30 * time.Second)
-			fmt.Fprintln(os.Stderr, "Timeout waiting for builds to cancel after interupt")
+			fmt.Fprintln(os.Stderr, "Timeout waiting for builds to cancel after interrupt")
 			os.Exit(int(syscall.SIGINT))
 		}()
 

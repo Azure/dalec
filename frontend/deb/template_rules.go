@@ -136,7 +136,7 @@ func (w *rulesWrapper) OverrideSystemd() (fmt.Stringer, error) {
 		// custom postinst/postrm script.
 		//
 		// We also only need to do this once per basename, so we don't need to
-		// itterate over every unit.
+		// iterate over every unit.
 
 		// Get the first key which we'll use to check if the unit is enabled.
 		// Either all units are enabled or not enabled OR we need to do custom enable

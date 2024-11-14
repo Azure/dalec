@@ -91,7 +91,7 @@ artifacts:
 Directories allows you to create new directories when installing the package.
 Two types of directory artifacts are supported:
 
-1. *config*: This is a directory where configuration files typically go, e.g. /etc/my_package2. *State*: This is directory for persistant state, typically in `/var/lib` on Linux.
+1. *config*: This is a directory where configuration files typically go, e.g. /etc/my_package2. *State*: This is directory for persistent state, typically in `/var/lib` on Linux.
 
 
 Unlike many other artifact types, this does not reference any file produced

@@ -50,7 +50,7 @@ func TestBuildMux(t *testing.T) {
 		t.Errorf("expected real handler call count to be %d, got %d", expectedRealcount, count)
 	}
 
-	// create a subrouter namespaced under the "real" hanlder.
+	// create a subrouter namespaced under the "real" handler.
 	// This should handle routes for real/subroute/*.
 	var subRouter BuildMux
 	subRouteACount, subrouteAH := newCallback()

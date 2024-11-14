@@ -30,7 +30,7 @@ var patchHeader []byte
 var debianInstall []byte
 
 // This creates a directory in the debian root directory for each patch, and copies the patch files into it.
-// The format for each patch dir matches what would normaly be under `debian/patches`, just that this is a separate dir for every source we are patching
+// The format for each patch dir matches what would normally be under `debian/patches`, just that this is a separate dir for every source we are patching
 // This is purely for documenting in the source package how patches are applied in a more readable way than the big merged patch file.
 func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, spec *dalec.Spec, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
 	patchesPath := filepath.Join(dir, name)

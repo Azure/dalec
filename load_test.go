@@ -252,7 +252,7 @@ func TestSourceValidation(t *testing.T) {
 			},
 		},
 		{
-			title:     "cmd souce mount dest must not be /",
+			title:     "cmd source mount dest must not be /",
 			expectErr: true,
 			src: Source{
 				Path: "/foo",

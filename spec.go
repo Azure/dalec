@@ -95,7 +95,7 @@ type Spec struct {
 
 	// Tests are the list of tests to run for the package that should work regardless of target OS
 	// Each item in this list is run with a separate rootfs and cannot interact with other tests.
-	// Each [TestSpec] is run with a separate rootfs, asyncronously from other [TestSpec].
+	// Each [TestSpec] is run with a separate rootfs, asynchronously from other [TestSpec].
 	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
 }
 
@@ -243,11 +243,11 @@ type SourceInline struct {
 	// File is the inline file to generate.
 	// File is treated as a literal single file.
 	// [SourceIsDir] will return false when this is set.
-	// This is mutally exclusive with [Dir]
+	// This is mutually exclusive with [Dir]
 	File *SourceInlineFile `yaml:"file,omitempty" json:"file,omitempty"`
 	// Dir creates a directory with the given files and directories.
 	// [SourceIsDir] will return true when this is set.
-	// This is mutally exclusive with [File]
+	// This is mutually exclusive with [File]
 	Dir *SourceInlineDir `yaml:"dir,omitempty" json:"dir,omitempty"`
 }
 
@@ -299,7 +299,7 @@ type Source struct {
 	// Generators are used to generate additional sources from this source.
 	// As an example the `godmod` generator can be used to generate a go module cache from a go source.
 	// How a genator operates is dependent on the actual generator.
-	// Geneators may also cauuse modifications to the build environment.
+	// Generators may also cauuse modifications to the build environment.
 	//
 	// Currently only one generator is supported: "gomod"
 	Generate []*SourceGenerator `yaml:"generate,omitempty" json:"generate,omitempty"`
@@ -322,7 +322,7 @@ type SourceGenerator struct {
 // PackageConstraints is used to specify complex constraints for a package dependency.
 type PackageConstraints struct {
 	// Version is a list of version constraints for the package.
-	// The format of these strings is depenendent on the package manager of the target system.
+	// The format of these strings is dependent on the package manager of the target system.
 	// Examples:
 	//   [">=1.0.0", "<2.0.0"]
 	Version []string `yaml:"version,omitempty" json:"version,omitempty"`
@@ -489,7 +489,7 @@ type TestStep struct {
 	Stdin string `yaml:"stdin,omitempty" json:"stdin,omitempty"`
 }
 
-// CheckOutput is used to specify the exepcted output of a check, such as stdout/stderr or a file.
+// CheckOutput is used to specify the expected output of a check, such as stdout/stderr or a file.
 // All non-empty fields will be checked.
 type CheckOutput struct {
 	// Equals is the exact string to compare the output to.

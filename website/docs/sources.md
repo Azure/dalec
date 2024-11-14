@@ -130,7 +130,7 @@ sources:
 
 Note the empty brackets.
 This is an unfortunate syntax requirement to not have `context` considered as a nil value.
-This is the equivelent of the following:
+This is the equivalent of the following:
 
 ```yaml
 sources:
@@ -243,7 +243,7 @@ Here's an example mounting an inline source, modifying it, and extracting the re
 ```yaml
 sources:
   someDockerImage:
-    path: /bar # Extract `/bar` fromt he result of running the command in the docker image below
+    path: /bar # Extract `/bar` from he result of running the command in the docker image below
     image:
       ref: docker.io/library/alpine:3.14
       cmd:
@@ -277,7 +277,7 @@ The default dockerfile path is `Dockerfile` just like a normal docker build.
 sources:
   someBuild:
     build:
-      source: # Specfy another source to use as the build context of this build operation
+      source: # Specify another source to use as the build context of this build operation
         git:
           url: https://github.com/Azure/dalec.git
           commit: v0.1.0
