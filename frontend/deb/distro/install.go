@@ -75,7 +75,7 @@ apt autoclean -y
 
 apt update
 
-if ! command -v apititude > /dev/null; then
+if ! command -v aptitude > /dev/null; then
 	needs_cleanup=1
 	apt install -y aptitude
 fi
@@ -131,7 +131,7 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 		}
 
 		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
-			opts := append(opts, dalec.ProgressGroup("Insall build dependencies"))
+			opts := append(opts, dalec.ProgressGroup("Install build dependencies"))
 			opts = append([]llb.ConstraintsOpt{dalec.WithConstraint(c)}, opts...)
 
 			srcPkg, err := deb.SourcePackage(sOpt, in, depsSpec, targetKey, "", opts...)

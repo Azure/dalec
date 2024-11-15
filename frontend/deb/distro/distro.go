@@ -14,6 +14,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	defaultRepoConfig = &dalec.RepoPlatformConfig{
+		ConfigRoot: "/etc/apt/sources.list.d",
+		GPGKeyRoot: "/usr/share/keyrings",
+		ConfigExt:  ".list",
+	}
+)
+
 type Config struct {
 	ImageRef       string
 	ContextRef     string
@@ -64,11 +72,7 @@ func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.
 
 	repoConfig := cfg.RepoPlatformConfig
 	if repoConfig == nil {
-		repoConfig = &dalec.RepoPlatformConfig{
-			ConfigRoot: "/etc/apt/sources.list.d",
-			GPGKeyRoot: "/usr/share/keyrings",
-			ConfigExt:  ".list",
-		}
+		repoConfig = defaultRepoConfig
 	}
 
 	withRepos, err := dalec.WithRepoConfigs(repos, repoConfig, sOpt, opts...)
