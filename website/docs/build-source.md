@@ -12,7 +12,7 @@ To do this, we'll need a few things:
 
 In this example, we'll build the `go-md2man` package and container from [`go-md2man`](https://github.com/cpuguy83/go-md2man) repo using `v2.0.3` tag in the repo.
 
-First, let's start with the contructing a [Dalec spec](spec.md) file.
+First, let's start with the constructing a [Dalec spec](spec.md) file.
 
 We define the metadata of the package in the spec. This includes the name, packager, vendor, license, website, and description of the package.
 

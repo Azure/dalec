@@ -287,7 +287,7 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 	}
 
 	if subPath == "" {
-		// TODO: We should log a warning here since extracing an entire image while also running a command is
+		// TODO: We should log a warning here since extracting an entire image while also running a command is
 		// probably not what the user really wanted to do here.
 		// The buildkit client provides functionality to do this we just need to wire it in.
 		subPath = "/"
@@ -492,7 +492,7 @@ func (s Source) Doc(name string) (io.Reader, error) {
 		fmt.Fprintln(b, "	Remote:", ref.Remote)
 		fmt.Fprintln(b, "	Ref:", git.Commit)
 		if s.Path != "" {
-			fmt.Fprintln(b, "	Extraced path:", s.Path)
+			fmt.Fprintln(b, "	Extracted path:", s.Path)
 		}
 	case s.DockerImage != nil:
 		img := s.DockerImage
@@ -500,13 +500,13 @@ func (s Source) Doc(name string) (io.Reader, error) {
 			fmt.Fprintln(b, "Generated from a docker image:")
 			fmt.Fprintln(b, "	Image:", img.Ref)
 			if s.Path != "" {
-				fmt.Fprintln(b, "	Extraced path:", s.Path)
+				fmt.Fprintln(b, "	Extracted path:", s.Path)
 			}
 		} else {
 			fmt.Fprintln(b, "Generated from running a command(s) in a docker image:")
 			fmt.Fprintln(b, "	Image:", img.Ref)
 			if s.Path != "" {
-				fmt.Fprintln(b, "	Extraced path:", s.Path)
+				fmt.Fprintln(b, "	Extracted path:", s.Path)
 			}
 			if len(img.Cmd.Env) > 0 {
 				fmt.Fprintln(b, "	With the following environment variables set for all commands:")
@@ -585,7 +585,7 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 }
 
 // PatchSources returns a new map containing the patched LLB state for each source in the source map.
-// Sources that are not patched are also included in the result for convienence.
+// Sources that are not patched are also included in the result for convenience.
 // `sourceToState` must be a complete map from source name -> llb state for each source in the dalec spec.
 // `worker` must be an LLB state with a `patch` binary present.
 func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {

@@ -179,7 +179,7 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 	for _, k := range sorted {
 		state := states[k]
 
-		// In cases where we have a generated soruce (e.g. gomods) we don't have a [dalec.Source] in the `sources` map.
+		// In cases where we have a generated source (e.g. gomods) we don't have a [dalec.Source] in the `sources` map.
 		// So we need to check for this.
 		src, ok := sources[k]
 

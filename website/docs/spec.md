@@ -43,7 +43,7 @@ args:
   TARGETVARIANT:
 ```
 
-These arguments are set based on the default docker platform for the machine, *unless* the platform is overriden explicitly in the docker build with `--platform`. For example, upon invoking `docker build` on a Linux amd64 machine, we would have `TARGETOS=linux`, `TARGETARCH=amd64`, `TARGETPLATFORM=linux/amd64`.
+These arguments are set based on the default docker platform for the machine, *unless* the platform is overridden explicitly in the docker build with `--platform`. For example, upon invoking `docker build` on a Linux amd64 machine, we would have `TARGETOS=linux`, `TARGETARCH=amd64`, `TARGETPLATFORM=linux/amd64`.
 
 :::note
 No default value should be included for these build args. These args are opt-in. If you haven't listed them in the args section as shown above, Dalec will **not** substitute values for them.

@@ -49,7 +49,7 @@ For container targets, only the artifacts within the container get signed.
 This will send the artifacts (`.rpm`, `.deb`, or `.exe`) to the
 signing frontend as the build context.
 
-Once a `signer` section has been aded to the spec, signing will be automatic.
+Once a `signer` section has been added to the spec, signing will be automatic.
 In order to disable signing when building specs that have a `signer` section,
 use the build arg `DALEC_SKIP_SIGNING=1`.
 
@@ -138,7 +138,7 @@ context(s).
 
 ### Build Arguments
 
-Buid arguments are key/value pairs that can be supplied in the yaml spec which
+Build arguments are key/value pairs that can be supplied in the yaml spec which
 will be forwarded to the signer.
 
 Taking the original example above we can add build by adding an `args` with
@@ -158,7 +158,7 @@ targets: # Distro specific build requirements
 
 The values of these arguments can also be taken from the client using variable
 substitution like in other parts of the spec.
-To use variable substituion, the args must be declared at the root of the spec:
+To use variable substitution, the args must be declared at the root of the spec:
 
 ```yaml
 args:

@@ -261,7 +261,7 @@ func TestStateWrapper_Walk(t *testing.T) {
 func TestStateWrapper_ReadPartial(t *testing.T) {
 	contents := []byte(`
 		This is a
-		multline
+		multiline
 		file
 	`)
 	st := llb.Scratch().File(llb.Mkfile("/foo", 0644, contents))
@@ -280,19 +280,19 @@ func TestStateWrapper_ReadPartial(t *testing.T) {
 		assert.Equal(t, n, 10)
 		assert.Equal(t, b, contents[0:10])
 
-		// read 8 bytes
-		b = make([]byte, 8)
+		// read 9 bytes
+		b = make([]byte, 9)
 		n, err = f.Read(b)
 		assert.Equal(t, err, nil)
-		assert.Equal(t, n, 8)
-		assert.Equal(t, b, contents[10:18])
+		assert.Equal(t, n, 9)
+		assert.Equal(t, b, contents[10:19])
 
 		// purposefully exceed length of remainder of file to
 		// read the rest of the contents (14 bytes)
 		b = make([]byte, 40)
 		n, err = f.Read(b)
 		assert.Equal(t, n, 14)
-		assert.Equal(t, b[:14], contents[18:])
+		assert.Equal(t, b[:14], contents[19:])
 
 		// the rest of the buffer should be an unfilled 26 bytes
 		assert.Equal(t, b[14:], make([]byte, 26))

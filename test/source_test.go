@@ -219,7 +219,7 @@ func TestSourceHTTP(t *testing.T) {
 	})
 }
 
-// Create a very simple fake module with a limited depdenency tree just to
+// Create a very simple fake module with a limited dependency tree just to
 // keep the test as fast/reliable as possible.
 const gomodFixtureMain = `package main
 

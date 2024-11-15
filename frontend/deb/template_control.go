@@ -78,7 +78,7 @@ func (w *controlWrapper) depends(buf io.Writer, depsSpec *dalec.PackageDependenc
 	}
 
 	// Add in deps vars that will get resolved by debbuild
-	// In some cases these are not neccessary (maybe even most), but when they are
+	// In some cases these are not necessary (maybe even most), but when they are
 	// it is important.
 	// When not needed lintian may throw warnings but that's ok.
 	// If these aren't actually needed they'll resolve to nothing and don't cause

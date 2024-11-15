@@ -203,7 +203,7 @@ func (m *BuildMux) loadSpec(ctx context.Context, client gwclient.Client) (*dalec
 		return nil, err
 	}
 
-	// Note: this is not suitable for passing to builds since it does ot have platform information
+	// Note: this is not suitable for passing to builds since it does not have platform information
 	spec, err := LoadSpec(ctx, dc, nil)
 	if err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func maybeSetDalecTargetKey(client gwclient.Client, key string) gwclient.Client 
 		return client
 	}
 
-	// optimization to help prevent uneccessary grpc requests
+	// optimization to help prevent unnecessary grpc requests
 	// The gateway client will make a grpc request to get the build opts from the gateway.
 	// This just caches those opts locally.
 	// If the client is already a clientWithCustomOpts, then the opts are already cached.
@@ -239,7 +239,7 @@ func (m *BuildMux) list(ctx context.Context, client gwclient.Client, target stri
 	if target == "" {
 		check = maps.Keys(m.handlers)
 	} else {
-		// Use the target as a filter so the response only incldues routes that are underneath the target
+		// Use the target as a filter so the response only includes routes that are underneath the target
 		check = append(check, target)
 	}
 
@@ -309,7 +309,7 @@ func (m *BuildMux) lookupTarget(ctx context.Context, target string) (matchedPatt
 	// cases for `t` are as follows:
 	//    1. may have an exact match in the handlers (ideal)
 	//    2. No matching handler and `target == ""` and there is a default handler set (assume default handler)
-	//    3. may have a prefix match in the handlers, e.g. hander for `foo`, `target == "foo/bar"` (assume nested route)
+	//    3. may have a prefix match in the handlers, e.g. handler for `foo`, `target == "foo/bar"` (assume nested route)
 	//    4. No match in the handlers (error)
 	h, ok := m.handlers[target]
 	if ok {

@@ -1,6 +1,6 @@
 ### Azure Linux 3 yum/dnf repository
 
-This only makes sense to run on Azure Linux, which already has the neccessary
+This only makes sense to run on Azure Linux, which already has the necessary
 keys installed, so this only needs to have the actual repo config file.
 
 ```yaml
