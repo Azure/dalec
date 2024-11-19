@@ -24,7 +24,6 @@ type worker interface {
 	Base(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 	Install(pkgs []string, opts ...installOpt) llb.RunOption
 	DefaultImageConfig(context.Context, llb.ImageMetaResolver, *ocispecs.Platform) (*dalec.DockerImageSpec, error)
-	WorkerImageConfig(context.Context, llb.ImageMetaResolver, *ocispecs.Platform) (*dalec.DockerImageSpec, error)
 	BasePackages() []string
 }
 
@@ -72,6 +71,7 @@ func getSpecWorker(ctx context.Context, w worker, client gwclient.Client, sOpt d
 		if err != nil {
 			return llb.Scratch(), err
 		}
+
 		if spec.HasGomods() {
 			deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
 

@@ -11,8 +11,11 @@ import (
 	"sort"
 	"sync/atomic"
 
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/util/system"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 var disableDiffMerge atomic.Bool
@@ -575,4 +578,30 @@ func SetBuildNetworkMode(spec *Spec) llb.StateOption {
 			})
 		}
 	}
+}
+
+// BaseImageConfig provides a default image config that can be used for
+// producing images.
+//
+// This is taken from https://github.com/moby/buildkit/blob/0655923d7e2884a0d514313fd688178a6da57b43/frontend/dockerfile/dockerfile2llb/image.go#L26-L39
+func BaseImageConfig(platform *ocispecs.Platform) *DockerImageSpec {
+	img := &DockerImageSpec{}
+
+	if platform == nil {
+		p := platforms.DefaultSpec()
+		platform = &p
+	}
+
+	img.Architecture = platform.Architecture
+	img.OS = platform.OS
+	img.OSVersion = platform.OSVersion
+	if platform.OSFeatures != nil {
+		img.OSFeatures = append([]string{}, platform.OSFeatures...)
+	}
+	img.Variant = platform.Variant
+	img.RootFS.Type = "layers"
+	img.Config.WorkingDir = "/"
+	img.Config.Env = []string{"PATH=" + system.DefaultPathEnv(platform.OS)}
+
+	return img
 }

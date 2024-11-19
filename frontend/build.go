@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/containerd/platforms"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -93,4 +94,22 @@ func BuildWithPlatform(ctx context.Context, client gwclient.Client, f PlatformBu
 		return nil, err
 	}
 	return rb.Finalize()
+}
+
+// GetBaseImage returns an image that first checks if the client provided the
+// image in the build context matching the image ref.
+//
+// This follows the behavior of of the dockerfile frontend.
+func GetBaseImage(sOpt dalec.SourceOpts, ref string) llb.State {
+	return llb.Scratch().Async(func(ctx context.Context, _ llb.State, c *llb.Constraints) (llb.State, error) {
+		fromClient, err := sOpt.GetContext(ref, dalec.WithConstraint(c))
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		if fromClient != nil {
+			return *fromClient, nil
+		}
+		return llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraint(c)), nil
+	})
 }
