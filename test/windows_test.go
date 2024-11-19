@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/jammy"
+	"github.com/Azure/dalec/frontend/ubuntu"
 	"github.com/Azure/dalec/frontend/windows"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -49,8 +49,8 @@ func TestWindows(t *testing.T) {
 
 	wcfg := workerConfig{
 		ContextName:    windows.WindowscrossWorkerContextName,
-		SignRepo:       signRepoJammy,
-		TestRepoConfig: jammyTestRepoConfig,
+		SignRepo:       signRepoUbuntu,
+		TestRepoConfig: ubuntuTestRepoConfig,
 		Platform:       &windowsAmd64,
 		Constraints: constraintsSymbols{
 			Equal:              "=",
@@ -66,7 +66,7 @@ deb [trusted=yes] copy:/opt/repo/ /
 `)
 				withRepo := in.Run(
 					dalec.ShArgs("apt-get update && apt-get install -y apt-utils gnupg2"),
-					dalec.WithMountedAptCache(jammy.AptCachePrefix),
+					dalec.WithMountedAptCache(ubuntu.JammyAptCachePrefix),
 				).File(llb.Copy(pkg, "/", "/opt/repo")).
 					Run(
 						llb.Dir("/opt/repo"),

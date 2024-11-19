@@ -586,25 +586,52 @@ func WithTargetForwardingHandler(ctx context.Context, client gwclient.Client, m 
 // These are only added if the target is in the spec OR the spec has no explicit targets.
 func WithBuiltinHandler(key string, bf gwclient.BuildFunc) func(context.Context, gwclient.Client, *BuildMux) error {
 	return func(ctx context.Context, client gwclient.Client, m *BuildMux) error {
-		spec, err := m.loadSpec(ctx, client)
-		if err != nil {
-			return err
+		if !shouldLoadTarget(ctx, client, m, key) {
+			return nil
 		}
-
-		if len(spec.Targets) > 0 {
-			t, ok := spec.Targets[key]
-			if !ok {
-				bklog.G(ctx).WithField("spec targets", maps.Keys(spec.Targets)).WithField("targetKey", key).Info("Target not in the spec, skipping")
-				return nil
-			}
-
-			if t.Frontend != nil {
-				bklog.G(ctx).WithField("targetKey", key).Info("Target has custom frontend, skipping builtin-handler")
-				return nil
-			}
-		}
-
 		m.Add(key, bf, nil)
+		return nil
+	}
+}
+
+// shouldLoadTarget is used to determine if the spec is overriding the built-in
+// target with the same targetKey.
+func shouldLoadTarget(ctx context.Context, client gwclient.Client, mux *BuildMux, targetKey string) bool {
+	spec, err := mux.loadSpec(ctx, client)
+	if err != nil {
+		Warnf(ctx, client, llb.Scratch(), "Cannot load target %s due to error loading spec: %v", targetKey, err)
+		return false
+	}
+
+	if len(spec.Targets) == 0 {
+		return true
+	}
+
+	t, ok := spec.Targets[targetKey]
+	if !ok {
+		bklog.G(ctx).WithField("spec targets", maps.Keys(spec.Targets)).WithField("targetKey", targetKey).Info("Target not in the spec, skipping")
+		Warnf(ctx, client, llb.Scratch(), "Skipping loading of built-in target %q since it is not in the list of targets in the spec", targetKey)
+		return false
+	}
+
+	if t.Frontend != nil {
+		bklog.G(ctx).WithField("targetKey", targetKey).Info("Target has custom frontend, skipping builtin-handler")
+		Warnf(ctx, client, llb.Scratch(), "Built-in target %q overwritten by target in spec", targetKey)
+		return false
+	}
+
+	return true
+}
+
+// LoadBuiltinTargets is like [WithBuiltinHandler] but accepts a mapping of handlers
+// instead of one at a time.
+func LoadBuiltinTargets(targets map[string]gwclient.BuildFunc) func(context.Context, gwclient.Client, *BuildMux) error {
+	return func(ctx context.Context, client gwclient.Client, mux *BuildMux) error {
+		for target, handler := range targets {
+			if shouldLoadTarget(ctx, client, mux, target) {
+				mux.Add(target, handler, nil)
+			}
+		}
 		return nil
 	}
 }
