@@ -97,7 +97,7 @@ by the client, not the actual secret values.
 
 ### HTTP
 
-HTTP sources fetch a file from an HTTP URL. The HTTP source type is considered to be a "file" source. 
+HTTP sources fetch a file from an HTTP URL. The HTTP source type is considered to be a "file" source.
 
 The fetched file can be verified against a digest
 if one is supplied. There is also a `permissions` field that can set the octal permissions
@@ -347,8 +347,33 @@ sources:
         gomod: {} # Generates a go module cache to cache dependencies
 ```
 
-`gomod` currently does not have any options but may in the future.
+The `gomod` generator also supports generating multiple modules in a single source. The `paths` field is a list of paths where the generator should fetch the dependencies. Assuming `src` looks like this:
 
+```
+.
+├── module1
+│   ├── go.mod
+│   ├── go.sum
+│   └── main.go
+└── module2
+    ├── go.mod
+    ├── go.sum
+    └── main.go
+```
+
+The dalec spec will look like this:
+
+```yaml
+sources:
+  src:
+    path: ./
+    context: {}
+    generate:
+      - gomod:
+          paths:
+            - module1
+            - module2
+```
 
 ## Patches
 
@@ -458,4 +483,3 @@ These are in here to test lots of different edge cases and are only mentioned to
 when these simple configurations are not enough.
 The examples in that directory are not exhaustive and are not guaranteed to work in all cases or with all inputs and are
 there strictly for testing purposes.
-
