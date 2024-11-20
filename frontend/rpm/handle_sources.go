@@ -77,6 +77,14 @@ func buildScript(spec *dalec.Spec) string {
 	fmt.Fprintln(b, "set -e")
 
 	if spec.HasGomods() {
+		// Older go versions did not have support for the `GOMODCACHE` var
+		// This is a hack to try and make the build work by linking the go modules
+		// we've already fetched into to module dir under $GOPATH
+		// The default GOMODCACHE value is ${GOPATH}/pkg/mod.
+		fmt.Fprintf(b, `test -n "$(go env GOMODCACHE)" || (GOPATH="$(go env GOPATH)"; mkdir -p "${GOPATH}/pkg" && ln -s "$(pwd)/%s" "${GOPATH}/pkg/mod")`, gomodsName)
+		// Above command does not have a newline due to quoting issues, so add that here.
+		fmt.Fprint(b, "\n")
+
 		fmt.Fprintln(b, "export GOMODCACHE=\"$(pwd)/"+gomodsName+"\"")
 	}
 

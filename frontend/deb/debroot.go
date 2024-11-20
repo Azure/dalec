@@ -223,6 +223,16 @@ func fixupSources(spec *dalec.Spec) []byte {
 		fmt.Fprintln(buf)
 	}
 
+	if spec.HasGomods() {
+		// Older go versions did not have support for the `GOMODCACHE` var
+		// This is a hack to try and make the build work by linking the go modules
+		// we've already fetched into to module dir under $GOPATH
+		// The default GOMODCACHE value is ${GOPATH}/pkg/mod.
+		fmt.Fprintf(buf, `test -n "$(go env GOMODCACHE)" || (GOPATH="$(go env GOPATH)"; mkdir -p "${GOPATH}/pkg" && ln -s "$(pwd)/%s" "${GOPATH}/pkg/mod")`, gomodsName)
+		// Above command does not have a newline due to quoting issues, so add that here.
+		fmt.Fprint(buf, "\n")
+	}
+
 	return buf.Bytes()
 }
 
