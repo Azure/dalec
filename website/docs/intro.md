@@ -18,4 +18,4 @@ Our goal is to provide a secure and reproducible way to build packages and conta
 - ✍️ Support for signed packages
 - 🔐 Ensure supply chain security with build time SBOMs, and Provenance attestations
 
-👉 To get started with building packages and containers, please see [Building with Dalec](build.md)!
+👉 To get started with building packages and containers, please see [Quickstart](quickstart.md)!

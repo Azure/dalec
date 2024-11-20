@@ -2,18 +2,29 @@
 title: Quickstart
 ---
 
-In this section, we'll go over how to build packages and containers from source with Dalec. Note that, in this context, "source" refers to the source code of the package being built. Before continuing, it is first helpful to have an idea of what we mean by a "Dalec build." 
+In this section, we'll go over how to build packages and containers from source with Dalec. Note that, in this context, "source" refers to the source code of the package being built. Before continuing, it first useful to go over some preliminary background.
+
+## Some Preliminaries
+
+### But what actually *is* Dalec?
+
+Dalec is what is known as a *frontend* for [Docker Buildkit](https://docs.docker.com/build/buildkit/frontend/) . If you've ever used a `Dockerfile` before (under newer versions of docker) you have interacted with a buildkit frontend. A frontend is a little like a compiler in that it translates higher level syntax into specific build instructions which the buildkit engine knows how to execute. Dalec, then, provides a specialized spec format for specifying particular artifacts -- in this case packages and containers -- and then translates that spec into build instructions to be run in buildkit. This is why Dalec has no dependencies other than Docker -- it actually becomes a component loaded during the docker build. 
+
+### Targets 
 
 First, a word on **targets**: A target refers to a specific output of a dalec build. Dalec can produce different types of outputs, such as RPMs, DEBs, and container images. 
 
-A Dalec build happens in three main stages, some of which are independent of each other:
-1. **Package Build** - This is where the sources are checked out and built using the build steps defined in the spec file. The output of this phase is an actual package, such as an RPM or DEB. These steps execute in the build environment, which is a worker container image with the necessary build dependencies installed.
-2. **Package Test** (optional) - This is where the package is installed in a clean environment and tested to ensure it was built correctly, for example to ensure that package artifacts are installed properly. 
-3. **Create Output Image** (optional) - This stage is independent of the first two; you may build a container image with Dalec *without* first building a package or running any tests. However, for many use cases, a package will have been built in stage (1) and it will be installed in a base image for the resulting **output container image** to be created. There may be additional runtime dependencies specified in the spec file that are installed at this stage, and additional configuration of the image itself is also allowed. 
+### Stages of a Dalec Build
 
-Now, without further ado, let's get started.
+A Dalec build happens in up to three main stages, some of which are independent of each other:
+1. **Package Build** - This is where the sources are checked out and built using the build steps defined in the spec file. The output of this phase is an actual package, such as an RPM or DEB. These steps execute in the build environment, which is a worker container image with the necessary build dependencies installed.
+2. **Package Test** (optional) - This is where the package is installed in a clean environment and tested to ensure it was built correctly -- for example, to ensure that package artifacts are installed in the proper locations and have the correct permissions.
+3. **Create Output Image** (optional) - This stage is independent of the first two; you may build a container image with Dalec *without* first building a package or running any tests; see [Container Only Builds](container-only-builds.md). However, for many use cases, a package will have been built in stage (1) and it will be installed in a base image for the resulting **output container image** to be created. There may be additional runtime dependencies specified in the spec file that are installed at this stage, and additional configuration of the image itself is also allowed. 
+
 
 ## Creating a Package and Container from Source
+
+Now, without further ado, let's get started.
 
 To do our build, we need a few things:
 
