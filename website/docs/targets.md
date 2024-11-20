@@ -11,28 +11,34 @@ Many components, such as package dependencies and base images, are specific to a
 To print a list of available build targets:
 
 ```shell
-GET                           DESCRIPTION
-azlinux3/container (default)     Builds a container image with azlinux3 as the base image.
-azlinux3/container/depsonly      Builds a container image with only the runtime dependencies installed.
-azlinux3/rpm                     Builds an rpm and src.rpm.
-azlinux3/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.
-azlinux3/rpm/debug/sources       Outputs all the sources specified in the spec file in the format given to rpmbuild.
-azlinux3/rpm/debug/spec          Outputs the generated RPM spec file
-azlinux3/worker                  Builds the base worker image responsible for building the rpm
-debug/gomods                     Outputs all the gomodule dependencies for the spec
-debug/resolve                    Outputs the resolved dalec spec file with build args applied.
-debug/sources                    Outputs all sources from a dalec spec file.
-mariner2/container (default)     Builds a container image with mariner2 as the base image.
-mariner2/container/depsonly      Builds a container image with only the runtime dependencies installed.
-mariner2/rpm                     Builds an rpm and src.rpm.
-mariner2/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.
-mariner2/rpm/debug/sources       Outputs all the sources specified in the spec file in the format given to rpmbuild.
-mariner2/rpm/debug/spec          Outputs the generated RPM spec file
-mariner2/worker                  Builds the base worker image responsible for building the rpm
-windowscross/container (default) Builds binaries and installs them into a Windows base image
-windowscross/worker              Builds the base worker image responsible for building the rpm
-windowscross/zip                 Builds binaries combined into a zip file
+$ docker buildx build --call targets --build-arg BUILDKIT_SYNTAX=ghcr.io/azure/dalec/frontend:latest - <<< "null"
 ```
+
+import TargetsCLIOut from './examples/targets.md'
+
+<details>
+<summary>DALEC targets list output</summary>
+<pre><TargetsCLIOut /></pre>
+</details>
+
+:::note
+The above command is passing in a "null" value as the build spec and telling
+buildkit to use the latest dalec version.
+This output can change depending on version or spec you provide.
+:::
+
+To check the targets available for a specific spec you can just add `--call targets`
+to your normal `docker build` command:
+
+```shell
+$ docker buildx build --call targets -f ./path/to/spec .
+```
+
+If the `--target=<val>` flag is set, the list of targets will be filtered based
+on `<val>`.
+
+Likewise if the spec file contains items in the `targets` section then the list
+of available targets will be filtered to just the targets in the spec.
 
 ## Dependencies
 

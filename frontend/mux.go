@@ -596,6 +596,16 @@ func WithBuiltinHandler(key string, bf gwclient.BuildFunc) func(context.Context,
 
 // shouldLoadTarget is used to determine if the spec is overriding the built-in
 // target with the same targetKey.
+//
+// When there is nothing specified in `spec.Targets` this always returns true.
+//
+// When `spec.Targets` is populated but the provided targetKey does not appear
+// in `spec.Targets` this returns false.
+//
+// When the provided tgargetKey is in `spec.Targets` but the target spec defines
+// a frontend to forward to, this returns false.
+//
+// Otherwise true.
 func shouldLoadTarget(ctx context.Context, client gwclient.Client, mux *BuildMux, targetKey string) bool {
 	spec, err := mux.loadSpec(ctx, client)
 	if err != nil {

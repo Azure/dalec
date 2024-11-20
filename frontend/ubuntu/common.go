@@ -22,7 +22,10 @@ var (
 	}
 
 	targets = map[string]gwclient.BuildFunc{
-		JammyDefaultTargetKey: JammyConfig.Handle, // 22.04
+		BionicDefaultTargetKey: BionicConfig.Handle, // 18.04
+		FocalDefaultTargetKey:  FocalConfig.Handle,  // 20.04
+		JammyDefaultTargetKey:  JammyConfig.Handle,  // 22.04
+		NobleDefaultTargetKey:  NobleConfig.Handle,  // 24.04
 	}
 )
 
