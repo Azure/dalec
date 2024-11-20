@@ -21,8 +21,18 @@ var (
 	}
 )
 
-func debLinuxTestConfigFor(targetKey string, cfg *distro.Config) testLinuxConfig {
-	return testLinuxConfig{
+func withPackageOverride(oldPkg, newPkg string) func(cfg *testLinuxConfig) {
+	return func(cfg *testLinuxConfig) {
+		if cfg.Target.PackageOverrides == nil {
+			cfg.Target.PackageOverrides = make(map[string]string)
+		}
+
+		cfg.Target.PackageOverrides[oldPkg] = newPkg
+	}
+}
+
+func debLinuxTestConfigFor(targetKey string, cfg *distro.Config, opts ...func(*testLinuxConfig)) testLinuxConfig {
+	tlc := testLinuxConfig{
 		Target: targetConfig{
 			Container: targetKey + "/testing/container",
 			Package:   targetKey + "/deb",
@@ -49,6 +59,11 @@ func debLinuxTestConfigFor(targetKey string, cfg *distro.Config) testLinuxConfig
 			Constraints:    debConstraintsSymbols,
 		},
 	}
+
+	for _, o := range opts {
+		o(&tlc)
+	}
+	return tlc
 }
 
 func ubuntuCreateRepo(cfg *distro.Config) func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
@@ -138,4 +153,25 @@ func TestJammy(t *testing.T) {
 
 	ctx := startTestSpan(baseCtx, t)
 	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.JammyDefaultTargetKey, ubuntu.JammyConfig))
+}
+
+func TestNoble(t *testing.T) {
+	t.Parallel()
+
+	ctx := startTestSpan(baseCtx, t)
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.NobleDefaultTargetKey, ubuntu.NobleConfig))
+}
+
+func TestFocal(t *testing.T) {
+	t.Parallel()
+
+	ctx := startTestSpan(baseCtx, t)
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.FocalDefaultTargetKey, ubuntu.FocalConfig, withPackageOverride("golang", "golang-1.22")))
+}
+
+func TestBionic(t *testing.T) {
+	t.Parallel()
+
+	ctx := startTestSpan(baseCtx, t)
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.BionicDefaultTargetKey, ubuntu.BionicConfig, withPackageOverride("golang", "golang-1.18")))
 }

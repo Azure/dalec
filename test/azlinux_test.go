@@ -225,6 +225,10 @@ type targetConfig struct {
 	// Given a spec, list all files (including the full path) that are expected
 	// to be sent to be signed.
 	ListExpectedSignFiles func(*dalec.Spec, ocispecs.Platform) []string
+
+	// PackageOverrides is useful for replacing packages used in tests (such as `golang`)
+	// with alternative ones.
+	PackageOverrides map[string]string
 }
 
 type testLinuxConfig struct {
@@ -241,6 +245,14 @@ type testLinuxConfig struct {
 type OSRelease struct {
 	ID        string
 	VersionID string
+}
+
+func (cfg *testLinuxConfig) GetPackage(name string) string {
+	updated := cfg.Target.PackageOverrides[name]
+	if updated != "" {
+		return updated
+	}
+	return name
 }
 
 func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
@@ -875,9 +887,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 			Dependencies: &dalec.PackageDependencies{
 				Build: map[string]dalec.PackageConstraints{
-					// TODO: This works at least for now, but is distro specific and
-					// could break on new distros (though that is still unlikely).
-					"golang": {},
+					testConfig.GetPackage("golang"): {},
 				},
 			},
 			Build: dalec.ArtifactBuild{

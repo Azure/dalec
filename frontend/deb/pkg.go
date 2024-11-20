@@ -15,7 +15,7 @@ const (
 	// Unique name that would not normally be in the spec
 	// This will get used to create the source tar for go module deps
 	gomodsName      = "xxxdalecGomodsInternal"
-	DebHelperCompat = "13"
+	DebHelperCompat = "11"
 )
 
 func mountSources(sources map[string]llb.State, dir string, mod func(string) string) llb.RunOption {

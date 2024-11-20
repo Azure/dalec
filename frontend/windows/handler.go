@@ -6,7 +6,6 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/deb"
 	"github.com/Azure/dalec/frontend/deb/distro"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
@@ -40,7 +39,7 @@ var (
 			"zip",
 			"aptitude",
 			"dpkg-dev",
-			"debhelper-compat=" + deb.DebHelperCompat,
+			"debhelper",
 		},
 	}
 )
