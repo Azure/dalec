@@ -1,6 +1,7 @@
 package deb
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -70,11 +71,11 @@ func createPatches(spec *dalec.Spec, sources map[string]llb.State, worker llb.St
 	return patches
 }
 
-func SourcePackage(sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, targetKey, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, targetKey, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if err := validateSpec(spec); err != nil {
 		return llb.Scratch(), err
 	}
-	dr, err := Debroot(sOpt, spec, worker, llb.Scratch(), targetKey, "", distroVersionID)
+	dr, err := Debroot(ctx, sOpt, spec, worker, llb.Scratch(), targetKey, "", distroVersionID)
 	if err != nil {
 		return llb.Scratch(), err
 	}

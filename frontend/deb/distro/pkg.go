@@ -26,7 +26,7 @@ func (d *Config) BuildDeb(ctx context.Context, worker llb.State, sOpt dalec.Sour
 	}
 
 	worker = worker.With(d.InstallBuildDeps(sOpt, spec, targetKey))
-	srcPkg, err := deb.SourcePackage(sOpt, worker, spec, targetKey, versionID, opts...)
+	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker, spec, targetKey, versionID, opts...)
 	if err != nil {
 		return worker, err
 	}
@@ -141,7 +141,7 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 		}
 
 		worker = worker.With(cfg.InstallBuildDeps(sOpt, spec, targetKey, pg))
-		st, err := deb.SourcePackage(sOpt, worker, spec, targetKey, versionID, pg)
+		st, err := deb.SourcePackage(ctx, sOpt, worker, spec, targetKey, versionID, pg)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building source package")
 		}
