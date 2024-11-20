@@ -44,7 +44,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 		for _, path := range paths {
 			in = worker.Run(
 				ShArgs("go mod download"),
-				llb.AddEnv("GOMODCACHE", gomodCacheDir),
+				llb.AddEnv("GOPATH", "/go"),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
