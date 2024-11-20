@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/deb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
@@ -20,7 +19,6 @@ var (
 		"dh-apparmor",
 		"dh-make",
 		"dh-exec",
-		"debhelper-compat=" + deb.DebHelperCompat,
 	}
 
 	targets = map[string]gwclient.BuildFunc{
