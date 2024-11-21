@@ -605,3 +605,17 @@ func BaseImageConfig(platform *ocispecs.Platform) *DockerImageSpec {
 
 	return img
 }
+
+func (p *PackageDependencies) GetExtraRepos(env string) []PackageRepositoryConfig {
+	return GetExtraRepos(p.ExtraRepos, env)
+}
+
+func GetExtraRepos(repos []PackageRepositoryConfig, env string) []PackageRepositoryConfig {
+	var out []PackageRepositoryConfig
+	for _, repo := range repos {
+		if slices.Contains(repo.Envs, env) {
+			out = append(repos, repo)
+		}
+	}
+	return out
+}

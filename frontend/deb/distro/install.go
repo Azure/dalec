@@ -144,7 +144,10 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 				return in, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
 			}
 
-			customRepos, err := d.RepoMounts(spec.GetBuildRepos(targetKey), sOpt, opts...)
+			repos := dalec.GetExtraRepos(d.ExtraRepos, "build")
+			repos = append(repos, spec.GetBuildRepos(targetKey)...)
+
+			customRepos, err := d.RepoMounts(repos, sOpt, opts...)
 			if err != nil {
 				return in, err
 			}
@@ -153,6 +156,7 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 				dalec.WithConstraints(opts...),
 				customRepos,
 				InstallLocalPkg(pkg, opts...),
+				dalec.WithMountedAptCache(d.AptCachePrefix),
 			).Root(), nil
 		})
 	}
@@ -166,7 +170,10 @@ func (d *Config) InstallTestDeps(sOpt dalec.SourceOpts, targetKey string, spec *
 
 	return func(in llb.State) llb.State {
 		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
-			withRepos, err := d.RepoMounts(spec.GetTestRepos(targetKey), sOpt, opts...)
+			repos := dalec.GetExtraRepos(d.ExtraRepos, "test")
+			repos = append(repos, spec.GetTestRepos(targetKey)...)
+
+			withRepos, err := d.RepoMounts(repos, sOpt, opts...)
 			if err != nil {
 				return in, err
 			}

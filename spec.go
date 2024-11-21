@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 
@@ -357,17 +356,6 @@ type PackageDependencies struct {
 	// ExtraRepos is used to inject extra package repositories that may be used to
 	// satisfy package dependencies in various stages.
 	ExtraRepos []PackageRepositoryConfig `yaml:"extra_repos,omitempty" json:"extra_repos,omitempty"`
-}
-
-func (p *PackageDependencies) GetExtraRepos(env string) []PackageRepositoryConfig {
-	var repos []PackageRepositoryConfig
-	for _, repo := range p.ExtraRepos {
-		if slices.Contains(repo.Envs, env) {
-			repos = append(repos, repo)
-		}
-	}
-
-	return repos
 }
 
 // PackageRepositoryConfig
