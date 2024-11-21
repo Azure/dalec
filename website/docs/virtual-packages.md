@@ -19,8 +19,8 @@ website: http://contoso.com
 
 dependencies:
   runtime:
-    - my-package-foo
-    - my-package-bar
+    my-package-foo:
+    my-package-bar:
 ```
 
 You can build it with:
@@ -28,10 +28,6 @@ You can build it with:
 ```shell
 docker build -t my-package-image:1.0.0 --target=mariner2 -f my-package.yml .
 ```
-
-:::note
-The `syntax` line tells docker the parser to use so it can understand the dalec spec format. Having `# syntax=ghcr.io/azure/dalec/frontend:latest` is required at the top of the Dalec spec file.
-:::
 
 :::tip
 You could also pass the dalec spec file via stdin `docker build -t my-package-image:1.0.0 -< my-package.yml`*
@@ -76,8 +72,8 @@ website: http://contoso.com
 
 dependencies:
   runtime:
-    - my-package-foo
-    - my-package-bar
+    my-package-foo:
+    my-package-bar:
 
 image:
     entrypoint: /bin/sh -c

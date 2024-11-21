@@ -10,17 +10,21 @@ In this section, we'll go over how to build packages and containers from source 
 
 Dalec is what is known as a *frontend* for [Docker Buildkit](https://docs.docker.com/build/buildkit/frontend/) . If you've ever used a `Dockerfile` before (under newer versions of docker) you have interacted with a buildkit frontend. A frontend is a little like a compiler in that it translates higher level syntax into specific build instructions which the buildkit engine knows how to execute. Dalec, then, provides a specialized spec format for specifying particular artifacts -- in this case packages and containers -- and then translates that spec into build instructions to be run in buildkit. This is why Dalec has no dependencies other than Docker -- it actually becomes a component loaded during the docker build. 
 
+
+:::note
+The `syntax` line tells docker the parser to use so it can understand the dalec spec format. Essentially, it specifies which *frontend* to use. Having `# syntax=ghcr.io/azure/dalec/frontend:latest` is required at the top of the Dalec spec file.
+:::
+
 ### Targets 
 
-First, a word on **targets**: A target refers to a specific output of a dalec build. Dalec can produce different types of outputs, such as RPMs, DEBs, and container images. 
+First, a word on **targets**: A target refers to a specific output of a dalec build. Dalec can produce different types of outputs, such as RPMs, DEBs, and container images. For a full list of available targets, see the [targets](targets.md) section.
 
 ### Stages of a Dalec Build
 
-A Dalec build happens in up to three main stages, some of which are independent of each other:
+A Dalec build generally happens in up to three main stages, some of which are independent of each other:
 1. **Package Build** - This is where the sources are checked out and built using the build steps defined in the spec file. The output of this phase is an actual package, such as an RPM or DEB. These steps execute in the build environment, which is a worker container image with the necessary build dependencies installed.
-2. **Package Test** (optional) - This is where the package is installed in a clean environment and tested to ensure it was built correctly -- for example, to ensure that package artifacts are installed in the proper locations and have the correct permissions.
+2. **Package Test**: Depends on **Package Build** - This is where the package is installed in a clean environment and tested to ensure it was built correctly -- for example, to ensure that package artifacts are installed in the proper locations and have the correct permissions.
 3. **Create Output Image** (optional) - This stage is independent of the first two; you may build a container image with Dalec *without* first building a package or running any tests; see [Container Only Builds](container-only-builds.md). However, for many use cases, a package will have been built in stage (1) and it will be installed in a base image for the resulting **output container image** to be created. There may be additional runtime dependencies specified in the spec file that are installed at this stage, and additional configuration of the image itself is also allowed. 
-
 
 ## Creating a Package and Container from Source
 
@@ -36,7 +40,7 @@ In this example, we'll build the `go-md2man` package and container from the [`go
 
 First, let's start with the constructing a [Dalec spec](spec.md) file.
 
-We define the metadata for the package in the spec. This includes the name, packager, vendor, license, website, and description of the package.
+We define the metadata for the package in the spec. This includes the name, packager, vendor, license, website, and description of the package. You may notice that many of these fields appear in package manager metadata for rpm and deb packages. This is because, for certain targets, Dalec will generate package files for these package managers and will utilize this information for that purpose.
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
@@ -56,7 +60,7 @@ In metadata section, `packager`, `vendor` and `website` are optional fields.
 
 In the next section of the spec, we define the [sources](sources.md) that we will be pulling from. In this case, we are pulling from a git repository.
 
-One thing to note, in many build systems you will not have access to the Internet while building the package, and indeed that is the case with the `mariner2` target. As such, this build will fail because `go build` will try to download the go modules. For this reason, we added a `generate` section to the source to run `go mod download` in a docker image with the `src` source mounted and then extract the go modules from the resulting filesystem.
+One thing to note: in many build systems you will not have access to the Internet while building the package, and indeed that is the case with the `mariner2` target. As such, this build will fail because `go build` will try to download the go modules. For this reason, we added a `generate` section to the source to run `go mod download` in a docker image with the `src` source mounted and then extract the go modules from the resulting filesystem.
 
 ```yaml
 sources:
@@ -93,7 +97,7 @@ build:
         go build -o go-md2man .
 ```
 
-Next, we define the artifacts that we want to include in the package. In this case, we are including the `go-md2man` binary.
+Next, we define the artifacts that we want to include in the package. In this case, we are including the `go-md2man` binary. Dalec allows for the inclusion of a variety of different artifact types in a package. For the full list, refer to the [artifacts](artifacts.md) section.
 
 ```yaml
 artifacts:
@@ -109,7 +113,7 @@ image:
   cmd: --help
 ```
 
-Finally, we can add a test case to the spec file which helps ensure the package is assembled as expected. The following test will make sure `/usr/bin/go-md2man` is installed and has the expected permissions. These tests are automatically executed when building the container image.
+Finally, we can add a test case to the spec file which helps ensure the package is assembled as expected. The following test will make sure `/usr/bin/go-md2man` is installed and has the expected permissions. These tests are automatically executed when building the container image. For more information on tests, see the [tests](testing.md) section.
 
 ```yaml
 tests:
@@ -183,7 +187,7 @@ In this section, we'll go over how to actually *perform* a build with Dalec once
 :::
 
 :::tip
-These steps are independent of each other. You don't have to build an RPM first to build a container.
+Remember that steps are independent of each other. You don't have to build an RPM first to build a container.
 :::
 
 ### Building just an RPM package
