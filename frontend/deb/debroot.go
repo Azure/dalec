@@ -65,6 +65,25 @@ func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, s
 	return append(states, series), nil
 }
 
+type SourcePkgConfig struct {
+	// PrependPath is a list of paths to be prepended to the $PATH var in build
+	// scripts.
+	PrependPath []string
+	// AppendPath is a list of paths to be appended to the $PATH var in build
+	// scripts.
+	AppendPath []string
+}
+
+// Addpath creates a SourcePkgConfig where the first argument is sets
+// [SourcePkgConfig.PrependPath] and the 2nd argument sets
+// [SourcePkgConfig.AppendPath]
+func AddPath(pre, post []string) SourcePkgConfig {
+	return SourcePkgConfig{
+		PrependPath: pre,
+		AppendPath:  post,
+	}
+}
+
 // Debroot creates a debian root directory suitable for use with debbuild.
 // This does not include sources in case you want to mount sources (instead of copying them) later.
 //
@@ -75,7 +94,7 @@ func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, s
 // an upgrade even if it is technically the same underlying source.
 // It may be left blank but is highly recommended to set this.
 // Use [ReadDistroVersionID] to get a suitable value.
-func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, target, dir, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worker, in llb.State, target, dir, distroVersionID string, cfg SourcePkgConfig, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	control, err := controlFile(spec, in, target, dir)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error generating control file")
@@ -122,15 +141,10 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	dalecDir := base.
 		File(llb.Mkdir(filepath.Join(dir, "dalec"), 0o755), opts...)
 
-	pathVar, _, err := worker.GetEnv(ctx, "PATH", opts...)
-	if err != nil {
-		return in, fmt.Errorf("error looking up $PATH in worker image: %w", err)
-	}
-
-	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/build.sh"), 0o700, createBuildScript(spec, pathVar)), opts...))
-	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/patch.sh"), 0o700, createPatchScript(spec, pathVar)), opts...))
-	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_sources.sh"), 0o700, fixupSources(spec, pathVar)), opts...))
-	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPerms(spec, pathVar)), opts...))
+	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/build.sh"), 0o700, createBuildScript(spec, &cfg)), opts...))
+	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/patch.sh"), 0o700, createPatchScript(spec, &cfg)), opts...))
+	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_sources.sh"), 0o700, fixupSources(spec, &cfg)), opts...))
+	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPerms(spec, &cfg)), opts...))
 
 	customEnable, err := customDHInstallSystemdPostinst(spec)
 	if err != nil {
@@ -166,9 +180,9 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	return dalec.MergeAtPath(in, states, "/"), nil
 }
 
-func fixupArtifactPerms(spec *dalec.Spec, pathVar string) []byte {
+func fixupArtifactPerms(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
-	writeScriptHeader(buf, pathVar)
+	writeScriptHeader(buf, cfg)
 
 	basePath := filepath.Join("debian", spec.Name)
 
@@ -203,9 +217,9 @@ func fixupArtifactPerms(spec *dalec.Spec, pathVar string) []byte {
 //     to bring those back.
 //
 // This is called from `debian/rules` after the source tarball has been extracted.
-func fixupSources(spec *dalec.Spec, pathVar string) []byte {
+func fixupSources(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
-	writeScriptHeader(buf, pathVar)
+	writeScriptHeader(buf, cfg)
 
 	// now, we need to find all the sources that are file-backed and fix them up
 	for name, src := range spec.Sources {
@@ -238,21 +252,33 @@ func fixupSources(spec *dalec.Spec, pathVar string) []byte {
 	return buf.Bytes()
 }
 
-func writeScriptHeader(buf io.Writer, pathVar string) {
+func setupPathVar(pre, post []string) string {
+	if len(pre) == 0 && len(post) == 0 {
+		return ""
+	}
+
+	full := append(pre, "$PATH")
+	full = append(full, post...)
+	return strings.Join(full, ":")
+}
+
+func writeScriptHeader(buf io.Writer, cfg *SourcePkgConfig) {
 	fmt.Fprintln(buf, "#!/usr/bin/env sh")
 	fmt.Fprintln(buf)
 
 	fmt.Fprintln(buf, "set -ex")
 
-	if pathVar != "" {
-		fmt.Fprintln(buf, `export PATH="`+pathVar+`"`)
+	if cfg != nil {
+		if pathVar := setupPathVar(cfg.PrependPath, cfg.AppendPath); pathVar != "" {
+			fmt.Fprintln(buf, "export PATH="+pathVar)
+		}
 	}
 }
 
-func createPatchScript(spec *dalec.Spec, pathVar string) []byte {
+func createPatchScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
 
-	writeScriptHeader(buf, pathVar)
+	writeScriptHeader(buf, cfg)
 
 	for name, patches := range spec.Patches {
 		for _, patch := range patches {
@@ -264,9 +290,9 @@ func createPatchScript(spec *dalec.Spec, pathVar string) []byte {
 	return buf.Bytes()
 }
 
-func createBuildScript(spec *dalec.Spec, pathVar string) []byte {
+func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
-	writeScriptHeader(buf, pathVar)
+	writeScriptHeader(buf, cfg)
 
 	sorted := dalec.SortMapKeys(spec.Build.Env)
 	for _, k := range sorted {
