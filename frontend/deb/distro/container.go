@@ -23,7 +23,10 @@ func (c *Config) BuildContainer(worker llb.State, sOpt dalec.SourceOpts, client 
 
 	opts = append(opts, dalec.ProgressGroup("Build Container Image"))
 
-	withRepos, err := c.RepoMounts(spec.GetInstallRepos(targetKey), sOpt, opts...)
+	repos := dalec.GetExtraRepos(c.ExtraRepos, "install")
+	repos = append(repos, spec.GetInstallRepos(targetKey)...)
+
+	withRepos, err := c.RepoMounts(repos, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}

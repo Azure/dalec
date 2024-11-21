@@ -79,6 +79,7 @@ func (cfg *Config) Worker(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (ll
 		Run(
 			dalec.WithConstraints(opts...),
 			AptInstall(cfg.BuilderPackages, opts...),
+			dalec.WithMountedAptCache(cfg.AptCachePrefix),
 		).
 		// This file prevents installation of things like docs in ubuntu
 		// containers We don't want to exclude this because tests want to

@@ -32,6 +32,11 @@ type Config struct {
 	RepoPlatformConfig *dalec.RepoPlatformConfig
 
 	DefaultOutputImage string
+
+	// ExtraRepos is used by distributions that want to enable extra repositories
+	// that are not inthe base worker config.
+	// A prime example of this is adding Debian backports on debian distrubutions.
+	ExtraRepos []dalec.PackageRepositoryConfig
 }
 
 func (cfg *Config) BuildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {

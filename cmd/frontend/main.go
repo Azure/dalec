@@ -6,6 +6,7 @@ import (
 
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/azlinux"
+	"github.com/Azure/dalec/frontend/debian"
 	"github.com/Azure/dalec/frontend/debug"
 	"github.com/Azure/dalec/frontend/ubuntu"
 	"github.com/Azure/dalec/frontend/windows"
@@ -36,6 +37,7 @@ func main() {
 		frontend.WithBuiltinHandler(azlinux.AzLinux3TargetKey, azlinux.NewAzlinux3Handler()),
 		frontend.WithBuiltinHandler(windows.DefaultTargetKey, windows.Handle),
 		ubuntu.Handlers,
+		debian.Handlers,
 		frontend.WithTargetForwardingHandler,
 	)); err != nil {
 		bklog.L.WithError(err).Fatal("error running frontend")

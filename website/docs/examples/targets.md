@@ -10,6 +10,14 @@ bionic/deb (default)             Builds a deb package.
 bionic/dsc                       Builds a Debian source package.
 bionic/testing/container         Builds a container image for testing purposes only.
 bionic/worker                    Builds the worker image.
+bookworm/deb (default)           Builds a deb package.
+bookworm/dsc                     Builds a Debian source package.
+bookworm/testing/container       Builds a container image for testing purposes only.
+bookworm/worker                  Builds the worker image.
+bullseye/deb (default)           Builds a deb package.
+bullseye/dsc                     Builds a Debian source package.
+bullseye/testing/container       Builds a container image for testing purposes only.
+bullseye/worker                  Builds the worker image.
 debug/gomods                     Outputs all the gomodule dependencies for the spec
 debug/resolve                    Outputs the resolved dalec spec file with build args applied.
 debug/sources                    Outputs all sources from a dalec spec file.
