@@ -30,7 +30,14 @@ func (d *Config) BuildDeb(ctx context.Context, worker llb.State, sOpt dalec.Sour
 	}
 
 	worker = worker.With(d.InstallBuildDeps(sOpt, spec, targetKey))
-	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(ensureGolang(client, spec, targetKey, opts...)), spec, targetKey, versionID, opts...)
+
+	var cfg deb.SourcePkgConfig
+	extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, opts...)
+	if err != nil {
+		return worker, err
+	}
+
+	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, opts...)
 	if err != nil {
 		return worker, err
 	}
@@ -44,60 +51,83 @@ func (d *Config) BuildDeb(ctx context.Context, worker llb.State, sOpt dalec.Sour
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 }
 
-// ensureGolang is a work-around for the case where the base distro golang package
-// is too old, but other packages are provided (e.g. `golang-1.22`) and those
-// other packages don't actually add go tools to $PATH.
-// It assumes if you added one of these go packages and there is no `go` in $PATH
-// that you probably wanted to use that version of go.
-func ensureGolang(client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+func noOpStateOpt(in llb.State) llb.State {
+	return in
+}
+
+func prepareGo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePkgConfig, worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	goBin, err := searchForAltGolang(ctx, client, spec, targetKey, worker, opts...)
+	if err != nil {
+		return noOpStateOpt, errors.Wrap(err, "error while looking for alternate go bin path")
+	}
+
+	if goBin == "" {
+		return noOpStateOpt, nil
+	}
+	cfg.PrependPath = append(cfg.PrependPath, goBin)
+	return addPaths([]string{goBin}, opts...), nil
+}
+
+func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, in llb.State, opts ...llb.ConstraintsOpt) (string, error) {
+	if !spec.HasGomods() {
+		return "", nil
+	}
+	var candidates []string
+
+	deps := spec.GetBuildDeps(targetKey)
+	if _, hasNormalGo := deps["golang"]; hasNormalGo {
+		return "", nil
+	}
+
+	for dep := range deps {
+		if strings.HasPrefix(dep, "golang-") {
+			// Get the base version component
+			_, ver, _ := strings.Cut(dep, "-")
+			// Trim off any potential extra stuff like `golang-1.20-go` (ie the `-go` bit)
+			// This is just for having definitive search paths to check it should
+			// not be an issue if this is not like the above example and its
+			// something else like `-doc` since we are still going to check the
+			// binary exists anyway (plus this would be highly unlikely in any case).
+			ver, _, _ = strings.Cut(ver, "-")
+			candidates = append(candidates, "usr/lib/go-"+ver+"/bin")
+		}
+	}
+
+	if len(candidates) == 0 {
+		return "", nil
+	}
+
+	stfs, err := bkfs.FromState(ctx, &in, client, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	for _, p := range candidates {
+		_, err := fs.Stat(stfs, filepath.Join(p, "go"))
+		if err == nil {
+			// bkfs does not allow a leading `/` in the stat path per spec for [fs.FS]
+			// Add that in here
+			p := "/" + p
+			return p, nil
+		}
+	}
+
+	return "", nil
+}
+
+// prepends the provided values to $PATH
+func addPaths(paths []string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
-		deps := spec.GetBuildDeps(targetKey)
-		if _, hasNormalGo := deps["golang"]; hasNormalGo {
+		if len(paths) == 0 {
 			return in
 		}
-
 		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
-			var candidates []string
-			for dep := range deps {
-				if strings.HasPrefix(dep, "golang-") {
-					// Get the base version component
-					_, ver, _ := strings.Cut(dep, "-")
-					// Trim off any potential extra stuff like `golang-1.20-go` (ie the `-go` bit)
-					// This is just for having definitive search paths to check it should
-					// not be an issue if this is not like the above example and its
-					// something else like `-doc` since we are still going to check the
-					// binary exists anyway (plus this would be highly unlikely in any case).
-					ver, _, _ = strings.Cut(ver, "-")
-					candidates = append(candidates, "usr/lib/go-"+ver+"/bin")
-				}
-			}
-
-			if len(candidates) == 0 {
-				return in, nil
-			}
-
 			opts := []llb.ConstraintsOpt{dalec.WithConstraint(c), dalec.WithConstraints(opts...)}
-
-			pathVar, _, err := in.GetEnv(ctx, "PATH", opts...)
+			pathEnv, _, err := in.GetEnv(ctx, "PATH", opts...)
 			if err != nil {
 				return in, err
 			}
-
-			stfs, err := bkfs.FromState(ctx, &in, client, opts...)
-			if err != nil {
-				return in, err
-			}
-
-			for _, p := range candidates {
-				_, err := fs.Stat(stfs, filepath.Join(p, "go"))
-				if err == nil {
-					// bkfs does not allow a leading `/` in the stat path per spec for [fs.FS]
-					// Add that in here
-					p := "/" + p
-					return in.AddEnv("PATH", p+":"+pathVar), nil
-				}
-			}
-			return in, nil
+			return in.AddEnv("PATH", strings.Join(append(paths, pathEnv), ":")), nil
 		})
 	}
 }
@@ -203,7 +233,14 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 		}
 
 		worker = worker.With(cfg.InstallBuildDeps(sOpt, spec, targetKey, pg))
-		st, err := deb.SourcePackage(ctx, sOpt, worker.With(ensureGolang(client, spec, targetKey, pg)), spec, targetKey, versionID, pg)
+
+		var cfg deb.SourcePkgConfig
+		extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, pg)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building source package")
 		}

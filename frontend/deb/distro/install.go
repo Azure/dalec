@@ -134,7 +134,7 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 			opts := append(opts, dalec.ProgressGroup("Install build dependencies"))
 			opts = append([]llb.ConstraintsOpt{dalec.WithConstraint(c)}, opts...)
 
-			srcPkg, err := deb.SourcePackage(ctx, sOpt, in, depsSpec, targetKey, "", opts...)
+			srcPkg, err := deb.SourcePackage(ctx, sOpt, in, depsSpec, targetKey, "", deb.SourcePkgConfig{}, opts...)
 			if err != nil {
 				return in, err
 			}
