@@ -16,7 +16,7 @@ For more information on the Dalec spec, see the [Dalec Specification](spec.md).
 
 Dalec can build packages and containers from source code repositories. This is done by specifying the source code repository and the build steps in the Dalec spec. The source code is checked out, built, and the resulting artifacts are included in the package.
 
-For more information on building from source, see [Building from source](build-source.md).
+For an intro guide to building from source code repos, see [Quickstart](quickstart.md).
 
 ## Virtual Packages
 
