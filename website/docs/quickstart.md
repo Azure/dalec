@@ -8,7 +8,7 @@ In this section, we'll go over how to build packages and containers from source 
 
 ### But what actually *is* Dalec?
 
-Dalec is what is known as a *frontend* for [Docker Buildkit](https://docs.docker.com/build/buildkit/frontend/) . If you've ever used a `Dockerfile` before (under newer versions of docker) you have interacted with a buildkit frontend. A frontend is a little like a compiler in that it translates higher level syntax into specific build instructions which the buildkit engine knows how to execute. Dalec, then, provides a specialized spec format for specifying particular artifacts -- in this case packages and containers -- and then translates that spec into build instructions to be run in buildkit. This is why Dalec has no dependencies other than Docker -- it actually becomes a component loaded during the docker build. 
+Dalec is what is known as a *frontend* for [Docker Buildkit](https://docs.docker.com/build/buildkit/frontend/). If you've ever used a `Dockerfile` before (under newer versions of docker) you have interacted with a buildkit frontend. A frontend is a little like a compiler in that it translates higher level syntax into specific build instructions which the buildkit engine knows how to execute. Dalec, then, provides a specialized spec format for specifying particular artifacts -- in this case packages and containers -- and then translates that spec into build instructions to be run in buildkit. This is why Dalec has no dependencies other than Docker -- it actually becomes a component loaded during the docker build. 
 
 
 :::note
