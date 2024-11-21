@@ -12,7 +12,7 @@ Dalec is what is known as a *frontend* for [Docker Buildkit](https://docs.docker
 
 
 :::note
-The `syntax` line tells docker the parser to use so it can understand the dalec spec format. Essentially, it specifies which *frontend* to use. Having `# syntax=ghcr.io/azure/dalec/frontend:latest` is required at the top of the Dalec spec file.
+The `syntax` line tells buildkit which parser to use so it can understand the dalec spec format. Essentially, it specifies which *frontend* to use. Having `# syntax=ghcr.io/azure/dalec/frontend:latest` is required at the top of the Dalec spec file.
 :::
 
 ### Targets 
