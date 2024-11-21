@@ -2,7 +2,6 @@
 title: Container-only builds
 ---
 
-# Container-only builds
 
 It is possible to use Dalec when you wish to build a minimal image from scratch or based on one of Dalec's supported distros (see [Targets](targets.md) for a list of these) with only certain packages installed. To do this, simply define a Dalec spec with only runtime dependencies specified. The resulting image will contain only the specified packages and their dependencies.
 
