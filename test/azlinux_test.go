@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/azlinux"
@@ -17,6 +18,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/exp/maps"
 	"gotest.tools/v3/assert"
 )
 
@@ -528,7 +530,16 @@ echo "$BAR" > bar.txt
 			)
 			sr.Evaluate = true
 
-			solveT(ctx, t, gwc, sr)
+			beforeBuild := time.Now()
+			res := solveT(ctx, t, gwc, sr)
+
+			dt, ok := res.Metadata[exptypes.ExporterImageConfigKey]
+			assert.Assert(t, ok, "result metadata should contain an image config: available metadata: %s", strings.Join(maps.Keys(res.Metadata), ", "))
+
+			var cfg dalec.DockerImageSpec
+			assert.Assert(t, json.Unmarshal(dt, &cfg))
+			assert.Check(t, cfg.Created.After(beforeBuild))
+			assert.Check(t, cfg.Created.Before(time.Now()))
 
 			// Make sure the test framework was actually executed by the build target.
 			// This appends a test case so that is expected to fail and as such cause the build to fail.
@@ -542,7 +553,8 @@ echo "$BAR" > bar.txt
 			// update the spec in the solve request
 			withSpec(ctx, t, &spec)(&newSolveRequestConfig{req: &sr})
 
-			if _, err := gwc.Solve(ctx, sr); err == nil {
+			_, err := gwc.Solve(ctx, sr)
+			if err == nil {
 				t.Fatal("expected test spec to run with error but got none")
 			}
 		})

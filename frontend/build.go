@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Azure/dalec"
 	"github.com/containerd/platforms"
@@ -88,6 +89,10 @@ func BuildWithPlatform(ctx context.Context, client gwclient.Client, f PlatformBu
 		targetKey := GetTargetKey(dc)
 
 		ref, cfg, err := f(ctx, client, platform, spec, targetKey)
+		if cfg != nil {
+			now := time.Now()
+			cfg.Created = &now
+		}
 		return ref, cfg, nil, err
 	})
 	if err != nil {
