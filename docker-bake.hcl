@@ -100,9 +100,9 @@ target "runc-jammy" {
     }
     target = tgt == "container" ? "jammy/testing/${tgt}" : "jammy/${tgt}"
     // only tag the container target
-    tags = tgt == "testing/container" ? ["runc:jammy"] : []
+    tags = tgt == "container" ? ["runc:jammy"] : []
     // only output non-container targets to the fs
-    output = tgt != "testing/container" ? ["_output"] : []
+    output = tgt != "container" ? ["_output"] : []
 
     cache-from = ["type=gha,scope=dalec/runc/jammy/${tgt}"]
     cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/jammy/${tgt},mode=max"] : []
