@@ -12,7 +12,8 @@ Dalec is what is known as a *frontend* for [Docker Buildkit](https://docs.docker
 
 
 :::note
-The `syntax` line tells buildkit which parser to use so it can understand the dalec spec format. Essentially, it specifies which *frontend* to use. Having `# syntax=ghcr.io/azure/dalec/frontend:latest` is required at the top of the Dalec spec file.
+The `syntax` line tells buildkit the parser to use so it can understand the dalec spec format. Essentially, it specifies which *frontend* to use. Having `# syntax=ghcr.io/azure/dalec/frontend:latest` is required at the top of the Dalec spec file. It is possible to pin the frontend to a specific version tag, as in `# syntax=ghcr.io/azure/dalec/frontend:0.10`
+For information about changes in specific releases of Dalec, see the [release notes](https://github.com/Azure/dalec/releases) page.
 :::
 
 ### Targets 
@@ -21,10 +22,10 @@ First, a word on **targets**: A target refers to a specific output of a dalec bu
 
 ### Stages of a Dalec Build
 
-A Dalec build generally happens in up to three main stages, some of which are independent of each other:
+A Dalec build generally happens in up to three main stages: 
 1. **Package Build** - This is where the sources are checked out and built using the build steps defined in the spec file. The output of this phase is an actual package, such as an RPM or DEB. These steps execute in the build environment, which is a worker container image with the necessary build dependencies installed.
 2. **Package Test**: Depends on **Package Build** - This is where the package is installed in a clean environment and tested to ensure it was built correctly -- for example, to ensure that package artifacts are installed in the proper locations and have the correct permissions.
-3. **Create Output Image** (optional) - This stage is independent of the first two; you may build a container image with Dalec *without* first building a package or running any tests; see [Container Only Builds](container-only-builds.md). However, for many use cases, a package will have been built in stage (1) and it will be installed in a base image for the resulting **output container image** to be created. There may be additional runtime dependencies specified in the spec file that are installed at this stage, and additional configuration of the image itself is also allowed. 
+3. **Create Output Image** (optional) - Depends on **Package Test**, **Package Build**. At this stage, Dalec will install a package built in stage (1) into a base image for the resulting **output container image** to be created. There may be additional runtime dependencies specified in the spec file that are installed at this stage, and additional configuration of the image itself is also allowed. Because of the ability to include runtime dependencies, it is possible to create a container without *explicit build steps* that has just package dependencies, see [Container-only builds](container-only-builds.md) for more information on this.
 
 ## Creating a Package and Container from Source
 
@@ -40,7 +41,7 @@ In this example, we'll build the `go-md2man` package and container from the [`go
 
 First, let's start with the constructing a [Dalec spec](spec.md) file.
 
-We define the metadata for the package in the spec. This includes the name, packager, vendor, license, website, and description of the package. You may notice that many of these fields appear in package manager metadata for rpm and deb packages. This is because, for certain targets, Dalec will generate package files for these package managers and will utilize this information for that purpose.
+We define the metadata for the package in the spec. This includes the name, packager, vendor, license, website, and description of the package. You may notice that many of these fields appear in package manager metadata for rpm and deb packages. This is because Dalec will generate package files for these packaging systems and utilize this metadata. 
 
 ```yaml
 # syntax=ghcr.io/azure/dalec/frontend:latest
@@ -55,24 +56,34 @@ website: https://github.com/cpuguy83/go-md2man
 ```
 
 :::tip
-In metadata section, `packager`, `vendor` and `website` are optional fields.
+In metadata section, `packager`, `vendor` and `website` may be optional fields, depending on the underlying target's 
+packaging system (i.e., RPM, DEB, etc.).
 :::
 
 In the next section of the spec, we define the [sources](sources.md) that we will be pulling from. In this case, we are pulling from a git repository.
 
-One thing to note: in many build systems you will not have access to the Internet while building the package, and indeed that is the case with the `mariner2` target. As such, this build will fail because `go build` will try to download the go modules. For this reason, we added a `generate` section to the source to run `go mod download` in a docker image with the `src` source mounted and then extract the go modules from the resulting filesystem.
+One thing to note: in many build systems you will not have access to the Internet while building the package, and by default this is the case for all Dalec targets.
+The reason for this is to ensure that the source packages Dalec produces can also be built without internet access.
+
+For debugging purposes, if you *do* need to access the internet during a build you can use the `network_mode` field under the `build` section of the spec, see [Spec#Build](spec.md#build-section). However, it is by far best practice to utilize a build process which can run in a network isolated environment, provided the proper dependencies are fetched beforehand.
+
+
+Due to the lack of internet access, the below build will fail because `go build` will try to download the go modules. For this reason, we added a `generate` section to the source to run `go mod download` in a docker image with the `src` source mounted and then extract the go modules from the resulting filesystem. 
 
 ```yaml
 sources:
+  # creates a directory in the build environment called "src" under which the source code will be checked out.
   src:
     git:
       url: https://github.com/cpuguy83/go-md2man.git
       commit: "v2.0.3"
     generate:
+    # see note above; needed to fetch go modules ahead of time
+    # since network access is default disabled during build
       - gomod: {}
 ```
 
-In the next section, we define the dependencies that are needed to build the package. In this case, we need the `golang` dependency at the build time, and `openssl-libs` at runtime. Build dependencies are dependencies that are needed to build the package, while runtime dependencies are dependencies that are needed to run the package, i.e., they will be installed alongside the package when it is installed on a system. Runtime dependencies are not required for this specific example, but they are included for illustrative purposes.
+In the next section, we define the dependencies that are needed to build the package. In this case, we need the `golang` dependency at the build time, and `man-db` at runtime. Build dependencies are dependencies that are needed to build the package, while runtime dependencies are dependencies that are needed to run the package, i.e., they will be installed alongside the package when it is installed on a system. Runtime dependencies are not required for this specific example, but they are included for illustrative purposes.
 
 ```yaml
 dependencies:
@@ -80,7 +91,7 @@ dependencies:
     golang:
   runtime:
     # as stated above, included for illustrative purposes
-    openssl-libs:
+    man-db:
 ```
 
 Now, let's define the build steps. In this case, we are building the `go-md2man` binary.
@@ -93,6 +104,7 @@ build:
     CGO_ENABLED: "0"
   steps:
     - command: |
+        # this `src` is the directory created in the sources section above from checking out the git repo
         cd src
         go build -o go-md2man .
 ```

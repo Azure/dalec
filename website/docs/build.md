@@ -1,5 +1,5 @@
 ---
-title: Building Packages and Containers with Dalec - An Overview
+title: Overview
 ---
 
 In this section, we'll go over how to build packages and containers with Dalec.
