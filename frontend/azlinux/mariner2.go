@@ -18,6 +18,7 @@ const (
 	tdnfCacheNameMariner2 = "mariner2-tdnf-cache"
 
 	Mariner2Ref               = "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+	Mariner2FullName          = "CBL-Mariner 2"
 	Mariner2WorkerContextName = "dalec-mariner2-worker"
 	mariner2DistrolessRef     = "mcr.microsoft.com/cbl-mariner/distroless/base:2.0"
 )
@@ -69,6 +70,10 @@ func (mariner2) DefaultImageConfig(ctx context.Context, resolver llb.ImageMetaRe
 	}
 
 	return &cfg, nil
+}
+
+func (mariner2) FullName() string {
+	return Mariner2FullName
 }
 
 func (mariner2) tdnfCacheMount(root string) llb.RunOption {
