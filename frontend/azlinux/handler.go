@@ -25,6 +25,7 @@ type worker interface {
 	Install(pkgs []string, opts ...installOpt) llb.RunOption
 	DefaultImageConfig(context.Context, llb.ImageMetaResolver, *ocispecs.Platform) (*dalec.DockerImageSpec, error)
 	BasePackages() []string
+	FullName() string
 }
 
 func newHandler(w worker) gwclient.BuildFunc {
@@ -38,7 +39,7 @@ func newHandler(w worker) gwclient.BuildFunc {
 
 	mux.Add("container", handleContainer(w), &targets.Target{
 		Name:        "container",
-		Description: "Builds a container image for",
+		Description: "Builds a container image for " + w.FullName(),
 		Default:     true,
 	})
 
