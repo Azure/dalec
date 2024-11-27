@@ -128,7 +128,7 @@ func (s *stateRefFile) ReadAt(b []byte, off int64) (int, error) {
 		return 0, &fs.PathError{Op: "read", Path: s.path, Err: fs.ErrInvalid}
 	}
 
-	if off >= s.stat.Size_ {
+	if off >= s.stat.Size {
 		return 0, io.EOF
 	}
 

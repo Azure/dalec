@@ -485,7 +485,7 @@ func getChildren(op *pb.Op, ops []*pb.Op, digests map[*pb.Op]digest.Digest) []*p
 	children := make([]*pb.Op, 0, len(ops))
 	for _, maybeChild := range ops {
 		for _, input := range maybeChild.Inputs {
-			if input.Digest == digests[op] {
+			if digest.Digest(input.Digest) == digests[op] {
 				children = append(children, maybeChild)
 			}
 		}
@@ -1027,7 +1027,7 @@ func checkCmd(t *testing.T, ops []*pb.Op, src *Source, expectMounts [][]expectMo
 			checkContainsMount(t, exec.Mounts, expectMount)
 		}
 
-		if exec.Mounts[0].Input == pb.Empty {
+		if pb.InputIndex(exec.Mounts[0].Input) == pb.Empty {
 			t.Fatal("rootfs mount cannot be empty")
 		}
 	}
