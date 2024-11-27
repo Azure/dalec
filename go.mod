@@ -6,7 +6,7 @@ toolchain go1.23.1
 
 require (
 	github.com/containerd/platforms v0.2.1
-	github.com/goccy/go-yaml v1.11.3
+	github.com/goccy/go-yaml v1.15.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/invopop/jsonschema v0.12.0
