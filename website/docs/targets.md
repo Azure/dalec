@@ -12,7 +12,7 @@ To print a list of available build targets:
 
 ```shell
 GET                           DESCRIPTION
-azlinux3/container (default)     Builds a container image for
+azlinux3/container (default)     Builds a container image with azlinux3 as the base image.
 azlinux3/container/depsonly      Builds a container image with only the runtime dependencies installed.
 azlinux3/rpm                     Builds an rpm and src.rpm.
 azlinux3/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.
@@ -22,7 +22,7 @@ azlinux3/worker                  Builds the base worker image responsible for bu
 debug/gomods                     Outputs all the gomodule dependencies for the spec
 debug/resolve                    Outputs the resolved dalec spec file with build args applied.
 debug/sources                    Outputs all sources from a dalec spec file.
-mariner2/container (default)     Builds a container image for
+mariner2/container (default)     Builds a container image with mariner2 as the base image.
 mariner2/container/depsonly      Builds a container image with only the runtime dependencies installed.
 mariner2/rpm                     Builds an rpm and src.rpm.
 mariner2/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.

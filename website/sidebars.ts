@@ -18,7 +18,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'intro',
         'build',
-        'build-source',
+        'quickstart',
+        'container-only-builds',
         'virtual-packages',
       ],
     },
