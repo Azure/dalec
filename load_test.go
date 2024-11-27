@@ -613,7 +613,7 @@ func TestCustomRepoFillDefaults(t *testing.T) {
 	// unspecified
 	dt := []byte(`
 dependencies:
-  extra_repos: 
+  extra_repos:
     - config:
         custom.repo:
           context: {}
@@ -621,7 +621,7 @@ dependencies:
         public.gpg:
           context: {}
           path: "public.gpg"
-	`)
+`)
 
 	spec, err := LoadSpec(dt)
 	if err != nil {
@@ -652,7 +652,7 @@ args:
 build:
   steps:
     - command: echo $TEST
-      env: 
+      env:
         TEST: ${test}
 `)
 
@@ -676,7 +676,7 @@ args:
 build:
   steps:
     - command: echo $TEST
-      env: 
+      env:
         TEST: ${test}
 `)
 
@@ -697,7 +697,7 @@ args:
 build:
   steps:
     - command: echo $TEST
-      env: 
+      env:
         TEST: ${test}
 `)
 
@@ -725,7 +725,7 @@ sources:
 build:
   steps:
     - command: echo ${COMMIT1}
-      env: 
+      env:
         TEST: ${COMMIT1}
 `)
 
@@ -749,7 +749,7 @@ args:
 build:
   steps:
     - command: echo '$OS'
-      env: 
+      env:
         OS: ${TARGETOS}
 `)
 		spec, err := LoadSpec(dt)
