@@ -22,7 +22,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.21.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	golang.org/x/sys v0.22.0
-	google.golang.org/grpc v1.62.0
+	google.golang.org/grpc v1.62.2
 	gotest.tools/v3 v3.5.1
 )
 
