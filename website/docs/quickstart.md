@@ -2,7 +2,7 @@
 title: Quickstart
 ---
 
-In this section, we'll go over how to build packages and containers from source with Dalec. Note that, in this context, "source" refers to the source code of the package being built. Before continuing, it first useful to go over some preliminary background.
+In this section, we'll go over how to build packages and containers from source with Dalec. Note that, in this context, "source" refers to the source code of the package being built. Before continuing, it is first useful to go over some preliminary background.
 
 ## Some Preliminaries
 
