@@ -540,6 +540,9 @@ func (m *BuildMux) Handler(opts ...func(context.Context, gwclient.Client, *Build
 		if !SupportsDiffMerge(client) {
 			dalec.DisableDiffMerge(true)
 		}
+		if !SupportsSymlinks(client) {
+			dalec.DisableSymlinks(true)
+		}
 		for _, opt := range opts {
 			if err := opt(ctx, client, m); err != nil {
 				return nil, err
