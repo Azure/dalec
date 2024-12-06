@@ -324,7 +324,7 @@ func TestSourceDockerImage(t *testing.T) {
 			src.DockerImage = &img
 
 			ops := getSourceOp(ctx, t, src)
-			fileMountCheck := []expectMount{{dest: "/filedest", selector: "/filedest", typ: pb.MountType_BIND}}
+			fileMountCheck := []expectMount{{dest: "/filedest", selector: internalMountSourceName, typ: pb.MountType_BIND}}
 			checkCmd(t, ops[2:], &src, [][]expectMount{noMountCheck, fileMountCheck})
 		})
 
@@ -985,6 +985,7 @@ func mountMatches(gotMount *pb.Mount, wantMount expectMount) bool {
 }
 
 func checkContainsMount(t *testing.T, mounts []*pb.Mount, expect expectMount) {
+	t.Helper()
 	for _, mnt := range mounts {
 		if mountMatches(mnt, expect) {
 			return

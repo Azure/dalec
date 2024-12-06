@@ -17,6 +17,19 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	// This is used as the source name for sources in specified in `SourceMount`
+	// For any sources we need to mount we need to give the source a name.
+	// We don't actually care about the name here *except* the way file-backed
+	// sources work the name of the file becomes the source name.
+	// So we at least need to track it.
+	// Source names must also not contain path separators or it can screw up the logic.
+	//
+	// To note, the name of the source affects how the source is cached, so this
+	// should just be a single specific name so we can get maximal cache re-use.
+	internalMountSourceName = "src"
+)
+
 // Run tests runs the tests defined in the spec against the given target container.
 func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref gwclient.Reference, withTestDeps llb.StateOption, target string) error {
 	if skipVar := client.BuildOpts().Opts["build-arg:"+"DALEC_SKIP_TESTS"]; skipVar != "" {
@@ -80,11 +93,16 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		pg := llb.ProgressGroup(identity.NewID(), "Test: "+path.Join(target, test.Name), false)
 
 		for _, sm := range test.Mounts {
-			st, err := sm.Spec.AsMount(sm.Dest, sOpt, pg)
+			st, err := sm.Spec.AsMount(internalMountSourceName, sOpt, pg)
 			if err != nil {
 				return err
 			}
-			opts = append(opts, llb.AddMount(sm.Dest, st, llb.SourcePath(sm.Spec.Path)))
+
+			if dalec.SourceIsDir(sm.Spec) {
+				opts = append(opts, llb.AddMount(sm.Dest, st, llb.SourcePath(sm.Spec.Path)))
+			} else {
+				opts = append(opts, llb.AddMount(sm.Dest, st, llb.SourcePath(internalMountSourceName)))
+			}
 		}
 
 		opts = append(opts, pg)
