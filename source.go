@@ -307,7 +307,7 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 			return llb.Scratch(), err
 		}
 
-		srcSt, err := src.Spec.AsMount(src.Dest, sOpts, opts...)
+		srcSt, err := src.Spec.AsMount(internalMountSourceName, sOpts, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -322,7 +322,7 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 		}
 
 		if !SourceIsDir(src.Spec) {
-			mountOpt = append(mountOpt, llb.SourcePath(src.Dest))
+			mountOpt = append(mountOpt, llb.SourcePath(internalMountSourceName))
 		}
 		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
 	}

@@ -75,34 +75,140 @@ func TestSourceCmd(t *testing.T) {
 	})
 
 	t.Run("with mounted file", func(t *testing.T) {
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			spec := testSpec()
-			spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
-				{
-					Command: `grep 'foo bar' /foo`,
-				},
-				{
-					Command: `mkdir -p /output; cp /foo /output/foo`,
-				},
-			}
-			spec.Sources[sourceName].DockerImage.Cmd.Mounts = []dalec.SourceMount{
-				{
-					Dest: "/foo",
-					Spec: dalec.Source{
-						Inline: &dalec.SourceInline{
-							File: &dalec.SourceInlineFile{
-								Contents: "foo bar",
+		t.Parallel()
+		t.Run("at root", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := testSpec()
+				spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
+					{
+						Command: `grep 'foo bar' /foo`,
+					},
+					{
+						Command: `mkdir -p /output; cp /foo /output/foo`,
+					},
+				}
+				spec.Sources[sourceName].DockerImage.Cmd.Mounts = []dalec.SourceMount{
+					{
+						Dest: "/foo",
+						Spec: dalec.Source{
+							Inline: &dalec.SourceInline{
+								File: &dalec.SourceInlineFile{
+									Contents: "foo bar",
+								},
 							},
 						},
 					},
-				},
-			}
+				}
 
-			req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
-			res := solveT(ctx, t, gwc, req)
+				req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+				res := solveT(ctx, t, gwc, req)
 
-			checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar"))
+				checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar"))
+			})
 		})
+		t.Run("nested", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := testSpec()
+				spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
+					{
+						Command: `grep 'foo bar' /tmp/foo`,
+					},
+					{
+						Command: `mkdir -p /output; cp /tmp/foo /output/foo`,
+					},
+				}
+				spec.Sources[sourceName].DockerImage.Cmd.Mounts = []dalec.SourceMount{
+					{
+						Dest: "/tmp/foo",
+						Spec: dalec.Source{
+							Inline: &dalec.SourceInline{
+								File: &dalec.SourceInlineFile{
+									Contents: "foo bar",
+								},
+							},
+						},
+					},
+				}
+
+				req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+				res := solveT(ctx, t, gwc, req)
+
+				checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar"))
+			})
+		})
+	})
+
+	t.Run("with mounted dir", func(t *testing.T) {
+		t.Parallel()
+		t.Run("at root", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := testSpec()
+				spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
+					{
+						Command: `grep 'foo bar' /foo/bar`,
+					},
+					{
+						Command: `mkdir -p /output; cp -r /foo /output/foo`,
+					},
+				}
+				spec.Sources[sourceName].DockerImage.Cmd.Mounts = []dalec.SourceMount{
+					{
+						Dest: "/foo",
+						Spec: dalec.Source{
+							Inline: &dalec.SourceInline{
+								Dir: &dalec.SourceInlineDir{
+									Files: map[string]*dalec.SourceInlineFile{
+										"bar": {Contents: "foo bar"},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+				res := solveT(ctx, t, gwc, req)
+
+				checkFile(ctx, t, filepath.Join(sourceName, "foo/bar"), res, []byte("foo bar"))
+			})
+		})
+		t.Run("nested", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := testSpec()
+				spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
+					{
+						Command: `grep 'foo bar' /tmp/foo/bar`,
+					},
+					{
+						Command: `mkdir -p /output; cp -r /tmp/foo /output/foo`,
+					},
+				}
+				spec.Sources[sourceName].DockerImage.Cmd.Mounts = []dalec.SourceMount{
+					{
+						Dest: "/tmp/foo",
+						Spec: dalec.Source{
+							Inline: &dalec.SourceInline{
+								Dir: &dalec.SourceInlineDir{
+									Files: map[string]*dalec.SourceInlineFile{
+										"bar": {Contents: "foo bar"},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+				res := solveT(ctx, t, gwc, req)
+
+				checkFile(ctx, t, filepath.Join(sourceName, "foo/bar"), res, []byte("foo bar"))
+			})
+		})
+
 	})
 }
 

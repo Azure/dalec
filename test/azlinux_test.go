@@ -481,6 +481,77 @@ echo "$BAR" > bar.txt
 
 			Tests: []*dalec.TestSpec{
 				{
+					Name: "Verify source mounts work",
+					Mounts: []dalec.SourceMount{
+						{
+							Dest: "/foo",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									File: &dalec.SourceInlineFile{
+										Contents: "hello world",
+									},
+								},
+							},
+						},
+						{
+							Dest: "/nested/foo",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									File: &dalec.SourceInlineFile{
+										Contents: "hello world nested",
+									},
+								},
+							},
+						},
+						{
+							Dest: "/dir",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									Dir: &dalec.SourceInlineDir{
+										Files: map[string]*dalec.SourceInlineFile{
+											"foo": {Contents: "hello from dir"},
+										},
+									},
+								},
+							},
+						},
+						{
+							Dest: "/nested/dir",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									Dir: &dalec.SourceInlineDir{
+										Files: map[string]*dalec.SourceInlineFile{
+											"foo": {Contents: "hello from nested dir"},
+										},
+									},
+								},
+							},
+						},
+					},
+					Steps: []dalec.TestStep{
+						{
+							Command: "/bin/sh -c 'cat /foo'",
+							Stdout:  dalec.CheckOutput{Equals: "hello world"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+						{
+							Command: "/bin/sh -c 'cat /nested/foo'",
+							Stdout:  dalec.CheckOutput{Equals: "hello world nested"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+						{
+							Command: "/bin/sh -c 'cat /dir/foo'",
+							Stdout:  dalec.CheckOutput{Equals: "hello from dir"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+						{
+							Command: "/bin/sh -c 'cat /nested/dir/foo'",
+							Stdout:  dalec.CheckOutput{Equals: "hello from nested dir"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+					},
+				},
+				{
 					Name: "Check that the binary artifacts execute and provide the expected output",
 					Steps: []dalec.TestStep{
 						{
