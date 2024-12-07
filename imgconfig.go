@@ -37,10 +37,16 @@ func MergeSpecImage(spec *Spec, targetKey string) *ImageConfig {
 		cfg.Env = append(cfg.Env, i.Env...)
 
 		for k, v := range i.Volumes {
+			if cfg.Volumes == nil {
+				cfg.Volumes = make(map[string]struct{}, len(i.Volumes))
+			}
 			cfg.Volumes[k] = v
 		}
 
 		for k, v := range i.Labels {
+			if cfg.Labels == nil {
+				cfg.Labels = make(map[string]string, len(i.Labels))
+			}
 			cfg.Labels[k] = v
 		}
 
