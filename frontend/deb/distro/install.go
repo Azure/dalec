@@ -26,6 +26,9 @@ set -ex
 rm -f /var/lib/apt/lists/_*
 apt autoclean -y
 
+# Remove any previously failed attempts to get repo data
+rm -rf /var/lib/apt/lists/partial/*
+
 apt update
 apt install -y "$@"
 `
@@ -73,6 +76,8 @@ set -ex
 rm -f /var/lib/apt/lists/_*
 apt autoclean -y
 
+# Remove any previously failed attempts to get repo data
+rm -rf /var/lib/apt/lists/partial/*
 apt update
 
 if ! command -v aptitude > /dev/null; then
