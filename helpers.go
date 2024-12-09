@@ -507,7 +507,7 @@ func repoConfigAsMount(config PackageRepositoryConfig, platformCfg *RepoPlatform
 
 	for name, repoConfig := range config.Config {
 		// each of these sources represent a repo config file
-		repoConfigSt, err := repoConfig.AsState(name, sOpt, append(opts, ProgressGroup("Importing repo config: "+name))...)
+		repoConfigSt, err := repoConfig.AsMount(name, sOpt, append(opts, ProgressGroup("Importing repo config: "+name))...)
 		if err != nil {
 			return nil, err
 		}
@@ -544,7 +544,7 @@ func GetRepoKeys(configs []PackageRepositoryConfig, cfg *RepoPlatformConfig, sOp
 	names := []string{}
 	for _, config := range configs {
 		for name, repoKey := range config.Keys {
-			gpgKey, err := repoKey.AsState(name, sOpt, append(opts, ProgressGroup("Fetching repo key: "+name))...)
+			gpgKey, err := repoKey.AsMount(name, sOpt, append(opts, ProgressGroup("Fetching repo key: "+name))...)
 			if err != nil {
 				return nil, nil, err
 			}
