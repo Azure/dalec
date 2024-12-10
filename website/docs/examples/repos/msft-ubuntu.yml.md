@@ -10,10 +10,11 @@ dependencies:
     - keys:
        # Note: The name for the key must use the proper `.gpg` (binary) or `.asc` (ascii)
        # extension, or apt will not be able to import the key properly
-        msft.asc:          
+        msft.asc:
           http:
             url: https://packages.microsoft.com/keys/microsoft.asc
             digest: sha256:2cfd20a306b2fa5e25522d78f2ef50a1f429d35fd30bd983e2ebffc2b80944fa
+            permissions: 0o644
       config:
         microsoft-prod.list:
           inline:

@@ -2,11 +2,31 @@
 title: Targets
 ---
 
-This section provides an overview of the targets that Dalec supports. At this time, supported targets are `mariner2`, `azlinux3`, and `windowscross`.
-
-Many components, such as package dependencies and base images, are specific to a distro or a subset of distros. The dalec spec allows you to move these distro specific things into a `target`.
+DALEC is designed to support building artifacts for a number of different
+systems.
+DALEC refers to these in the [spec](spec.md) as "targets".
+When executing a build with Docker these targets can be specified with the
+`--target=<target>` flag.
 
 ## Available Targets
+
+DALEC includes a number of built-in targets that you can either use in your spec.
+
+- `mariner2` - Azure Linux 2 (formerly CBL-Mariner)
+- `azlinux3` - Azure Linux 3
+- `bullseye` - Debian 11 (Bullseye) (v0.11)
+- `bookworm` - Debian 12 (Bookworm) (v0.11)
+- `bionic` - Ubuntu 18.04 (Bionic) (v0.11)
+- `focal` - Ubuntu 20.04 (focal) (v0.11)
+- `jammy` - Ubuntu 22.04 (jammy) (v0.9)
+- `noble` - Ubuntu 24.04 (noble) (v0.11)
+- `windowscross` - Cross compile from Ubuntu Jammy to Windows
+
+When specifying a "target" to `docker build --target=<target>` DALEC treats
+`<target>` as a route (much like an HTTP path) and each of the above mentioned
+targets have subroutes you can specfiy as well, e.g. `jammy/deb` to have DALEC
+build and output just the deb package. What subroutes are available depend on
+the underlying target implementation.
 
 To print a list of available build targets:
 
@@ -41,6 +61,10 @@ Likewise if the spec file contains items in the `targets` section then the list
 of available targets will be filtered to just the targets in the spec.
 
 ## Dependencies
+
+Many components, such as package dependencies and base images, are specific to
+a distro or a subset of distros. The dalec spec allows you to move these distro
+specific things into a `target`.
 
 Instead of specifying a package dependency at the root of the spec, you can specify it under a target.
 This allows you to include different packages for different targets.
