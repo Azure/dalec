@@ -3,11 +3,13 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
-	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -35,9 +37,28 @@ func waitForDebug(ctx context.Context) error {
 		}
 	}()
 
-	s, cancel := signal.NotifyContext(ctx, syscall.SIGCONT)
-	defer cancel()
-	<-s.Done()
+	tracerPid := "0"
+	for tracerPid == "0" {
+		b, err := os.Open("/proc/self/status")
+		if err != nil {
+			return err
+		}
+
+		s := bufio.NewScanner(b)
+		for s.Scan() {
+			start, end, ok := strings.Cut(s.Text(), ":\t")
+			if !ok {
+				continue
+			}
+
+			if start != "TracerPid" {
+				continue
+			}
+
+			tracerPid = end
+			break
+		}
+	}
 
 	return nil
 }
