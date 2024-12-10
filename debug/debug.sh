@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -eux
 
 if [ -z "$(command -v socat)" ]; then
     echo you must have "'socat'" installed
@@ -24,29 +25,18 @@ docker build \
 
 # Wait for frontend process to start, and forward the socket connection when the process has started
 (
+    set +x
     pid=""
     while [ -z "$pid" ]; do
         sleep 0.5
         pid="$(pgrep frontend)"
     done
+    set -x
 
     socat_logfile="$(mktemp)"
-    socat -v UNIX:"/proc/${pid}/root/dlv.sock" TCP-LISTEN:30157,reuseaddr,fork 2>"$socat_logfile" &
-    scatpid="$!"
-    trap "kill -9 ${scatpid}" EXIT
-
-    # Detect when vs code has connected, then send the CONT signal to the frontend
-    txt=""
-    while [ -z "$txt" ]; do
-        sleep 0.5
-        if ! [ -f "$socat_logfile" ]; then
-            continue
-        fi
-        txt="$(head -n1 "$socat_logfile")"
-    done
-
-    kill -s CONT "$pid"
-    wait "$scatpid"
+    socat -v UNIX:"/proc/${pid}/root/dlv.sock" TCP-LISTEN:30157,reuseaddr,fork 2>"$socat_logfile"
+    socat_pid="$!"
+    trap "kill -9 ${socat_pid}" EXIT
 ) &
 
 # Run the build
