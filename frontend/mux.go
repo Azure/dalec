@@ -602,7 +602,7 @@ func WithBuiltinHandler(key string, bf gwclient.BuildFunc) func(context.Context,
 // When `spec.Targets` is populated but the provided targetKey does not appear
 // in `spec.Targets` this returns false.
 //
-// When the provided tgargetKey is in `spec.Targets` but the target spec defines
+// When the provided targetKey is in `spec.Targets` but the target spec defines
 // a frontend to forward to, this returns false.
 //
 // Otherwise true.
