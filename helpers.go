@@ -18,6 +18,19 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+const (
+	// This is used as the source name for sources in specified in `SourceMount`
+	// For any sources we need to mount we need to give the source a name.
+	// We don't actually care about the name here *except* the way file-backed
+	// sources work the name of the file becomes the source name.
+	// So we at least need to track it.
+	// Source names must also not contain path separators or it can screw up the logic.
+	//
+	// To note, the name of the source affects how the source is cached, so this
+	// should just be a single specific name so we can get maximal cache re-use.
+	internalMountSourceName = "src"
+)
+
 var disableDiffMerge atomic.Bool
 
 // DisableDiffMerge allows disabling the use of [llb.Diff] and [llb.Merge] in favor of [llb.Copy].
@@ -491,12 +504,17 @@ func WithRepoData(repos []PackageRepositoryConfig, sOpts SourceOpts, opts ...llb
 // Returns a run option for mounting the state (i.e., packages/metadata) for a single repo
 func repoDataAsMount(config PackageRepositoryConfig, sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
 	var mounts []llb.RunOption
+
 	for _, data := range config.Data {
-		repoState, err := data.Spec.AsMount(data.Dest, sOpts, opts...)
+		repoState, err := data.Spec.AsMount(internalMountSourceName, sOpts, opts...)
 		if err != nil {
 			return nil, err
 		}
-		mounts = append(mounts, llb.AddMount(data.Dest, repoState))
+		if SourceIsDir(data.Spec) {
+			mounts = append(mounts, llb.AddMount(data.Dest, repoState))
+		} else {
+			mounts = append(mounts, llb.AddMount(data.Dest, repoState, llb.SourcePath(internalMountSourceName)))
+		}
 	}
 
 	return WithRunOptions(mounts...), nil
