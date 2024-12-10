@@ -620,7 +620,6 @@ func shouldLoadTarget(ctx context.Context, client gwclient.Client, mux *BuildMux
 	t, ok := spec.Targets[targetKey]
 	if !ok {
 		bklog.G(ctx).WithField("spec targets", maps.Keys(spec.Targets)).WithField("targetKey", targetKey).Info("Target not in the spec, skipping")
-		Warnf(ctx, client, llb.Scratch(), "Skipping loading of built-in target %q since it is not in the list of targets in the spec", targetKey)
 		return false
 	}
 
