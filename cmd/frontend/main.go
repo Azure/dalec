@@ -35,7 +35,7 @@ func main() {
 		// copy/paster's beware: [frontend.WithTargetForwardingHandler] should not be set except for the root dalec frontend.
 		frontend.WithBuiltinHandler(azlinux.Mariner2TargetKey, azlinux.NewMariner2Handler()),
 		frontend.WithBuiltinHandler(azlinux.AzLinux3TargetKey, azlinux.NewAzlinux3Handler()),
-		frontend.WithBuiltinHandler(windows.DefaultTargetKey, windows.Handle),
+		windows.Handlers,
 		ubuntu.Handlers,
 		debian.Handlers,
 		frontend.WithTargetForwardingHandler,

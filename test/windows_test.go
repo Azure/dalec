@@ -16,29 +16,32 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-var windowsAmd64 = ocispecs.Platform{OS: "windows", Architecture: "amd64"}
+var (
+	windowsAmd64       = ocispecs.Platform{OS: "windows", Architecture: "amd64"}
+	windowscrossTarget = "windowscross-1809"
+)
 
 func TestWindows(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
 	testWindows(ctx, t, targetConfig{
-		Package:   "windowscross/zip",
-		Container: "windowscross/container",
+		Package:   windowscrossTarget + "/zip",
+		Container: windowscrossTarget + "/container",
 		ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
 			return maps.Keys(spec.Artifacts.Binaries)
 		},
 	})
 
 	tcfg := targetConfig{
-		Container: "windowscross/container",
+		Container: windowscrossTarget + "/container",
 		// The way the test uses the package target is to generate a package which
 		// it then feeds back into a custom repo and adds that package as a build dep
 		// to another package.
-		// We don't build system packages for the windowscross base image.
+		// We don't build system packages for the windowscross-<version> base image.
 		// So... use jammy to create a deb which we'll use to create a repo.
 		Package: "jammy/deb",
-		Worker:  "windowscross/worker",
+		Worker:  windowscrossTarget + "/worker",
 		FormatDepEqual: func(ver, rev string) string {
 			return ver + "-ubuntu22.04u" + rev
 		},
@@ -326,7 +329,7 @@ echo "$BAR" > bar.txt
 				t.Fatal(err)
 			}
 
-			post := spec.GetImagePost("windowscross")
+			post := spec.GetImagePost(windowscrossTarget)
 			for srcPath, l := range post.Symlinks {
 				b1, err := ref.ReadFile(ctx, gwclient.ReadRequest{
 					Filename: srcPath,
@@ -432,7 +435,7 @@ echo "$BAR" > bar.txt
 func prepareWindowsSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
 	zipper := getZipperState(ctx, t, gwc)
 
-	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"), withWindowsAmd64}
+	srOpts := []srOpt{withSpec(ctx, t, spec), withBuildTarget(windowscrossTarget + "/zip"), withWindowsAmd64}
 	srOpts = append(srOpts, extraSrOpts...)
 
 	sr := newSolveRequest(srOpts...)

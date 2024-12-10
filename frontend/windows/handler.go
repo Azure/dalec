@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	DefaultTargetKey              = "windowscross"
 	outputKey                     = "windows"
 	workerImgRef                  = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
 	WindowscrossWorkerContextName = "dalec-windowscross-worker"
@@ -44,7 +43,34 @@ var (
 	}
 )
 
-func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+var (
+	windowscross_1809     = &config{baseImage: "mcr.microsoft.com/windows/nanoserver:1809"}
+	windowscross_ltsc2019 = &config{baseImage: "mcr.microsoft.com/windows/nanoserver:ltsc2019"}
+	windowscross_ltsc2022 = &config{baseImage: "mcr.microsoft.com/windows/nanoserver:ltsc2022"}
+	windowscross_ltsc2025 = &config{baseImage: "mcr.microsoft.com/windows/nanoserver:ltsc2025"}
+	windowscross_20H2     = &config{baseImage: "mcr.microsoft.com/windows/nanoserver:20H2"}
+	windowscross_1909     = &config{baseImage: "mcr.microsoft.com/windows/nanoserver:1909"}
+	windowscross_2004     = &config{baseImage: "mcr.microsoft.com/windows/nanoserver:2004"}
+)
+
+func Handlers(ctx context.Context, client gwclient.Client, m *frontend.BuildMux) error {
+	targets := map[string]gwclient.BuildFunc{
+		"windowscross-1809":     windowscross_1809.Handle,
+		"windowscross-ltsc2019": windowscross_ltsc2019.Handle,
+		"windowscross-ltsc2022": windowscross_ltsc2022.Handle,
+		"windowscross-ltsc2025": windowscross_ltsc2025.Handle,
+		"windowscross-20H2":     windowscross_20H2.Handle,
+		"windowscross-1909":     windowscross_1909.Handle,
+		"windowscross-2004":     windowscross_2004.Handle,
+	}
+	return frontend.LoadBuiltinTargets(targets)(ctx, client, m)
+}
+
+type config struct {
+	baseImage string
+}
+
+func (c *config) Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	var mux frontend.BuildMux
 
 	mux.Add("zip", handleZip, &bktargets.Target{
@@ -52,7 +78,7 @@ func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		Description: "Builds binaries combined into a zip file",
 	})
 
-	mux.Add("container", handleContainer, &bktargets.Target{
+	mux.Add("container", c.handleContainer, &bktargets.Target{
 		Name:        "container",
 		Description: "Builds binaries and installs them into a Windows base image",
 		Default:     true,
