@@ -87,7 +87,7 @@ artifacts:
   managpes:
     src/man/*:
       subpath: ""
-      mode: 0o755
+      mode: 0o644
 ```
 
 You may use a trailing wildcard to specify multiple binaries in a directory,
@@ -152,7 +152,7 @@ artifacts:
   configFiles:
     src/my_config.json:
       subpath: ""
-      mode: 0o755
+      mode: 0o644
 ```
 
 ### Docs
@@ -171,7 +171,7 @@ artifacts:
   docs:
     src/doc/info.md:
       subpath: ""
-      mode: 0o755
+      mode: 0o644
 ```
 
 You may use a trailing wildcard to specify multiple binaries in a directory,
@@ -192,7 +192,7 @@ artifacts:
   licenses:
     src/LICENSE.md:
       subpath: ""
-      mode: 0o755
+      mode: 0o644
 ```
 
 ### Systemd
@@ -236,7 +236,7 @@ artifacts:
   libs:
     my_output_dir/lib.o:
         subpath: ""
-        mode: 0o755
+        mode: 0o644
 ```
 
 You may use a trailing wildcard to specify multiple binaries in a directory,
