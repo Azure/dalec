@@ -11,7 +11,6 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
-	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -44,16 +43,6 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, fmt.Errorf("error validating windows spec: %w", err)
 		}
 
-		bc, err := dockerui.NewClient(client)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		targetPlatform, err := getTargetPlatform(bc)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
 		worker, err := distroConfig.Worker(sOpt, pg)
 		if err != nil {
@@ -66,7 +55,12 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		}
 
 		baseImgName := getBaseOutputImage(spec, targetKey, defaultBaseImage)
-		baseImage := llb.Image(baseImgName, llb.Platform(targetPlatform))
+
+		if platform == nil {
+			platform = &defaultPlatform
+		}
+
+		baseImage := llb.Image(baseImgName, llb.Platform(*platform))
 
 		out := baseImage.
 			File(llb.Copy(bin, "/", windowsSystemDir)).
@@ -90,7 +84,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		}
 
 		_, _, dt, err := client.ResolveImageConfig(ctx, imgRef, sourceresolver.Opt{
-			Platform: &targetPlatform,
+			Platform: platform,
 		})
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not resolve base image config")
@@ -131,21 +125,6 @@ func copySymlinks(post *dalec.PostInstall) llb.StateOption {
 		return s
 	}
 
-}
-
-func getTargetPlatform(bc *dockerui.Client) (ocispecs.Platform, error) {
-	platform := defaultPlatform
-
-	switch len(bc.TargetPlatforms) {
-	case 0:
-	case 1:
-		platform = bc.TargetPlatforms[0]
-	default:
-		return ocispecs.Platform{},
-			fmt.Errorf("multiple target supplied for build: %v. note: only amd64 is supported for windows outputs", bc.TargetPlatforms)
-	}
-
-	return platform, nil
 }
 
 func getBaseOutputImage(spec *dalec.Spec, target, defaultBase string) string {
