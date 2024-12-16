@@ -33,7 +33,7 @@ var (
 	}
 )
 
-func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+func (c *config) handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		sOpt, err := frontend.SourceOptFromClient(ctx, client)
 		if err != nil {
@@ -65,7 +65,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, fmt.Errorf("unable to build binary %w", err)
 		}
 
-		baseImgName := getBaseOutputImage(spec, targetKey, defaultBaseImage)
+		baseImgName := getBaseOutputImage(spec, targetKey, c.baseImage)
 		baseImage := llb.Image(baseImgName, llb.Platform(targetPlatform))
 
 		out := baseImage.
@@ -86,7 +86,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 
 		imgRef := dalec.GetBaseOutputImage(spec, targetKey)
 		if imgRef == "" {
-			imgRef = defaultBaseImage
+			imgRef = c.baseImage
 		}
 
 		_, _, dt, err := client.ResolveImageConfig(ctx, imgRef, sourceresolver.Opt{
