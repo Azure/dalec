@@ -101,12 +101,7 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 	return "", false
 }
 
-func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOpts, error) {
-	dc, err := dockerui.NewClient(c)
-	if err != nil {
-		return dalec.SourceOpts{}, err
-	}
-
+func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.Client) dalec.SourceOpts {
 	return dalec.SourceOpts{
 		Resolver: c,
 		Forward:  ForwarderFromClient(ctx, c),
@@ -125,7 +120,15 @@ func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOp
 			}
 			return st, nil
 		},
-	}, nil
+	}
+}
+
+func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOpts, error) {
+	dc, err := dockerui.NewClient(c)
+	if err != nil {
+		return dalec.SourceOpts{}, err
+	}
+	return SourceOptFromUIClient(ctx, c, dc), nil
 }
 
 var (
