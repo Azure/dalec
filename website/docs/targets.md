@@ -144,3 +144,42 @@ This works the same way in the `azlinux3`:
   i. `--build-context mcr.microsoft.com/azurelinux/base/core:3.0=<new ref>`
 2. A build context named `dalec-mariner2-worker`
   i. `--build-context dalec-azlinux3-worker=<new ref>`
+
+#### Windows
+
+For Windows containers, typically the container image OS needs to match
+the Windows host OS.
+
+You can use DALEC to create a single multi-platform image with the different
+Windows versions you want to use.
+Normally you would specify a single base image in the DALEC spec's image config,
+however this is not sufficient to accomplish this task.
+
+With DALEC you can pass in a build-arg `DALEC_WINDOWSCROSS_BASES_PATH` the value
+of which should be the path to a file containing json with the following
+structure to the `windowscross/container` build target:
+
+
+```json
+{
+    "refs": [
+        "mcr.microsoft.com/windows/nanoserver:1809",
+        "mcr.microsoft.com/windows/nanoserver:ltsc2022"
+    ]
+}
+```
+
+:::note
+Values in the "refs" field can be any Windows image.
+
+You can provide any number of images here, however each image must have a
+different value for the `os.version` field in the image config's platform.
+If there are images with the same platform values the build will fail.
+:::
+
+You can also provide this file in a named build context, but you must still
+specifiy the above mentioned build-arg so that DALEC knows how to find the file
+in that named context.
+You can tell DALEC to use a named context by providing the name in a build-arg
+`DALEC_WINDOWSCROSS_BASES_CONTEXT`
+
