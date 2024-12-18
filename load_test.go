@@ -557,6 +557,14 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	err := spec.SubstituteArgs(env)
 	assert.ErrorIs(t, err, errUnknownArg, "args not defined in the spec should error out")
 
+	// Now with the arg explicitly allowed as a passhtrough
+	err = spec.SubstituteArgs(env, func(cfg *SubstituteConfig) {
+		cfg.AllowArg = func(key string) bool {
+			return key == "FOO"
+		}
+	})
+	assert.NilError(t, err)
+
 	spec.Args = map[string]string{}
 
 	spec.Args["FOO"] = ""
@@ -585,7 +593,6 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	}
 
 	env["BAR"] = bar
-	assert.ErrorIs(t, err, errUnknownArg, "args not defined in the spec should error out")
 
 	spec.Args["BAR"] = ""
 	spec.Args["VAR_WITH_DEFAULT"] = argWithDefault
@@ -603,6 +610,7 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["BAR"], bar))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["REGULAR"], plainOleValue))
+
 }
 
 func TestCustomRepoFillDefaults(t *testing.T) {
