@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	goerrors "errors"
 	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
@@ -141,7 +144,6 @@ func (src *SourceGit) AsState(opts ...llb.ConstraintsOpt) (llb.State, error) {
 
 	st := llb.Git(ref.Remote, src.Commit, gOpts...)
 	return st, nil
-	// TODO: Pass git secrets
 }
 
 func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -276,7 +278,20 @@ func (m *SourceMount) validate(root string) error {
 		// We cannot support this as the base mount for subPath will shadow the mount being done here.
 		return errors.Wrapf(errInvalidMountConfig, "mount destination (%s) must not be a descendent of the target source path (%s)", m.Dest, root)
 	}
+	return m.Spec.validate()
+}
+
+func (m *SourceMount) processBuildArgs(args map[string]string, allowArg func(string) bool) error {
+	if err := m.Spec.processBuildArgs(args, allowArg); err != nil {
+		return errors.Wrapf(err, "mount dest: %s", m.Dest)
+	}
 	return nil
+}
+
+func (m *SourceMount) fillDefaults() {
+	src := m.Spec
+	fillDefaults(&src)
+	m.Spec = src
 }
 
 // must not be called with a nil cmd pointer
@@ -671,10 +686,180 @@ func Sources(spec *Spec, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (map[strin
 
 		st, err := src.AsState(k, sOpt, opts...)
 		if err != nil {
-			return nil, errors.Wrapf(err, "could not get source state for source: %s", k)
+			return nil, errors.Wrapf(err, "could not get source stat e for source: %s", k)
 		}
 
 		states[k] = st
 	}
 	return states, nil
+}
+
+func fillDefaults(s *Source) {
+	switch {
+	case s.DockerImage != nil:
+		if s.DockerImage.Cmd != nil {
+			for _, mnt := range s.DockerImage.Cmd.Mounts {
+				fillDefaults(&mnt.Spec)
+			}
+		}
+	case s.Git != nil:
+	case s.HTTP != nil:
+	case s.Context != nil:
+		if s.Context.Name == "" {
+			s.Context.Name = dockerui.DefaultLocalNameContext
+		}
+	case s.Build != nil:
+		fillDefaults(&s.Build.Source)
+	case s.Inline != nil:
+	}
+}
+
+func (s *Source) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
+	lex := shell.NewLex('\\')
+	// force the shell lexer to skip unresolved env vars so they aren't
+	// replaced with ""
+	lex.SkipUnsetEnv = true
+	var errs []error
+	appendErr := func(err error) {
+		errs = append(errs, err)
+	}
+
+	switch {
+	case s.DockerImage != nil:
+		updated, err := expandArgs(lex, s.DockerImage.Ref, args, allowArg)
+		if err != nil {
+			appendErr(fmt.Errorf("image ref: %w", err))
+		}
+		s.DockerImage.Ref = updated
+
+		if s.DockerImage.Cmd != nil {
+			if err := s.DockerImage.Cmd.processBuildArgs(lex, args, allowArg); err != nil {
+				appendErr(errors.Wrap(err, "docker image cmd source"))
+			}
+		}
+	case s.Git != nil:
+		updated, err := expandArgs(lex, s.Git.URL, args, allowArg)
+		s.Git.URL = updated
+		if err != nil {
+			appendErr(err)
+		}
+
+		updated, err = expandArgs(lex, s.Git.Commit, args, allowArg)
+		s.Git.Commit = updated
+		if err != nil {
+			appendErr(err)
+		}
+
+	case s.HTTP != nil:
+		updated, err := expandArgs(lex, s.HTTP.URL, args, allowArg)
+		if err != nil {
+			appendErr(err)
+		}
+		s.HTTP.URL = updated
+	case s.Context != nil:
+		updated, err := expandArgs(lex, s.Context.Name, args, allowArg)
+		s.Context.Name = updated
+		if err != nil {
+			appendErr(err)
+		}
+	case s.Build != nil:
+		err := s.Build.Source.processBuildArgs(args, allowArg)
+		if err != nil {
+			appendErr(err)
+		}
+
+		updated, err := expandArgs(lex, s.Build.DockerfilePath, args, allowArg)
+		if err != nil {
+			appendErr(err)
+		}
+		s.Build.DockerfilePath = updated
+
+		updated, err = expandArgs(lex, s.Build.Target, args, allowArg)
+		if err != nil {
+			appendErr(err)
+		}
+		s.Build.Target = updated
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (s *Source) validate(failContext ...string) (retErr error) {
+	count := 0
+
+	defer func() {
+		if retErr != nil && failContext != nil {
+			retErr = errors.Wrap(retErr, strings.Join(failContext, " "))
+		}
+	}()
+
+	for _, g := range s.Generate {
+		if err := g.Validate(); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
+	}
+
+	if s.DockerImage != nil {
+		if s.DockerImage.Ref == "" {
+			retErr = goerrors.Join(retErr, fmt.Errorf("docker image source variant must have a ref"))
+		}
+
+		if s.DockerImage.Cmd != nil {
+			// If someone *really* wants to extract the entire rootfs, they need to say so explicitly.
+			// We won't fill this in for them, particularly because this is almost certainly not the user's intent.
+			if s.Path == "" {
+				retErr = goerrors.Join(retErr, errors.Errorf("source path cannot be empty"))
+			}
+
+			for _, mnt := range s.DockerImage.Cmd.Mounts {
+				if err := mnt.validate(s.Path); err != nil {
+					retErr = goerrors.Join(retErr, err)
+				}
+				if err := mnt.Spec.validate("docker image source with ref", "'"+s.DockerImage.Ref+"'"); err != nil {
+					retErr = goerrors.Join(retErr, err)
+				}
+			}
+		}
+
+		count++
+	}
+
+	if s.Git != nil {
+		count++
+	}
+	if s.HTTP != nil {
+		if err := s.HTTP.validate(); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
+		count++
+	}
+	if s.Context != nil {
+		count++
+	}
+	if s.Build != nil {
+		c := s.Build.DockerfilePath
+		if err := s.Build.validate("build source with dockerfile", "`"+c+"`"); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
+
+		count++
+	}
+
+	if s.Inline != nil {
+		if err := s.Inline.validate(s.Path); err != nil {
+			retErr = goerrors.Join(retErr, err)
+		}
+		count++
+	}
+
+	switch count {
+	case 0:
+		retErr = goerrors.Join(retErr, fmt.Errorf("no non-nil source variant"))
+	case 1:
+		return retErr
+	default:
+		retErr = goerrors.Join(retErr, fmt.Errorf("more than one source variant defined"))
+	}
+
+	return retErr
 }
