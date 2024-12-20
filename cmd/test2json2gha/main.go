@@ -95,12 +95,6 @@ func do(in io.Reader, out io.Writer, modName string, slowThreshold time.Duration
 			return false, errors.WithStack(err)
 		}
 
-		if te.Test == "" {
-			// Don't bother processing events that aren't specifically for a test
-			// Go adds extra events in for package level info that we don't need.
-			continue
-		}
-
 		tr, err := getOutputStream()
 		if err != nil {
 			return false, err
@@ -139,6 +133,14 @@ func do(in io.Reader, out io.Writer, modName string, slowThreshold time.Duration
 
 		hist.Add(tr.elapsed)
 		elapsed += tr.elapsed
+
+		if tr.name == "" {
+			// Don't write generic package-level details unless its a failure
+			// since there is nothing interesting here.
+			if !tr.failed {
+				continue
+			}
+		}
 
 		if err := writeResult(tr, buf, failBuf, slowBuf, slow, modName); err != nil {
 			slog.Error("Error writing result", "error", err)
