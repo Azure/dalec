@@ -324,42 +324,6 @@ func (s *Spec) GetBuildDeps(targetKey string) map[string]PackageConstraints {
 	return deps.Build
 }
 
-func (s *Spec) GetBuildRepos(targetKey string) []PackageRepositoryConfig {
-	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
-	return deps.GetExtraRepos("build")
-}
-
-func (s *Spec) GetInstallRepos(targetKey string) []PackageRepositoryConfig {
-	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
-	return deps.GetExtraRepos("install")
-}
-
-func (s *Spec) GetTestRepos(targetKey string) []PackageRepositoryConfig {
-	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
-	return deps.GetExtraRepos("test")
-}
-
 func (s *Spec) GetTestDeps(targetKey string) []string {
 	var deps *PackageDependencies
 	if t, ok := s.Targets[targetKey]; ok {
@@ -622,18 +586,4 @@ func BaseImageConfig(platform *ocispecs.Platform) *DockerImageSpec {
 	img.Config.Env = []string{"PATH=" + system.DefaultPathEnv(platform.OS)}
 
 	return img
-}
-
-func (p *PackageDependencies) GetExtraRepos(env string) []PackageRepositoryConfig {
-	return GetExtraRepos(p.ExtraRepos, env)
-}
-
-func GetExtraRepos(repos []PackageRepositoryConfig, env string) []PackageRepositoryConfig {
-	var out []PackageRepositoryConfig
-	for _, repo := range repos {
-		if slices.Contains(repo.Envs, env) {
-			out = append(repos, repo)
-		}
-	}
-	return out
 }
