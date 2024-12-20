@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/rpm/distro"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -24,6 +25,17 @@ const (
 	Azlinux3WorkerContextName = "dalec-azlinux3-worker"
 	azlinux3DistrolessRef     = "mcr.microsoft.com/azurelinux/distroless/base:3.0"
 )
+
+var Azlinux3Config = &distro.Config{
+	ImageRef:   Azlinux3Ref,
+	ContextRef: Azlinux3WorkerContextName,
+
+	ReleaseVer:         "3.0",
+	BuilderPackages:    basePackages,
+	BasePackages:       []string{"distroless-packages-minimal", "prebuilt-ca-certificates"},
+	RepoPlatformConfig: &defaultAzlinuxRepoPlatform,
+	InstallFunc:        distro.TdnfInstall,
+}
 
 func NewAzlinux3Handler() gwclient.BuildFunc {
 	return newHandler(azlinux3{})

@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/rpm/distro"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -22,6 +23,17 @@ const (
 	Mariner2WorkerContextName = "dalec-mariner2-worker"
 	mariner2DistrolessRef     = "mcr.microsoft.com/cbl-mariner/distroless/base:2.0"
 )
+
+var Mariner2Config = &distro.Config{
+	ImageRef:   "mcr.microsoft.com/cbl-mariner/base/core:2.0",
+	ContextRef: Mariner2WorkerContextName,
+
+	ReleaseVer:         "2.0",
+	BuilderPackages:    basePackages,
+	BasePackages:       []string{"distroless-packages-minimal", "prebuilt-ca-certificates"},
+	RepoPlatformConfig: &defaultAzlinuxRepoPlatform,
+	InstallFunc:        distro.TdnfInstall,
+}
 
 func NewMariner2Handler() gwclient.BuildFunc {
 	return newHandler(mariner2{})

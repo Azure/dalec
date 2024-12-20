@@ -11,6 +11,12 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
+var dnfRepoPlatform = dalec.RepoPlatformConfig{
+	ConfigRoot: "/etc/yum.repos.d",
+	GPGKeyRoot: "/etc/pki/rpm-gpg",
+	ConfigExt:  ".repo",
+}
+
 type PackageInstaller func(*dnfInstallConfig, string, []string) llb.RunOption
 
 type dnfInstallConfig struct {
@@ -26,7 +32,7 @@ type dnfInstallConfig struct {
 	// this acts like installing to a chroot.
 	root string
 
-	// Additional mounts to add to the tdnf install command (useful if installing RPMS which are mounted to a local directory)
+	// Additional mounts to add to the (t?)dnf install command (useful if installing RPMS which are mounted to a local directory)
 	mounts []llb.RunOption
 
 	constraints []llb.ConstraintsOpt
@@ -143,33 +149,9 @@ func DnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Run
 	return dalec.WithRunOptions(runOpts...)
 }
 
-var azlinuxRepoPlatform = dalec.RepoPlatformConfig{
-	ConfigRoot: "/etc/yum.repos.d",
-	GPGKeyRoot: "/etc/pki/rpm-gpg",
-	ConfigExt:  ".repo",
-}
+type buildDepsInstallerFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.RunOption, error)
 
-func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]DnfInstallOpt, error) {
-	withRepos, err := dalec.WithRepoConfigs(repos, &azlinuxRepoPlatform, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	withData, err := dalec.WithRepoData(repos, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	keyMounts, keyPaths, err := dalec.GetRepoKeys(repos, &azlinuxRepoPlatform, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	repoMounts := dalec.WithRunOptions(withRepos, withData, keyMounts)
-	return []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}, nil
-}
-
-func (c *Config) installBuildDepsPackage(target string, packageName string, deps map[string]dalec.PackageConstraints, installOpts ...DnfInstallOpt) installFunc {
+func (cfg *Config) installBuildDepsPackage(worker llb.State, target string, packageName string, deps map[string]dalec.PackageConstraints, installOpts ...DnfInstallOpt) buildDepsInstallerFunc {
 	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
 	depsOnly := dalec.Spec{
 		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
@@ -186,7 +168,7 @@ func (c *Config) installBuildDepsPackage(target string, packageName string, deps
 		pg := dalec.ProgressGroup("Building container for build dependencies")
 
 		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := specToRpmLLB(ctx, w, client, &depsOnly, sOpt, target, pg)
+		rpmDir, err := cfg.BuildRPM(worker, ctx, client, &depsOnly, sOpt, target, pg)
 		if err != nil {
 			return nil, err
 		}
@@ -203,36 +185,39 @@ func (c *Config) installBuildDepsPackage(target string, packageName string, deps
 		}, installOpts...)
 
 		// install the built RPMs into the worker itself
-		return w.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
+		return cfg.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
 	}
 }
 
-func (c *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	deps := spec.GetBuildDeps(targetKey)
 	if len(deps) == 0 {
-		return func(in llb.State) llb.State { return in }, nil
+		return func(in llb.State) llb.State { return in }
 	}
 
 	repos := spec.GetBuildRepos(targetKey)
 
 	sOpt, err := frontend.SourceOptFromClient(ctx, client)
 	if err != nil {
-		return nil, err
-	}
-
-	importRepos, err := repoMountInstallOpts(repos, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	opts = append(opts, dalec.ProgressGroup("Install build deps"))
-	installOpt, err := c.installBuildDepsPackage(targetKey, spec.Name, w, deps,
-		append(importRepos, dnfInstallWithConstraints(opts))...)(ctx, client, sOpt)
-	if err != nil {
-		return nil, err
+		return nil
 	}
 
 	return func(in llb.State) llb.State {
-		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
-	}, nil
+		return in.Async(func(ctx context.Context, s llb.State, c *llb.Constraints) (llb.State, error) {
+			repoMounts, keyPaths, err := cfg.RepoMounts(repos, sOpt, opts...)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+			importRepos := []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
+
+			opts = append(opts, dalec.ProgressGroup("Install build deps"))
+			installOpt, err := cfg.installBuildDepsPackage(s, targetKey, spec.Name, deps,
+				append(importRepos, dnfInstallWithConstraints(opts))...)(ctx, client, sOpt)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+
+			return s.Run(installOpt, dalec.WithConstraints(opts...)).Root(), nil
+		})
+	}
 }

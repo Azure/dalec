@@ -10,7 +10,7 @@ import (
 	"github.com/Azure/dalec/frontend/rpm"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/frontend/subrequests/targets"
+	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -31,24 +31,24 @@ type worker interface {
 func newHandler(w worker) gwclient.BuildFunc {
 	var mux frontend.BuildMux
 
-	mux.Add("rpm", handleRPM(w), &targets.Target{
+	mux.Add("rpm", handleRPM(w), &bktargets.Target{
 		Name:        "rpm",
 		Description: "Builds an rpm and src.rpm.",
 	})
 	mux.Add("rpm/debug", handleDebug(w), nil)
 
-	mux.Add("container", handleContainer(w), &targets.Target{
+	mux.Add("container", handleContainer(w), &bktargets.Target{
 		Name:        "container",
 		Description: "Builds a container image for " + w.FullName(),
 		Default:     true,
 	})
 
-	mux.Add("container/depsonly", handleDepsOnly(w), &targets.Target{
+	mux.Add("container/depsonly", handleDepsOnly(w), &bktargets.Target{
 		Name:        "container/depsonly",
 		Description: "Builds a container image with only the runtime dependencies installed.",
 	})
 
-	mux.Add("worker", handleBaseImg(w), &targets.Target{
+	mux.Add("worker", handleBaseImg(w), &bktargets.Target{
 		Name:        "worker",
 		Description: "Builds the base worker image responsible for building the rpm",
 	})

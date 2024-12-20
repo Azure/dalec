@@ -97,14 +97,8 @@ func runTests(ctx context.Context, client gwclient.Client, w worker, spec *dalec
 	return ref, errors.Wrap(err, "TESTS FAILED")
 }
 
-var azlinuxRepoPlatform = dalec.RepoPlatformConfig{
-	ConfigRoot: "/etc/yum.repos.d",
-	GPGKeyRoot: "/etc/pki/rpm-gpg",
-	ConfigExt:  ".repo",
-}
-
 func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]installOpt, error) {
-	withRepos, err := dalec.WithRepoConfigs(repos, &azlinuxRepoPlatform, sOpt, opts...)
+	withRepos, err := dalec.WithRepoConfigs(repos, &defaultAzlinuxRepoPlatform, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +108,7 @@ func repoMountInstallOpts(repos []dalec.PackageRepositoryConfig, sOpt dalec.Sour
 		return nil, err
 	}
 
-	keyMounts, keyPaths, err := dalec.GetRepoKeys(repos, &azlinuxRepoPlatform, sOpt, opts...)
+	keyMounts, keyPaths, err := dalec.GetRepoKeys(repos, &defaultAzlinuxRepoPlatform, sOpt, opts...)
 	if err != nil {
 		return nil, err
 	}
