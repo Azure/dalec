@@ -15,7 +15,39 @@ import (
 	"github.com/pkg/errors"
 )
 
-func LoadSpec(ctx context.Context, client *dockerui.Client, platform *ocispecs.Platform) (*dalec.Spec, error) {
+type LoadConfig struct {
+	SubstituteOpts []dalec.SubstituteOpt
+}
+
+type LoadOpt func(*LoadConfig)
+
+func WithAllowArgs(args ...string) LoadOpt {
+	return func(cfg *LoadConfig) {
+		set := make(map[string]struct{}, len(args))
+		for _, arg := range args {
+			set[arg] = struct{}{}
+		}
+		cfg.SubstituteOpts = append(cfg.SubstituteOpts, func(cfg *dalec.SubstituteConfig) {
+			orig := cfg.AllowArg
+
+			cfg.AllowArg = func(key string) bool {
+				if orig != nil && orig(key) {
+					return true
+				}
+				_, ok := set[key]
+				return ok
+			}
+		})
+	}
+}
+
+func LoadSpec(ctx context.Context, client *dockerui.Client, platform *ocispecs.Platform, opts ...LoadOpt) (*dalec.Spec, error) {
+	cfg := LoadConfig{}
+
+	for _, o := range opts {
+		o(&cfg)
+	}
+
 	src, err := client.ReadEntrypoint(ctx, "Dockerfile")
 	if err != nil {
 		return nil, fmt.Errorf("could not read spec file: %w", err)
@@ -35,7 +67,7 @@ func LoadSpec(ctx context.Context, client *dockerui.Client, platform *ocispecs.P
 	fillPlatformArgs("TARGET", args, *platform)
 	fillPlatformArgs("BUILD", args, client.BuildPlatforms[0])
 
-	if err := spec.SubstituteArgs(args); err != nil {
+	if err := spec.SubstituteArgs(args, cfg.SubstituteOpts...); err != nil {
 		return nil, errors.Wrap(err, "error resolving build args")
 	}
 	return spec, nil
