@@ -88,7 +88,7 @@ jobs:
       - name: download deps
         run: go mod download
       - name: Run integration tests
-        run: go test -v -json ./test | go run ./cmd/test2json2gha
+        run: go test -v -timeout=30m -json ./test | go run ./cmd/test2json2gha
       - name: dump logs
         if: failure()
         run: sudo journalctl -u docker

@@ -103,6 +103,7 @@ func do(in io.Reader, out io.Writer, modName string) (bool, error) {
 		return tr, nil
 	}
 
+	var anyFail bool
 	for {
 		*te = TestEvent{}
 		if err := dec.Decode(te); err != nil {
@@ -115,6 +116,9 @@ func do(in io.Reader, out io.Writer, modName string) (bool, error) {
 		if te.Test == "" {
 			// Don't bother processing events that aren't specifically for a test
 			// Go adds extra events in for package level info that we don't need.
+			if te.Action == "fail" {
+				anyFail = true
+			}
 			continue
 		}
 
@@ -122,13 +126,12 @@ func do(in io.Reader, out io.Writer, modName string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if err := handlEvent(te, tr); err != nil {
+		if err := handleEvent(te, tr); err != nil {
 			slog.Error("Error handing event test event", "error", err)
 		}
 	}
 
 	buf := bufio.NewWriter(out)
-	var anyFail bool
 
 	for _, tr := range outs {
 		if tr.failed {
@@ -148,7 +151,7 @@ func do(in io.Reader, out io.Writer, modName string) (bool, error) {
 	return anyFail, nil
 }
 
-func handlEvent(te *TestEvent, tr *TestResult) error {
+func handleEvent(te *TestEvent, tr *TestResult) error {
 	if te.Output != "" {
 		_, err := tr.output.Write([]byte(te.Output))
 		if err != nil {
