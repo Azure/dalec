@@ -5,27 +5,34 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/moby/patternmatcher/ignorefile"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/fsutil"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
+	"gotest.tools/v3/assert"
 )
 
 func buildBaseFrontend(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 	dc, err := dockerui.NewClient(c)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating dockerui client")
+	}
+
+	dockerfile, err := dc.ReadEntrypoint(ctx, "dockerfile")
+	if err != nil {
+		return nil, err
 	}
 
 	buildCtx, err := dc.MainContext(ctx)
@@ -38,21 +45,13 @@ func buildBaseFrontend(ctx context.Context, c gwclient.Client) (*gwclient.Result
 		return nil, errors.Wrap(err, "error marshaling main context")
 	}
 
-	// Can't use the state from `MainContext` because it filters out
-	// whatever was in `.dockerignore`, which may include `Dockerfile`,
-	// which we need.
-	dockerfileDef, err := llb.Local(dockerui.DefaultLocalNameDockerfile, llb.IncludePatterns([]string{"Dockerfile"})).Marshal(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "error marshaling Dockerfile context")
-	}
-
 	defPB := def.ToPB()
 	return c.Solve(ctx, gwclient.SolveRequest{
 		Frontend:    "dockerfile.v0",
 		FrontendOpt: map[string]string{},
 		FrontendInputs: map[string]*pb.Definition{
 			dockerui.DefaultLocalNameContext:    defPB,
-			dockerui.DefaultLocalNameDockerfile: dockerfileDef.ToPB(),
+			dockerui.DefaultLocalNameDockerfile: dockerfile.Definition.ToPB(),
 		},
 		Evaluate: true,
 	})
@@ -114,15 +113,15 @@ func injectInput(ctx context.Context, res *gwclient.Result, id string, req *gwcl
 	return nil
 }
 
-// withDalecInput adds the necessary options to a solve request to use
+// WithDalecInput adds the necessary options to a solve request to use
 // the locally built frontend as an input to the solve request.
 // This only works with buildkit >= 0.12
-func withDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.SolveRequest) error {
-	id := identity.NewID()
+func WithDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.SolveRequest) error {
 	res, err := buildBaseFrontend(ctx, gwc)
 	if err != nil {
 		return errors.Wrap(err, "error building local frontend")
 	}
+	const id = "frontend"
 	if err := injectInput(ctx, res, id, opts); err != nil {
 		return errors.Wrap(err, "error adding local frontend as input")
 	}
@@ -176,22 +175,61 @@ func displaySolveStatus(ctx context.Context, t *testing.T) (chan *client.SolveSt
 // withProjectRoot adds the current project root as the build context for the solve request.
 func withProjectRoot(t *testing.T, opts *client.SolveOpt) {
 	t.Helper()
+	assert.NilError(t, WithProjectRoot(opts))
+}
 
+func WithProjectRoot(opts *client.SolveOpt) error {
 	cwd, err := os.Getwd()
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 
 	projectRoot, err := lookupProjectRoot(cwd)
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 
-	if opts.LocalDirs == nil {
-		opts.LocalDirs = make(map[string]string)
+	if opts.LocalMounts == nil {
+		opts.LocalMounts = make(map[string]fsutil.FS)
 	}
-	opts.LocalDirs[dockerui.DefaultLocalNameContext] = projectRoot
-	opts.LocalDirs[dockerui.DefaultLocalNameDockerfile] = projectRoot
+
+	contextFS, err := fsutil.NewFS(projectRoot)
+	if err != nil {
+		return errors.Wrap(err, "open project root")
+	}
+
+	dockerfileFS, err := fsutil.NewFilterFS(contextFS, &fsutil.FilterOpt{
+		IncludePatterns: []string{"Dockerfile"},
+	})
+	if err != nil {
+		return errors.Wrap(err, "dockerfile context")
+	}
+
+	f, err := os.Open(".dockerignore")
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if f != nil {
+		defer f.Close()
+
+		excludes, err := ignorefile.ReadAll(f)
+		if err != nil {
+			return errors.Wrap(err, "ignore file")
+		}
+		if len(excludes) > 0 {
+			contextFS, err = fsutil.NewFilterFS(contextFS, &fsutil.FilterOpt{
+				ExcludePatterns: excludes,
+			})
+			if err != nil {
+				return errors.Wrap(err, "filter context fs")
+			}
+		}
+	}
+
+	opts.LocalMounts[dockerui.DefaultLocalNameContext] = contextFS
+	opts.LocalMounts[dockerui.DefaultLocalNameDockerfile] = dockerfileFS
+
+	return nil
 }
 
 // lookupProjectRoot looks up the project root from the current working directory.

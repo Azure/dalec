@@ -239,3 +239,16 @@ target "frontend-ci-full" {
     platforms = ["linux/amd64", "linux/arm64"]
 }
 
+target "worker" {
+  matrix = {
+    distro = ["mariner2", "azlinux3", "bullseye", "bookworm", "bionic", "focal", "jammy", "noble"]
+  }
+  name = "worker-${distro}"
+    args = {
+        "BUILDKIT_SYNTAX" = FRONTEND_REF
+    }
+  target = "${distro}/worker"
+  dockerfile-inline = <<EOT
+null
+EOT
+}

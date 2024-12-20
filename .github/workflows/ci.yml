@@ -105,15 +105,13 @@ jobs:
         with:
           driver-opts: |
             network=host
-            env.OTLP_EXPORTER_OPTELP_ENDPOINT=http://127.0.0.1:4318
+            env.OTLP_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
             env.OTEL_SERVICE_NAME=buildkitd
 
       - name: download deps
         run: go mod download
       - name: Run integration tests
-        run: go test -v -json ./test | go run ./cmd/test2json2gha --slow 5s
-        env:
-          GOMAXPROCS: 64
+        run: go test -v -json --parallel 128 ./test | go run ./cmd/test2json2gha --slow 5s
       - name: dump logs
         if: failure()
         run: sudo journalctl -u docker
@@ -150,6 +148,8 @@ jobs:
           cache: false
       - name: download deps
         run: go mod download
+      - name: precache worker images
+        run: go run ./cmd/ci-build-workers
       - name: Run unit tests
         run: go test -v --test.short --json ./... | go run ./cmd/test2json2gha
 
