@@ -112,6 +112,8 @@ jobs:
         run: go mod download
       - name: Run integration tests
         run: go test -v -json ./test | go run ./cmd/test2json2gha --slow 5s
+        env:
+          GOMAXPROCS: 64
       - name: dump logs
         if: failure()
         run: sudo journalctl -u docker
