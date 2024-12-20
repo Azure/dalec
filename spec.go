@@ -2,10 +2,7 @@
 package dalec
 
 import (
-	"fmt"
 	"io/fs"
-	"regexp"
-	"strings"
 	"time"
 
 	"github.com/moby/buildkit/client/llb"
@@ -323,67 +320,6 @@ type SourceGenerator struct {
 	Gomod *GeneratorGomod `yaml:"gomod" json:"gomod"`
 }
 
-// PackageConstraints is used to specify complex constraints for a package dependency.
-type PackageConstraints struct {
-	// Version is a list of version constraints for the package.
-	// The format of these strings is dependent on the package manager of the target system.
-	// Examples:
-	//   [">=1.0.0", "<2.0.0"]
-	Version []string `yaml:"version,omitempty" json:"version,omitempty"`
-	// Arch is a list of architecture constraints for the package.
-	// Use this to specify that a package constraint only applies to certain architectures.
-	Arch []string `yaml:"arch,omitempty" json:"arch,omitempty"`
-}
-
-// PackageDependencies is a list of dependencies for a package.
-// This will be included in the package metadata so that the package manager can install the dependencies.
-// It also includes build-time dedendencies, which we'll install before running any build steps.
-type PackageDependencies struct {
-	// Build is the list of packagese required to build the package.
-	Build map[string]PackageConstraints `yaml:"build,omitempty" json:"build,omitempty"`
-	// Runtime is the list of packages required to install/run the package.
-	Runtime map[string]PackageConstraints `yaml:"runtime,omitempty" json:"runtime,omitempty"`
-	// Recommends is the list of packages recommended to install with the generated package.
-	// Note: Not all package managers support this (e.g. rpm)
-	Recommends map[string]PackageConstraints `yaml:"recommends,omitempty" json:"recommends,omitempty"`
-
-	// Test lists any extra packages required for running tests
-	// These packages are only installed for tests which have steps that require
-	// running a command in the built container.
-	// See [TestSpec] for more information.
-	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
-
-	// ExtraRepos is used to inject extra package repositories that may be used to
-	// satisfy package dependencies in various stages.
-	ExtraRepos []PackageRepositoryConfig `yaml:"extra_repos,omitempty" json:"extra_repos,omitempty"`
-}
-
-// PackageRepositoryConfig
-type PackageRepositoryConfig struct {
-	// Keys are the list of keys that need to be imported to use the configured
-	// repositories
-	Keys map[string]Source `yaml:"keys,omitempty" json:"keys,omitempty"`
-
-	// Config list of repo configs to to add to the environment.  The format of
-	// these configs are distro specific (e.g. apt/yum configs).
-	Config map[string]Source `yaml:"config" json:"config"`
-
-	// Data lists all the extra data that needs to be made available for the
-	// provided repository config to work.
-	// As an example, if the provided config is referencing a file backed repository
-	// then data would include the file data, assuming its not already available
-	// in the environment.
-	Data []SourceMount `yaml:"data,omitempty" json:"data,omitempty"`
-	// Envs specifies the list of environments to make the repositories available
-	// during.
-	// Acceptable values are:
-	//  - "build"   - Repositories are added prior to installing build dependencies
-	//  - "test"    - Repositories are added prior to installing test dependencies
-	//  - "install" - Repositories are added prior to installing the output
-	//                package in a container build target.
-	Envs []string `yaml:"envs" json:"envs" jsonschema:"enum=build,enum=test,enum=install"`
-}
-
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
 type ArtifactBuild struct {
 	// Steps is the list of commands to run to build the artifact(s).
@@ -452,29 +388,6 @@ type Frontend struct {
 	CmdLine string `yaml:"cmdline,omitempty" json:"cmdline,omitempty"`
 }
 
-// Target defines a distro-specific build target.
-// This is used in [Spec] to specify the build target for a distro.
-type Target struct {
-	// Dependencies are the different dependencies that need to be specified in the package.
-	Dependencies *PackageDependencies `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
-
-	// Image is the image configuration when the target output is a container image.
-	Image *ImageConfig `yaml:"image,omitempty" json:"image,omitempty"`
-
-	// Frontend is the frontend configuration to use for the target.
-	// This is used to forward the build to a different, dalec-compatible frontend.
-	// This can be useful when testing out new distros or using a different version of the frontend for a given distro.
-	Frontend *Frontend `yaml:"frontend,omitempty" json:"frontend,omitempty"`
-
-	// Tests are the list of tests to run which are specific to the target.
-	// Tests are appended to the list of tests in the main [Spec]
-	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
-
-	// PackageConfig is the configuration to use for artifact targets, such as
-	// rpms, debs, or zip files containing Windows binaries
-	PackageConfig *PackageConfig `yaml:"package_config,omitempty" json:"package_config,omitempty"`
-}
-
 // PackageSigner is the configuration for defining how to sign a package
 type PackageSigner struct {
 	*Frontend `yaml:",inline" json:",inline"`
@@ -486,154 +399,6 @@ type PackageSigner struct {
 type PackageConfig struct {
 	// Signer is the configuration to use for signing packages
 	Signer *PackageSigner `yaml:"signer,omitempty" json:"signer,omitempty"`
-}
-
-// TestSpec is used to execute tests against a container with the package installed in it.
-type TestSpec struct {
-	// Name is the name of the test
-	// This will be used to output the test results
-	Name string `yaml:"name" json:"name" jsonschema:"required"`
-
-	// Dir is the working directory to run the command in.
-	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
-
-	// Mounts is the list of sources to mount into the build steps.
-	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
-
-	// List of CacheDirs which will be used across all Steps
-	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
-
-	// Env is the list of environment variables to set for all commands in this step group.
-	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
-
-	// Steps is the list of commands to run to test the package.
-	Steps []TestStep `yaml:"steps" json:"steps" jsonschema:"required"`
-
-	// Files is the list of files to check after running the steps.
-	Files map[string]FileCheckOutput `yaml:"files,omitempty" json:"files,omitempty"`
-}
-
-// TestStep is a wrapper for [BuildStep] to include checks on stdio streams
-type TestStep struct {
-	// Command is the command to run to build the artifact(s).
-	// This will always be wrapped as /bin/sh -c "<command>", or whatever the equivalent is for the target distro.
-	Command string `yaml:"command" json:"command" jsonschema:"required"`
-	// Env is the list of environment variables to set for the command.
-	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
-	// Stdout is the expected output on stdout
-	Stdout CheckOutput `yaml:"stdout,omitempty" json:"stdout,omitempty"`
-	// Stderr is the expected output on stderr
-	Stderr CheckOutput `yaml:"stderr,omitempty" json:"stderr,omitempty"`
-	// Stdin is the input to pass to stdin for the command
-	Stdin string `yaml:"stdin,omitempty" json:"stdin,omitempty"`
-}
-
-// CheckOutput is used to specify the expected output of a check, such as stdout/stderr or a file.
-// All non-empty fields will be checked.
-type CheckOutput struct {
-	// Equals is the exact string to compare the output to.
-	Equals string `yaml:"equals,omitempty" json:"equals,omitempty"`
-	// Contains is the list of strings to check if they are contained in the output.
-	Contains []string `yaml:"contains,omitempty" json:"contains,omitempty"`
-	// Matches is the regular expression to match the output against.
-	Matches string `yaml:"matches,omitempty" json:"matches,omitempty"`
-	// StartsWith is the string to check if the output starts with.
-	StartsWith string `yaml:"starts_with,omitempty" json:"starts_with,omitempty"`
-	// EndsWith is the string to check if the output ends with.
-	EndsWith string `yaml:"ends_with,omitempty" json:"ends_with,omitempty"`
-	// Empty is used to check if the output is empty.
-	Empty bool `yaml:"empty,omitempty" json:"empty,omitempty"`
-}
-
-// IsEmpty is used to determine if there are any checks to perform.
-func (c CheckOutput) IsEmpty() bool {
-	return c.Equals == "" && len(c.Contains) == 0 && c.Matches == "" && c.StartsWith == "" && c.EndsWith == "" && !c.Empty
-}
-
-// Check is used to check the output stream.
-func (c CheckOutput) Check(dt string, p string) (retErr error) {
-	if c.Empty {
-		if dt != "" {
-			return &CheckOutputError{Kind: "empty", Expected: "", Actual: dt, Path: p}
-		}
-
-		// Anything else would be nonsensical and it would make sense to return early...
-		// But we'll check it anyway and it should fail since this would be an invalid CheckOutput
-	}
-
-	if c.Equals != "" && c.Equals != dt {
-		return &CheckOutputError{Expected: c.Equals, Actual: dt, Path: p}
-	}
-
-	for _, contains := range c.Contains {
-		if contains != "" && !strings.Contains(dt, contains) {
-			return &CheckOutputError{Kind: "contains", Expected: contains, Actual: dt, Path: p}
-		}
-	}
-	if c.Matches != "" {
-		regexp, err := regexp.Compile(c.Matches)
-		if err != nil {
-			return err
-		}
-
-		if !regexp.Match([]byte(dt)) {
-			return &CheckOutputError{Kind: "matches", Expected: c.Matches, Actual: dt, Path: p}
-		}
-	}
-
-	if c.StartsWith != "" && !strings.HasPrefix(dt, c.StartsWith) {
-		return &CheckOutputError{Kind: "starts_with", Expected: c.StartsWith, Actual: dt, Path: p}
-	}
-
-	if c.EndsWith != "" && !strings.HasSuffix(dt, c.EndsWith) {
-		return &CheckOutputError{Kind: "ends_with", Expected: c.EndsWith, Actual: dt, Path: p}
-	}
-
-	return nil
-}
-
-// FileCheckOutput is used to specify the expected output of a file.
-type FileCheckOutput struct {
-	CheckOutput `yaml:",inline"`
-	// Permissions is the expected permissions of the file.
-	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
-	// IsDir is used to set the expected file mode to a directory.
-	IsDir bool `yaml:"is_dir,omitempty" json:"is_dir,omitempty"`
-	// NotExist is used to check that the file does not exist.
-	NotExist bool `yaml:"not_exist,omitempty" json:"not_exist,omitempty"`
-
-	// TODO: Support checking symlinks
-	// This is not currently possible with buildkit as it does not expose information about the symlink
-}
-
-// Check is used to check the output file.
-func (c FileCheckOutput) Check(dt string, mode fs.FileMode, isDir bool, p string) error {
-	if c.IsDir && !isDir {
-		return &CheckOutputError{Kind: "mode", Expected: "ModeDir", Actual: "ModeFile", Path: p}
-	}
-
-	if !c.IsDir && isDir {
-		return &CheckOutputError{Kind: "mode", Expected: "ModeFile", Actual: "ModeDir", Path: p}
-	}
-
-	perm := mode.Perm()
-	if c.Permissions != 0 && c.Permissions != perm {
-		return &CheckOutputError{Kind: "permissions", Expected: c.Permissions.String(), Actual: perm.String(), Path: p}
-	}
-
-	return c.CheckOutput.Check(dt, p)
-}
-
-// CheckOutputError is used to build an error message for a failed output check for a test case.
-type CheckOutputError struct {
-	Kind     string
-	Expected string
-	Actual   string
-	Path     string
-}
-
-func (c *CheckOutputError) Error() string {
-	return fmt.Sprintf("expected %q %s %q, got %q", c.Path, c.Kind, c.Expected, c.Actual)
 }
 
 func (s *SystemdConfiguration) IsEmpty() bool {
