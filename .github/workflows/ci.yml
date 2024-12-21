@@ -60,9 +60,26 @@ jobs:
             exit 1
           fi
 
-
   integration:
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - Mariner2
+          - Azlinux3
+          - Bookworm
+          - Bullseye
+          - Bionic
+          - Focal
+          - Jammy
+          - Noble
+          - Windows
+          - other
+        include:
+          - suite: other
+            skip: Mariner2|Azlinux3|Bookworm|Bullseye|Bionic|Focal|Jammy|Noble|Windows
+
     # TODO: support diff/merge
     # Right now this is handled by the e2e suite, but we can migrate that here.
     steps:
@@ -105,13 +122,24 @@ jobs:
         with:
           driver-opts: |
             network=host
-            env.OTLP_EXPORTER_OPTELP_ENDPOINT=http://127.0.0.1:4318
+            env.OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
             env.OTEL_SERVICE_NAME=buildkitd
 
       - name: download deps
         run: go mod download
       - name: Run integration tests
-        run: go test -v -json ./test | go run ./cmd/test2json2gha --slow 5s
+        run: |
+          set -ex
+          if [ -n "${TEST_SUITE}" ] && [ ! "${TEST_SUITE}" = "other" ]; then
+            run="-run=${TEST_SUITE}"
+          fi
+          if [ -n "${TEST_SKIP}" ]; then
+            skip="-skip=${TEST_SKIP}"
+          fi
+          go test -timeout=30m -v -json ${run} ${skip} ./test | go run ./cmd/test2json2gha --slow 120s
+        env:
+          TEST_SUITE: ${{ matrix.suite }}
+          TEST_SKIP: ${{ matrix.skip }}
       - name: dump logs
         if: failure()
         run: sudo journalctl -u docker
@@ -127,7 +155,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-test-reports
+          name: integration-test-reports-${{matrix.suite}}
           path: /tmp/reports/*
           retention-days: 1
 
