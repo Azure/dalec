@@ -38,6 +38,8 @@ func getBuildPlatform(ctx context.Context, t *testing.T) *ocispecs.Platform {
 }
 
 func TestPassthroughVars(t *testing.T) {
+	t.Parallel()
+
 	runTest := func(t *testing.T, f testenv.TestFunc) {
 		t.Helper()
 		ctx := startTestSpan(baseCtx, t)
