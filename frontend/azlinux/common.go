@@ -9,8 +9,7 @@ import (
 )
 
 var (
-	basePackages = []string{
-		// TODO(adamperlin): fill in
+	builderPackages = []string{
 		"rpm-build",
 		"mariner-rpm-macros",
 		"build-essential",
