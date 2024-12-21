@@ -204,7 +204,14 @@ func (m *BuildMux) loadSpec(ctx context.Context, client gwclient.Client) (*dalec
 	}
 
 	// Note: this is not suitable for passing to builds since it does not have platform information
-	spec, err := LoadSpec(ctx, dc, nil)
+	spec, err := LoadSpec(ctx, dc, nil, func(cfg *LoadConfig) {
+		cfg.SubstituteOpts = append(cfg.SubstituteOpts, func(cfg *dalec.SubstituteConfig) {
+			// Allow any args here since we aren't trying to validate the spec at this point.
+			cfg.AllowArg = func(string) bool {
+				return true
+			}
+		})
+	})
 	if err != nil {
 		return nil, err
 	}
