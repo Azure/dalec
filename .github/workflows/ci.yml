@@ -60,9 +60,25 @@ jobs:
             exit 1
           fi
 
-
   integration:
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        filter:
+          - Mariner2
+          - Azlinux3
+          - Bookworm
+          - Bullseye
+          - Bionic
+          - Focal
+          - Jammy
+          - Noble
+          - Windows
+          - ""
+        include:
+          - filter: ""
+            exclude: Mariner2|Azlinux3|Bookworm|Bullseye|Bionic|FOcal|Jammy|Noble|Windows
+
     # TODO: support diff/merge
     # Right now this is handled by the e2e suite, but we can migrate that here.
     steps:
@@ -111,7 +127,15 @@ jobs:
       - name: download deps
         run: go mod download
       - name: Run integration tests
-        run: go test -v -json --parallel 128 ./test | go run ./cmd/test2json2gha --slow 5s
+        run: |
+          set -ex
+          if [ -n "${{matrix.include }}" ]; then
+            run="-run ${{matrix.include}}"
+          fi
+          if [ -n "${{matrix.exclude}}" ]; then
+            skip="-skip ${{matrix.exclude}}"
+          fi
+          go test -v -json --parallel 128 ${run} ${skip} ./test | go run ./cmd/test2json2gha --slow 5s
       - name: dump logs
         if: failure()
         run: sudo journalctl -u docker
@@ -127,7 +151,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: integration-test-reports
+          name: integration-test-reports-${{matrix.include}}
           path: /tmp/reports/*
           retention-days: 1
 
