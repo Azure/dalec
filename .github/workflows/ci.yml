@@ -88,13 +88,29 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
         with:
           go-version: '1.22'
           cache: false
 
+      - name: Configure dockerd
+        run: |
+          set -ex -o pipefail
+
+          docker ps -a
+          docker images
+
+          sudo mkdir -p /etc/docker
+          test ! -f /etc/docker/daemon.json && echo '{}' | sudo tee /etc/docker/daemon.json
+
+          tmp="$(mktemp)"
+          jq '.features["containerd-snapshotter"] = true' /etc/docker/daemon.json | tee "${tmp}"
+          sudo cp "${tmp}" /etc/docker/daemon.json
+          rm "${tmp}"
+
+          sudo systemctl restart docker
+      - name: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Setup jaeger
         run: |
           set -e
@@ -104,7 +120,9 @@ jobs:
           echo "OTEL_SERVICE_NAME=dalec-integration-test" >> "${GITHUB_ENV}"
 
           tmp="$(mktemp)"
-          echo "Environment=\"OTEL_EXPORTER_OTLP_ENDPOINT=http://${docker0_ip}:4318\"" > "${tmp}"
+          echo "[Service]" > "${tmp}"
+          echo "Environment=\"OTEL_EXPORTER_OTLP_ENDPOINT=http://${docker0_ip}:4318\"" >> "${tmp}"
+
           sudo mkdir -p /etc/systemd/system/docker.service.d
           sudo mkdir -p /etc/systemd/system/containerd.service.d
           sudo cp "${tmp}" /etc/systemd/system/docker.service.d/otlp.conf
@@ -113,17 +131,6 @@ jobs:
           sudo systemctl daemon-reload
           sudo systemctl restart containerd
           sudo systemctl restart docker
-
-      # Tests currently require buildkit v0.12.0 or higher
-      # The version of buildkit builtin to moby currently (v24) is too old
-      # So we need to setup a custom builder.
-      - name: Set up builder
-        uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.7.1
-        with:
-          driver-opts: |
-            network=host
-            env.OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
-            env.OTEL_SERVICE_NAME=buildkitd
 
       - name: download deps
         run: go mod download
@@ -150,7 +157,7 @@ jobs:
           mkdir -p /tmp/reports
           curl -sSLf localhost:16686/api/traces?service=${OTEL_SERVICE_NAME} > /tmp/reports/jaeger-tests.json
           curl -sSLf localhost:16686/api/traces?service=containerd > /tmp/reports/jaeger-containerd.json
-          curl -sSLf localhost:16686/api/traces?service=buildkitd > /tmp/reports/jaeger-buildkitd.json
+          curl -sSLf localhost:16686/api/traces?service=docker > /tmp/reports/jaeger-docker.json
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
