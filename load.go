@@ -58,7 +58,7 @@ func (m envGetterMap) Keys() []string {
 	return maps.Keys(m)
 }
 
-func expandArgs(lex *shell.Lex, s string, args map[string]string) (string, error) {
+func expandArgs(lex *shell.Lex, s string, args map[string]string, allowArg func(key string) bool) (string, error) {
 	result, err := lex.ProcessWordWithMatches(s, envGetterMap(args))
 	if err != nil {
 		return "", err
@@ -66,7 +66,7 @@ func expandArgs(lex *shell.Lex, s string, args map[string]string) (string, error
 
 	var errs []error
 	for m := range result.Unmatched {
-		if !knownArg(m) {
+		if !knownArg(m) && !allowArg(m) {
 			errs = append(errs, fmt.Errorf(`build arg "%s" not declared`, m))
 			continue
 		}
@@ -79,7 +79,7 @@ func expandArgs(lex *shell.Lex, s string, args map[string]string) (string, error
 	return result.Result, goerrors.Join(errs...)
 }
 
-func (s *Source) substituteBuildArgs(args map[string]string) error {
+func (s *Source) substituteBuildArgs(args map[string]string, allowArg func(key string) bool) error {
 	lex := shell.NewLex('\\')
 	// force the shell lexer to skip unresolved env vars so they aren't
 	// replaced with ""
@@ -92,7 +92,7 @@ func (s *Source) substituteBuildArgs(args map[string]string) error {
 
 	switch {
 	case s.DockerImage != nil:
-		updated, err := expandArgs(lex, s.DockerImage.Ref, args)
+		updated, err := expandArgs(lex, s.DockerImage.Ref, args, allowArg)
 		if err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on docker image ref: %w", err))
 		}
@@ -100,50 +100,50 @@ func (s *Source) substituteBuildArgs(args map[string]string) error {
 
 		if s.DockerImage.Cmd != nil {
 			for _, mnt := range s.DockerImage.Cmd.Mounts {
-				err := mnt.Spec.substituteBuildArgs(args)
+				err := mnt.Spec.substituteBuildArgs(args, allowArg)
 				if err != nil {
 					appendErr(fmt.Errorf("error performing shell expansion on docker image mount: %w", err))
 				}
 			}
 		}
 	case s.Git != nil:
-		updated, err := expandArgs(lex, s.Git.URL, args)
+		updated, err := expandArgs(lex, s.Git.URL, args, allowArg)
 		s.Git.URL = updated
 		if err != nil {
 			appendErr(err)
 		}
 
-		updated, err = expandArgs(lex, s.Git.Commit, args)
+		updated, err = expandArgs(lex, s.Git.Commit, args, allowArg)
 		s.Git.Commit = updated
 		if err != nil {
 			appendErr(err)
 		}
 
 	case s.HTTP != nil:
-		updated, err := expandArgs(lex, s.HTTP.URL, args)
+		updated, err := expandArgs(lex, s.HTTP.URL, args, allowArg)
 		if err != nil {
 			appendErr(err)
 		}
 		s.HTTP.URL = updated
 	case s.Context != nil:
-		updated, err := expandArgs(lex, s.Context.Name, args)
+		updated, err := expandArgs(lex, s.Context.Name, args, allowArg)
 		s.Context.Name = updated
 		if err != nil {
 			appendErr(err)
 		}
 	case s.Build != nil:
-		err := s.Build.Source.substituteBuildArgs(args)
+		err := s.Build.Source.substituteBuildArgs(args, allowArg)
 		if err != nil {
 			appendErr(err)
 		}
 
-		updated, err := expandArgs(lex, s.Build.DockerfilePath, args)
+		updated, err := expandArgs(lex, s.Build.DockerfilePath, args, allowArg)
 		if err != nil {
 			appendErr(err)
 		}
 		s.Build.DockerfilePath = updated
 
-		updated, err = expandArgs(lex, s.Build.Target, args)
+		updated, err = expandArgs(lex, s.Build.Target, args, allowArg)
 		if err != nil {
 			appendErr(err)
 		}
@@ -255,7 +255,25 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 
 var errUnknownArg = errors.New("unknown arg")
 
-func (s *Spec) SubstituteArgs(env map[string]string) error {
+type SubstituteConfig struct {
+	AllowArg func(string) bool
+}
+
+type SubstituteOpt func(*SubstituteConfig)
+
+func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) error {
+	var cfg SubstituteConfig
+
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	if cfg.AllowArg == nil {
+		cfg.AllowArg = func(string) bool {
+			return false
+		}
+	}
+
 	lex := shell.NewLex('\\')
 	// force the shell lexer to skip unresolved env vars so they aren't
 	// replaced with ""
@@ -272,7 +290,7 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	}
 	for k, v := range env {
 		if _, ok := args[k]; !ok {
-			if !knownArg(k) {
+			if !knownArg(k) && !cfg.AllowArg(k) {
 				appendErr(fmt.Errorf("%w: %q", errUnknownArg, k))
 			}
 
@@ -285,31 +303,31 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	}
 
 	for name, src := range s.Sources {
-		if err := src.substituteBuildArgs(args); err != nil {
+		if err := src.substituteBuildArgs(args, cfg.AllowArg); err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on source %q: %w", name, err))
 		}
 		if src.DockerImage != nil {
-			if err := src.DockerImage.Cmd.processBuildArgs(lex, args, name); err != nil {
+			if err := src.DockerImage.Cmd.processBuildArgs(lex, args, name, cfg.AllowArg); err != nil {
 				appendErr(fmt.Errorf("error performing shell expansion on source %q: %w", name, err))
 			}
 		}
 		s.Sources[name] = src
 	}
 
-	updated, err := expandArgs(lex, s.Version, args)
+	updated, err := expandArgs(lex, s.Version, args, cfg.AllowArg)
 	if err != nil {
 		appendErr(fmt.Errorf("error performing shell expansion on version: %w", err))
 	}
 	s.Version = updated
 
-	updated, err = expandArgs(lex, s.Revision, args)
+	updated, err = expandArgs(lex, s.Revision, args, cfg.AllowArg)
 	if err != nil {
 		appendErr(fmt.Errorf("error performing shell expansion on revision: %w", err))
 	}
 	s.Revision = updated
 
 	for k, v := range s.Build.Env {
-		updated, err := expandArgs(lex, v, args)
+		updated, err := expandArgs(lex, v, args, cfg.AllowArg)
 		if err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on env var %q: %w", k, err))
 		}
@@ -317,7 +335,7 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 	}
 
 	if s.Build.NetworkMode != "" {
-		updated, err := expandArgs(lex, s.Build.NetworkMode, args)
+		updated, err := expandArgs(lex, s.Build.NetworkMode, args, cfg.AllowArg)
 		if err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on build network mode: %s: %w", s.Build.NetworkMode, err))
 		}
@@ -326,26 +344,26 @@ func (s *Spec) SubstituteArgs(env map[string]string) error {
 
 	for i, step := range s.Build.Steps {
 		bs := &step
-		if err := bs.processBuildArgs(lex, args, i); err != nil {
+		if err := bs.processBuildArgs(lex, args, i, cfg.AllowArg); err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on build step %d: %w", i, err))
 		}
 		s.Build.Steps[i] = *bs
 	}
 
 	for _, t := range s.Tests {
-		if err := t.processBuildArgs(lex, args, t.Name); err != nil {
+		if err := t.processBuildArgs(lex, args, t.Name, cfg.AllowArg); err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on test %q: %w", t.Name, err))
 		}
 	}
 
 	for name, t := range s.Targets {
-		if err := t.processBuildArgs(name, lex, args); err != nil {
+		if err := t.processBuildArgs(name, lex, args, cfg.AllowArg); err != nil {
 			appendErr(fmt.Errorf("error processing build args for target %q: %w", name, err))
 		}
 	}
 
 	if s.PackageConfig != nil {
-		if err := s.PackageConfig.processBuildArgs(lex, args); err != nil {
+		if err := s.PackageConfig.processBuildArgs(lex, args, cfg.AllowArg); err != nil {
 			appendErr(fmt.Errorf("could not process build args for base spec package config: %w", err))
 		}
 	}
@@ -389,10 +407,10 @@ func stripXFields(dt []byte) ([]byte, error) {
 	return yaml.Marshal(obj)
 }
 
-func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int) error {
+func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i int, allowArg func(string) bool) error {
 	var errs []error
 	for k, v := range s.Env {
-		updated, err := expandArgs(lex, v, args)
+		updated, err := expandArgs(lex, v, args, allowArg)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error performing shell expansion on env var %q for step %d: %w", k, i, err))
 		}
@@ -401,7 +419,7 @@ func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, i i
 	return goerrors.Join(errs...)
 }
 
-func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
+func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name string, allowArg func(string) bool) error {
 	if c == nil {
 		return nil
 	}
@@ -412,12 +430,12 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 	}
 
 	for _, s := range c.Mounts {
-		if err := s.Spec.substituteBuildArgs(args); err != nil {
+		if err := s.Spec.substituteBuildArgs(args, allowArg); err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err))
 		}
 	}
 	for k, v := range c.Env {
-		updated, err := expandArgs(lex, v, args)
+		updated, err := expandArgs(lex, v, args, allowArg)
 		if err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err))
 		}
@@ -425,7 +443,7 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, name 
 	}
 	for i, step := range c.Steps {
 		for k, v := range step.Env {
-			updated, err := expandArgs(lex, v, args)
+			updated, err := expandArgs(lex, v, args, allowArg)
 			if err != nil {
 				appendErr(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err))
 			}
@@ -560,34 +578,34 @@ func validatePatch(patch PatchSpec, patchSrc Source) error {
 	return nil
 }
 
-func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) error {
+func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	for i, contains := range c.Contains {
-		updated, err := expandArgs(lex, contains, args)
+		updated, err := expandArgs(lex, contains, args, allowArg)
 		if err != nil {
 			return errors.Wrap(err, "error performing shell expansion on contains")
 		}
 		c.Contains[i] = updated
 	}
 
-	updated, err := expandArgs(lex, c.EndsWith, args)
+	updated, err := expandArgs(lex, c.EndsWith, args, allowArg)
 	if err != nil {
 		return errors.Wrap(err, "error performing shell expansion on endsWith")
 	}
 	c.EndsWith = updated
 
-	updated, err = expandArgs(lex, c.Matches, args)
+	updated, err = expandArgs(lex, c.Matches, args, allowArg)
 	if err != nil {
 		return errors.Wrap(err, "error performing shell expansion on matches")
 	}
 	c.Matches = updated
 
-	updated, err = expandArgs(lex, c.Equals, args)
+	updated, err = expandArgs(lex, c.Equals, args, allowArg)
 	if err != nil {
 		return errors.Wrap(err, "error performing shell expansion on equals")
 	}
 	c.Equals = updated
 
-	updated, err = expandArgs(lex, c.StartsWith, args)
+	updated, err = expandArgs(lex, c.StartsWith, args, allowArg)
 	if err != nil {
 		return errors.Wrap(err, "error performing shell expansion on startsWith")
 	}
@@ -595,21 +613,21 @@ func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) e
 	return nil
 }
 
-func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name string) error {
+func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name string, allowArg func(string) bool) error {
 	var errs []error
 	appendErr := func(err error) {
 		errs = append(errs, err)
 	}
 
 	for _, s := range c.Mounts {
-		err := s.Spec.substituteBuildArgs(args)
+		err := s.Spec.substituteBuildArgs(args, allowArg)
 		if err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on source ref %q: %w", name, err))
 		}
 	}
 
 	for k, v := range c.Env {
-		updated, err := expandArgs(lex, v, args)
+		updated, err := expandArgs(lex, v, args, allowArg)
 		if err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err))
 		}
@@ -618,7 +636,7 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 
 	for i, step := range c.Steps {
 		for k, v := range step.Env {
-			updated, err := expandArgs(lex, v, args)
+			updated, err := expandArgs(lex, v, args, allowArg)
 			if err != nil {
 				appendErr(fmt.Errorf("error performing shell expansion on env var %q for source %q: %w", k, name, err))
 			}
@@ -629,13 +647,13 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 
 	for i, step := range c.Steps {
 		stdout := step.Stdout
-		if err := stdout.processBuildArgs(lex, args); err != nil {
+		if err := stdout.processBuildArgs(lex, args, allowArg); err != nil {
 			appendErr(err)
 		}
 		step.Stdout = stdout
 
 		stderr := step.Stderr
-		if err := stderr.processBuildArgs(lex, args); err != nil {
+		if err := stderr.processBuildArgs(lex, args, allowArg); err != nil {
 			appendErr(err)
 		}
 
@@ -644,7 +662,7 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 	}
 
 	for name, f := range c.Files {
-		if err := f.processBuildArgs(lex, args); err != nil {
+		if err := f.processBuildArgs(lex, args, allowArg); err != nil {
 			appendErr(fmt.Errorf("error performing shell expansion to check output of file %s: %w", name, err))
 		}
 		c.Files[name] = f
@@ -653,9 +671,9 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, name
 	return goerrors.Join(errs...)
 }
 
-func (c *FileCheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string) error {
+func (c *FileCheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	check := c.CheckOutput
-	if err := check.processBuildArgs(lex, args); err != nil {
+	if err := check.processBuildArgs(lex, args, allowArg); err != nil {
 		return err
 	}
 	c.CheckOutput = check
@@ -671,9 +689,9 @@ func (g *SourceGenerator) Validate() error {
 	return nil
 }
 
-func (s *PackageSigner) processBuildArgs(lex *shell.Lex, args map[string]string) error {
+func (s *PackageSigner) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	for k, v := range s.Args {
-		updated, err := expandArgs(lex, v, args)
+		updated, err := expandArgs(lex, v, args, allowArg)
 		if err != nil {
 			return fmt.Errorf("error performing shell expansion on env var %q: %w", k, err)
 		}
@@ -682,15 +700,15 @@ func (s *PackageSigner) processBuildArgs(lex *shell.Lex, args map[string]string)
 	return nil
 }
 
-func (t *Target) processBuildArgs(name string, lex *shell.Lex, args map[string]string) error {
+func (t *Target) processBuildArgs(name string, lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	for _, tt := range t.Tests {
-		if err := tt.processBuildArgs(lex, args, path.Join(name, tt.Name)); err != nil {
+		if err := tt.processBuildArgs(lex, args, path.Join(name, tt.Name), allowArg); err != nil {
 			return err
 		}
 	}
 
 	if t.PackageConfig != nil {
-		if err := t.PackageConfig.processBuildArgs(lex, args); err != nil {
+		if err := t.PackageConfig.processBuildArgs(lex, args, allowArg); err != nil {
 			return fmt.Errorf("error processing package config build args: %w", err)
 		}
 	}
@@ -698,9 +716,9 @@ func (t *Target) processBuildArgs(name string, lex *shell.Lex, args map[string]s
 	return nil
 }
 
-func (cfg *PackageConfig) processBuildArgs(lex *shell.Lex, args map[string]string) error {
+func (cfg *PackageConfig) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	if cfg.Signer != nil {
-		if err := cfg.Signer.processBuildArgs(lex, args); err != nil {
+		if err := cfg.Signer.processBuildArgs(lex, args, allowArg); err != nil {
 			return fmt.Errorf("could not process build args for signer config: %w", err)
 		}
 	}
