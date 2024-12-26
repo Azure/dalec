@@ -1073,3 +1073,90 @@ func Test_validatePatch(t *testing.T) {
 		})
 	}
 }
+
+func TestImage_fillDefaults(t *testing.T) {
+	t.Run("image.base is migrated to image.bases", func(t *testing.T) {
+		dt := []byte(`
+image:
+  base: busybox:latest
+
+targets:
+  foo:
+    image:
+      base: busybox:latest
+`)
+
+		spec, err := LoadSpec(dt)
+		assert.NilError(t, err)
+
+		// image.base should be migrated to image.bases
+		assert.Check(t, cmp.Equal(spec.Image.Base, ""))
+		assert.Check(t, cmp.Equal(spec.Targets["foo"].Image.Base, ""))
+		assert.Check(t, cmp.Len(spec.Image.Bases, 1))
+		assert.Check(t, spec.Image.Bases[0].Rootfs.DockerImage != nil)
+		assert.Check(t, cmp.Equal(spec.Image.Bases[0].Rootfs.DockerImage.Ref, "busybox:latest"))
+		assert.Check(t, cmp.Len(spec.Targets["foo"].Image.Bases, 1))
+		assert.Check(t, spec.Targets["foo"].Image.Bases[0].Rootfs.DockerImage != nil)
+		assert.Check(t, cmp.Equal(spec.Targets["foo"].Image.Bases[0].Rootfs.DockerImage.Ref, "busybox:latest"))
+	})
+}
+
+func TestImage_validate(t *testing.T) {
+	type testCase struct {
+		Name      string
+		Image     ImageConfig
+		expectErr string
+	}
+
+	cases := []testCase{
+		{
+			Name:  "No base image",
+			Image: ImageConfig{},
+		},
+		{
+			Name: "image.base set",
+			Image: ImageConfig{
+				Base: "busybox:latest",
+			},
+		},
+		{
+			Name: "image.bases set with valid sources",
+			Image: ImageConfig{
+				Bases: []BaseImage{
+					{Rootfs: Source{DockerImage: &SourceDockerImage{Ref: "busybox:latest"}}},
+					{Rootfs: Source{DockerImage: &SourceDockerImage{Ref: "alpine:latest"}}},
+				},
+			},
+		},
+		{
+			Name:      "both image.bases and image.base set",
+			expectErr: "cannot specify both",
+			Image: ImageConfig{
+				Base: "busybox:latest",
+				Bases: []BaseImage{
+					{Rootfs: Source{DockerImage: &SourceDockerImage{Ref: "busybox:latest"}}},
+				},
+			},
+		},
+		{
+			Name:      "image.bases set to anything other than image source type",
+			expectErr: "rootfs currently only supports image source types",
+			Image: ImageConfig{
+				Bases: []BaseImage{
+					{Rootfs: Source{Context: &SourceContext{}}},
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			err := tc.Image.validate()
+			if tc.expectErr != "" {
+				assert.ErrorContains(t, err, tc.expectErr)
+				return
+			}
+			assert.NilError(t, err)
+		})
+	}
+}

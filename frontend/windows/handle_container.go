@@ -10,7 +10,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/client/llb/sourceresolver"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -65,9 +64,21 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, fmt.Errorf("unable to build binary %w", err)
 		}
 
-		baseImgName := getBaseOutputImage(spec, targetKey, defaultBaseImage)
-		baseImage := llb.Image(baseImgName, llb.Platform(targetPlatform))
+		bi, err := spec.GetSingleBase(targetKey)
+		if err != nil {
+			return nil, nil, err
+		}
 
+		if bi == nil {
+			bi = &dalec.BaseImage{Rootfs: dalec.Source{
+				DockerImage: &dalec.SourceDockerImage{Ref: defaultBaseImage},
+			}}
+		}
+
+		baseImage, err := bi.ToState(sOpt, pg, llb.Platform(targetPlatform))
+		if err != nil {
+			return nil, nil, err
+		}
 		out := baseImage.
 			File(llb.Copy(bin, "/", windowsSystemDir)).
 			With(copySymlinks(spec.GetImagePost(targetKey)))
@@ -84,14 +95,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		imgRef := dalec.GetBaseOutputImage(spec, targetKey)
-		if imgRef == "" {
-			imgRef = defaultBaseImage
-		}
-
-		_, _, dt, err := client.ResolveImageConfig(ctx, imgRef, sourceresolver.Opt{
-			Platform: &targetPlatform,
-		})
+		dt, err := bi.ResolveImageConfig(ctx, sOpt, &targetPlatform)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not resolve base image config")
 		}
@@ -146,12 +150,4 @@ func getTargetPlatform(bc *dockerui.Client) (ocispecs.Platform, error) {
 	}
 
 	return platform, nil
-}
-
-func getBaseOutputImage(spec *dalec.Spec, target, defaultBase string) string {
-	baseRef := defaultBase
-	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
-		baseRef = spec.Targets[target].Image.Base
-	}
-	return baseRef
 }
