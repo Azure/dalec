@@ -1,8 +1,14 @@
 package dalec
 
 import (
+	"context"
+	goerrors "errors"
+
 	"github.com/google/shlex"
+	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -34,7 +40,24 @@ type ImageConfig struct {
 	StopSignal string `yaml:"stop_signal,omitempty" json:"stop_signal,omitempty" jsonschema:"example=SIGTERM"`
 	// Base is the base image to use for the output image.
 	// This only affects the output image, not the intermediate build image.
+
+	// Deprecated: Use [Bases] instead.
 	Base string `yaml:"base,omitempty" json:"base,omitempty"`
+
+	// Bases is used to specify a list of base images to build images for.  The
+	// intent of allowing multiple bases is for cases, such as Windows, where you
+	// may want to publish multiple versions of a base image in one image.
+	//
+	// Windows is the example here because of the way Windows works, the image
+	// that the base is based off of must match the OS version of the host machine.
+	// Therefore it is common to have multiple Windows images in one with a
+	// different value for the os version field of the platform.
+	//
+	// For the most part implementations are not expected to support multiple base
+	// images and may error out if multiple are specified.
+	//
+	// This should not be set if [Base] is also set.
+	Bases []BaseImage `yaml:"bases,omitempty json:bases,omitempty"`
 
 	// Post is the post install configuration for the image.
 	// This allows making additional modifications to the container rootfs after the package(s) are installed.
@@ -45,6 +68,11 @@ type ImageConfig struct {
 
 	// User is the that the image should run as.
 	User string `yaml:"user,omitempty" json:"user,omitempty"`
+}
+
+type BaseImage struct {
+	// Rootfs represents an image rootfs.
+	Rootfs Source `yaml:"rootfs" json:"rootfs"`
 }
 
 // MergeImageConfig copies the fields from the source [ImageConfig] into the destination [image.Image].
@@ -116,4 +144,110 @@ func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
 	}
 
 	return nil
+}
+
+func (s *ImageConfig) validate() error {
+	if s == nil {
+		return nil
+	}
+
+	var errs []error
+
+	if s.Base != "" && len(s.Bases) > 0 {
+		errs = append(errs, errors.New("cannot specify both image.base and image.bases"))
+	}
+
+	for i, base := range s.Bases {
+		if err := base.validate(); err != nil {
+			errs = append(errs, errors.Wrapf(err, "bases[%d]", i))
+		}
+	}
+	return goerrors.Join(errs...)
+}
+
+func (s *ImageConfig) fillDefaults() {
+	if s == nil {
+		return
+	}
+
+	// s.Bases is a superset of s.Base, so migrate s.Base to s.Bases
+	if s.Base != "" {
+		s.Bases = append(s.Bases, BaseImage{
+			Rootfs: Source{
+				DockerImage: &SourceDockerImage{
+					Ref: s.Base,
+				},
+			},
+		})
+
+		s.Base = ""
+	}
+
+	for _, bi := range s.Bases {
+		bi.fillDefaults()
+	}
+}
+
+func (s *BaseImage) validate() error {
+	if s.Rootfs.DockerImage == nil {
+		// In the future we may support other source types but this adds a lot of complexity
+		// that is currently unecessary.
+		return errors.New("rootfs currently only supports image source types")
+	}
+	if err := s.Rootfs.validate(); err != nil {
+		return errors.Wrap(err, "rootfs")
+	}
+	return nil
+}
+
+func (s *BaseImage) fillDefaults() {
+	fillDefaults(&s.Rootfs)
+}
+
+func (bi *BaseImage) ResolveImageConfig(ctx context.Context, sOpt SourceOpts, platform *ocispecs.Platform) ([]byte, error) {
+	// In the future, *BaseImage may support other source types, but for now it only supports Docker images.
+	//
+	// Likewise we may support passing in a config separate from the requested image rootfs,
+	// e.g. through a new field in *BaseImage, but for now we only support resolving the image config from the provided image reference.
+	_, _, dt, err := sOpt.Resolver.ResolveImageConfig(ctx, bi.Rootfs.DockerImage.Ref, sourceresolver.Opt{
+		Platform: platform,
+	})
+	return dt, err
+}
+
+func (bi *BaseImage) ToState(sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	if bi == nil {
+		return llb.Scratch(), nil
+	}
+	return bi.Rootfs.AsState("rootfs", sOpt, opts...)
+}
+
+func (s *Spec) GetImageBases(targetKey string) []BaseImage {
+	if t, ok := s.Targets[targetKey]; ok && t.Image != nil {
+		// note: this is intentionally only doing a nil check and *not* a length check
+		// so that an empty list of bases can be used to override the default bases
+		if t.Image.Bases != nil {
+			return t.Image.Bases
+		}
+	}
+
+	if s.Image == nil {
+		return nil
+	}
+	return s.Image.Bases
+}
+
+// GetSingleBase looks up the base images to use for the targetKey and returns
+// only the first entry.
+// If there is more than 1 entry an error is returned.
+// If there are no entries then both return values are nil.
+func (s *Spec) GetSingleBase(targetKey string) (*BaseImage, error) {
+	bases := s.GetImageBases(targetKey)
+	if len(bases) > 1 {
+		return nil, errors.New("multiple image bases, expected only one")
+	}
+	if len(bases) == 0 {
+		return nil, nil
+	}
+	return &bases[0], nil
 }
