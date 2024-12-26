@@ -36,6 +36,10 @@ func (t *Target) validate() error {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
 	}
 
+	if err := t.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "image"))
+	}
+
 	for _, test := range t.Tests {
 		if err := test.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "test %s", test.Name))
@@ -68,4 +72,5 @@ func (t *Target) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 
 func (t *Target) fillDefaults() {
 	t.Dependencies.fillDefaults()
+	t.Image.fillDefaults()
 }

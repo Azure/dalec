@@ -56,7 +56,7 @@ func handleRPM(w worker) gwclient.BuildFunc {
 			if imgRef, err := runTests(ctx, client, w, spec, sOpt, st, targetKey, pg); err != nil {
 				// return the container ref in case of error so it can be used to debug
 				// the installed package state.
-				cfg, _ := resolveBaseConfig(ctx, w, client, platform, spec, targetKey)
+				cfg, _ := resolveBaseConfig(ctx, w, sOpt, platform, spec, targetKey)
 				return imgRef, cfg, err
 			}
 
@@ -94,7 +94,7 @@ func runTests(ctx context.Context, client gwclient.Client, w worker, spec *dalec
 	}
 
 	err = frontend.RunTests(ctx, client, spec, ref, withDeps, targetKey)
-	return ref, errors.Wrap(err, "TESTS FAILED")
+	return ref, err
 }
 
 var azlinuxRepoPlatform = dalec.RepoPlatformConfig{

@@ -160,6 +160,19 @@
 			"type": "object",
 			"description": "Artifacts describes all the artifacts to include in the package."
 		},
+		"BaseImage": {
+			"properties": {
+				"rootfs": {
+					"$ref": "#/$defs/Source",
+					"description": "Rootfs represents an image rootfs."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"rootfs"
+			]
+		},
 		"BuildStep": {
 			"properties": {
 				"command": {
@@ -487,7 +500,14 @@
 				},
 				"base": {
 					"type": "string",
-					"description": "Base is the base image to use for the output image.\nThis only affects the output image, not the intermediate build image."
+					"description": "Deprecated: Use [Bases] instead."
+				},
+				"Bases": {
+					"items": {
+						"$ref": "#/$defs/BaseImage"
+					},
+					"type": "array",
+					"description": "Bases is used to specify a list of base images to build images for.  The\nintent of allowing multiple bases is for cases, such as Windows, where you\nmay want to publish multiple versions of a base image in one image.\n\nWindows is the example here because of the way Windows works, the image\nthat the base is based off of must match the OS version of the host machine.\nTherefore it is common to have multiple Windows images in one with a\ndifferent value for the os version field of the platform.\n\nFor the most part implementations are not expected to support multiple base\nimages and may error out if multiple are specified.\n\nThis should not be set if [Base] is also set."
 				},
 				"post": {
 					"$ref": "#/$defs/PostInstall",
@@ -500,6 +520,9 @@
 			},
 			"additionalProperties": false,
 			"type": "object",
+			"required": [
+				"Bases"
+			],
 			"description": "ImageConfig is the configuration for the output image."
 		},
 		"PackageConfig": {

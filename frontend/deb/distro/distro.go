@@ -7,7 +7,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -39,8 +38,8 @@ type Config struct {
 	ExtraRepos []dalec.PackageRepositoryConfig
 }
 
-func (cfg *Config) BuildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
-	img, err := resolveConfig(ctx, resolver, spec, platform, targetKey)
+func (cfg *Config) BuildImageConfig(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
+	img, err := resolveConfig(ctx, sOpt, spec, platform, targetKey)
 	if err != nil {
 		return nil, err
 	}
@@ -52,17 +51,19 @@ func (cfg *Config) BuildImageConfig(ctx context.Context, resolver llb.ImageMetaR
 	return img, nil
 }
 
-func resolveConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
-	ref := dalec.GetBaseOutputImage(spec, targetKey)
-	if ref == "" {
+func resolveConfig(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
+	bi, err := spec.GetSingleBase(targetKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if bi == nil {
 		return dalec.BaseImageConfig(platform), nil
 	}
 
-	_, _, dt, err := resolver.ResolveImageConfig(ctx, ref, sourceresolver.Opt{
-		Platform: platform,
-	})
+	dt, err := bi.ResolveImageConfig(ctx, sOpt, platform)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error resolving base image config")
 	}
 
 	var img dalec.DockerImageSpec
