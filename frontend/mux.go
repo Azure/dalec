@@ -76,7 +76,7 @@ type handler struct {
 }
 
 // Add adds a handler for the given target
-// [targetKey] is the resource path to be handled
+// [targetPath] is the resource path to be handled
 func (m *BuildMux) Add(targetPath string, bf gwclient.BuildFunc, info *bktargets.Target) {
 	if m.handlers == nil {
 		m.handlers = make(map[string]handler)
