@@ -60,9 +60,26 @@ jobs:
             exit 1
           fi
 
-
   integration:
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - Mariner2
+          - Azlinux3
+          - Bookworm
+          - Bullseye
+          - Bionic
+          - Focal
+          - Jammy
+          - Noble
+          - Windows
+          - other
+        include:
+          - suite: other
+            skip: Mariner2|Azlinux3|Bookworm|Bullseye|Bionic|Focal|Jammy|Noble|Windows
+
     # TODO: support diff/merge
     # Right now this is handled by the e2e suite, but we can migrate that here.
     steps:
@@ -71,27 +88,83 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
         with:
           go-version: '1.22'
           cache: false
 
-      - name: Expose GitHub tokens for caching
-        uses: crazy-max/ghaction-github-runtime@b3a9207c0e1ef41f4cf215303c976869d0c2c1c4 # v3.0.0
-      # Tests currently require buildkit v0.12.0 or higher
-      # The version of buildkit builtin to moby currently (v24) is too old
-      # So we need to setup a custom builder.
-      - name: Set up builder
-        uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.8.0
+      - name: Configure dockerd
+        run: |
+          set -ex -o pipefail
+
+          docker ps -a
+          docker images
+
+          sudo mkdir -p /etc/docker
+          test ! -f /etc/docker/daemon.json && echo '{}' | sudo tee /etc/docker/daemon.json
+
+          tmp="$(mktemp)"
+          jq '.features["containerd-snapshotter"] = true' /etc/docker/daemon.json | tee "${tmp}"
+          sudo cp "${tmp}" /etc/docker/daemon.json
+          rm "${tmp}"
+
+          sudo systemctl restart docker
+      - name: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup jaeger
+        run: |
+          set -e
+          docker run -d --net=host --restart=always --name jaeger -e COLLECTOR_OTLP_ENABLED=true jaegertracing/all-in-one:1.62.0
+          docker0_ip="$(ip -f inet addr show docker0 | grep -Po 'inet \K[\d.]+')"
+          echo "OTEL_EXPORTER_OTLP_ENDPOINT=http://${docker0_ip}:4318" >> "${GITHUB_ENV}"
+          echo "OTEL_SERVICE_NAME=dalec-integration-test" >> "${GITHUB_ENV}"
+
+          tmp="$(mktemp)"
+          echo "[Service]" > "${tmp}"
+          echo "Environment=\"OTEL_EXPORTER_OTLP_ENDPOINT=http://${docker0_ip}:4318\"" >> "${tmp}"
+
+          sudo mkdir -p /etc/systemd/system/docker.service.d
+          sudo mkdir -p /etc/systemd/system/containerd.service.d
+          sudo cp "${tmp}" /etc/systemd/system/docker.service.d/otlp.conf
+          sudo cp "${tmp}" /etc/systemd/system/containerd.service.d/otlp.conf
+
+          sudo systemctl daemon-reload
+          sudo systemctl restart containerd
+          sudo systemctl restart docker
+
       - name: download deps
         run: go mod download
       - name: Run integration tests
-        run: go test -v -json ./test | go run ./cmd/test2json2gha
+        run: |
+          set -ex
+          if [ -n "${TEST_SUITE}" ] && [ ! "${TEST_SUITE}" = "other" ]; then
+            run="-run=${TEST_SUITE}"
+          fi
+          if [ -n "${TEST_SKIP}" ]; then
+            skip="-skip=${TEST_SKIP}"
+          fi
+          go test -timeout=30m -v -json ${run} ${skip} ./test | go run ./cmd/test2json2gha --slow 120s
+        env:
+          TEST_SUITE: ${{ matrix.suite }}
+          TEST_SKIP: ${{ matrix.skip }}
       - name: dump logs
         if: failure()
         run: sudo journalctl -u docker
+      - name: Get traces
+        if: always()
+        run: |
+          set -ex
+          mkdir -p /tmp/reports
+          curl -sSLf localhost:16686/api/traces?service=${OTEL_SERVICE_NAME} > /tmp/reports/jaeger-tests.json
+          curl -sSLf localhost:16686/api/traces?service=containerd > /tmp/reports/jaeger-containerd.json
+          curl -sSLf localhost:16686/api/traces?service=docker > /tmp/reports/jaeger-docker.json
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports-${{matrix.suite}}
+          path: /tmp/reports/*
+          retention-days: 1
 
 
   unit:
