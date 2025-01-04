@@ -82,6 +82,11 @@ func (cfg *Config) Handle(ctx context.Context, client gwclient.Client) (*gwclien
 		Description: "Builds an rpm and src.rpm.",
 	})
 
+	mux.Add("rpm/debug", cfg.HandleDebug(), &targets.Target{
+		Name:        "rpm/debug",
+		Description: "Debug options for rpm builds.",
+	})
+
 	mux.Add("container", cfg.HandleContainer, &targets.Target{
 		Name:        "container",
 		Description: "Builds a container image for " + cfg.FullName,

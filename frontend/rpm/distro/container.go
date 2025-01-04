@@ -3,6 +3,7 @@ package distro
 import (
 	"context"
 	"path/filepath"
+	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
@@ -103,5 +104,52 @@ func (cfg *Config) HandleContainer(ctx context.Context, client gwclient.Client) 
 }
 
 func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-	return nil, nil
+	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
+		pg := dalec.ProgressGroup("Build mariner2 deps-only container: " + spec.Name)
+
+		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		worker, err := cfg.Worker(sOpt, pg)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		rpmDir := worker.Run(
+			dalec.ShArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(spec.GetRuntimeDeps(targetKey), " ")),
+			pg,
+		).
+			AddMount("/tmp/rpms", llb.Scratch())
+
+		ctr, err := cfg.BuildContainer(worker, spec, targetKey, rpmDir, sOpt, pg)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		def, err := ctr.Marshal(ctx, pg)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		res, err := client.Solve(ctx, gwclient.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+
+		img, err := cfg.BuildImageConfig(ctx, sOpt.Resolver, spec, platform, targetKey)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ref, err := res.SingleRef()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return ref, img, nil
+	})
 }
