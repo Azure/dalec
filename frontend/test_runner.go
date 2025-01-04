@@ -79,9 +79,6 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 	}
 
 	ctrWithDeps := ctr.With(withTestDeps)
-	ctrWithDeps = ctrWithDeps.Run(
-		dalec.ShArgs("ls -lrt /etc"),
-	).Root()
 
 	runs := make([]testPair, 0, len(tests))
 	for _, test := range tests {
