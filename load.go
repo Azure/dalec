@@ -447,3 +447,16 @@ func (b *ArtifactBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 
 	return goerrors.Join(errs...)
 }
+
+func (i *ImageConfig) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
+	var errs error
+	for _, p := range []*string{&i.Base, &i.Cmd, &i.User, &i.Entrypoint, &i.StopSignal, &i.WorkingDir} {
+		updated, err := expandArgs(lex, *p, args, allowArg)
+		if err != nil {
+			errs = goerrors.Join(errs, errors.Wrap(err, "imgconfig"))
+		}
+		*p = updated
+	}
+
+	return errs
+}
