@@ -454,14 +454,55 @@ func (b *ArtifactBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 	return goerrors.Join(errs...)
 }
 
-func (i *ImageConfig) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
+func (img *ImageConfig) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	var errs error
-	for _, p := range []*string{&i.Base, &i.Cmd, &i.User, &i.Entrypoint, &i.StopSignal, &i.WorkingDir} {
+	for _, p := range []*string{&img.Base, &img.Cmd, &img.User, &img.Entrypoint, &img.StopSignal, &img.WorkingDir} {
 		updated, err := expandArgs(lex, *p, args, allowArg)
 		if err != nil {
 			errs = goerrors.Join(errs, errors.Wrap(err, "imgconfig"))
 		}
 		*p = updated
+	}
+
+	for i, s := range img.Env {
+		updated, err := expandArgs(lex, s, args, allowArg)
+		if err != nil {
+			errs = goerrors.Join(errs, errors.Wrapf(err, "env %s", s))
+			continue
+		}
+		img.Env[i] = updated
+	}
+
+	for k, v := range img.Labels {
+		updated, err := expandArgs(lex, v, args, allowArg)
+		if err != nil {
+			errs = goerrors.Join(errs, errors.Wrapf(err, "env %s=%s", k, v))
+			continue
+		}
+		img.Labels[k] = updated
+	}
+
+	if img.Post != nil {
+		for k, sl := range img.Post.Symlinks {
+			updatedK, err := expandArgs(lex, k, args, allowArg)
+			if err != nil {
+				errs = goerrors.Join(errs, errors.Wrapf(err, "symlink oldpath"))
+				continue
+			}
+
+			updatedV, err := expandArgs(lex, sl.Path, args, allowArg)
+			if err != nil {
+				errs = goerrors.Join(errs, errors.Wrapf(err, "symlink newpath"))
+				continue
+			}
+
+			sl.Path = updatedV
+			img.Post.Symlinks[updatedK] = sl
+			// remove the old key if a substitution happened
+			if updatedK != k {
+				delete(img.Post.Symlinks, k)
+			}
+		}
 	}
 
 	return errs
