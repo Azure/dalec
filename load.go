@@ -199,6 +199,10 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 		}
 	}
 
+	if err := s.Image.processBuildArgs(lex, args, cfg.AllowArg); err != nil {
+		appendErr(errors.Wrap(err, "package config"))
+	}
+
 	if err := s.Dependencies.processBuildArgs(args, cfg.AllowArg); err != nil {
 		appendErr(errors.Wrap(err, "dependencies"))
 	}
@@ -473,7 +477,7 @@ func validateSymlinks(symlinks map[string]SymlinkTarget) error {
 			errs = append(errs, err)
 		}
 
-		if (cfg.Path != "" && len(cfg.Paths) > 0) || (cfg.Path == "" && len(cfg.Paths) == 0 ) {
+		if (cfg.Path != "" && len(cfg.Paths) > 0) || (cfg.Path == "" && len(cfg.Paths) == 0) {
 			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required: "+
 				"symlink to %s", oldpath)
 
@@ -535,4 +539,23 @@ func validateSymlinks(symlinks map[string]SymlinkTarget) error {
 	}
 
 	return goerrors.Join(errs...)
+}
+
+func (img *ImageConfig) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
+	if img == nil {
+		return nil
+	}
+
+	var errs error
+
+	for k, v := range img.Labels {
+		updated, err := expandArgs(lex, v, args, allowArg)
+		if err != nil {
+			errs = goerrors.Join(errs, errors.Wrapf(err, "env %s=%s", k, v))
+			continue
+		}
+		img.Labels[k] = updated
+	}
+
+	return errs
 }
