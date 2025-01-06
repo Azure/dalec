@@ -199,6 +199,12 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 		}
 	}
 
+	if s.Image != nil {
+		if err := s.Image.processBuildArgs(lex, args, cfg.AllowArg); err != nil {
+			appendErr(errors.Wrap(err, "package config"))
+		}
+	}
+
 	if err := s.Dependencies.processBuildArgs(args, cfg.AllowArg); err != nil {
 		appendErr(errors.Wrap(err, "dependencies"))
 	}
