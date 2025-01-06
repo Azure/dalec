@@ -70,6 +70,10 @@ func (t *Target) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 		}
 	}
 
+	if err := t.Image.processBuildArgs(lex, args, allowArg); err != nil {
+		errs = append(errs, errors.Wrap(err, "package config"))
+	}
+
 	if err := t.Dependencies.processBuildArgs(args, allowArg); err != nil {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
 	}

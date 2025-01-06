@@ -590,6 +590,14 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 					Args: maps.Clone(pairs),
 				},
 			},
+			Image: &ImageConfig{
+				Labels: map[string]string{
+					"foo": "$FOO",
+				},
+				Volumes: map[string]struct{}{
+					"": {},
+				},
+			},
 		},
 	}
 
@@ -611,7 +619,7 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["BAR"], bar))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["REGULAR"], plainOleValue))
-
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Labels["foo"], foo))
 }
 
 func TestCustomRepoFillDefaults(t *testing.T) {
