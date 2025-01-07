@@ -8,7 +8,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/deb"
+	"github.com/Azure/dalec/frontend/linux/deb"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"

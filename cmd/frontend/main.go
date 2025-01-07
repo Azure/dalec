@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/azlinux"
-	"github.com/Azure/dalec/frontend/debian"
 	"github.com/Azure/dalec/frontend/debug"
-	"github.com/Azure/dalec/frontend/ubuntu"
+	"github.com/Azure/dalec/frontend/linux/deb/debian"
+	"github.com/Azure/dalec/frontend/linux/deb/ubuntu"
+	"github.com/Azure/dalec/frontend/linux/rpm/azlinux"
 	"github.com/Azure/dalec/frontend/windows"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/util/appcontext"

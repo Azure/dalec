@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/ubuntu"
+	"github.com/Azure/dalec/frontend/linux/deb/ubuntu"
 	"github.com/Azure/dalec/frontend/windows"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
