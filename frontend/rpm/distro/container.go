@@ -3,7 +3,6 @@ package distro
 import (
 	"context"
 	"path/filepath"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
@@ -105,7 +104,7 @@ func (cfg *Config) HandleContainer(ctx context.Context, client gwclient.Client) 
 
 func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		pg := dalec.ProgressGroup("Build mariner2 deps-only container: " + spec.Name)
+		pg := dalec.ProgressGroup("Build " + targetKey + " deps-only container for: " + spec.Name)
 
 		sOpt, err := frontend.SourceOptFromClient(ctx, client)
 		if err != nil {
@@ -117,11 +116,15 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 			return nil, nil, err
 		}
 
-		rpmDir := worker.Run(
-			dalec.ShArgs(`set -ex; dir="/tmp/rpms/RPMS/$(uname -m)"; mkdir -p "${dir}"; tdnf install -y --releasever=2.0 --downloadonly --alldeps --downloaddir "${dir}" `+strings.Join(spec.GetRuntimeDeps(targetKey), " ")),
-			pg,
-		).
-			AddMount("/tmp/rpms", llb.Scratch())
+		deps := spec.GetRuntimeDeps(targetKey)
+		var rpmDir = llb.Scratch()
+		if len(deps) > 0 {
+			withDownloads := worker.Run(dalec.ShArgs("set -ex; mkdir -p /tmp/rpms/RPMS/$(uname -m)")).
+				Run(cfg.Install(spec.GetRuntimeDeps(targetKey),
+					DnfDownloadAllDeps("/tmp/rpms/RPMS/$(uname -m)"))).Root()
+			rpmDir = llb.Scratch().File(llb.Copy(withDownloads, "/tmp/rpms", "/", dalec.WithDirContentsOnly()))
+
+		}
 
 		ctr, err := cfg.BuildContainer(worker, spec, targetKey, rpmDir, sOpt, pg)
 		if err != nil {

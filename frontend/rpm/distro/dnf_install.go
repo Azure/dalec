@@ -36,6 +36,12 @@ type dnfInstallConfig struct {
 	mounts []llb.RunOption
 
 	constraints []llb.ConstraintsOpt
+
+	downloadOnly bool
+
+	allDeps bool
+
+	downloadDir string
 }
 
 type DnfInstallOpt func(*dnfInstallConfig)
@@ -63,6 +69,14 @@ func DnfAtRoot(root string) DnfInstallOpt {
 	}
 }
 
+func DnfDownloadAllDeps(dest string) DnfInstallOpt {
+	return func(cfg *dnfInstallConfig) {
+		cfg.downloadOnly = true
+		cfg.allDeps = true
+		cfg.downloadDir = dest
+	}
+}
+
 func dnfInstallWithConstraints(opts []llb.ConstraintsOpt) DnfInstallOpt {
 	return func(cfg *dnfInstallConfig) {
 		cfg.constraints = opts
@@ -79,6 +93,18 @@ func dnfInstallFlags(cfg *dnfInstallConfig) string {
 	if cfg.root != "" {
 		cmdOpts += " --installroot=" + cfg.root
 		cmdOpts += " --setopt=reposdir=/etc/yum.repos.d"
+	}
+
+	if cfg.downloadOnly {
+		cmdOpts += " --downloadonly"
+	}
+
+	if cfg.allDeps {
+		cmdOpts += " --alldeps"
+	}
+
+	if cfg.downloadDir != "" {
+		cmdOpts += " --downloaddir " + cfg.downloadDir
 	}
 
 	return cmdOpts
@@ -98,7 +124,7 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 
 	var runOpts []llb.RunOption
 
-	// TODO: see if this can be removed for dnf
+	// TODO(adamperlin): see if this can be removed for dnf
 	// If we have keys to import in order to access a repo, we need to create a script to use `gpg` to import them
 	// This is an unfortunate consequence of a bug in tdnf (see https://github.com/vmware/tdnf/issues/471).
 	// The keys *should* be imported automatically by tdnf as long as the repo config references them correctly and
