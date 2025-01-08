@@ -98,6 +98,9 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 			}
 
 			img, err := BuildImageConfig(ctx, sOpt.Resolver, spec, platform, targetKey)
+			if err != nil {
+				return nil, nil, err
+			}
 
 			ctr, err := c.BuildContainer(client, worker, sOpt, spec, targetKey, deb)
 			if err != nil {
