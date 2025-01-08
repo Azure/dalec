@@ -43,16 +43,6 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, fmt.Errorf("error validating windows spec: %w", err)
 		}
 
-		bc, err := dockerui.NewClient(client)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		targetPlatform, err := getTargetPlatform(bc)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		pg := dalec.ProgressGroup("Build windows container: " + spec.Name)
 		worker, err := distroConfig.Worker(sOpt, pg)
 		if err != nil {
@@ -75,7 +65,10 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			}}
 		}
 
-		baseImage, err := bi.ToState(sOpt, pg, llb.Platform(targetPlatform))
+		if platform == nil {
+			platform = &defaultPlatform
+		}
+		baseImage, err := bi.ToState(sOpt, pg, llb.Platform(*platform))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -95,7 +88,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 			return nil, nil, err
 		}
 
-		dt, err := bi.ResolveImageConfig(ctx, sOpt, &targetPlatform)
+		dt, err := bi.ResolveImageConfig(ctx, sOpt, platform)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not resolve base image config")
 		}
