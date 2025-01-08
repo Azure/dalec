@@ -6,14 +6,13 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/Azure/dalec/frontend/linux"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/util/bklog"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-func (cfg *Config) BuildContainer(worker llb.State, spec *dalec.Spec, targetKey string, rpmDir llb.State, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func (cfg *Config) BuildContainer(_ gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, rpmDir llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
@@ -55,53 +54,6 @@ func (cfg *Config) BuildContainer(worker llb.State, spec *dalec.Spec, targetKey 
 	return rootfs, nil
 }
 
-func (cfg *Config) HandleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		pg := dalec.ProgressGroup(spec.Name)
-		worker, err := cfg.Worker(sOpt, pg)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		rpm, err := cfg.BuildRPM(worker, ctx, client, spec, sOpt, targetKey, pg)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		img, err := cfg.BuildImageConfig(ctx, client, spec, platform, targetKey)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ctr, err := cfg.BuildContainer(worker, spec, targetKey, rpm, sOpt, pg)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		fs, err := bkfs.FromState(ctx, &ctr, client)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		entries, err := fs.ReadDir(".")
-		if err != nil {
-			return nil, nil, err
-		}
-
-		for _, entry := range entries {
-			bklog.L.Warnf("entry: %s", entry.Name())
-		}
-
-		ref, err := cfg.runTests(ctx, worker, client, spec, sOpt, ctr, targetKey, pg)
-		return ref, img, err
-	})
-}
-
 func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		pg := dalec.ProgressGroup("Build " + targetKey + " deps-only container for: " + spec.Name)
@@ -126,7 +78,7 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 
 		}
 
-		ctr, err := cfg.BuildContainer(worker, spec, targetKey, rpmDir, sOpt, pg)
+		ctr, err := cfg.BuildContainer(client, worker, sOpt, spec, targetKey, rpmDir, pg)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -143,7 +95,7 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 			return nil, nil, err
 		}
 
-		img, err := cfg.BuildImageConfig(ctx, sOpt.Resolver, spec, platform, targetKey)
+		img, err := linux.BuildImageConfig(ctx, sOpt.Resolver, spec, platform, targetKey)
 		if err != nil {
 			return nil, nil, err
 		}

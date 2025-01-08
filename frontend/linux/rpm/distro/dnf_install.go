@@ -194,7 +194,7 @@ func (cfg *Config) installBuildDepsPackage(worker llb.State, target string, pack
 		pg := dalec.ProgressGroup("Building container for build dependencies")
 
 		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := cfg.BuildRPM(worker, ctx, client, &depsOnly, sOpt, target, pg)
+		rpmDir, err := cfg.BuildPkg(ctx, client, worker, sOpt, &depsOnly, target, pg)
 		if err != nil {
 			return nil, err
 		}

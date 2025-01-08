@@ -2,16 +2,13 @@ package distro
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/linux/rpm"
-	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -19,7 +16,15 @@ var (
 	defaultRepoConfig = &dnfRepoPlatform
 )
 
-func (c *Config) BuildRPM(worker llb.State, ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func (c *Config) Validate(spec *dalec.Spec) error {
+	if err := rpm.ValidateSpec(spec); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, targetKey, opts...))
 
 	br, err := rpm.SpecToBuildrootLLB(worker, spec, sOpt, targetKey, opts...)
@@ -35,69 +40,9 @@ func (c *Config) BuildRPM(worker llb.State, ctx context.Context, client gwclient
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt, opts...)
 }
 
-func (cfg *Config) HandleRPM(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		if err := rpm.ValidateSpec(spec); err != nil {
-			return nil, nil, fmt.Errorf("rpm: invalid spec: %w", err)
-		}
-
-		pg := dalec.ProgressGroup("Building " + targetKey + " rpm: " + spec.Name)
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		worker, err := cfg.Worker(sOpt, pg)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "error building worker container")
-		}
-
-		rpmSt, err := cfg.BuildRPM(worker, ctx, client, spec, sOpt, targetKey, pg)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		def, err := rpmSt.Marshal(ctx, pg)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
-		}
-
-		res, err := client.Solve(ctx, gwclient.SolveRequest{
-			Definition: def.ToPB(),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ref, err := res.SingleRef()
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := ref.Evaluate(ctx); err != nil {
-			return ref, nil, err
-		}
-
-		ctr, err := cfg.BuildContainer(worker, spec, targetKey, rpmSt, sOpt)
-		if err != nil {
-			return ref, nil, err
-		}
-
-		if ref, err := cfg.runTests(ctx, worker, client, spec, sOpt, ctr, targetKey, pg); err != nil {
-			cfg, _ := cfg.BuildImageConfig(ctx, client, spec, platform, targetKey)
-			return ref, cfg, err
-		}
-
-		if platform == nil {
-			p := platforms.DefaultSpec()
-			platform = &p
-		}
-		return ref, &dalec.DockerImageSpec{Image: ocispecs.Image{Platform: *platform}}, nil
-	})
-}
-
 // runTests runs the package tests
 // The returned reference is the solved container state
-func (cfg *Config) runTests(ctx context.Context, worker llb.State, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, ctr llb.State, targetKey string, opts ...llb.ConstraintsOpt) (gwclient.Reference, error) {
+func (cfg *Config) RunTests(ctx context.Context, client gwclient.Client, worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, ctr llb.State, targetKey string, opts ...llb.ConstraintsOpt) (gwclient.Reference, error) {
 	def, err := ctr.Marshal(ctx, opts...)
 	if err != nil {
 		return nil, err
