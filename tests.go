@@ -187,14 +187,6 @@ func (s *TestStep) processBuildArgs(lex *shell.Lex, args map[string]string, allo
 	}
 	s.Stderr = stderr
 
-	updated, err = expandArgs(lex, s.Command, args, allowArg)
-	if err != nil {
-		appendErr(errors.Wrap(err, "command"))
-	}
-	if updated != s.Command {
-		s.Command = updated
-	}
-
 	return goerrors.Join(errs...)
 }
 

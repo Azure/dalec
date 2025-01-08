@@ -2136,7 +2136,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 							Command: "/bin/sh -c 'test -d /mount1'",
 						},
 						{
-							Command: `/bin/sh -c 'grep "some file" /mont1/some_file'`,
+							Command: `/bin/sh -c 'grep "some file" /mount1/some_file'`,
 						},
 						{
 							Command: "/bin/sh -c 'test -f /mount2'",
