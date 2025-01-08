@@ -105,14 +105,18 @@ func fillPlatformArgs(prefix string, args map[string]string, platform ocispecs.P
 type PlatformBuildFunc func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error)
 
 // BuildWithPlatform is a helper function to build a spec with a given platform
-// It takes care of looping through each tarrget platform and executing the build with the platform args substituted in the spec.
+// It takes care of looping through each target platform and executing the build with the platform args substituted in the spec.
 // This also deals with the docker-style multi-platform output.
 func BuildWithPlatform(ctx context.Context, client gwclient.Client, f PlatformBuildFunc) (*gwclient.Result, error) {
 	dc, err := dockerui.NewClient(client)
 	if err != nil {
 		return nil, err
 	}
+	return BuildWithPlatformFromUIClient(ctx, client, dc, f)
+}
 
+// Like [BuildWithPlatform] but with a pre-initialized dockerui.Client
+func BuildWithPlatformFromUIClient(ctx context.Context, client gwclient.Client, dc *dockerui.Client, f PlatformBuildFunc) (*gwclient.Result, error) {
 	rb, err := dc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *dalec.DockerImageSpec, *dalec.DockerImageSpec, error) {
 		spec, err := LoadSpec(ctx, dc, platform)
 		if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -96,7 +97,9 @@ func resolveBaseConfig(ctx context.Context, w worker, sOpt dalec.SourceOpts, pla
 	}
 
 	if bi != nil {
-		dt, err := bi.ResolveImageConfig(ctx, sOpt, platform)
+		dt, err := bi.ResolveImageConfig(ctx, sOpt, sourceresolver.Opt{
+			Platform: platform,
+		})
 		if err != nil {
 			return nil, err
 		}

@@ -8,7 +8,6 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -204,14 +203,12 @@ func (s *BaseImage) fillDefaults() {
 	fillDefaults(&s.Rootfs)
 }
 
-func (bi *BaseImage) ResolveImageConfig(ctx context.Context, sOpt SourceOpts, platform *ocispecs.Platform) ([]byte, error) {
+func (bi *BaseImage) ResolveImageConfig(ctx context.Context, sOpt SourceOpts, opt sourceresolver.Opt) ([]byte, error) {
 	// In the future, *BaseImage may support other source types, but for now it only supports Docker images.
 	//
 	// Likewise we may support passing in a config separate from the requested image rootfs,
 	// e.g. through a new field in *BaseImage, but for now we only support resolving the image config from the provided image reference.
-	_, _, dt, err := sOpt.Resolver.ResolveImageConfig(ctx, bi.Rootfs.DockerImage.Ref, sourceresolver.Opt{
-		Platform: platform,
-	})
+	_, _, dt, err := sOpt.Resolver.ResolveImageConfig(ctx, bi.Rootfs.DockerImage.Ref, opt)
 	return dt, err
 }
 
