@@ -20,6 +20,9 @@ var Azlinux3Config = &distro.Config{
 	ImageRef:   Azlinux3Ref,
 	ContextRef: Azlinux3WorkerContextName,
 
+	CacheName: tdnfCacheNameAzlinux3,
+	CacheDir:  "/var/cache/tdnf",
+
 	ReleaseVer:         "3.0",
 	BuilderPackages:    builderPackages,
 	BasePackages:       []string{"distroless-packages-minimal", "prebuilt-ca-certificates"},

@@ -1,59 +1,13 @@
 package rpm
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
-
-func HandleSources(wf WorkerFunc) gwclient.BuildFunc {
-	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-		return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-			sOpt, err := frontend.SourceOptFromClient(ctx, client)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			worker, err := wf(sOpt.Resolver, spec, targetKey)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			sources, err := Dalec2SourcesLLB(worker, spec, sOpt)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// Now we can merge sources into the desired path
-			st := dalec.MergeAtPath(llb.Scratch(), sources, "/SOURCES")
-
-			def, err := st.Marshal(ctx)
-			if err != nil {
-				return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
-			}
-
-			res, err := client.Solve(ctx, gwclient.SolveRequest{
-				Definition: def.ToPB(),
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-
-			ref, err := res.SingleRef()
-			if err != nil {
-				return nil, nil, err
-			}
-			return ref, &dalec.DockerImageSpec{}, nil
-		})
-	}
-}
 
 func buildScriptSourceState(spec *dalec.Spec) *llb.State {
 	if len(spec.Build.Steps) == 0 {
@@ -102,7 +56,7 @@ func buildScript(spec *dalec.Spec) string {
 	return b.String()
 }
 
-func Dalec2SourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
+func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
 	sources, err := dalec.Sources(spec, sOpt)
 	if err != nil {
 		return nil, err

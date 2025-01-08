@@ -77,7 +77,6 @@ func (cfg *Config) Worker(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (ll
 		}
 	}
 
-	// TODO(adamperlin): proper package caching, probably with caching path from cfg
 	base := frontend.GetBaseImage(sOpt, cfg.ImageRef).
 		Run(
 			dalec.WithConstraints(opts...),

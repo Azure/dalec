@@ -106,7 +106,7 @@ func (c *Config) HandleSources(ctx context.Context, client gwclient.Client) (*gw
 			return nil, nil, err
 		}
 
-		sources, err := rpm.Dalec2SourcesLLB(worker, spec, sOpt)
+		sources, err := rpm.ToSourcesLLB(worker, spec, sOpt)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -136,7 +136,7 @@ func (c *Config) HandleSources(ctx context.Context, client gwclient.Client) (*gw
 
 func (c *Config) HandleSpec(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		st, err := rpm.Dalec2SpecLLB(spec, llb.Scratch(), targetKey, "")
+		st, err := rpm.ToSpecLLB(spec, llb.Scratch(), targetKey, "")
 		if err != nil {
 			return nil, nil, err
 		}

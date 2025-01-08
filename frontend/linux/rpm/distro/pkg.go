@@ -120,10 +120,8 @@ func (cfg *Config) runTests(ctx context.Context, worker llb.State, client gwclie
 	return ref, errors.Wrap(err, "TESTS FAILED")
 }
 
-// TODO(adamperlin): can this implementation be shared between RPM and DEB?
 func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
 	opts = append(opts, dalec.ProgressGroup("Prepare custom repos"))
-
 	repoConfig := cfg.RepoPlatformConfig
 	if repoConfig == nil {
 		repoConfig = defaultRepoConfig
@@ -147,7 +145,6 @@ func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.
 	return dalec.WithRunOptions(withRepos, withData, keyMounts), keyPaths, nil
 }
 
-// TODO(adamperlin): can this implementation be shared between rpm/deb?
 func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targetKey string, spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOption {
 	deps := spec.GetTestDeps(targetKey)
 	if len(deps) == 0 {
@@ -165,7 +162,6 @@ func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targ
 
 			importRepos := []DnfInstallOpt{DnfAtRoot("/tmp/rootfs"), DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
 
-			// TODO(adamperlin): proper caching
 			opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
 			return worker.Run(
 				dalec.WithConstraints(opts...),
@@ -173,9 +169,4 @@ func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targ
 			).AddMount("/tmp/rootfs", in), nil
 		})
 	}
-}
-
-// No plan to implement right now as HandleRPM should deal with this
-func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-	return nil, nil
 }

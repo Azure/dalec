@@ -3,6 +3,7 @@ package distro
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
@@ -32,6 +33,17 @@ type Config struct {
 	DefaultOutputImage string
 
 	InstallFunc PackageInstaller
+
+	// Unique identifier for the package cache for this particular distro,
+	// e.g., azlinux3-tdnf-cache
+	CacheName string
+
+	// e.g. /var/cache/tdnf or /var/cache/dnf
+	CacheDir string
+}
+
+func (cfg *Config) PackageCacheMount(root string) llb.RunOption {
+	return llb.AddMount(filepath.Join(root, cfg.CacheDir), llb.Scratch(), llb.AsPersistentCacheDir(cfg.CacheName, llb.CacheMountLocked))
 }
 
 func (cfg *Config) BuildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
@@ -71,7 +83,7 @@ func (c *Config) Install(pkgs []string, opts ...DnfInstallOpt) llb.RunOption {
 	var cfg dnfInstallConfig
 	dnfInstallOptions(&cfg, opts)
 
-	return c.InstallFunc(&cfg, c.ReleaseVer, pkgs)
+	return dalec.WithRunOptions(c.InstallFunc(&cfg, c.ReleaseVer, pkgs), c.PackageCacheMount(cfg.root))
 }
 
 func (cfg *Config) Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {

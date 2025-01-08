@@ -17,13 +17,12 @@ var Mariner2Config = &distro.Config{
 	ImageRef:   "mcr.microsoft.com/cbl-mariner/base/core:2.0",
 	ContextRef: Mariner2WorkerContextName,
 
+	CacheName: tdnfCacheNameMariner2,
+	CacheDir:  "/var/cache/tdnf",
+
 	ReleaseVer:         "2.0",
 	BuilderPackages:    builderPackages,
 	BasePackages:       []string{"distroless-packages-minimal", "prebuilt-ca-certificates"},
 	RepoPlatformConfig: &defaultAzlinuxRepoPlatform,
 	InstallFunc:        distro.TdnfInstall,
 }
-
-// func (mariner2) tdnfCacheMount(root string) llb.RunOption {
-// 	return llb.AddMount(filepath.Join(root, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheNameMariner2, llb.CacheMountLocked))
-// }
