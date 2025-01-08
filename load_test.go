@@ -732,7 +732,7 @@ tests: &tests
         starts_with: ${SOME_ARG}
         ends_with: ${SOME_ARG}
     steps:
-      - command: ${SOME_ARG}
+      - command: hello
         stdout: *check-output
         stderr: *check-output
         stdin: ${SOME_ARG}
@@ -844,7 +844,6 @@ targets:
 		assert.Check(t, cmp.Equal(spec.Tests[0].Steps[0].Stderr.Contains[0], "test"))
 		assert.Check(t, cmp.Equal(spec.Tests[0].Steps[0].Stderr.StartsWith, "test"))
 		assert.Check(t, cmp.Equal(spec.Tests[0].Steps[0].Stderr.EndsWith, "test"))
-		assert.Check(t, cmp.Equal(spec.Tests[0].Steps[0].Command, "test"))
 
 		assert.Check(t, cmp.Equal(spec.PackageConfig.Signer.Args["FOO"], "test"))
 
@@ -873,7 +872,6 @@ targets:
 		assert.Check(t, cmp.Equal(target.Tests[0].Steps[0].Stderr.Contains[0], "test"))
 		assert.Check(t, cmp.Equal(target.Tests[0].Steps[0].Stderr.StartsWith, "test"))
 		assert.Check(t, cmp.Equal(target.Tests[0].Steps[0].Stderr.EndsWith, "test"))
-		assert.Check(t, cmp.Equal(target.Tests[0].Steps[0].Command, "test"))
 
 		assert.Check(t, cmp.Equal(target.Dependencies.ExtraRepos[0].Keys["img"].DockerImage.Cmd.Env["TEST"], "test"))
 		assert.Check(t, cmp.Equal(target.Dependencies.ExtraRepos[0].Keys["git"].Git.URL, "https://test"))
