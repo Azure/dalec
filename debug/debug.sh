@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -eux
 
+PTRACE_SCOPE_PROCFILE="/proc/sys/kernel/yama/ptrace_scope"
+
 if [ -z "$(command -v socat)" ]; then
     echo you must have "'socat'" installed
     exit 1
@@ -8,6 +10,16 @@ fi
 
 if [ -z "$(command -v pgrep)" ]; then
     echo you must have "'pgrep'" installed
+    exit 1
+fi
+
+if ! [ -f "$PTRACE_SCOPE_PROCFILE" ]; then
+    echo "unable to detect necessary procfile, attempting to continue..."
+fi
+
+if [ "$(<"$PTRACE_SCOPE_PROCFILE")" != "0" ]; then
+    echo "you must set ${PTRACE_SCOPE_PROCFILE} to '0':"
+    echo "echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope"
     exit 1
 fi
 
