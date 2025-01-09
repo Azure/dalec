@@ -6,6 +6,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/linux"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -101,13 +102,13 @@ func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.
 func (cfg *Config) Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	var mux frontend.BuildMux
 
-	mux.Add("deb", cfg.HandleDeb, &targets.Target{
+	mux.Add("deb", linux.HandlePackage(cfg), &targets.Target{
 		Name:        "deb",
 		Description: "Builds a deb package.",
 		Default:     true,
 	})
 
-	mux.Add("testing/container", cfg.HandleContainer, &targets.Target{
+	mux.Add("testing/container", linux.HandleContainer(cfg), &targets.Target{
 		Name:        "testing/container",
 		Description: "Builds a container image for testing purposes only.",
 	})

@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/azlinux"
-	"github.com/Azure/dalec/frontend/debian"
 	"github.com/Azure/dalec/frontend/debug"
-	"github.com/Azure/dalec/frontend/ubuntu"
+	"github.com/Azure/dalec/frontend/linux/deb/debian"
+	"github.com/Azure/dalec/frontend/linux/deb/ubuntu"
+	"github.com/Azure/dalec/frontend/linux/rpm/azlinux"
 	"github.com/Azure/dalec/frontend/windows"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/util/appcontext"
@@ -33,8 +33,7 @@ func main() {
 
 	if err := grpcclient.RunFromEnvironment(ctx, mux.Handler(
 		// copy/paster's beware: [frontend.WithTargetForwardingHandler] should not be set except for the root dalec frontend.
-		frontend.WithBuiltinHandler(azlinux.Mariner2TargetKey, azlinux.NewMariner2Handler()),
-		frontend.WithBuiltinHandler(azlinux.AzLinux3TargetKey, azlinux.NewAzlinux3Handler()),
+		azlinux.Handlers,
 		frontend.WithBuiltinHandler(windows.DefaultTargetKey, windows.Handle),
 		ubuntu.Handlers,
 		debian.Handlers,

@@ -1,7 +1,7 @@
 package debian
 
 import (
-	"github.com/Azure/dalec/frontend/deb/distro"
+	"github.com/Azure/dalec/frontend/linux/deb/distro"
 )
 
 const (
