@@ -466,6 +466,19 @@ func (p *PostInstall) validate() error {
 	}
 
 	var errs []error
+	for k, sl := range p.Symlinks {
+		var err error
+		if k == "" {
+			err = fmt.Errorf("symlink source is empty")
+			errs = append(errs, err)
+		}
+
+		if sl.Path != "" && len(sl.Paths) != 0 || sl.Path == "" && len(sl.Paths) == 0 {
+			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required")
+			errs = append(errs, err)
+		}
+	}
+
 	symlinks := p.GetSymlinks()
 	if err := validateSymlinks(symlinks); err != nil {
 		errs = append(errs, err)
@@ -476,14 +489,28 @@ func (p *PostInstall) validate() error {
 
 func validateSymlinks(symlinks []ArtifactSymlinkConfig) error {
 	var errs []error
+	dests := make(map[string]string, len(symlinks)<<1)
+
 	for _, l := range symlinks {
+		var err error
 		if l.Dest == "" {
-			errs = append(errs, fmt.Errorf("invalid symlink destination"))
+			err = fmt.Errorf("invalid symlink destination")
+			errs = append(errs, err)
 		}
 
 		if l.Source == "" {
-			errs = append(errs, fmt.Errorf("invalid symlink source"))
+			err = fmt.Errorf("invalid symlink source")
+			errs = append(errs, err)
 		}
+
+		if err != nil {
+			continue
+		}
+
+		if other_oldpath, ok := dests[l.Dest]; ok {
+			errs = append(errs, fmt.Errorf("symlink 'newpaths' must be unique: %q points to both %q and %q", l.Dest, l.Source, other_oldpath))
+		}
+		dests[l.Dest] = l.Source
 	}
 
 	return goerrors.Join(errs...)
