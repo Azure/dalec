@@ -44,6 +44,32 @@ func TestGetSymlinks(t *testing.T) {
 			shouldFailVaildation: true,
 		},
 		{
+			desc: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique",
+			PostInstall: PostInstall{
+				Symlinks: map[string]SymlinkTarget{
+					"perfectly_valid": {
+						Path: "/also_valid",
+					},
+					"also_perfectly_valid": {
+						Paths: []string{"/also_valid"},
+					},
+				},
+			},
+			shouldFailVaildation: true,
+		},
+		{
+			desc: "invalid SymlinkTarget should fail validation: path and paths are mutually exclusive",
+			PostInstall: PostInstall{
+				Symlinks: map[string]SymlinkTarget{
+					"perfectly_valid": {
+						Path:  "/also_valid",
+						Paths: []string{"/also_valid_too", "also_valid_too,_also"},
+					},
+				},
+			},
+			shouldFailVaildation: true,
+		},
+		{
 			desc: "should be able to create multiple symlinks to the same target, with the correct ordering",
 			PostInstall: PostInstall{
 				Symlinks: map[string]SymlinkTarget{
@@ -130,12 +156,18 @@ func TestGetSymlinks(t *testing.T) {
 			p := test.PostInstall
 
 			if err := p.validate(); err != nil {
-				if test.shouldFailVaildation {
-					return
+				if !test.shouldFailVaildation {
+					t.Logf("input failed validation: %s", err)
+					t.Fail()
 				}
 
-				t.Log("input failed validation")
+				return
+			}
+
+			if test.shouldFailVaildation { // err was nil, but shouldn't have been
+				t.Logf("input should have failed validation, but succeeded:\n%#v", test.PostInstall)
 				t.Fail()
+				return
 			}
 
 			actualSymlinks := p.GetSymlinks()
