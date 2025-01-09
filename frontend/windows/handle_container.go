@@ -116,21 +116,18 @@ func copySymlinks(post *dalec.PostInstall) llb.StateOption {
 			return s
 		}
 
-		lm := post.Symlinks
-		if len(lm) == 0 {
+		symlinks := post.GetSymlinks()
+		if len(symlinks) == 0 {
 			return s
 		}
-		keys := dalec.SortMapKeys(lm)
-		for _, srcPath := range keys {
-			l := lm[srcPath]
-			dstPath := l.Path
-			s = s.File(llb.Mkdir(path.Dir(dstPath), 0755, llb.WithParents(true)))
-			s = s.File(llb.Copy(s, srcPath, dstPath))
+
+		for _, sl := range symlinks {
+			s = s.File(llb.Mkdir(path.Dir(sl.Dest), 0755, llb.WithParents(true)))
+			s = s.File(llb.Copy(s, sl.Source, sl.Dest))
 		}
 
 		return s
 	}
-
 }
 
 func getTargetPlatform(bc *dockerui.Client) (ocispecs.Platform, error) {

@@ -466,7 +466,7 @@ echo "$BAR" > bar.txt
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
 						"/usr/bin/src1": {Path: "/src1"},
-						"/usr/bin/src3": {Path: "/non/existing/dir/src3"},
+						"/usr/bin/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
 					},
 				},
 			},
@@ -588,8 +588,13 @@ echo "$BAR" > bar.txt
 					Steps: []dalec.TestStep{
 						{Command: "/bin/bash -c 'test -L /src1'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
+						{Command: "/bin/bash -c 'test -L /non/existing/dir/src3'"},
+						{Command: "/bin/bash -c 'test \"$(readlink /non/existing/dir/src3)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -c 'test -L /non/existing/dir2/src3'"},
+						{Command: "/bin/bash -c 'test \"$(readlink /non/existing/dir2/src3)\" = \"/usr/bin/src3\"'"},
 						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 						{Command: "/non/existing/dir/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
+						{Command: "/non/existing/dir2/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 					},
 				},
 				{
