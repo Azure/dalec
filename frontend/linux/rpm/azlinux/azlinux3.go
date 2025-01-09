@@ -29,11 +29,3 @@ var Azlinux3Config = &distro.Config{
 	RepoPlatformConfig: &defaultAzlinuxRepoPlatform,
 	InstallFunc:        distro.TdnfInstall,
 }
-
-// func (azlinux3) tdnfCacheMount(root string) llb.RunOption {
-// 	return llb.AddMount(filepath.Join(root, tdnfCacheDir), llb.Scratch(), llb.AsPersistentCacheDir(tdnfCacheNameAzlinux3, llb.CacheMountLocked))
-// }
-
-// func (azlinux3) FullName() string {
-// 	return AzLinux3FullName
-// }

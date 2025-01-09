@@ -3,6 +3,7 @@ package distro
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/Azure/dalec"
@@ -114,6 +115,19 @@ func dnfInstallOptions(cfg *dnfInstallConfig, opts []DnfInstallOpt) {
 	for _, o := range opts {
 		o(cfg)
 	}
+}
+
+func importGPGScript(keyPaths []string) string {
+	// all keys that are included should be mounted under this path
+	keyRoot := "/etc/pki/rpm-gpg"
+
+	var importScript string = "#!/usr/bin/env sh\nset -eux\n"
+	for _, keyPath := range keyPaths {
+		keyName := filepath.Base(keyPath)
+		importScript += fmt.Sprintf("gpg --import %s\n", filepath.Join(keyRoot, keyName))
+	}
+
+	return importScript
 }
 
 func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.RunOption {
