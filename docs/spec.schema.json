@@ -123,6 +123,13 @@
 					"type": "object",
 					"description": "Docs is a list of doc files included in the package"
 				},
+				"infoFiles": {
+					"additionalProperties": {
+						"$ref": "#/$defs/ArtifactConfig"
+					},
+					"type": "object",
+					"description": "InfoFiles is a list of info files included in the package"
+				},
 				"licenses": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactConfig"
