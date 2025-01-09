@@ -317,6 +317,7 @@ func (s *Spec) FillDefaults() {
 	}
 
 	s.Dependencies.fillDefaults()
+	s.Image.fillDefaults()
 
 	for k := range s.Targets {
 		t := s.Targets[k]
@@ -373,6 +374,10 @@ func (s Spec) Validate() error {
 
 	if err := s.Dependencies.validate(); err != nil {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
+	}
+
+	if err := s.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "image"))
 	}
 
 	for k, t := range s.Targets {

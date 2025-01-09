@@ -12,13 +12,23 @@ import (
 )
 
 func (c *Config) BuildContainer(worker llb.State, sOpt dalec.SourceOpts, client gwclient.Client, spec *dalec.Spec, targetKey string, debSt llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	base := dalec.GetBaseOutputImage(spec, targetKey)
-	if base == "" {
-		base = c.DefaultOutputImage
+	bi, err := spec.GetSingleBase(targetKey)
+	if err != nil {
+		return llb.Scratch(), err
 	}
 
-	if base == "" {
-		return llb.Scratch(), fmt.Errorf("no output image ref specified, cannot build from scratch")
+	var baseImg llb.State
+	if bi != nil {
+		img, err := bi.ToState(sOpt, opts...)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+		baseImg = img
+	} else {
+		if c.DefaultOutputImage == "" {
+			return llb.Scratch(), fmt.Errorf("no output image ref specified, cannot build from scratch")
+		}
+		baseImg = llb.Image(c.DefaultOutputImage, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 	}
 
 	opts = append(opts, dalec.ProgressGroup("Build Container Image"))
@@ -30,8 +40,6 @@ func (c *Config) BuildContainer(worker llb.State, sOpt dalec.SourceOpts, client 
 	if err != nil {
 		return llb.Scratch(), err
 	}
-
-	baseImg := llb.Image(base, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
 
 	debug := llb.Scratch().File(llb.Mkfile("debug", 0o644, []byte(`debug=2`)), opts...)
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))
@@ -93,7 +101,7 @@ func (c *Config) HandleContainer(ctx context.Context, client gwclient.Client) (*
 			return nil, nil, err
 		}
 
-		img, err := c.BuildImageConfig(ctx, client, spec, platform, targetKey)
+		img, err := c.BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
 		if err != nil {
 			return nil, nil, err
 		}

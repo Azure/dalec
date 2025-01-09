@@ -178,7 +178,7 @@ func (cfg *Config) HandleDeb(ctx context.Context, client gwclient.Client) (*gwcl
 		}
 
 		if ref, err := cfg.runTests(ctx, client, spec, sOpt, targetKey, ctr, pg); err != nil {
-			cfg, _ := cfg.BuildImageConfig(ctx, client, spec, platform, targetKey)
+			cfg, _ := cfg.BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
 			return ref, cfg, err
 		}
 

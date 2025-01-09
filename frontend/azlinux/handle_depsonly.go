@@ -49,7 +49,7 @@ func handleDepsOnly(w worker) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			img, err := resolveBaseConfig(ctx, w, client, platform, spec, targetKey)
+			img, err := resolveBaseConfig(ctx, w, sOpt, platform, spec, targetKey)
 			if err != nil {
 				return nil, nil, err
 			}

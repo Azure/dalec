@@ -107,8 +107,19 @@ For more information, please see [Targets](targets.md).
 
 Image section is used to define the base image and post processing for the image.
 
-- `base`: The base image for the target.
-- `post`: The post processing for the image, such as symlinks.
+Example:
+
+```yaml
+image:
+  base: mcr.microsoft.com/cbl-mariner/distroless/minimal:2.0
+  post:
+    symlinks:
+      /usr/bin/my-binary:
+       path: /my-binary
+  entrypoint: /my-binary
+```
+
+For more information, please see [Images](image.md).
 
 ### Package Config section
 
