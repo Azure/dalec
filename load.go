@@ -381,8 +381,15 @@ func (s Spec) Validate() error {
 		}
 	}
 
+	if s.Image != nil {
+		if err := s.Image.Post.validate(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	return goerrors.Join(errs...)
 }
+
 func validatePatch(patch PatchSpec, patchSrc Source) error {
 	if SourceIsDir(patchSrc) {
 		// Patch sources that use directory-backed sources require a subpath in the
@@ -443,6 +450,62 @@ func (b *ArtifactBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 			continue
 		}
 		b.Env[k] = updated
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (p *PostInstall) validate() error {
+	if p == nil {
+		return nil
+	}
+
+	var errs []error
+	for k, sl := range p.Symlinks {
+		var err error
+		if k == "" {
+			err = fmt.Errorf("symlink source is empty")
+			errs = append(errs, err)
+		}
+
+		if sl.Path != "" && len(sl.Paths) != 0 || sl.Path == "" && len(sl.Paths) == 0 {
+			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required")
+			errs = append(errs, err)
+		}
+	}
+
+	symlinks := p.GetSymlinks()
+	if err := validateSymlinks(symlinks); err != nil {
+		errs = append(errs, err)
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func validateSymlinks(symlinks []ArtifactSymlinkConfig) error {
+	var errs []error
+	dests := make(map[string]string, len(symlinks)<<1)
+
+	for _, l := range symlinks {
+		var err error
+		if l.Dest == "" {
+			err = fmt.Errorf("invalid symlink destination")
+			errs = append(errs, err)
+		}
+
+		if l.Source == "" {
+			err = fmt.Errorf("invalid symlink source")
+			errs = append(errs, err)
+		}
+
+		if err != nil {
+			continue
+		}
+
+		if other_oldpath, ok := dests[l.Dest]; ok {
+			errs = append(errs, fmt.Errorf("symlink 'newpaths' must be unique: %q points to both %q and %q", l.Dest, l.Source, other_oldpath))
+		}
+		dests[l.Dest] = l.Source
 	}
 
 	return goerrors.Join(errs...)
