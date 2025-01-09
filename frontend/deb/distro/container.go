@@ -72,7 +72,8 @@ func (c *Config) createSymlinks(worker llb.State, spec *dalec.Spec, targetKey st
 			return in
 		}
 
-		if len(post.Symlinks) == 0 {
+		symlinks := post.GetSymlinks()
+		if len(symlinks) == 0 {
 			return in
 		}
 

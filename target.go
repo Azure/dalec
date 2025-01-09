@@ -46,6 +46,12 @@ func (t *Target) validate() error {
 		}
 	}
 
+	if t.Image != nil {
+		if err := t.Image.Post.validate(); err != nil {
+			errs = append(errs, errors.Wrap(err, "postinsall"))
+		}
+	}
+
 	return goerrors.Join(errs...)
 }
 

@@ -386,8 +386,15 @@ func (s Spec) Validate() error {
 		}
 	}
 
+	if s.Image != nil {
+		if err := s.Image.Post.validate(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	return goerrors.Join(errs...)
 }
+
 func validatePatch(patch PatchSpec, patchSrc Source) error {
 	if SourceIsDir(patchSrc) {
 		// Patch sources that use directory-backed sources require a subpath in the
@@ -448,6 +455,35 @@ func (b *ArtifactBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 			continue
 		}
 		b.Env[k] = updated
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (p *PostInstall) validate() error {
+	if p == nil {
+		return nil
+	}
+
+	var errs []error
+	symlinks := p.GetSymlinks()
+	if err := validateSymlinks(symlinks); err != nil {
+		errs = append(errs, err)
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func validateSymlinks(symlinks []ArtifactSymlinkConfig) error {
+	var errs []error
+	for _, l := range symlinks {
+		if l.Dest == "" {
+			errs = append(errs, fmt.Errorf("invalid symlink destination"))
+		}
+
+		if l.Source == "" {
+			errs = append(errs, fmt.Errorf("invalid symlink source"))
+		}
 	}
 
 	return goerrors.Join(errs...)
