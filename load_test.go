@@ -589,6 +589,28 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 					Args: maps.Clone(pairs),
 				},
 			},
+			Image: &ImageConfig{
+				Entrypoint: "$FOO",
+				Cmd:        "$FOO",
+				Env:        []string{"$FOO"},
+				Labels: map[string]string{
+					"foo": "$FOO",
+				},
+				Volumes: map[string]struct{}{
+					"": {},
+				},
+				WorkingDir: "$FOO",
+				StopSignal: "$FOO",
+				Base:       "$FOO",
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"$FOO": {
+							Path: "$BAR",
+						},
+					},
+				},
+				User: "$FOO",
+			},
 		},
 	}
 
@@ -610,7 +632,15 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["BAR"], bar))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["REGULAR"], plainOleValue))
-
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Entrypoint, foo))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Cmd, foo))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Env[0], foo))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.WorkingDir, foo))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.StopSignal, foo))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Base, foo))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.User, foo))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Labels["foo"], foo))
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Post.Symlinks[foo].Path, bar))
 }
 
 func TestCustomRepoFillDefaults(t *testing.T) {
