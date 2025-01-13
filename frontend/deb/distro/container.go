@@ -36,6 +36,8 @@ func (c *Config) BuildContainer(worker llb.State, sOpt dalec.SourceOpts, client 
 	debug := llb.Scratch().File(llb.Mkfile("debug", 0o644, []byte(`debug=2`)), opts...)
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))
 
+	const workpath = "/tmp/rootfs"
+
 	return baseImg.Run(
 		dalec.WithConstraints(opts...),
 		withRepos,
@@ -54,25 +56,7 @@ func (c *Config) BuildContainer(worker llb.State, sOpt dalec.SourceOpts, client 
 		}),
 		InstallLocalPkg(debSt, opts...),
 	).Root().
-		With(c.createSymlinks(worker, spec, targetKey, opts...)), nil
-}
-
-func (c *Config) createSymlinks(worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return func(in llb.State) llb.State {
-		post := spec.GetImagePost(targetKey)
-		if post == nil {
-			return in
-		}
-
-		if len(post.Symlinks) == 0 {
-			return in
-		}
-
-		const workPath = "/tmp/rootfs"
-		return worker.
-			Run(dalec.WithConstraints(opts...), dalec.InstallPostSymlinks(post, workPath)).
-			AddMount(workPath, in)
-	}
+		With(dalec.InstallPostSymlinks(baseImg, spec.GetImagePost(targetKey), workpath, opts...)), nil
 }
 
 func (c *Config) HandleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
