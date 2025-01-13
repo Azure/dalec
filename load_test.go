@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/moby/buildkit/frontend/dockerui"
@@ -1218,18 +1219,214 @@ func testSymlinks(t *testing.T) {
 					return
 				}
 
-				t.Log("should not have passed validation, but did anyway")
-				t.Fail()
+				t.Error("should not have passed validation, but did anyway")
 				return
 			}
 
 			// err is non-nil
 
 			if test.shouldPassVaildation {
-				t.Logf("should have passed validation, but failed with error: %s\n%#v\n", err, symlinks)
-				t.Fail()
+				t.Errorf("should have passed validation, but failed with error: %s\n%#v\n", err, symlinks)
 				return
 			}
 		})
 	}
+}
+
+func TestImageFillDefaults(t *testing.T) {
+	t.Run("postinstall", testPostInstallFillDefaults)
+}
+
+func testPostInstallFillDefaults(t *testing.T) {
+	t.Run("symlinks", testSymlinkFillDefaults)
+}
+
+func testSymlinkFillDefaults(t *testing.T) {
+	type tableEntry struct {
+		desc   string
+		input  ImageConfig
+		output ImageConfig
+	}
+
+	// note: fillDefaults is run after validation, so input is assumed to be
+	// valid
+
+	table := []tableEntry{
+		{
+			desc: "empty Path and single Paths should remain untouched",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "path should be moved to Paths",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "/newpath2",
+							Paths: []string{"/newpath1"},
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath1", "/newpath2"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "Path should be appended to Paths",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "/newpath3",
+							Paths: []string{"/newpath1", "/newpath2"},
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath1", "/newpath2", "/newpath3"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "should work if Paths is nil",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "/newpath",
+							Paths: nil,
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "should work if Paths is empty",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "/newpath",
+							Paths: nil,
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "empty Path and multimple Paths should remain untouched",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath1", "/newpath2"},
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath1", "/newpath2"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.desc, func(t *testing.T) {
+			cmp := func(v1 SymlinkTarget, v2 SymlinkTarget) bool {
+				if v1.Path != v2.Path {
+					return false
+				}
+
+				if !slices.Equal(v1.Paths, v2.Paths) {
+					return false
+				}
+
+				return true
+			}
+
+			test.input.fillDefaults()
+
+			in := test.input.Post.Symlinks
+			out := test.output.Post.Symlinks
+			if err := validateSymlinks(in); err != nil {
+				t.Errorf("you wrote a bad test. the input must be valid for the defaults to be filled.")
+				return
+			}
+
+			if err := validateSymlinks(out); err != nil {
+				t.Errorf("you wrote a bad test. the output specified fails validation")
+				return
+			}
+
+			if !maps.EqualFunc(in, out, cmp) {
+				in, _ := json.MarshalIndent(in, "", "\t")
+				out, _ := json.MarshalIndent(out, "", "\t")
+
+				t.Errorf("input and output are not matched:\nexpected: %s\n=======\nactual:%s\n", string(out), string(in))
+			}
+		})
+	}
+
 }
