@@ -996,7 +996,7 @@ build:
 	})
 }
 
-func Test_validatePatch(t *testing.T) {
+func TestPatchValidation(t *testing.T) {
 	type testCase struct {
 		name     string
 		patchSrc Source
@@ -1070,6 +1070,166 @@ func Test_validatePatch(t *testing.T) {
 				}
 				assert.NilError(t, err)
 			})
+		})
+	}
+}
+
+func TestImageConfigValidation(t *testing.T) {
+	t.Run("test postinstall", testPostInstall)
+}
+
+func testPostInstall(t *testing.T) {
+	t.Run("test symlinks", testSymlinks)
+}
+
+func testSymlinks(t *testing.T) {
+	type symlinkTableEntry struct {
+		ImageConfig
+		shouldPassVaildation bool
+		desc                 string
+	}
+
+	table := []symlinkTableEntry{
+		{
+			desc: "valid SymlinkTarget should pass validation (path)",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path: "newpath",
+						},
+					},
+				},
+			},
+			shouldPassVaildation: true,
+		},
+		{
+			desc: "valid SymlinkTarget should pass validation (paths, single)",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Paths: []string{"newpath"},
+						},
+					},
+				},
+			},
+			shouldPassVaildation: true,
+		},
+		{
+			desc: "valid SymlinkTarget should pass validation (paths, multiple)",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Paths: []string{"newpath1", "newpath2"},
+						},
+					},
+				},
+			},
+			shouldPassVaildation: true,
+		},
+		{
+			desc: "invalid SymlinkTarget should fail validation: empty target",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {},
+					},
+				},
+			},
+		},
+		{
+			desc: "invalid SymlinkTarget should fail validation: empty key, valid target(paths)",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"": {
+							Paths: []string{"/newpath_z", "/newpath_a"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "invalid SymlinkTarget should fail validation: empty key: valid target(path)",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"": {
+							Path: "/newpath_z",
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique(paths)",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path: "/also_valid",
+						},
+						"also_perfectly_valid": {
+							Paths: []string{"/also_valid"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique(path)",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path: "/also_valid",
+						},
+						"also_perfectly_valid": {
+							Path: "/also_valid",
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "invalid SymlinkTarget should fail validation: path and paths are mutually exclusive",
+			ImageConfig: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path:  "/also_valid",
+							Paths: []string{"/also_valid_too", "also_valid_too,_also"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.desc, func(t *testing.T) {
+			symlinks := test.ImageConfig.Post.Symlinks
+
+			err := validateSymlinks(symlinks)
+			if err == nil {
+				if test.shouldPassVaildation {
+					return
+				}
+
+				t.Log("should not have passed validation, but did anyway")
+				t.Fail()
+				return
+			}
+
+			// err is non-nil
+
+			if test.shouldPassVaildation {
+				t.Logf("should have passed validation, but failed with error: %s\n%#v\n", err, symlinks)
+				t.Fail()
+				return
+			}
 		})
 	}
 }

@@ -357,38 +357,6 @@ func (s *Spec) GetImagePost(target string) *PostInstall {
 	return nil
 }
 
-func (p *PostInstall) GetSymlinks() []ArtifactSymlinkConfig {
-	if p == nil {
-		return []ArtifactSymlinkConfig{}
-	}
-
-	ret := make([]ArtifactSymlinkConfig, 0, len(p.Symlinks)<<1)
-	keys := SortMapKeys(p.Symlinks)
-	for _, oldpath := range keys {
-		cfg := p.Symlinks[oldpath]
-
-		if cfg.Path != "" {
-			ret = append(ret, ArtifactSymlinkConfig{
-				Source: oldpath,
-				Dest:   cfg.Path,
-			})
-
-			continue
-		}
-
-		paths := slices.Clone(cfg.Paths)
-		sort.Strings(paths)
-		for _, newpath := range paths {
-			ret = append(ret, ArtifactSymlinkConfig{
-				Source: oldpath,
-				Dest:   newpath,
-			})
-		}
-	}
-
-	return ret
-}
-
 // ShArgs returns a RunOption that runs the given command in a shell.
 func ShArgs(args string) llb.RunOption {
 	return llb.Args(append([]string{"sh", "-c"}, args))
@@ -406,8 +374,7 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 			return
 		}
 
-		symlinks := post.GetSymlinks()
-		if len(symlinks) == 0 {
+		if len(post.Symlinks) == 0 {
 			return
 		}
 
@@ -416,9 +383,11 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 		buf := bytes.NewBuffer(nil)
 		buf.WriteString("set -ex\n")
 
-		for _, sl := range symlinks {
-			fmt.Fprintf(buf, "mkdir -p %q\n", filepath.Join(rootfsPath, filepath.Dir(sl.Dest)))
-			fmt.Fprintf(buf, "ln -s %q %q\n", sl.Source, filepath.Join(rootfsPath, sl.Dest))
+		for oldpath, newpaths := range post.Symlinks {
+			for _, newpath := range newpaths.Paths {
+				fmt.Fprintf(buf, "mkdir -p %q\n", filepath.Join(rootfsPath, filepath.Dir(newpath)))
+				fmt.Fprintf(buf, "ln -s %q %q\n", oldpath, filepath.Join(rootfsPath, newpath))
+			}
 		}
 
 		const name = "tmp.dalec.symlink.sh"

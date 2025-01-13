@@ -4,6 +4,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -323,6 +324,8 @@ func (s *Spec) FillDefaults() {
 		t.fillDefaults()
 		s.Targets[k] = t
 	}
+
+	s.Image.fillDefaults()
 }
 
 func (s Spec) Validate() error {
@@ -381,10 +384,8 @@ func (s Spec) Validate() error {
 		}
 	}
 
-	if s.Image != nil {
-		if err := s.Image.Post.validate(); err != nil {
-			errs = append(errs, err)
-		}
+	if err := s.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "image"))
 	}
 
 	return goerrors.Join(errs...)
@@ -455,46 +456,46 @@ func (b *ArtifactBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 	return goerrors.Join(errs...)
 }
 
+func (i *ImageConfig) validate() error {
+	if i == nil {
+		return nil
+	}
+
+	var errs []error
+	if err := i.Post.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "postinstall"))
+	}
+
+	return goerrors.Join(errs...)
+}
+
 func (p *PostInstall) validate() error {
 	if p == nil {
 		return nil
 	}
 
 	var errs []error
-	for k, sl := range p.Symlinks {
+
+	if err := validateSymlinks(p.Symlinks); err != nil {
+		errs = append(errs, err)
+	}
+
+	return errors.Wrap(goerrors.Join(errs...), "symlink")
+}
+
+func validateSymlinks(symlinks map[string]SymlinkTarget) error {
+	var errs []error
+	dests := make(map[string]string, len(symlinks)<<1)
+
+	for oldpath, cfg := range symlinks {
 		var err error
-		if k == "" {
+		if oldpath == "" {
 			err = fmt.Errorf("symlink source is empty")
 			errs = append(errs, err)
 		}
 
-		if sl.Path != "" && len(sl.Paths) != 0 || sl.Path == "" && len(sl.Paths) == 0 {
+		if cfg.Path != "" && len(cfg.Paths) != 0 || cfg.Path == "" && len(cfg.Paths) == 0 {
 			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required")
-			errs = append(errs, err)
-		}
-	}
-
-	symlinks := p.GetSymlinks()
-	if err := validateSymlinks(symlinks); err != nil {
-		errs = append(errs, err)
-	}
-
-	return goerrors.Join(errs...)
-}
-
-func validateSymlinks(symlinks []ArtifactSymlinkConfig) error {
-	var errs []error
-	dests := make(map[string]string, len(symlinks)<<1)
-
-	for _, l := range symlinks {
-		var err error
-		if l.Dest == "" {
-			err = fmt.Errorf("invalid symlink destination")
-			errs = append(errs, err)
-		}
-
-		if l.Source == "" {
-			err = fmt.Errorf("invalid symlink source")
 			errs = append(errs, err)
 		}
 
@@ -502,10 +503,26 @@ func validateSymlinks(symlinks []ArtifactSymlinkConfig) error {
 			continue
 		}
 
-		if other_oldpath, ok := dests[l.Dest]; ok {
-			errs = append(errs, fmt.Errorf("symlink 'newpaths' must be unique: %q points to both %q and %q", l.Dest, l.Source, other_oldpath))
+		// By this point, both the oldpath and the SymlinkTarget are
+		// well-formed. We still need to make sure each 'newpath' is unique.
+		if cfg.Paths == nil {
+			cfg.Paths = []string{}
 		}
-		dests[l.Dest] = l.Source
+
+		newpaths := slices.Clone(cfg.Paths)
+		newpaths = append(newpaths, cfg.Path)
+
+		for _, newpath := range newpaths {
+			if newpath == "" {
+				continue
+			}
+
+			if other_oldpath, ok := dests[newpath]; ok {
+				errs = append(errs, fmt.Errorf("symlink 'newpaths' must be unique: %q points to both %q and %q", newpath, oldpath, other_oldpath))
+			}
+
+			dests[newpath] = oldpath
+		}
 	}
 
 	return goerrors.Join(errs...)
