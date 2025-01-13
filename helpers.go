@@ -375,7 +375,7 @@ func ShArgsf(format string, args ...interface{}) llb.RunOption {
 }
 
 func InstallPostSymlinks(builderImg llb.State, post *PostInstall, rootfsPath string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	if disableDiffMerge.Load() {
+	if disableSymlinks.Load() {
 		return installPostSymlinksShell(builderImg, post, rootfsPath, opts...)
 	}
 
