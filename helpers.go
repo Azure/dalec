@@ -384,6 +384,14 @@ func InstallPostSymlinks(builderImg llb.State, post *PostInstall, rootfsPath str
 
 func installPostSymlinksShell(builderImg llb.State, post *PostInstall, rootfsPath string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(rootfs llb.State) llb.State {
+		if post == nil {
+			return rootfs
+		}
+
+		if len(post.Symlinks) == 0 {
+			return rootfs
+		}
+
 		return builderImg.Run(
 			WithConstraints(opts...),
 			withSymlinkInstallScript(post, rootfsPath),
@@ -394,14 +402,6 @@ func installPostSymlinksShell(builderImg llb.State, post *PostInstall, rootfsPat
 // withSymlinkInstallScript returns a RunOption that adds symlinks defined in the [PostInstall] underneath the provided rootfs path.
 func withSymlinkInstallScript(post *PostInstall, rootfsPath string) llb.RunOption {
 	return runOptionFunc(func(ei *llb.ExecInfo) {
-		if post == nil {
-			return
-		}
-
-		if len(post.Symlinks) == 0 {
-			return
-		}
-
 		llb.Dir(rootfsPath).SetRunOption(ei)
 
 		buf := bytes.NewBuffer(nil)
