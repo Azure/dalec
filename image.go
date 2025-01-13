@@ -3,6 +3,7 @@ package dalec
 import (
 	"context"
 	goerrors "errors"
+	"sort"
 
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/client/llb"
@@ -145,46 +146,53 @@ func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
 	return nil
 }
 
-func (s *ImageConfig) validate() error {
-	if s == nil {
+func (i *ImageConfig) validate() error {
+	if i == nil {
 		return nil
 	}
 
 	var errs []error
 
-	if s.Base != "" && len(s.Bases) > 0 {
+	if i.Base != "" && len(i.Bases) > 0 {
 		errs = append(errs, errors.New("cannot specify both image.base and image.bases"))
 	}
 
-	for i, base := range s.Bases {
+	for i, base := range i.Bases {
 		if err := base.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "bases[%d]", i))
 		}
 	}
+
+	if err := i.Post.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "postinstall"))
+	}
+
 	return goerrors.Join(errs...)
 }
 
-func (s *ImageConfig) fillDefaults() {
-	if s == nil {
+func (i *ImageConfig) fillDefaults() {
+	if i == nil {
 		return
 	}
 
 	// s.Bases is a superset of s.Base, so migrate s.Base to s.Bases
-	if s.Base != "" {
-		s.Bases = append(s.Bases, BaseImage{
+	if i.Base != "" {
+		i.Bases = append(i.Bases, BaseImage{
 			Rootfs: Source{
 				DockerImage: &SourceDockerImage{
-					Ref: s.Base,
+					Ref: i.Base,
 				},
 			},
 		})
 
-		s.Base = ""
+		i.Base = ""
 	}
 
-	for _, bi := range s.Bases {
+	for _, bi := range i.Bases {
 		bi.fillDefaults()
 	}
+
+	i.Post.fillDefaults()
 }
 
 func (s *BaseImage) validate() error {
@@ -199,8 +207,41 @@ func (s *BaseImage) validate() error {
 	return nil
 }
 
+func (p *PostInstall) validate() error {
+	if p == nil {
+		return nil
+	}
+
+	var errs []error
+
+	if err := validateSymlinks(p.Symlinks); err != nil {
+		errs = append(errs, err)
+	}
+
+	return errors.Wrap(goerrors.Join(errs...), "symlink")
+}
+
 func (s *BaseImage) fillDefaults() {
 	fillDefaults(&s.Rootfs)
+}
+
+func (p *PostInstall) fillDefaults() {
+	if p == nil {
+		return
+	}
+
+	// validation has already taken place
+	for oldpath := range p.Symlinks {
+		cfg := p.Symlinks[oldpath]
+		if cfg.Path == "" {
+			continue
+		}
+
+		cfg.Paths = append(cfg.Paths, cfg.Path)
+		cfg.Path = ""
+		sort.Strings(cfg.Paths)
+		p.Symlinks[oldpath] = cfg
+	}
 }
 
 func (bi *BaseImage) ResolveImageConfig(ctx context.Context, sOpt SourceOpts, opt sourceresolver.Opt) ([]byte, error) {

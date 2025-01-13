@@ -1147,6 +1147,125 @@ func TestImage_validate(t *testing.T) {
 				},
 			},
 		},
+		{
+			Name: "valid SymlinkTarget should pass validation (path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path: "newpath",
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "valid SymlinkTarget should pass validation (paths, single)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Paths: []string{"newpath"},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "valid SymlinkTarget should pass validation (paths, multiple)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Paths: []string{"newpath1", "newpath2"},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty target",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {},
+					},
+				},
+			},
+			expectErr: "'path' and 'paths' fields are mutually exclusive, and at least one is required",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty key, valid target(paths)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"": {
+							Paths: []string{"/newpath_z", "/newpath_a"},
+						},
+					},
+				},
+			},
+			expectErr: "symlink source is empty",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty key: valid target(path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"": {
+							Path: "/newpath_z",
+						},
+					},
+				},
+			},
+			expectErr: "symlink source is empty",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique(paths)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path: "/also_valid",
+						},
+						"also_perfectly_valid": {
+							Paths: []string{"/also_valid"},
+						},
+					},
+				},
+			},
+			expectErr: "symlink 'newpaths' must be unique:",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique(path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path: "/also_valid",
+						},
+						"also_perfectly_valid": {
+							Path: "/also_valid",
+						},
+					},
+				},
+			},
+			expectErr: "symlink 'newpaths' must be unique:",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: path and paths are mutually exclusive",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path:  "/also_valid",
+							Paths: []string{"/also_valid_too", "also_valid_too,_also"},
+						},
+					},
+				},
+			},
+			expectErr: "'path' and 'paths' fields are mutually exclusive, and at least one is required",
+		},
 	}
 
 	for _, tc := range cases {

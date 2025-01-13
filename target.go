@@ -46,10 +46,8 @@ func (t *Target) validate() error {
 		}
 	}
 
-	if t.Image != nil {
-		if err := t.Image.Post.validate(); err != nil {
-			errs = append(errs, errors.Wrap(err, "postinsall"))
-		}
+	if err := t.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "postinstall"))
 	}
 
 	return goerrors.Join(errs...)

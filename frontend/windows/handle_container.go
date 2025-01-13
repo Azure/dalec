@@ -198,14 +198,15 @@ func copySymlinks(post *dalec.PostInstall) llb.StateOption {
 			return s
 		}
 
-		symlinks := post.GetSymlinks()
-		if len(symlinks) == 0 {
+		if len(post.Symlinks) == 0 {
 			return s
 		}
 
-		for _, sl := range symlinks {
-			s = s.File(llb.Mkdir(path.Dir(sl.Dest), 0755, llb.WithParents(true)))
-			s = s.File(llb.Copy(s, sl.Source, sl.Dest))
+		for oldpath, newpaths := range post.Symlinks {
+			for _, newpath := range newpaths.Paths {
+				s = s.File(llb.Mkdir(path.Dir(newpath), 0755, llb.WithParents(true)))
+				s = s.File(llb.Copy(s, oldpath, newpath))
+			}
 		}
 
 		return s
