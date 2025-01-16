@@ -383,9 +383,11 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 		buf := bytes.NewBuffer(nil)
 		buf.WriteString("set -ex\n")
 
-		for src, tgt := range post.Symlinks {
-			fmt.Fprintf(buf, "mkdir -p %q\n", filepath.Join(rootfsPath, filepath.Dir(tgt.Path)))
-			fmt.Fprintf(buf, "ln -s %q %q\n", src, filepath.Join(rootfsPath, tgt.Path))
+		for oldpath, newpaths := range post.Symlinks {
+			for _, newpath := range newpaths.Paths {
+				fmt.Fprintf(buf, "mkdir -p %q\n", filepath.Join(rootfsPath, filepath.Dir(newpath)))
+				fmt.Fprintf(buf, "ln -s %q %q\n", oldpath, filepath.Join(rootfsPath, newpath))
+			}
 		}
 
 		const name = "tmp.dalec.symlink.sh"

@@ -130,7 +130,11 @@ type PostInstall struct {
 // SymlinkTarget specifies the properties of a symlink
 type SymlinkTarget struct {
 	// Path is the path where the symlink should be placed
-	Path string `yaml:"path" json:"path" jsonschema:"required"`
+	//
+	// Deprecated: This is here for backward compatibility. Use `Paths` instead.
+	Path string `yaml:"path" json:"path" jsonschema:"oneof_required=path"`
+	// Path is a list of `newpath`s that will all point to the same `oldpath`.
+	Paths []string `yaml:"paths" json:"paths" jsonschema:"oneof_required=paths"`
 }
 
 type SourceDockerImage struct {

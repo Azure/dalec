@@ -2,6 +2,7 @@ package dalec
 
 import (
 	goerrors "errors"
+	"sort"
 
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
@@ -42,6 +43,10 @@ func (t *Target) validate() error {
 		}
 	}
 
+	if err := t.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "postinstall"))
+	}
+
 	return goerrors.Join(errs...)
 }
 
@@ -68,4 +73,30 @@ func (t *Target) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 
 func (t *Target) fillDefaults() {
 	t.Dependencies.fillDefaults()
+	t.Image.fillDefaults()
+}
+
+func (i *ImageConfig) fillDefaults() {
+	if i == nil {
+		return
+	}
+
+	i.Post.fillDefaults()
+}
+
+func (p *PostInstall) fillDefaults() {
+	if p == nil {
+		return
+	}
+
+	for oldpath := range p.Symlinks {
+		cfg := p.Symlinks[oldpath]
+		if cfg.Path != "" {
+			cfg.Paths = append(cfg.Paths, cfg.Path)
+			cfg.Path = ""
+		}
+
+		sort.Strings(cfg.Paths)
+		p.Symlinks[oldpath] = cfg
+	}
 }
