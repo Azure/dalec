@@ -4,7 +4,6 @@ import (
 	goerrors "errors"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -463,7 +462,7 @@ func (i *ImageConfig) validate() error {
 
 	var errs []error
 	if err := i.Post.validate(); err != nil {
-		errs = append(errs, errors.Wrap(err, "postinstall"))
+		errs = append(errs, errors.Wrap(err, "post"))
 	}
 
 	return goerrors.Join(errs...)
@@ -484,8 +483,10 @@ func (p *PostInstall) validate() error {
 }
 
 func validateSymlinks(symlinks map[string]SymlinkTarget) error {
-	var errs []error
-	dests := make(map[string]string, len(symlinks)<<1)
+	var (
+		errs     []error
+		numPairs int
+	)
 
 	for oldpath, cfg := range symlinks {
 		var err error
@@ -495,7 +496,9 @@ func validateSymlinks(symlinks map[string]SymlinkTarget) error {
 		}
 
 		if cfg.Path != "" && len(cfg.Paths) != 0 || cfg.Path == "" && len(cfg.Paths) == 0 {
-			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required")
+			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required: "+
+				"symlink to %s", oldpath)
+
 			errs = append(errs, err)
 		}
 
@@ -503,25 +506,53 @@ func validateSymlinks(symlinks map[string]SymlinkTarget) error {
 			continue
 		}
 
-		// By this point, both the oldpath and the SymlinkTarget are
-		// well-formed. We still need to make sure each 'newpath' is unique.
-		if cfg.Paths == nil {
-			cfg.Paths = []string{}
+		if cfg.Path != "" { // this means .Paths is empty
+			numPairs++
+			continue
 		}
 
-		newpaths := slices.Clone(cfg.Paths)
-		newpaths = append(newpaths, cfg.Path)
-
-		for _, newpath := range newpaths {
+		for _, newpath := range cfg.Paths { // this means .Path is empty
+			numPairs++
 			if newpath == "" {
+				errs = append(errs, fmt.Errorf("symlink newpath should not be empty"))
 				continue
 			}
+		}
+	}
 
-			if other_oldpath, ok := dests[newpath]; ok {
-				errs = append(errs, fmt.Errorf("symlink 'newpaths' must be unique: %q points to both %q and %q", newpath, oldpath, other_oldpath))
-			}
+	// The remainder of this function checks for duplicate `newpath`s in the
+	// symlink pairs. This is not allowed: neither the ordering of the
+	// `oldpath` map keys, nor that of the `.Paths` values can be trusted. We
+	// also sort both to avoid cache misses, so we would end up with
+	// inconsistent behavior -- regardless of whether the inputs are the same.
+	if numPairs < 2 {
+		return goerrors.Join(errs...)
+	}
 
-			dests[newpath] = oldpath
+	var (
+		oldpath string
+		cfg     SymlinkTarget
+	)
+
+	seen := make(map[string]string, numPairs)
+	checkDuplicateNewpath := func(newpath string) {
+		if newpath == "" {
+			return
+		}
+
+		if seenPath, found := seen[newpath]; found {
+			errs = append(errs, fmt.Errorf("symlink 'newpaths' must be unique: %q points to both %q and %q",
+				newpath, oldpath, seenPath))
+		}
+
+		seen[newpath] = oldpath
+	}
+
+	for oldpath, cfg = range symlinks {
+		checkDuplicateNewpath(cfg.Path)
+
+		for _, newpath := range cfg.Paths {
+			checkDuplicateNewpath(newpath)
 		}
 	}
 

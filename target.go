@@ -89,15 +89,13 @@ func (p *PostInstall) fillDefaults() {
 		return
 	}
 
-	// validation has already taken place
 	for oldpath := range p.Symlinks {
 		cfg := p.Symlinks[oldpath]
-		if cfg.Path == "" {
-			continue
+		if cfg.Path != "" {
+			cfg.Paths = append(cfg.Paths, cfg.Path)
+			cfg.Path = ""
 		}
 
-		cfg.Paths = append(cfg.Paths, cfg.Path)
-		cfg.Path = ""
 		sort.Strings(cfg.Paths)
 		p.Symlinks[oldpath] = cfg
 	}

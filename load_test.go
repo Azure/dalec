@@ -1368,13 +1368,13 @@ func testSymlinkFillDefaults(t *testing.T) {
 			},
 		},
 		{
-			desc: "empty Path and multimple Paths should remain untouched",
+			desc: "empty Path and multimple Paths should have Paths sorted",
 			input: ImageConfig{
 				Post: &PostInstall{
 					Symlinks: map[string]SymlinkTarget{
 						"oldpath": {
 							Path:  "",
-							Paths: []string{"/newpath1", "/newpath2"},
+							Paths: []string{"/newpath2", "/newpath1"},
 						},
 					},
 				},
