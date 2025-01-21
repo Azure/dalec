@@ -1,7 +1,10 @@
 package dalec
 
 import (
+	"bytes"
+	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
@@ -45,6 +48,10 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 		}
 
 		const proxyPath = "/tmp/dalec/gomod-proxy-cache"
+
+		// Pass in git auth if necessary
+		worker = worker.With(g.gitAuth(opts...))
+
 		for _, path := range paths {
 			in = worker.Run(
 				// First download the go module deps to our persistent cache
@@ -63,6 +70,62 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 		}
 		return in
 	}
+}
+
+func (g *SourceGenerator) gitAuth(opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(worker llb.State) llb.State {
+		if g == nil || g.Gomod == nil {
+			return worker
+		}
+
+		if len(g.Gomod.Auth) == 0 {
+			return worker
+		}
+
+		script := new(bytes.Buffer)
+		fmt.Fprintln(script, `#!/usr/bin/env sh`)
+		secrets := make(map[string]struct{}, len(g.Gomod.Auth))
+		for host, auth := range g.Gomod.Auth {
+			var quotedHeaderArg string
+			if auth.Header != "" {
+				quotedHeaderArg = fmt.Sprintf(`"Authorization: ${%s}"`, auth.Header)
+				secrets[auth.Header] = struct{}{}
+			}
+
+			if auth.Token != "" && quotedHeaderArg == "" {
+				line := fmt.Sprintf(`export %[1]s="$(echo -n "${%[1]s}" | base64)"`, auth.Token)
+				fmt.Fprintln(script, line)
+
+				quotedHeaderArg = fmt.Sprintf(`"Authorization: basic ${%s}"`, auth.Token)
+				secrets[auth.Token] = struct{}{}
+			}
+
+			if auth.SSH != "" && quotedHeaderArg == "" {
+				panic("unimplemented")
+			}
+
+			fmt.Fprintf(script, `git config --global http.%s.extraheader %s`, host, quotedHeaderArg)
+		}
+
+		secretsOpt := runOptionFunc(func(ei *llb.ExecInfo) {
+			for secret := range secrets {
+				SecretToEnv(secret).SetRunOption(ei)
+			}
+		})
+
+		scriptTxt := string(script.Bytes())
+		lines := strings.Split(scriptTxt, "\n")
+		_ = lines
+		scriptState := llb.Scratch().File(llb.Mkfile("/script.sh", 0o755, script.Bytes()))
+
+		return worker.Run(
+			llb.Args([]string{"/tmp/mnt/script.sh"}),
+			llb.AddMount("/tmp/mnt", scriptState),
+			secretsOpt,
+			WithConstraints(opts...),
+		).Root()
+	}
+
 }
 
 func (s *Spec) gomodSources() map[string]Source {
