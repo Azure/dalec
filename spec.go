@@ -373,6 +373,8 @@ type Source struct {
 type GeneratorGomod struct {
 	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
+	// Auth is the git authorization to use for gomods. The keys are the hosts, and the values are the auth to use for that host.
+	Auth map[string]GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
 }
 
 // GeneratorCargohome is used to generate a cargo home from cargo sources
