@@ -156,6 +156,18 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 		states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/"+customSystemdPostinstFile), 0o600, customEnable), opts...))
 	}
 
+	postinst := bytes.NewBuffer(nil)
+	artifacts := spec.GetArtifacts(target)
+	writeUsersPostInst(postinst, artifacts.Users)
+	writeGroupsPostInst(postinst, artifacts.Groups)
+
+	if postinst.Len() > 0 {
+		dt := []byte("#!/usr/bin/env sh\nset -e\n")
+		dt = append(dt, postinst.Bytes()...)
+
+		states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "postinst"), 0o700, dt), opts...))
+	}
+
 	patchDir := dalecDir.File(llb.Mkdir(filepath.Join(dir, "dalec/patches"), 0o755), opts...)
 	sorted := dalec.SortMapKeys(spec.Patches)
 	for _, name := range sorted {
@@ -166,7 +178,6 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 		states = append(states, pls...)
 	}
 
-	artifacts := spec.GetArtifacts(target)
 	if len(artifacts.Links) > 0 {
 		buf := bytes.NewBuffer(nil)
 		for _, l := range artifacts.Links {
@@ -595,4 +606,16 @@ func unquote(v string) string {
 		return updated
 	}
 	return v
+}
+
+func writeUsersPostInst(w io.Writer, users []dalec.AddUserConfig) {
+	for _, u := range users {
+		fmt.Fprintf(w, "getent passwd %s >/dev/null || useradd %s\n", u.Name, u.Name)
+	}
+}
+
+func writeGroupsPostInst(w io.Writer, groups []dalec.AddGroupConfig) {
+	for _, g := range groups {
+		fmt.Fprintf(w, "getent group %s >/dev/null || groupadd --system %s\n", g.Name, g.Name)
+	}
 }

@@ -3,6 +3,34 @@
 	"$id": "https://github.com/Azure/dalec/spec",
 	"$ref": "#/$defs/Spec",
 	"$defs": {
+		"AddGroupConfig": {
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Name is the name of the group to add to the system."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name"
+			],
+			"description": "AddGroupConfig is the configuration for adding a group to the system."
+		},
+		"AddUserConfig": {
+			"properties": {
+				"name": {
+					"type": "string",
+					"description": "Name is the name of the user to add to the system."
+				}
+			},
+			"additionalProperties": false,
+			"type": "object",
+			"required": [
+				"name"
+			],
+			"description": "AddUserConfig is the configuration for adding a user to the system."
+		},
 		"ArtifactBuild": {
 			"properties": {
 				"steps": {
@@ -154,6 +182,20 @@
 					},
 					"type": "object",
 					"description": "Headers is a list of header files and/or folders to be installed.\nOn linux this would typically be installed to /usr/include/."
+				},
+				"users": {
+					"items": {
+						"$ref": "#/$defs/AddUserConfig"
+					},
+					"type": "array",
+					"description": "Users is a list of users to add to the system when the package is installed."
+				},
+				"groups": {
+					"items": {
+						"$ref": "#/$defs/AddGroupConfig"
+					},
+					"type": "array",
+					"description": "Groups is a list of groups to add to the system when the package is installed."
 				}
 			},
 			"additionalProperties": false,
