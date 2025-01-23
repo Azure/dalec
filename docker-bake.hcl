@@ -16,10 +16,6 @@ variable "DALEC_DISABLE_DIFF_MERGE" {
     default = "0"
 }
 
-variable "DALEC_NO_CACHE_EXPORT" {
-    default = "0"
-}
-
 target "frontend" {
     target = "frontend"
     tags = [FRONTEND_REF]
@@ -76,9 +72,6 @@ target "runc-azlinux" {
     tags = tgt == "container" ? ["runc:mariner2"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
-
-    cache-from = ["type=gha,scope=dalec/runc/mariner2/${tgt}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/mariner2/${tgt},mode=max"] : []
 }
 
 target "runc-jammy" {
@@ -102,9 +95,6 @@ target "runc-jammy" {
     tags = tgt == "container" ? ["runc:jammy"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
-
-    cache-from = ["type=gha,scope=dalec/runc/jammy/${tgt}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/jammy/${tgt},mode=max"] : []
 }
 
 target "runc-test" {
@@ -148,8 +138,6 @@ target "test-fixture" {
       "dalec_frontend" = "target:frontend"
     }
     target = tgt
-    cache-from = ["type=gha,scope=dalec/${f}/${tgt}/${f}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/${f}/${tgt}/${f},mode=max"] : []
 }
 
 variable "BUILD_SPEC" {
@@ -174,9 +162,6 @@ target "build" {
     tags = tgt == "container" ? ["build:${distro}"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
-
-    cache-from = ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt},mode=max"] : []
 }
 
 target "examples" {
@@ -215,8 +200,6 @@ dependencies:
     }
     target = "${distro}/container/depsonly"
     tags = ["local/dalec/deps-only:${distro}"]
-    cache-from = ["type=gha,scope=dalec/deps-only-${distro}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/deps-only-${distro},mode=max"] : []
 }
 
 target "test-deps-only" {
@@ -240,13 +223,11 @@ variable "CI_FRONTEND_CACHE_SCOPE" {
 
 target "frontend-ci" {
     inherits = ["frontend"]
-    cache-from = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE}"]
     output = ["type=registry"]
 }
 
 target "frontend-ci-full" {
     inherits = ["frontend-ci"]
-    cache-to = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE},mode=max"]
     platforms = ["linux/amd64", "linux/arm64"]
 }
 
