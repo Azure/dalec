@@ -1557,6 +1557,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testBuildNetworkMode(ctx, t, testConfig.Target)
 	})
+
+	t.Run("user and group creation", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testUserAndGroupCreation(ctx, t, testConfig.Target)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -2218,5 +2224,43 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 			_, err = res.SingleRef()
 			assert.NilError(t, err)
 		})
+	})
+}
+
+func testUserAndGroupCreation(ctx context.Context, t *testing.T, testCfg targetConfig) {
+	spec := newSimpleSpec()
+
+	spec.Artifacts.Groups = []dalec.AddGroupConfig{
+		{Name: "testgroup"},
+	}
+	spec.Artifacts.Users = []dalec.AddUserConfig{
+		{Name: "testuser"},
+	}
+
+	spec.Tests = []*dalec.TestSpec{
+		{
+			Files: map[string]dalec.FileCheckOutput{
+				"/etc/group": {
+					CheckOutput: dalec.CheckOutput{
+						Contains: []string{
+							"testgroup:x:",
+							"testuser:x:",
+						},
+					},
+				},
+				"/etc/passwd": {
+					CheckOutput: dalec.CheckOutput{
+						Contains: []string{"testuser:x:"},
+					},
+				},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(testCfg.Container))
+		res := solveT(ctx, t, client, sr)
+		_, err := res.SingleRef()
+		assert.NilError(t, err)
 	})
 }

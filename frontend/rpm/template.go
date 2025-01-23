@@ -137,14 +137,30 @@ OrderWithRequires(postun): systemd
 	return requires + orderRequires
 }
 
+func getUserPostRequires(users []dalec.AddUserConfig, groups []dalec.AddGroupConfig) string {
+	var out string
+
+	if len(users) > 0 {
+		out += "Requires(post): /usr/sbin/adduser, /usr/bin/getent\n"
+	}
+	if len(groups) > 0 {
+		out += "Requires(post): /usr/sbin/groupadd, /usr/bin/getent\n"
+	}
+
+	return out
+}
+
 func (w *specWrapper) Requires() fmt.Stringer {
 	b := &strings.Builder{}
 
-	artifacts := w.GetArtifacts(w.Target)
+	artifacts := w.Spec.GetArtifacts(w.Target)
 
-	// first write systemd requires if they exist,
+	// first write post requires for systemd and user/group creation
 	// as these do not come from dependencies in the spec
+	// NOTE: This is a bit janky since different distributions may have different
+	// package names... something to consider as we expand functionality.
 	b.WriteString(getSystemdRequires(artifacts.Systemd))
+	b.WriteString(getUserPostRequires(artifacts.Users, artifacts.Groups))
 
 	deps := w.GetPackageDeps(w.Target)
 	if deps == nil {
@@ -383,22 +399,69 @@ fi
 func (w *specWrapper) Post() fmt.Stringer {
 	b := &strings.Builder{}
 
-	artifacts := w.GetArtifacts(w.Target)
-	if artifacts.Systemd.IsEmpty() {
+	systemd := w.postSystemd()
+	users := w.postUsers()
+	groups := w.postGroups()
+
+	if systemd == "" && users == "" && groups == "" {
 		return b
 	}
 
+	b.WriteString("%post\n")
+	if systemd != "" {
+		b.WriteString(systemd)
+	}
+	if users != "" {
+		b.WriteString(users)
+	}
+	if groups != "" {
+		b.WriteString(groups)
+	}
+
+	b.WriteString("\n")
+	return b
+}
+
+func (w *specWrapper) postUsers() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if len(artifacts.Users) == 0 {
+		return ""
+	}
+
+	b := &strings.Builder{}
+	for _, user := range artifacts.Users {
+		fmt.Fprintf(b, "getent passwd %s >/dev/null || adduser %s\n", user.Name, user.Name)
+	}
+	return b.String()
+}
+
+func (w *specWrapper) postGroups() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if len(artifacts.Groups) == 0 {
+		return ""
+	}
+
+	b := &strings.Builder{}
+	for _, group := range artifacts.Groups {
+		fmt.Fprintf(b, "getent group %s >/dev/null || groupadd --system %s\n", group.Name, group.Name)
+	}
+	return b.String()
+}
+
+func (w *specWrapper) postSystemd() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if artifacts.Systemd.IsEmpty() {
+		return ""
+	}
 	enabledUnits := artifacts.Systemd.EnabledUnits()
 	if len(enabledUnits) == 0 {
 		// if we have no enabled units, we don't need to do anything systemd related
 		// in the post script. In this case, we shouldn't emit '%post'
 		// as this eliminates the need for extra dependencies in the target container
-		return b
+		return ""
 	}
 
-	b.WriteString("%post\n")
-	// TODO: can inject other post install steps here in the future
-
+	b := &strings.Builder{}
 	keys := dalec.SortMapKeys(enabledUnits)
 	for _, servicePath := range keys {
 		unitConf := artifacts.Systemd.Units[servicePath]
@@ -408,8 +471,7 @@ func (w *specWrapper) Post() fmt.Stringer {
 		)
 	}
 
-	b.WriteString("\n")
-	return b
+	return b.String()
 }
 
 func (w *specWrapper) PostUn() fmt.Stringer {
@@ -436,7 +498,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 	b := &strings.Builder{}
 	fmt.Fprintln(b, "%install")
 
-	artifacts := w.GetArtifacts(w.Target)
+	artifacts := w.Spec.GetArtifacts(w.Target)
 
 	copyArtifact := func(root, p string, cfg *dalec.ArtifactConfig) {
 		if cfg == nil {

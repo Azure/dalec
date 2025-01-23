@@ -556,6 +556,41 @@ cp -r src/simple.service %{buildroot}/%{_unitdir}/phony.service
 `)
 	})
 
+	t.Run("test user", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Users: []dalec.AddUserConfig{
+					{Name: "testuser"},
+				},
+			},
+		}}
+
+		got := w.Post().String()
+		want := `%post
+getent passwd testuser >/dev/null || adduser testuser
+
+`
+
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("test group", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Groups: []dalec.AddGroupConfig{
+					{Name: "testgroup"},
+				},
+			},
+		}}
+
+		got := w.Post().String()
+		want := `%post
+getent group testgroup >/dev/null || groupadd --system testgroup
+
+`
+
+		assert.Equal(t, want, got)
+	})
 }
 
 func TestTemplate_Requires(t *testing.T) {
@@ -731,43 +766,77 @@ A helpful tool
 }
 
 func TestTemplate_ImplicitRequires(t *testing.T) {
-	spec := &dalec.Spec{
-		Artifacts: dalec.Artifacts{
-			Systemd: &dalec.SystemdConfiguration{
-				Units: map[string]dalec.SystemdUnitConfig{
-					"test.service": {
-						Enable: true,
+	t.Run("systemd", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"test.service": {
+							Enable: true,
+						},
 					},
 				},
 			},
-		},
-	}
+		}
 
-	w := specWrapper{Spec: spec}
+		w := specWrapper{Spec: spec}
 
-	got := w.Requires().String()
-	assert.Equal(t, got,
-		`Requires(post): systemd
+		got := w.Requires().String()
+		assert.Equal(t, got,
+			`Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
 OrderWithRequires(post): systemd
 OrderWithRequires(preun): systemd
 OrderWithRequires(postun): systemd
 `,
-	)
+		)
 
-	spec.Artifacts.Systemd.Units = map[string]dalec.SystemdUnitConfig{
-		"test.service": {
-			Enable: false,
-		},
-	}
+		spec.Artifacts.Systemd.Units = map[string]dalec.SystemdUnitConfig{
+			"test.service": {
+				Enable: false,
+			},
+		}
 
-	got = w.Requires().String()
-	assert.Equal(t, got,
-		`Requires(preun): systemd
+		got = w.Requires().String()
+		assert.Equal(t, got,
+			`Requires(preun): systemd
 Requires(postun): systemd
 OrderWithRequires(preun): systemd
 OrderWithRequires(postun): systemd
 `)
+	})
+
+	t.Run("user", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Users: []dalec.AddUserConfig{
+					{Name: "testuser"},
+				},
+			},
+		}
+
+		w := specWrapper{Spec: spec}
+
+		got := w.Requires().String()
+		want := "Requires(post): /usr/sbin/adduser, /usr/bin/getent\n"
+		assert.Equal(t, got, want)
+	})
+
+	t.Run("group", func(t *testing.T) {
+		spec := &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Groups: []dalec.AddGroupConfig{
+					{Name: "testgroup"},
+				},
+			},
+		}
+
+		w := specWrapper{Spec: spec}
+
+		got := w.Requires().String()
+		want := "Requires(post): /usr/sbin/groupadd, /usr/bin/getent\n"
+		assert.Equal(t, got, want)
+	})
 
 }
