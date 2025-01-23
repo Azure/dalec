@@ -85,26 +85,28 @@ func (g *SourceGenerator) gitAuth(opts ...llb.ConstraintsOpt) llb.StateOption {
 		script := new(bytes.Buffer)
 		fmt.Fprintln(script, `#!/usr/bin/env sh`)
 		secrets := make(map[string]struct{}, len(g.Gomod.Auth))
+
 		for host, auth := range g.Gomod.Auth {
-			var quotedHeaderArg string
+			var headerArg string
 			if auth.Header != "" {
-				quotedHeaderArg = fmt.Sprintf(`"Authorization: ${%s}"`, auth.Header)
+				headerArg = fmt.Sprintf(`Authorization: ${%s}`, auth.Header)
 				secrets[auth.Header] = struct{}{}
 			}
 
-			if auth.Token != "" && quotedHeaderArg == "" {
-				line := fmt.Sprintf(`export %[1]s="$(echo -n "${%[1]s}" | base64)"`, auth.Token)
+			if auth.Token != "" && headerArg == "" {
+				line := fmt.Sprintf(`export tkn="$(echo -n "x-access-token:${%s}" | base64)"`, auth.Token)
 				fmt.Fprintln(script, line)
 
-				quotedHeaderArg = fmt.Sprintf(`"Authorization: basic ${%s}"`, auth.Token)
+				headerArg = fmt.Sprintf(`Authorization: basic ${tkn}`)
 				secrets[auth.Token] = struct{}{}
 			}
 
-			if auth.SSH != "" && quotedHeaderArg == "" {
+			if auth.SSH != "" && headerArg == "" {
 				panic("unimplemented")
 			}
 
-			fmt.Fprintf(script, `git config --global http.%s.extraheader %s`, host, quotedHeaderArg)
+			fmt.Fprintf(script, `git config --global http."https://%s".extraheader "%s"`, host, headerArg)
+			script.WriteRune('\n')
 		}
 
 		secretsOpt := runOptionFunc(func(ei *llb.ExecInfo) {
