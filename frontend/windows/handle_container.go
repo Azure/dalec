@@ -120,7 +120,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		dc.MultiPlatformRequested = true
 	}
 
-	rb, err := dcBuild(ctx, dc, func(ctx context.Context, platform *ocispecs.Platform, idx int) (ref gwclient.Reference, retCfg, retBaseCfg *dalec.DockerImageSpec, retErr error) {
+	rb, err := dc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (ref gwclient.Reference, retCfg, retBaseCfg *dalec.DockerImageSpec, retErr error) {
 		spec, err := frontend.LoadSpec(ctx, dc, platform)
 		if err != nil {
 			return nil, nil, nil, err
