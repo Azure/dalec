@@ -177,6 +177,77 @@ func TestSourceGitHTTP(t *testing.T) {
 		ops := getSourceOp(ctx, t, src)
 		checkGitOp(t, ops, &src)
 	})
+
+	t.Run("gomod auth", func(t *testing.T) {
+		src := Source{
+			Git: &SourceGit{
+				URL:    "https://localhost/test.git",
+				Commit: t.Name(),
+				Auth: GitAuth{
+					Header: "some header",
+					Token:  "some token",
+				},
+			},
+			Generate: []*SourceGenerator{
+				{
+					Gomod: &GeneratorGomod{
+						Auth: map[string]GitAuth{
+							"github.com": {
+								Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+							},
+							"dev.azure.com": {
+								Header: "DALEC_GIT_AUTH_HEADER_ADO",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		const srcName = "foo"
+		spec := Spec{
+			Sources: map[string]Source{
+				srcName: src,
+			},
+		}
+
+		ops := getGomodLLB(ctx, t, spec)
+		checkGitAuth(t, ops, &src)
+	})
+}
+
+func getGomodLLB(ctx context.Context, t *testing.T, spec Spec) []*pb.Op {
+	sOpt := SourceOpts{
+		GetContext: func(name string, opts ...llb.LocalOption) (*llb.State, error) {
+			st := llb.Local(name, opts...)
+			return &st, nil
+		},
+	}
+
+	st, err := spec.GomodDeps(sOpt, llb.Scratch())
+	if err != nil {
+		t.Fatalf("gomod generator failed: %s", err)
+	}
+	if st == nil {
+		t.Fatal("gomod generator succeeded but return value was nil")
+	}
+
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		t.Fatalf("error marshaling llb.State: %s", err)
+	}
+
+	out := make([]*pb.Op, 0, len(def.Def)-1)
+	for _, dt := range def.Def[:len(def.Def)-1] {
+		op := &pb.Op{}
+		if err := op.Unmarshal(dt); err != nil {
+			t.Fatal(err)
+		}
+
+		out = append(out, op)
+	}
+
+	return out
 }
 
 func TestSourceHTTP(t *testing.T) {
@@ -879,6 +950,62 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 }
 
 func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
+	op := ops[0].GetSource()
+
+	var bkAddr string
+
+	_, other, ok := strings.Cut(src.Git.URL, "@")
+	if ok {
+		// ssh
+		// buildkit replaces the `:` between host and port with a `/` in the identifier
+		bkAddr = "git://" + strings.Replace(other, ":", "/", 1)
+	} else {
+		// not ssh
+		_, other, ok := strings.Cut(src.Git.URL, "://")
+		if !ok {
+			t.Fatal("invalid git URL")
+		}
+		bkAddr = "git://" + other
+	}
+
+	xID := bkAddr + "#" + src.Git.Commit
+	if op.Identifier != xID {
+		t.Errorf("expected identifier %q, got %q", xID, op.Identifier)
+	}
+
+	if op.Attrs["git.fullurl"] != src.Git.URL {
+		t.Errorf("expected git.fullurl %q, got %q", src.Git.URL, op.Attrs["git.fullurl"])
+	}
+
+	const (
+		defaultAuthHeader = "GIT_AUTH_HEADER"
+		defaultAuthToken  = "GIT_AUTH_TOKEN"
+		defaultAuthSSH    = "default"
+	)
+
+	hdr := defaultAuthHeader
+	if src.Git.Auth.Header != "" {
+		hdr = src.Git.Auth.Header
+	}
+	assert.Check(t, cmp.Equal(op.Attrs["git.authheadersecret"], hdr), op.Attrs)
+
+	token := defaultAuthToken
+	if src.Git.Auth.Token != "" {
+		token = src.Git.Auth.Token
+	}
+	assert.Check(t, cmp.Equal(op.Attrs["git.authtokensecret"], token), op.Attrs)
+
+	if !strings.HasPrefix(src.Git.URL, "http") {
+		// ssh settings are only set when using ssh based auth
+		ssh := defaultAuthSSH
+		if src.Git.Auth.SSH != "" {
+			ssh = src.Git.Auth.SSH
+		}
+		assert.Check(t, cmp.Equal(op.Attrs["git.mountsshsock"], ssh), op)
+	}
+}
+
+func checkGitAuth(t *testing.T, ops []*pb.Op, src *Source) {
 	op := ops[0].GetSource()
 
 	var bkAddr string
