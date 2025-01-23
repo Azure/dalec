@@ -18,6 +18,8 @@ import (
 
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/solver/pb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	pkgerrors "github.com/pkg/errors"
@@ -226,6 +228,23 @@ type FrontendSpec struct {
 
 // withResolveLocal tells buildkit to prefer local images when resolving image references.
 // This prevents unnecessary API requests to registries.
+type keyVal struct {
+	k string
+	v string
+}
+
+func withSecrets(so *client.SolveOpt, kvs ...keyVal) {
+	m := map[string][]byte{}
+	for _, kv := range kvs {
+		k := kv.k
+		v := kv.v
+		m[k] = []byte(v)
+	}
+	so.Session = []session.Attachable{secretsprovider.FromMap(m)}
+}
+
+// withResolveLocal tells buildkit to prefer local images when resolving image references.
+// This prevents unnecessary API requests to registries.
 func withResolveLocal(so *client.SolveOpt) {
 	if so.FrontendAttrs == nil {
 		so.FrontendAttrs = make(map[string]string)
@@ -298,6 +317,16 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 
 	err = withSourcePolicy(&so)
 	assert.NilError(t, err)
+
+	withSecrets(&so,
+		keyVal{
+			k: "GIT_AUTH_TOKEN",
+			v: os.Getenv("GIT_AUTH_TOKEN"),
+		},
+		keyVal{
+			k: "GIT_AUTH_HEADER",
+			v: os.Getenv("GIT_AUTH_HEADER")},
+	)
 
 	_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		gwc = &clientForceDalecWithInput{gwc}
