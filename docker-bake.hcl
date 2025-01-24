@@ -7,13 +7,6 @@ group "test" {
 }
 
 variable "FRONTEND_REF" {
-    // Buildkit always checks the registry for the frontend image.
-    // AFAIK there is no way to tell it not to.
-    // Even if we have the image locally it will still check the registry and use that instead.
-    // As such we need to use a local only ref to ensure we always use the local image when testing things.
-    //
-    // We'll use this var to set the `BUILDKIT_SYNTAX` var in the builds that consume the frontend which will
-    // cause buildkit to use the local image.
     default = "local/dalec/frontend"
 }
 
@@ -68,8 +61,11 @@ target "runc-azlinux" {
         "RUNC_COMMIT" = RUNC_COMMIT
         "VERSION" = RUNC_VERSION
         "REVISION" = RUNC_REVISION
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     matrix = {
         distro = ["mariner2", "azlinux3"]
@@ -92,8 +88,11 @@ target "runc-jammy" {
         "RUNC_COMMIT" = RUNC_COMMIT
         "VERSION" = RUNC_VERSION
         "REVISION" = RUNC_REVISION
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     matrix = {
         tgt = ["deb", "container"]
@@ -142,8 +141,11 @@ target "test-fixture" {
     dockerfile = "test/fixtures/${f}.yml"
 
     args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     target = tgt
     cache-from = ["type=gha,scope=dalec/${f}/${tgt}/${f}"]
@@ -162,7 +164,10 @@ target "build" {
     }
     dockerfile = BUILD_SPEC
     args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/${tgt}"
     // only tag the container target
@@ -181,7 +186,10 @@ target "examples" {
         f = ["go-md2man-2"]
     }
     args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/container"
     dockerfile = "docs/examples/${f}.yml"
@@ -200,7 +208,10 @@ dependencies:
         bash: {}
     EOT
     args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/container/depsonly"
     tags = ["local/dalec/deps-only:${distro}"]
