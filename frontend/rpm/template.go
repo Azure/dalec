@@ -403,25 +403,25 @@ func (w *specWrapper) Post() fmt.Stringer {
 		return b
 	}
 	artifactsToProcess := w.getArtifactsToProcess()
+	keys := dalec.SortMapKeys(enabledUnits)
 
-	// resolveNameForArtifact gets the name which is a file or dir name to use for the artifact in the package.
-	resolveNameForArtifact := func(artifacts dalec.Artifacts) {
-		keys := dalec.SortMapKeys(enabledUnits)
+	// appendSystemPostScript gets the name (file or dir name) to use for the artifact in the package.
+	appendSystemPostScript := func(artifacts dalec.Artifacts, keys []string) {
 		for _, servicePath := range keys {
 			unitConf := artifacts.Systemd.Units[servicePath]
 			artifact := unitConf.Artifact()
+			b.WriteString("%post\n")
 			b.WriteString(
 				systemdPostScript(artifact.ResolveName(servicePath), unitConf),
 			)
 		}
 	}
 
-	b.WriteString("%post\n")
 	// TODO: can inject other post install steps here in the future
 	//
 	// iterate through slice of artifacts and resolve name for each
-	for _, artifact := range artifactsToProcess {
-		resolveNameForArtifact(artifact)
+	for _, artifacts := range artifactsToProcess {
+		appendSystemPostScript(artifacts, keys)
 	}
 	b.WriteString("\n")
 	return b
@@ -727,15 +727,12 @@ func WriteSpec(spec *dalec.Spec, target string, w io.Writer) error {
 // This function defaults to returning whatever spec level artifacts exist if target level artifacts don't exist.
 func (w *specWrapper) getArtifactsToProcess() []dalec.Artifacts {
 	var artifactsToProcess []dalec.Artifacts
-	if w.Spec == nil || w.Spec.Targets == nil {
-		return nil
-	}
-	for _, t := range w.Spec.Targets {
-		if t.Artifacts != nil {
-			artifactsToProcess = append(artifactsToProcess, *t.Artifacts)
+	if w.Spec != nil && w.Spec.Targets != nil {
+		for _, t := range w.Spec.Targets {
+			artifactsToProcess = append(artifactsToProcess, t.Artifacts)
 		}
 	}
-	if artifactsToProcess == nil {
+	if len(artifactsToProcess) == 0 && w.Spec.Artifacts.Systemd != nil {
 		// this means there were no artifacts in target; default to spec level artifact
 		artifactsToProcess = []dalec.Artifacts{w.Spec.Artifacts}
 	}
