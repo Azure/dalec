@@ -402,10 +402,10 @@ func (w *specWrapper) Post() fmt.Stringer {
 		// as this eliminates the need for extra dependencies in the target container
 		return b
 	}
+
 	artifactsToProcess := w.getArtifactsToProcess()
 	keys := dalec.SortMapKeys(enabledUnits)
 
-	// appendSystemPostScript gets the name (file or dir name) to use for the artifact in the package.
 	appendSystemPostScript := func(artifacts dalec.Artifacts, keys []string) {
 		for _, servicePath := range keys {
 			unitConf := artifacts.Systemd.Units[servicePath]
@@ -732,9 +732,6 @@ func (w *specWrapper) getArtifactsToProcess() []dalec.Artifacts {
 			artifactsToProcess = append(artifactsToProcess, t.Artifacts)
 		}
 	}
-	if len(artifactsToProcess) == 0 && w.Spec.Artifacts.Systemd != nil {
-		// this means there were no artifacts in target; default to spec level artifact
-		artifactsToProcess = []dalec.Artifacts{w.Spec.Artifacts}
-	}
+	artifactsToProcess = append(artifactsToProcess, w.Spec.Artifacts)
 	return artifactsToProcess
 }

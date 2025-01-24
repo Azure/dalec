@@ -19,8 +19,8 @@ type SystemdUnitConfig struct {
 	// to name the service with the appropriate extension, i.e. .service, .timer, etc.
 	Name string `yaml:"name,omitempty" json:"name"`
 
-	// Enable is used to enable the systemd unit on install
-	// This determines what will be written to a systemd preset file
+	// Enable is used to enable the systemd unit on install.
+	// This determines what will be written to a systemd preset file.
 	Enable bool `yaml:"enable,omitempty" json:"enable"`
 }
 
