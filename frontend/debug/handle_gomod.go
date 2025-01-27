@@ -30,7 +30,7 @@ func Gomods(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		worker, ok := inputs[keyGomodWorker]
 		if !ok {
 			worker = llb.Image("alpine:latest", llb.WithMetaResolver(client)).
-				Run(llb.Shlex("apk add --no-cache go git ca-certificates patch")).Root()
+				Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
 		}
 
 		st, err := spec.GomodDeps(sOpt, worker, dalec.Platform(platform))
