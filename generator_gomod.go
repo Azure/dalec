@@ -154,11 +154,12 @@ func (g *SourceGenerator) gitAuth(opts ...llb.ConstraintsOpt) llb.StateOption {
 			}
 
 			if auth.SSH != "" {
-				if !(strings.HasPrefix(host, "github.com") || strings.HasPrefix(host, "www.github.com")) {
-					panic("the user is unknown")
+				username := "git"
+				if auth.SSHUsername != "" {
+					username = auth.SSHUsername
 				}
 
-				fmt.Fprintf(script, `git config --global "url.ssh://git@%[1]s/.insteadOf" https://%[1]s/`, host)
+				fmt.Fprintf(script, `git config --global "url.ssh://%[1]s@%[2]s/.insteadOf" https://%[2]s/`, username, host)
 				script.WriteRune('\n')
 			}
 		}
