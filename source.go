@@ -141,6 +141,7 @@ func (src *SourceGit) AsState(opts ...llb.ConstraintsOpt) (llb.State, error) {
 	}
 	gOpts = append(gOpts, withConstraints(opts))
 	gOpts = append(gOpts, src.Auth.LLBOpt())
+	gOpts = append(gOpts, llb.IgnoreCache)
 
 	st := llb.Git(ref.Remote, src.Commit, gOpts...)
 	return st, nil
@@ -231,6 +232,7 @@ type SourceOpts struct {
 	Resolver   llb.ImageMetaResolver
 	Forward    ForwarderFunc
 	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
+	SessionID  string
 }
 
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
