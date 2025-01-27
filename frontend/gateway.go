@@ -104,6 +104,7 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 
 func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.Client, platform *ocispecs.Platform) dalec.SourceOpts {
 	return dalec.SourceOpts{
+		SessionID:      c.BuildOpts().SessionID,
 		TargetPlatform: platform,
 		Resolver:       c,
 		Forward:        ForwarderFromClient(ctx, c),
