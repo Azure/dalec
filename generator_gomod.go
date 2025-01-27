@@ -36,7 +36,7 @@ func (s *Spec) HasGomods() bool {
 	return false
 }
 
-func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
+func withGomod(g *SourceGenerator, srcSt, worker, sshMount llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		workDir := "/work/src"
 		joinedWorkDir := filepath.Join(workDir, g.Subpath)
@@ -62,6 +62,9 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 				llb.IgnoreCache,
 				llb.AddEnv("GOPATH", "/go"),
 				llb.AddEnv("TMP_GOMODCACHE", proxyPath),
+				llb.AddEnv("SSH_AUTH_SOCK", "/sshsock/S.gpg-agent.ssh"),
+				llb.AddEnv("GIT_SSH_COMMAND", "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"),
+				llb.AddMount("/sshsock", sshMount),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				llb.AddMount(proxyPath, llb.Scratch(), llb.AsPersistentCacheDir(GomodCacheKey, llb.CacheMountShared)),
@@ -70,6 +73,46 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 		}
 		return in
 	}
+}
+
+func withGomod2(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
+	return func(in llb.State) llb.State {
+		workDir := "/work/src"
+		joinedWorkDir := filepath.Join(workDir, g.Subpath)
+		srcMount := llb.AddMount(workDir, srcSt)
+
+		paths := g.Gomod.Paths
+		if g.Gomod.Paths == nil {
+			paths = []string{"."}
+		}
+
+		worker = worker.With(g.gitAuth(opts...))
+		for _, path := range paths {
+			in = worker.Run(
+				ShArgs(`go mod download`),
+				llb.AddEnv("GOPATH", "/go"),
+				llb.AddEnv("GIT_SSH_COMMAND", "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"),
+				llb.Dir(filepath.Join(joinedWorkDir, path)),
+				llb.IgnoreCache,
+				srcMount,
+				WithConstraints(opts...),
+				g.withSSHAuthSockets(),
+			).AddMount(gomodCacheDir, in)
+		}
+		return in
+	}
+}
+
+func (g *SourceGenerator) withSSHAuthSockets() llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		for _, auth := range g.Gomod.Auth {
+			if auth.SSH == "" {
+				continue
+			}
+
+			llb.AddSSHSocket(llb.SSHID(auth.SSH)).SetRunOption(ei)
+		}
+	})
 }
 
 func (g *SourceGenerator) gitAuth(opts ...llb.ConstraintsOpt) llb.StateOption {
@@ -84,7 +127,10 @@ func (g *SourceGenerator) gitAuth(opts ...llb.ConstraintsOpt) llb.StateOption {
 
 		script := new(bytes.Buffer)
 		fmt.Fprintln(script, `#!/usr/bin/env sh`)
+		fmt.Fprintln(script, `set -exu`)
 		secrets := make(map[string]struct{}, len(g.Gomod.Auth))
+		socks := []any{}
+		_ = socks
 
 		for host, auth := range g.Gomod.Auth {
 			var headerArg string
@@ -101,12 +147,20 @@ func (g *SourceGenerator) gitAuth(opts ...llb.ConstraintsOpt) llb.StateOption {
 				secrets[auth.Token] = struct{}{}
 			}
 
-			if auth.SSH != "" && headerArg == "" {
-				panic("unimplemented")
+			if headerArg != "" {
+				fmt.Fprintf(script, `git config --global http."https://%s".extraheader "%s"`, host, headerArg)
+				script.WriteRune('\n')
+				continue
 			}
 
-			fmt.Fprintf(script, `git config --global http."https://%s".extraheader "%s"`, host, headerArg)
-			script.WriteRune('\n')
+			if auth.SSH != "" {
+				if !(strings.HasPrefix(host, "github.com") || strings.HasPrefix(host, "www.github.com")) {
+					panic("the user is unknown")
+				}
+
+				fmt.Fprintf(script, `git config --global "url.ssh://git@%[1]s/.insteadOf" https://%[1]s/`, host)
+				script.WriteRune('\n')
+			}
 		}
 
 		secretsOpt := runOptionFunc(func(ei *llb.ExecInfo) {
@@ -119,10 +173,12 @@ func (g *SourceGenerator) gitAuth(opts ...llb.ConstraintsOpt) llb.StateOption {
 		lines := strings.Split(scriptTxt, "\n")
 		_ = lines
 		scriptState := llb.Scratch().File(llb.Mkfile("/script.sh", 0o755, script.Bytes()))
+		knownHostsState := llb.Scratch().File(llb.Mkfile("/known_hosts", 0o755, []byte{}))
 
 		return worker.Run(
 			llb.Args([]string{"/tmp/mnt/script.sh"}),
 			llb.AddMount("/tmp/mnt", scriptState),
+			llb.AddMount("/root/.ssh", knownHostsState),
 			secretsOpt,
 			WithConstraints(opts...),
 		).Root()
@@ -170,8 +226,46 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
 				if gen.Gomod != nil {
-					in = in.With(withGomod(gen, patched[key], worker, opts...))
+					in = in.With(withGomod(gen, patched[key], worker, llb.Scratch(), opts...))
 				}
+			}
+			return in
+		})
+	}
+
+	return &deps, nil
+}
+
+// GomodDeps returns an [llb.State] containing all the go module dependencies for the spec
+// for any sources that have a gomod generator specified.
+// If there are no sources with a gomod generator, this will return a nil state.
+func (s *Spec) GomodDeps2(sOpt SourceOpts, worker, sshMount llb.State, opts ...llb.ConstraintsOpt) (*llb.State, error) {
+	sources := s.gomodSources()
+	if len(sources) == 0 {
+		return nil, nil
+	}
+
+	deps := llb.Scratch()
+
+	// Get the patched sources for the go modules
+	// This is needed in case a patch includes changes to go.mod or go.sum
+	patched, err := s.getPatchedSources(sOpt, worker, func(name string) bool {
+		_, ok := sources[name]
+		return ok
+	}, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get patched sources")
+	}
+
+	sorted := SortMapKeys(patched)
+
+	for _, key := range sorted {
+		src := s.Sources[key]
+
+		opts := append(opts, ProgressGroup("Fetch go module dependencies for source: "+key))
+		deps = deps.With(func(in llb.State) llb.State {
+			for _, gen := range src.Generate {
+				in = in.With(withGomod2(gen, patched[key], worker, opts...))
 			}
 			return in
 		})
