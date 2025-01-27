@@ -229,6 +229,12 @@ type GitAuth struct {
 	SSH string `yaml:"ssh,omitempty" json:"ssh,omitempty"`
 }
 
+type GitAuthWithUsername struct {
+	GitAuth `yaml:",inline,omitempty" json:",inline,omitempty"`
+	// SSHUsername is the SSHUsername to use when connecting to a git repo
+	SSHUsername string `yaml:"ssh_username,omitempty" json:"ssh_username,omitempty"`
+}
+
 // LLBOpt returns an [llb.GitOption] which sets the auth header and token secret
 // values in LLB if they are set.
 func (a *GitAuth) LLBOpt() llb.GitOption {
@@ -374,7 +380,7 @@ type GeneratorGomod struct {
 	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 	// Auth is the git authorization to use for gomods. The keys are the hosts, and the values are the auth to use for that host.
-	Auth map[string]GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	Auth map[string]GitAuthWithUsername `yaml:"auth,omitempty" json:"auth,omitempty"`
 }
 
 // GeneratorCargohome is used to generate a cargo home from cargo sources
