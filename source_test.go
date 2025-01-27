@@ -19,6 +19,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -211,12 +212,12 @@ func TestSourceGitHTTP(t *testing.T) {
 			},
 		}
 
-		ops := getGomodLLB(ctx, t, spec)
-		checkGitAuth(t, ops, &src)
+		m, ops := getGomodLLBOps(ctx, t, spec)
+		checkGitAuth(t, m, ops, &src)
 	})
 }
 
-func getGomodLLB(ctx context.Context, t *testing.T, spec Spec) []*pb.Op {
+func getGomodLLBOps(ctx context.Context, t *testing.T, spec Spec) (map[string]*pb.Op, []*pb.Op) {
 	sOpt := SourceOpts{
 		GetContext: func(name string, opts ...llb.LocalOption) (*llb.State, error) {
 			st := llb.Local(name, opts...)
@@ -237,17 +238,19 @@ func getGomodLLB(ctx context.Context, t *testing.T, spec Spec) []*pb.Op {
 		t.Fatalf("error marshaling llb.State: %s", err)
 	}
 
-	out := make([]*pb.Op, 0, len(def.Def)-1)
-	for _, dt := range def.Def[:len(def.Def)-1] {
-		op := &pb.Op{}
-		if err := op.Unmarshal(dt); err != nil {
-			t.Fatal(err)
-		}
+	m := map[string]*pb.Op{}
+	arr := make([]*pb.Op, 0, len(def.Def))
 
-		out = append(out, op)
+	for _, dt := range def.Def[:len(def.Def)-1] {
+		var op pb.Op
+		err := op.Unmarshal(dt)
+		require.NoError(t, err)
+		dgst := digest.FromBytes(dt)
+		m[string(dgst)] = &op
+		arr = append(arr, &op)
 	}
 
-	return out
+	return m, arr
 }
 
 func TestSourceHTTP(t *testing.T) {
@@ -1005,60 +1008,59 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 	}
 }
 
-func checkGitAuth(t *testing.T, ops []*pb.Op, src *Source) {
-	op := ops[0].GetSource()
-
-	var bkAddr string
-
-	_, other, ok := strings.Cut(src.Git.URL, "@")
-	if ok {
-		// ssh
-		// buildkit replaces the `:` between host and port with a `/` in the identifier
-		bkAddr = "git://" + strings.Replace(other, ":", "/", 1)
-	} else {
-		// not ssh
-		_, other, ok := strings.Cut(src.Git.URL, "://")
-		if !ok {
-			t.Fatal("invalid git URL")
-		}
-		bkAddr = "git://" + other
-	}
-
-	xID := bkAddr + "#" + src.Git.Commit
-	if op.Identifier != xID {
-		t.Errorf("expected identifier %q, got %q", xID, op.Identifier)
-	}
-
-	if op.Attrs["git.fullurl"] != src.Git.URL {
-		t.Errorf("expected git.fullurl %q, got %q", src.Git.URL, op.Attrs["git.fullurl"])
-	}
-
+func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) {
 	const (
-		defaultAuthHeader = "GIT_AUTH_HEADER"
-		defaultAuthToken  = "GIT_AUTH_TOKEN"
-		defaultAuthSSH    = "default"
+		scriptExecOpIdx        = 1
+		goModDownloadExecOpIdx = 3
+
+		numSecrets = 2
 	)
 
-	hdr := defaultAuthHeader
-	if src.Git.Auth.Header != "" {
-		hdr = src.Git.Auth.Header
-	}
-	assert.Check(t, cmp.Equal(op.Attrs["git.authheadersecret"], hdr), op.Attrs)
+	// Check that the requests for secrets are there for when the script runs.
+	scriptOp := ops[scriptExecOpIdx].GetExec()
+	assert.Check(t, cmp.Len(scriptOp.Secretenv, numSecrets), scriptOp)
 
-	token := defaultAuthToken
-	if src.Git.Auth.Token != "" {
-		token = src.Git.Auth.Token
+	secrets := map[string]struct{}{}
+	for _, s := range scriptOp.Secretenv {
+		secrets[s.ID] = struct{}{}
 	}
-	assert.Check(t, cmp.Equal(op.Attrs["git.authtokensecret"], token), op.Attrs)
 
-	if !strings.HasPrefix(src.Git.URL, "http") {
-		// ssh settings are only set when using ssh based auth
-		ssh := defaultAuthSSH
-		if src.Git.Auth.SSH != "" {
-			ssh = src.Git.Auth.SSH
+	assert.Check(t, cmp.Len(secrets, 2), secrets)
+
+	for _, auth := range src.Generate[0].Gomod.Auth {
+		chk := auth.Token
+		if chk == "" {
+			chk = auth.Header
 		}
-		assert.Check(t, cmp.Equal(op.Attrs["git.mountsshsock"], ssh), op)
+		require.NotEqual(t, chk, "")
+
+		_, requiresSecret := secrets[chk]
+		assert.Check(t, requiresSecret, secrets)
 	}
+
+	inpDigest := ops[scriptExecOpIdx].Inputs[0].Digest
+	mf, hasMkFileDigest := m[inpDigest]
+	assert.Check(t, hasMkFileDigest)
+	mkFileOp := mf.GetFile()
+
+	// Check that it depends on the `mkfile` op which generates the script.
+	assert.Check(t, cmp.Len(mkFileOp.Actions, 1), mkFileOp)
+	famf, ok := mkFileOp.Actions[0].Action.(*pb.FileAction_Mkfile)
+	assert.Check(t, ok, mkFileOp)
+	assert.Check(t, cmp.Equal(famf.Mkfile.Path, "/script.sh"), famf.Mkfile)
+	assert.Check(t, strings.HasPrefix(string(famf.Mkfile.Data), "#!/usr/bin/env sh"), string(famf.Mkfile.Data))
+	assert.Check(t, strings.Contains(string(famf.Mkfile.Data), "git config"), string(famf.Mkfile.Data))
+
+	dlOp := ops[goModDownloadExecOpIdx]
+	dependsOnScriptOp := false
+	for _, input := range dlOp.Inputs {
+		if o, ok := m[input.Digest]; ok && o == ops[scriptExecOpIdx] {
+			dependsOnScriptOp = true
+			break
+		}
+	}
+
+	assert.Check(t, dependsOnScriptOp, dlOp.Inputs)
 }
 
 func checkFilter(t *testing.T, op *pb.FileOp, src *Source) {
