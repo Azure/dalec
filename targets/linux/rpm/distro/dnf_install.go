@@ -157,7 +157,6 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 	runOpts = append(runOpts, cfg.mounts...)
 
 	return dalec.WithRunOptions(runOpts...)
-
 }
 
 func DnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.RunOption {

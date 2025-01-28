@@ -21,13 +21,21 @@ import (
 	"github.com/pkg/errors"
 )
 
-const customSystemdPostinstFile = "custom_systemd_postinst.sh.partial"
+const (
+	DebHelperCompat           = "11"
+	customSystemdPostinstFile = "custom_systemd_postinst.sh.partial"
+)
 
 //go:embed templates/patch-header.txt
 var patchHeader []byte
 
 //go:embed templates/debian_install_header.sh
 var debianInstall []byte
+
+func sanitizeSourceKey(key string) string {
+	replacer := strings.NewReplacer("_", "", "-", "", ".", "")
+	return replacer.Replace(key)
+}
 
 // This creates a directory in the debian root directory for each patch, and copies the patch files into it.
 // The format for each patch dir matches what would normally be under `debian/patches`, just that this is a separate dir for every source we are patching

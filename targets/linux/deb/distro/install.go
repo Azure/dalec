@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/linux/deb"
+	"github.com/Azure/dalec/packaging/linux/deb"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )

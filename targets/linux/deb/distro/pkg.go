@@ -8,8 +8,8 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/linux/deb"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/Azure/dalec/packaging/linux/deb"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"

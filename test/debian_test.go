@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/Azure/dalec/frontend/linux/deb/debian"
+	"github.com/Azure/dalec/targets/linux/deb/debian"
 )
 
 func TestBookworm(t *testing.T) {

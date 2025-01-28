@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
@@ -14,8 +13,7 @@ import (
 const (
 	// Unique name that would not normally be in the spec
 	// This will get used to create the source tar for go module deps
-	gomodsName      = "xxxdalecGomodsInternal"
-	DebHelperCompat = "11"
+	gomodsName = "xxxdalecGomodsInternal"
 )
 
 func mountSources(sources map[string]llb.State, dir string, mod func(string) string) llb.RunOption {
@@ -130,11 +128,6 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersio
 		).AddMount("/tmp/out", llb.Scratch())
 
 	return dalec.MergeAtPath(llb.Scratch(), []llb.State{st, srcPkg}, "/"), nil
-}
-
-func sanitizeSourceKey(key string) string {
-	replacer := strings.NewReplacer("_", "", "-", "", ".", "")
-	return replacer.Replace(key)
 }
 
 func debSources(worker llb.State, sources map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
