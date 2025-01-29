@@ -142,7 +142,6 @@ func (src *SourceGit) AsState(opts ...llb.ConstraintsOpt) (llb.State, error) {
 	}
 	gOpts = append(gOpts, withConstraints(opts))
 	gOpts = append(gOpts, src.Auth.LLBOpt())
-	gOpts = append(gOpts, llb.IgnoreCache)
 
 	st := llb.Git(ref.Remote, src.Commit, gOpts...)
 	return st, nil
@@ -880,7 +879,7 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 	return retErr
 }
 
-func SecretToEnv(secretName string, opts ...llb.SecretOption) llb.RunOption {
+func secretToEnv(secretName string, opts ...llb.SecretOption) llb.RunOption {
 	allOpts := append([]llb.SecretOption{llb.SecretID(secretName), llb.SecretAsEnv(true)}, opts...)
 	return llb.AddSecret(secretName, allOpts...)
 }

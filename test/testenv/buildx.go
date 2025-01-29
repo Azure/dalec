@@ -226,8 +226,6 @@ type FrontendSpec struct {
 	Build gwclient.BuildFunc
 }
 
-// withResolveLocal tells buildkit to prefer local images when resolving image references.
-// This prevents unnecessary API requests to registries.
 type keyVal struct {
 	k string
 	v string

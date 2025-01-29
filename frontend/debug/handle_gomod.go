@@ -54,6 +54,6 @@ func Gomods(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		if err != nil {
 			return nil, nil, err
 		}
-		return ref, &dalec.DockerImageSpec{Image: ocispecs.Image{Platform: ocispecs.Platform{OS: "linux", Architecture: "amd64"}}}, nil
+		return ref, &dalec.DockerImageSpec{}, nil
 	})
 }
