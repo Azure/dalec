@@ -17,6 +17,7 @@ variable "DALEC_DISABLE_DIFF_MERGE" {
 }
 
 target "frontend" {
+    // uses default Dockerfile
     target = "frontend"
     tags = [FRONTEND_REF]
 }
