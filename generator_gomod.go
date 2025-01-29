@@ -163,7 +163,7 @@ func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
 		}
 
 		for secret := range secrets {
-			SecretToEnv(secret).SetRunOption(ei)
+			secretToEnv(secret).SetRunOption(ei)
 		}
 	})
 }
