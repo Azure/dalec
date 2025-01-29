@@ -234,9 +234,7 @@ type keyVal struct {
 func withSecrets(so *client.SolveOpt, kvs ...keyVal) {
 	m := map[string][]byte{}
 	for _, kv := range kvs {
-		k := kv.k
-		v := kv.v
-		m[k] = []byte(v)
+		m[kv.k] = []byte(kv.v)
 	}
 	so.Session = []session.Attachable{secretsprovider.FromMap(m)}
 }

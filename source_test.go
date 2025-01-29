@@ -1044,13 +1044,13 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) 
 	assert.Check(t, cmp.Len(secrets, 3), secrets)
 
 	for _, auth := range src.Generate[0].Gomod.Auth {
-		chk := auth.Token
-
-		if chk == "" {
+		var chk string
+		switch {
+		case auth.Token != "":
+			chk = auth.Token
+		case auth.Header != "":
 			chk = auth.Header
-		}
-
-		if chk == "" {
+		default:
 			chk = auth.SSH
 		}
 
@@ -1088,11 +1088,7 @@ func hasTmpFSMount(scriptOp *pb.ExecOp) bool {
 		}
 
 		tfso := mnt.GetTmpfsOpt()
-		if tfso == nil {
-			return false
-		}
-
-		if tfso.Size == 0 {
+		if tfso == nil || tfso.Size == 0 {
 			return false
 		}
 	}
