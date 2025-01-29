@@ -117,7 +117,7 @@ func (src *SourceContext) AsState(path string, includes []string, excludes []str
 	}
 
 	if st == nil {
-		return llb.Scratch(), errors.Errorf("context %q not found", src.Name)
+		return llb.Scratch(), fmt.Errorf("context %q not found", src.Name)
 	}
 
 	return *st, nil
@@ -179,7 +179,7 @@ func (src *SourceHTTP) AsState(name string, opts ...llb.ConstraintsOpt) (llb.Sta
 
 func (src *SourceHTTP) validate() error {
 	if src.URL == "" {
-		return errors.New("http source must have a URL")
+		return goerrors.New("http source must have a URL")
 	}
 	if src.Digest != "" {
 		if err := src.Digest.Validate(); err != nil {
@@ -218,11 +218,11 @@ func (s *InvalidPatchError) Unwrap() error {
 }
 
 var (
-	sourceNamePathSeparatorError = errors.New("source name must not contain path separator")
-	errMissingSource             = errors.New("source is missing from sources list")
+	sourceNamePathSeparatorError = goerrors.New("source name must not contain path separator")
+	errMissingSource             = goerrors.New("source is missing from sources list")
 
-	errPatchRequiresSubpath = errors.New("patch source refers to a directory source without a subpath to the patch file to use")
-	errPatchFileNoSubpath   = errors.New("patch source refers to a file source but patch spec specifies a subpath")
+	errPatchRequiresSubpath = goerrors.New("patch source refers to a directory source without a subpath to the patch file to use")
+	errPatchFileNoSubpath   = goerrors.New("patch source refers to a file source but patch spec specifies a subpath")
 )
 
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
@@ -234,7 +234,6 @@ type SourceOpts struct {
 	Forward        ForwarderFunc
 	GetContext     func(string, ...llb.LocalOption) (*llb.State, error)
 	TargetPlatform *ocispecs.Platform
-	SessionID      string
 }
 
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -254,7 +253,7 @@ func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOp
 	return s.asState(name, true, sOpt, opts...)
 }
 
-var errInvalidMountConfig = errors.New("invalid mount config")
+var errInvalidMountConfig = goerrors.New("invalid mount config")
 
 func pathHasPrefix(s string, prefix string) bool {
 	if s == prefix {

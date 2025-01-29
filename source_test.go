@@ -192,12 +192,16 @@ func TestSourceGitHTTP(t *testing.T) {
 			Generate: []*SourceGenerator{
 				{
 					Gomod: &GeneratorGomod{
-						Auth: map[string]GitAuth{
+						Auth: map[string]GitAuthWithUsername{
 							"github.com": {
-								Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+								GitAuth: GitAuth{
+									Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+								},
 							},
 							"dev.azure.com": {
-								Header: "DALEC_GIT_AUTH_HEADER_ADO",
+								GitAuth: GitAuth{
+									Header: "DALEC_GIT_AUTH_HEADER_ADO",
+								},
 							},
 						},
 					},
