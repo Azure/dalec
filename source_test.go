@@ -203,6 +203,12 @@ func TestSourceGitHTTP(t *testing.T) {
 									Header: "DALEC_GIT_AUTH_HEADER_ADO",
 								},
 							},
+							"some.other.com": {
+								GitAuth: GitAuth{
+									SSH: "dalec",
+								},
+								SSHUsername: "hello",
+							},
 						},
 					},
 				},
@@ -1014,10 +1020,8 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 
 func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) {
 	const (
-		scriptExecOpIdx        = 1
-		goModDownloadExecOpIdx = 3
-
-		numSecrets = 2
+		scriptExecOpIdx = 2
+		numSecrets      = 2
 	)
 
 	// Check that the requests for secrets are there for when the script runs.
@@ -1029,13 +1033,27 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) 
 		secrets[s.ID] = struct{}{}
 	}
 
-	assert.Check(t, cmp.Len(secrets, 2), secrets)
+	for _, mnt := range scriptOp.Mounts {
+		if mnt.MountType != pb.MountType_SSH {
+			continue
+		}
+
+		secrets[mnt.SSHOpt.ID] = struct{}{}
+	}
+
+	assert.Check(t, cmp.Len(secrets, 3), secrets)
 
 	for _, auth := range src.Generate[0].Gomod.Auth {
 		chk := auth.Token
+
 		if chk == "" {
 			chk = auth.Header
 		}
+
+		if chk == "" {
+			chk = auth.SSH
+		}
+
 		require.NotEqual(t, chk, "")
 
 		_, requiresSecret := secrets[chk]
@@ -1047,24 +1065,49 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) 
 	assert.Check(t, hasMkFileDigest)
 	mkFileOp := mf.GetFile()
 
+	// check that "/dev/shm/git" is a tmpfs mount
+	assert.Check(t, hasTmpFSMount(scriptOp), scriptOp)
+
+	// check that an ssh socket will be mounted
+	assert.Check(t, hasSSHMount(scriptOp), scriptOp)
+
 	// Check that it depends on the `mkfile` op which generates the script.
 	assert.Check(t, cmp.Len(mkFileOp.Actions, 1), mkFileOp)
 	famf, ok := mkFileOp.Actions[0].Action.(*pb.FileAction_Mkfile)
 	assert.Check(t, ok, mkFileOp)
-	assert.Check(t, cmp.Equal(famf.Mkfile.Path, "/script.sh"), famf.Mkfile)
+	assert.Check(t, cmp.Equal(famf.Mkfile.Path, "/go_mod_download.sh"), famf.Mkfile)
 	assert.Check(t, strings.HasPrefix(string(famf.Mkfile.Data), "#!/usr/bin/env sh"), string(famf.Mkfile.Data))
 	assert.Check(t, strings.Contains(string(famf.Mkfile.Data), "git config"), string(famf.Mkfile.Data))
+}
 
-	dlOp := ops[goModDownloadExecOpIdx]
-	dependsOnScriptOp := false
-	for _, input := range dlOp.Inputs {
-		if o, ok := m[input.Digest]; ok && o == ops[scriptExecOpIdx] {
-			dependsOnScriptOp = true
-			break
+func hasTmpFSMount(scriptOp *pb.ExecOp) bool {
+	for _, mnt := range scriptOp.Mounts {
+		trimmed := strings.TrimRight(mnt.Dest, "/")
+		if trimmed != "/dev/shm/git" {
+			continue
+		}
+
+		tfso := mnt.GetTmpfsOpt()
+		if tfso == nil {
+			return false
+		}
+
+		if tfso.Size == 0 {
+			return false
 		}
 	}
 
-	assert.Check(t, dependsOnScriptOp, dlOp.Inputs)
+	return true
+}
+
+func hasSSHMount(scriptOp *pb.ExecOp) bool {
+	for _, mnt := range scriptOp.Mounts {
+		if mnt.MountType == pb.MountType_SSH {
+			return true
+		}
+	}
+
+	return false
 }
 
 func checkFilter(t *testing.T, op *pb.FileOp, src *Source) {
