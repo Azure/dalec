@@ -80,9 +80,7 @@ func specToContainerLLB(w worker, spec *dalec.Spec, targetKey string, rpmDir llb
 	).AddMount(workPath, rootfs)
 
 	if post := spec.GetImagePost(targetKey); post != nil && len(post.Symlinks) > 0 {
-		rootfs = builderImg.
-			Run(dalec.WithConstraints(opts...), dalec.InstallPostSymlinks(post, workPath)).
-			AddMount(workPath, rootfs)
+		rootfs = rootfs.With(dalec.InstallPostSymlinks(builderImg, post, workPath, opts...))
 	}
 
 	return rootfs, nil

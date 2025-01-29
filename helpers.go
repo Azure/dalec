@@ -32,6 +32,7 @@ const (
 )
 
 var disableDiffMerge atomic.Bool
+var disableSymlinks atomic.Bool
 
 // DisableDiffMerge allows disabling the use of [llb.Diff] and [llb.Merge] in favor of [llb.Copy].
 // This is needed when the buildkit version does not support [llb.Diff] and [llb.Merge].
@@ -43,6 +44,12 @@ var disableDiffMerge atomic.Bool
 // checks the capabilities of the backend.
 func DisableDiffMerge(v bool) {
 	disableDiffMerge.Store(v)
+}
+
+// DisableSymlinks allows disabling the use of the [llb.Symlink] FileAction.
+// This is needed when the buildkit version does not support [llb.Symlink].
+func DisableSymlinks(v bool) {
+	disableSymlinks.Store(v)
 }
 
 type copyOptionFunc func(*llb.CopyInfo)
@@ -367,17 +374,34 @@ func ShArgsf(format string, args ...interface{}) llb.RunOption {
 	return ShArgs(fmt.Sprintf(format, args...))
 }
 
-// InstallPostSymlinks returns a RunOption that adds symlinks defined in the [PostInstall] underneath the provided rootfs path.
-func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
-	return runOptionFunc(func(ei *llb.ExecInfo) {
+func InstallPostSymlinks(builderImg llb.State, post *PostInstall, rootfsPath string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	if disableSymlinks.Load() {
+		return installPostSymlinksShell(builderImg, post, rootfsPath, opts...)
+	}
+
+	return installPostSymlinksLLB(post)
+}
+
+func installPostSymlinksShell(builderImg llb.State, post *PostInstall, rootfsPath string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(rootfs llb.State) llb.State {
 		if post == nil {
-			return
+			return rootfs
 		}
 
 		if len(post.Symlinks) == 0 {
-			return
+			return rootfs
 		}
 
+		return builderImg.Run(
+			WithConstraints(opts...),
+			withSymlinkInstallScript(post, rootfsPath),
+		).AddMount(rootfsPath, rootfs)
+	}
+}
+
+// withSymlinkInstallScript returns a RunOption that adds symlinks defined in the [PostInstall] underneath the provided rootfs path.
+func withSymlinkInstallScript(post *PostInstall, rootfsPath string) llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
 		llb.Dir(rootfsPath).SetRunOption(ei)
 
 		buf := bytes.NewBuffer(nil)
@@ -395,6 +419,23 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 		llb.Args([]string{"/bin/sh", name}).SetRunOption(ei)
 		ProgressGroup("Add post-install symlinks").SetRunOption(ei)
 	})
+}
+
+// InstallPostSymlinks returns a RunOption that adds symlinks defined in the [PostInstall] underneath the provided rootfs path.
+func installPostSymlinksLLB(post *PostInstall, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(s llb.State) llb.State {
+		if post == nil {
+			return s
+		}
+
+		ret := s
+		pg := llb.ProgressGroup(identity.NewID(), "add symlinks", false)
+		for oldpath, sl := range post.Symlinks {
+			ret = ret.File(llb.Symlink(oldpath, sl.Path), pg)
+		}
+
+		return ret
+	}
 }
 
 func (s *Spec) GetSigner(targetKey string) (*PackageSigner, bool) {

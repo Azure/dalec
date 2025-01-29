@@ -134,6 +134,9 @@ func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOp
 var (
 	supportsDiffMergeOnce sync.Once
 	supportsDiffMerge     atomic.Bool
+
+	supportsSymlinksOnce sync.Once
+	supportsSymlinks     atomic.Bool
 )
 
 // SupportsDiffMerge checks if the given client supports the diff and merge operations.
@@ -148,6 +151,14 @@ func SupportsDiffMerge(client gwclient.Client) bool {
 	return supportsDiffMerge.Load()
 }
 
+// SupportsSymlinks checks if the given client supports the diff and merge operations.
+func SupportsSymlinks(client gwclient.Client) bool {
+	supportsSymlinksOnce.Do(func() {
+		supportsSymlinks.Store(checkSymlinks(client))
+	})
+	return supportsSymlinks.Load()
+}
+
 func checkDiffMerge(client gwclient.Client) bool {
 	caps := client.BuildOpts().LLBCaps
 	if caps.Supports(pb.CapMergeOp) != nil {
@@ -157,6 +168,15 @@ func checkDiffMerge(client gwclient.Client) bool {
 	if caps.Supports(pb.CapDiffOp) != nil {
 		return false
 	}
+	return true
+}
+
+func checkSymlinks(client gwclient.Client) bool {
+	caps := client.BuildOpts().LLBCaps
+	if err := caps.Supports(pb.CapFileSymlinkCreate); err != nil {
+		return false
+	}
+
 	return true
 }
 
