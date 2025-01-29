@@ -103,9 +103,8 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 
 func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.Client) dalec.SourceOpts {
 	return dalec.SourceOpts{
-		SessionID: c.BuildOpts().SessionID,
-		Resolver:  c,
-		Forward:   ForwarderFromClient(ctx, c),
+		Resolver: c,
+		Forward:  ForwarderFromClient(ctx, c),
 		GetContext: func(ref string, opts ...llb.LocalOption) (*llb.State, error) {
 			if ref == dockerui.DefaultLocalNameContext {
 				return dc.MainContext(ctx, opts...)
