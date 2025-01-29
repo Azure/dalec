@@ -42,7 +42,7 @@ func (s *Spec) HasGomods() bool {
 func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		const (
-			fourKB           = 4 * (1 << 10)
+			fourKB           = 4096
 			workDir          = "/work/src"
 			scriptMountPoint = "/tmp/mnt"
 		)
