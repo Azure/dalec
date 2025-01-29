@@ -65,7 +65,6 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 				llb.AddMount(gitConfigMountpoint, llb.Scratch(), llb.Tmpfs(llb.TmpfsSize(fourKB))), // to house the gitconfig, which has secrets
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
-				llb.IgnoreCache,
 				WithConstraints(opts...),
 			).AddMount(gomodCacheDir, in)
 		}
@@ -149,7 +148,7 @@ func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
 		}
 
 		for secret := range secrets {
-			SecretToEnv(secret).SetRunOption(ei)
+			secretToEnv(secret).SetRunOption(ei)
 		}
 	})
 }
