@@ -88,18 +88,24 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 }
 
 func (g *SourceGenerator) gitconfigGeneratorScript() llb.State {
-	var script bytes.Buffer
+	var (
+		script bytes.Buffer
+		noop   = func() {}
+
+		createPreamble = func() {
+			fmt.Fprintln(&script, `set -eu`)
+			fmt.Fprintf(&script, `ln -sf %s/.gitconfig "${HOME}/.gitconfig"`, gitConfigMountpoint)
+			script.WriteRune('\n')
+		}
+	)
+
 	fmt.Fprintln(&script, `#!/usr/bin/env sh`)
 
-	if g.Gomod == nil {
-		return llb.Scratch().File(llb.Mkfile(scriptRelativePath, 0o755, script.Bytes()))
-	}
-
-	fmt.Fprintln(&script, `set -eu`)
-	fmt.Fprintf(&script, `ln -sf %s/.gitconfig "${HOME}/.gitconfig"`, gitConfigMountpoint)
-	script.WriteRune('\n')
-
 	for host, auth := range g.Gomod.Auth {
+		// Only do this the first time through the loop
+		createPreamble()
+		createPreamble = noop
+
 		var headerArg string
 		if auth.Header != "" {
 			headerArg = fmt.Sprintf(`Authorization: ${%s}`, auth.Header)
@@ -109,7 +115,7 @@ func (g *SourceGenerator) gitconfigGeneratorScript() llb.State {
 			line := fmt.Sprintf(`tkn="$(echo -n "x-access-token:${%s}" | base64)"`, auth.Token)
 			fmt.Fprintln(&script, line)
 
-			headerArg = fmt.Sprintf(`Authorization: basic ${tkn}`)
+			headerArg = `Authorization: basic ${tkn}`
 		}
 
 		if headerArg != "" {
