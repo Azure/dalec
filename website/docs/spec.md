@@ -160,7 +160,23 @@ dependencies:
   runtime:
     - libfoo
     - libbar
+  recommends:
+    - libcafe
+  test:
+    - kind
+  extra_repos:
+    - libdecaf
 ```
+
+`Build` dependencies are the list of packages required to build the package.
+
+`Runtime` dependencies are the list of packages required to install/run the package.
+
+`Recommends` dependencies are the list of packages recommended to install with the generated package.
+
+`Test` dependencies list packages required for running tests. These packages are only installed for tests which have steps that require running a command in the built container.
+
+See [dependencies](dependencies.md) for more details on dependency options.
 
 Sometimes you may need to add extra repositories in order to fulfill the
 specified dependencies.
