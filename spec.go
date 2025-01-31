@@ -222,17 +222,39 @@ type GitAuth struct {
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
 	Token string `yaml:"token,omitempty" json:"token,omitempty"`
-	// SSH is the name of the secret which contains the ssh auth into when using
+	// SSH is the name of the secret which contains the ssh auth info when using
 	// ssh based auth.
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
 	SSH string `yaml:"ssh,omitempty" json:"ssh,omitempty"`
 }
 
-type GitAuthWithUsername struct {
-	GitAuth `yaml:",inline,omitempty" json:",inline,omitempty"`
-	// SSHUsername is the SSHUsername to use when connecting to a git repo
-	SSHUsername string `yaml:"ssh_username,omitempty" json:"ssh_username,omitempty"`
+type GomodGitAuth struct {
+	// Header is the name of the secret which contains the git auth header.
+	// when using git auth header based authentication.
+	// Note: This should not have the *actual* secret value, just the name of
+	// the secret which was specified as a build secret.
+	Header string `yaml:"header,omitempty" json:"header,omitempty"`
+	// Token is the name of the secret which contains a git auth token when using
+	// token based authentication.
+	// Note: This should not have the *actual* secret value, just the name of
+	// the secret which was specified as a build secret.
+	Token string `yaml:"token,omitempty" json:"token,omitempty"`
+	// SSH is a struct container the name of the ssh ID which contains the
+	// address of the ssh auth socket, plus the username to use for the git
+	// remote.
+	// Note: This should not have the *actual* socket address, just the name of
+	// the ssh ID which was specified as a build secret.
+	SSH *GomodGitAuthSSH `yaml:"ssh,omitempty" json:"ssh,omitempty"`
+}
+
+type GomodGitAuthSSH struct {
+	// ID is the name of the ssh socket to mount, as provided via the `--ssh`
+	// flag to `docker build`.
+	ID string `yaml:"id,omitempty" json:"id,omitempty"`
+	// Username is the username to use with this particular git remote. If none
+	// is provided, `git` will be inserted.
+	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 }
 
 // LLBOpt returns an [llb.GitOption] which sets the auth header and token secret
@@ -380,7 +402,7 @@ type GeneratorGomod struct {
 	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 	// Auth is the git authorization to use for gomods. The keys are the hosts, and the values are the auth to use for that host.
-	Auth map[string]GitAuthWithUsername `yaml:"auth,omitempty" json:"auth,omitempty"`
+	Auth map[string]GomodGitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
 }
 
 // GeneratorCargohome is used to generate a cargo home from cargo sources
