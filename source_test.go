@@ -180,26 +180,30 @@ func TestSourceGitHTTP(t *testing.T) {
 	})
 
 	t.Run("gomod auth", func(t *testing.T) {
+		const (
+			numSecrets = 2
+			numSSH     = 1
+		)
+
 		src := Source{
 			Git: &SourceGit{
 				URL:    "https://localhost/test.git",
 				Commit: t.Name(),
 				Auth: GitAuth{
 					Header: "some header",
-					Token:  "some token",
 				},
 			},
 			Generate: []*SourceGenerator{
 				{
 					Gomod: &GeneratorGomod{
 						Auth: map[string]GomodGitAuth{
-							"github.com": GomodGitAuth{
+							"github.com": {
 								Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
 							},
-							"dev.azure.com": GomodGitAuth{
+							"dev.azure.com": {
 								Header: "DALEC_GIT_AUTH_HEADER_ADO",
 							},
-							"some.other.com": GomodGitAuth{
+							"some.other.com": {
 								SSH: &GomodGitAuthSSH{
 									ID:       "dalec",
 									Username: "hello",
@@ -219,7 +223,39 @@ func TestSourceGitHTTP(t *testing.T) {
 		}
 
 		m, ops := getGomodLLBOps(ctx, t, spec)
-		checkGitAuth(t, m, ops, &src)
+		checkGitAuth(t, m, ops, &src, numSecrets, numSSH)
+	})
+
+	t.Run("gomod auth auto-propagate", func(t *testing.T) {
+		const (
+			numSecrets = 1
+			numSSH     = 0
+		)
+		src := Source{
+			Git: &SourceGit{
+				URL:    "https://localhost/test.git",
+				Commit: t.Name(),
+				Auth: GitAuth{
+					Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+				},
+			},
+			Generate: []*SourceGenerator{
+				{
+					Gomod: &GeneratorGomod{},
+				},
+			},
+		}
+
+		const srcName = "foo"
+		spec := Spec{
+			Sources: map[string]Source{
+				srcName: src,
+			},
+		}
+
+		spec.FillDefaults()
+		m, ops := getGomodLLBOps(ctx, t, spec)
+		checkGitAuth(t, m, ops, &src, numSecrets, numSSH)
 	})
 }
 
@@ -1014,10 +1050,9 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 	}
 }
 
-func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) {
+func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, numSecrets, numSSH int) {
 	const (
 		scriptExecOpIdx = 2
-		numSecrets      = 2
 	)
 
 	// Check that the requests for secrets are there for when the script runs.
@@ -1037,7 +1072,7 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) 
 		secrets[mnt.SSHOpt.ID] = struct{}{}
 	}
 
-	assert.Check(t, cmp.Len(secrets, 3), secrets)
+	assert.Check(t, cmp.Len(secrets, numSecrets+numSSH), secrets)
 
 	for _, auth := range src.Generate[0].Gomod.Auth {
 		var chk string
@@ -1066,7 +1101,9 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) 
 	assert.Check(t, hasTmpFSMount(scriptOp), scriptOp)
 
 	// check that an ssh socket will be mounted
-	assert.Check(t, hasSSHMount(scriptOp), scriptOp)
+	if numSSH > 0 {
+		assert.Check(t, hasSSHMount(scriptOp), scriptOp)
+	}
 
 	// Check that it depends on the `mkfile` op which generates the script.
 	assert.Check(t, cmp.Len(mkFileOp.Actions, 1), mkFileOp)
