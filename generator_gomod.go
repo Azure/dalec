@@ -124,10 +124,10 @@ func (g *SourceGenerator) gitconfigGeneratorScript() llb.State {
 			continue
 		}
 
-		if auth.SSH != "" {
-			username := "git"
-			if auth.SSHUsername != "" {
-				username = auth.SSHUsername
+		username := "git"
+		if auth.SSH != nil {
+			if auth.SSH.Username != "" {
+				username = auth.SSH.Username
 			}
 
 			fmt.Fprintf(&script, `git config --global "url.ssh://%[1]s@%[2]s/.insteadOf" https://%[2]s/`, username, host)
@@ -140,11 +140,21 @@ func (g *SourceGenerator) gitconfigGeneratorScript() llb.State {
 }
 
 func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
-	envIsSet := false
 	return runOptionFunc(func(ei *llb.ExecInfo) {
 		if g.Gomod == nil {
 			return
 		}
+
+		var (
+			setenv = func() {
+				llb.AddEnv(
+					"GIT_SSH_COMMAND",
+					`ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`,
+				).SetRunOption(ei)
+			}
+
+			noop = func() {}
+		)
 
 		secrets := make(map[string]struct{}, len(g.Gomod.Auth))
 		for _, auth := range g.Gomod.Auth {
@@ -158,13 +168,11 @@ func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
 				continue
 			}
 
-			if auth.SSH != "" {
-				llb.AddSSHSocket(llb.SSHID(auth.SSH)).SetRunOption(ei)
+			if auth.SSH != nil && auth.SSH.ID != "" {
+				llb.AddSSHSocket(llb.SSHID(auth.SSH.ID)).SetRunOption(ei)
 
-				if !envIsSet {
-					llb.AddEnv("GIT_SSH_COMMAND", `ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`).SetRunOption(ei)
-					envIsSet = true
-				}
+				setenv()
+				setenv = noop
 			}
 		}
 
