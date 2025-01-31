@@ -11,6 +11,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
@@ -508,7 +509,7 @@ X-capitalized-other-field: "some other value capitalized X key"
 
 		src, ok := spec.Sources["test"]
 		if !ok {
-			t.Fatal("expected source to be present")
+			t.Fatalf("expected source to be present: %+v", spec)
 		}
 
 		if src.Inline == nil {
@@ -1404,5 +1405,53 @@ func testSymlinkFillDefaults(t *testing.T) {
 			}
 		})
 	}
+}
 
+func checkExt[T any](t *testing.T, spec Spec, key string, expect T) {
+	t.Helper()
+
+	var actual T
+	err := spec.Ext(key, &actual)
+	assert.NilError(t, err)
+	assert.Check(t, cmp.DeepEqual(actual, expect))
+}
+
+func TestExtensionFieldMarshalUnmarshal(t *testing.T) {
+	dt := []byte(`
+name: test
+x-hello: world
+x-foo:
+- bar
+- baz
+X-capitalized: world2
+`)
+
+	var spec Spec
+	err := yaml.Unmarshal(dt, &spec)
+	assert.NilError(t, err)
+
+	assert.Check(t, cmp.Equal(spec.Name, "test"), spec)
+	checkExt(t, spec, "hello", "world")
+	checkExt(t, spec, "x-hello", "world")
+	checkExt(t, spec, "foo", []string{"bar", "baz"})
+	checkExt(t, spec, "x-foo", []string{"bar", "baz"})
+	checkExt(t, spec, "capitalized", "world2")
+	checkExt(t, spec, "X-capitalized", "world2")
+
+	// marshal and unmarshal to ensure the extension fields are preserved
+
+	dt, err = yaml.Marshal(spec)
+	assert.NilError(t, err)
+
+	var spec2 Spec
+	err = yaml.Unmarshal(dt, &spec2)
+	assert.NilError(t, err)
+
+	assert.Check(t, cmp.Equal(spec2.Name, "test"), spec2)
+	checkExt(t, spec2, "hello", "world")
+	checkExt(t, spec2, "x-hello", "world")
+	checkExt(t, spec2, "foo", []string{"bar", "baz"})
+	checkExt(t, spec2, "x-foo", []string{"bar", "baz"})
+	checkExt(t, spec2, "capitalized", "world2")
+	checkExt(t, spec2, "X-capitalized", "world2")
 }

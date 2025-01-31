@@ -3,10 +3,14 @@ package dalec
 
 import (
 	"io/fs"
+	"strings"
 	"time"
 
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/opencontainers/go-digest"
+	"github.com/pkg/errors"
 )
 
 // Spec is the specification for a package build.
@@ -94,6 +98,10 @@ type Spec struct {
 	// Each item in this list is run with a separate rootfs and cannot interact with other tests.
 	// Each [TestSpec] is run with a separate rootfs, asynchronously from other [TestSpec].
 	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
+
+	// extRaw is the raw AST of the extension fields in the spec.
+	// This is used to extract the ext fields in [Spec.Ext]
+	extRaw *ast.File
 }
 
 // PatchSpec is used to apply a patch to a source with a given set of options.
@@ -430,4 +438,56 @@ func (s *SystemdConfiguration) EnabledUnits() map[string]SystemdUnitConfig {
 	}
 
 	return units
+}
+
+type ExtDecodeConfig struct {
+	AllowUnknownFields bool
+}
+
+// Ext reads the extension field from the spec and unmarshals it into the target
+// value.
+func (s Spec) Ext(key string, target interface{}, opts ...func(*ExtDecodeConfig)) error {
+	lookup := key
+	addPrefix := !strings.HasPrefix(key, "x-") && !strings.HasPrefix(key, "X-")
+	if addPrefix {
+		lookup = "x-" + key
+	}
+
+	p, err := yaml.PathString("$." + lookup)
+	if err != nil {
+		return err
+	}
+
+	node, err := p.FilterFile(s.extRaw)
+	if err != nil {
+		if addPrefix {
+			lookup = "X-" + key
+			p, err = yaml.PathString("$." + lookup)
+			if err != nil {
+				return err
+			}
+			node, err = p.FilterFile(s.extRaw)
+		}
+		if err != nil {
+			return errors.Wrap(err, "error filtering node")
+		}
+	}
+
+	var cfg ExtDecodeConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	var decodeOpts []yaml.DecodeOption
+	if !cfg.AllowUnknownFields {
+		decodeOpts = append(decodeOpts, yaml.Strict())
+	}
+
+	dt := node.String()
+	err = yaml.UnmarshalWithOptions([]byte(dt), target, decodeOpts...)
+	if err != nil {
+		return errors.Wrapf(err, "error unmarshalling extension field %q into target", key)
+	}
+
+	return nil
 }
