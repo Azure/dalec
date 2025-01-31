@@ -723,6 +723,13 @@
 						"array"
 					],
 					"description": "Paths is the list of paths to run the generator on. Used to generate multi-module in a single source."
+				},
+				"auth": {
+					"additionalProperties": {
+						"$ref": "#/$defs/GitAuthWithUsername"
+					},
+					"type": "object",
+					"description": "Auth is the git authorization to use for gomods. The keys are the hosts, and the values are the auth to use for that host."
 				}
 			},
 			"additionalProperties": {
@@ -765,6 +772,28 @@
 				"object",
 				"null"
 			]
+		},
+		"GitAuthWithUsername": {
+			"properties": {
+				"header": {
+					"type": "string",
+					"description": "Header is the name of the secret which contains the git auth header.\nwhen using git auth header based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"token": {
+					"type": "string",
+					"description": "Token is the name of the secret which contains a git auth token when using\ntoken based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"ssh": {
+					"type": "string",
+					"description": "SSH is the name of the secret which contains the ssh auth into when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"ssh_username": {
+					"type": "string",
+					"description": "SSHUsername is the SSHUsername to use when connecting to a git repo"
+				}
+			},
+			"additionalProperties": false,
+			"type": "object"
 		},
 		"ImageConfig": {
 			"properties": {
