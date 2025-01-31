@@ -7,6 +7,9 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
+	"github.com/goccy/go-yaml/token"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
 	"golang.org/x/exp/maps"
@@ -222,36 +225,87 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 func LoadSpec(dt []byte) (*Spec, error) {
 	var spec Spec
 
-	dt, err := stripXFields(dt)
-	if err != nil {
-		return nil, fmt.Errorf("error stripping x-fields: %w", err)
-	}
-
 	if err := yaml.UnmarshalWithOptions(dt, &spec, yaml.Strict()); err != nil {
-		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
+		return nil, errors.Wrap(err, "error unmarshalling spec")
 	}
 
 	if err := spec.Validate(); err != nil {
 		return nil, err
 	}
-	spec.FillDefaults()
 
+	spec.FillDefaults()
 	return &spec, nil
 }
 
-func stripXFields(dt []byte) ([]byte, error) {
-	var obj map[string]interface{}
-	if err := yaml.Unmarshal(dt, &obj); err != nil {
-		return nil, fmt.Errorf("error unmarshalling spec: %w", err)
+func (s *Spec) UnmarshalYAML(dt []byte) error {
+	parsed, err := parser.ParseBytes(dt, parser.ParseComments)
+	if err != nil {
+		return errors.Wrapf(err, "error parsing yaml: \n%s", string(dt))
 	}
 
-	for k := range obj {
-		if strings.HasPrefix(k, "x-") || strings.HasPrefix(k, "X-") {
-			delete(obj, k)
+	if len(parsed.Docs) != 1 {
+		return errors.New("expected exactly one yaml document")
+	}
+
+	body := parsed.Docs[0].Body.(*ast.MappingNode)
+	var extNodes []*ast.MappingValueNode
+	for i := 0; i < len(body.Values); i++ {
+		node := body.Values[i]
+		p := node.GetPath()
+		if !strings.HasPrefix(p, "$.x-") && !strings.HasPrefix(p, "$.X-") {
+			continue
 		}
+
+		// Delete the extension node from the AST.
+		body.Values = append(body.Values[:i], body.Values[i+1:]...)
+		i--
+		extNodes = append(extNodes, node)
 	}
 
-	return yaml.Marshal(obj)
+	parsed, err = parser.ParseBytes([]byte(parsed.String()), parser.ParseComments)
+	if err != nil {
+		return errors.Wrapf(err, "error parsing yaml: \n%s", parsed.String())
+	}
+
+	type internalSpec Spec
+	var s2 internalSpec
+
+	dec := yaml.NewDecoder(parsed, yaml.Strict())
+	if err := dec.Decode(&s2); err != nil {
+		return fmt.Errorf("%w:\n\n%s", errors.Wrap(err, "error unmarshalling parsed document"), parsed.String())
+	}
+
+	*s = Spec(s2)
+
+	node := ast.Mapping(token.MappingStart("", &token.Position{}), false, extNodes...)
+	doc := ast.Document(&token.Token{Position: &token.Position{}}, node)
+	s.extRaw = &ast.File{Docs: []*ast.DocumentNode{doc}}
+
+	return nil
+}
+
+func (s Spec) MarshalYAML() ([]byte, error) {
+	// We need to define a new type to avoid infinite recursion of MarshalYAML.
+	type internalSpec Spec
+
+	if s.extRaw == nil {
+		return yaml.Marshal(internalSpec(s))
+	}
+
+	var ext map[string]interface{}
+	if err := yaml.NewDecoder(s.extRaw).Decode(&ext); err != nil {
+		return nil, errors.Wrap(err, "error unmarshalling extension nodes")
+	}
+
+	type specExt struct {
+		internalSpec `yaml:",inline"`
+		Ext          map[string]interface{} `yaml:",omitempty,inline"`
+	}
+
+	return yaml.Marshal(specExt{
+		internalSpec: internalSpec(s),
+		Ext:          ext,
+	})
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
