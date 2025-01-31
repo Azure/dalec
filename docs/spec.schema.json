@@ -840,6 +840,16 @@
 		},
 		"GeneratorGomod": {
 			"properties": {
+				"auth": {
+					"additionalProperties": {
+						"$ref": "#/$defs/GitAuthWithUsername"
+					},
+					"type": [
+						"object",
+						"null"
+					],
+					"description": "Auth is the git authorization to use for gomods. The keys are the hosts, and the values are the auth to use for that host."
+				},
 				"paths": {
 					"items": {
 						"type": [
@@ -876,6 +886,45 @@
 						"null"
 					],
 					"description": "SSH is the name of the secret which contains the ssh auth into when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"token": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Token is the name of the secret which contains a git auth token when using\ntoken based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			]
+		},
+		"GitAuthWithUsername": {
+			"properties": {
+				"header": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Header is the name of the secret which contains the git auth header.\nwhen using git auth header based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"ssh": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "SSH is the name of the secret which contains the ssh auth into when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"ssh_username": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "SSHUsername is the SSHUsername to use when connecting to a git repo"
 				},
 				"token": {
 					"type": [
