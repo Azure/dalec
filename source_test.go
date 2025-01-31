@@ -192,22 +192,18 @@ func TestSourceGitHTTP(t *testing.T) {
 			Generate: []*SourceGenerator{
 				{
 					Gomod: &GeneratorGomod{
-						Auth: map[string]GitAuthWithUsername{
-							"github.com": {
-								GitAuth: GitAuth{
-									Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
-								},
+						Auth: map[string]GomodGitAuth{
+							"github.com": GomodGitAuth{
+								Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
 							},
-							"dev.azure.com": {
-								GitAuth: GitAuth{
-									Header: "DALEC_GIT_AUTH_HEADER_ADO",
-								},
+							"dev.azure.com": GomodGitAuth{
+								Header: "DALEC_GIT_AUTH_HEADER_ADO",
 							},
-							"some.other.com": {
-								GitAuth: GitAuth{
-									SSH: "dalec",
+							"some.other.com": GomodGitAuth{
+								SSH: &GomodGitAuthSSH{
+									ID:       "dalec",
+									Username: "hello",
 								},
-								SSHUsername: "hello",
 							},
 						},
 					},
@@ -1051,7 +1047,8 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source) 
 		case auth.Header != "":
 			chk = auth.Header
 		default:
-			chk = auth.SSH
+			require.NotNil(t, auth.SSH)
+			chk = auth.SSH.ID
 		}
 
 		require.NotEqual(t, chk, "")

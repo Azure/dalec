@@ -7,6 +7,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"io"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -692,6 +693,7 @@ func fillDefaults(s *Source) {
 			}
 		}
 	case s.Git != nil:
+		s.Git.fillDefaults(s.Generate)
 	case s.HTTP != nil:
 	case s.Context != nil:
 		if s.Context.Name == "" {
@@ -701,7 +703,75 @@ func fillDefaults(s *Source) {
 		fillDefaults(&s.Build.Source)
 	case s.Inline != nil:
 	}
+
 }
+
+func (git *SourceGit) fillDefaults(generators []*SourceGenerator) {
+	if git == nil {
+		return
+	}
+
+	u, err := url.Parse(git.URL)
+	if err != nil {
+		//TODO(pmengelbert) this should be validated, but it looks like it's not
+	}
+
+	for _, generator := range generators {
+		generator.fillDefaults(u.Host, &git.Auth)
+	}
+}
+
+func (g *SourceGenerator) fillDefaults(host string, authInfo *GitAuth) {
+	if g == nil || authInfo == nil {
+		return
+	}
+
+	switch {
+	case g.Gomod != nil:
+		g.Gomod.fillDefaults(host, authInfo)
+	}
+}
+
+func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth) {
+	var (
+		initialize = func() {
+			if gm.Auth == nil {
+				gm.Auth = make(map[string]GomodGitAuth)
+			}
+		}
+
+		noop = func() {}
+
+		initOnce = func() {
+			initialize()
+			initialize = noop
+		}
+	)
+
+	const defaultUsername = "git"
+
+	var gomodAuth GomodGitAuth
+	switch {
+	case authInfo.Token != "":
+		initOnce()
+		gomodAuth.Token = authInfo.Token
+	case authInfo.Header != "":
+		initOnce()
+		gomodAuth.Header = authInfo.Header
+	case authInfo.SSH != "":
+		initOnce()
+		gomodAuth.SSH = &GomodGitAuthSSH{
+			ID:       authInfo.SSH,
+			Username: defaultUsername,
+		}
+	default:
+		return
+	}
+
+	gm.Auth[host] = gomodAuth
+}
+
+// func (gm *GeneratorGomod) fillDefaults
 
 func (s *Source) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
 	// force the shell lexer to skip unresolved env vars so they aren't
