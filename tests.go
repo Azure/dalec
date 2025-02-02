@@ -59,7 +59,7 @@ type CheckOutput struct {
 	// Contains is the list of strings to check if they are contained in the output.
 	Contains []string `yaml:"contains,omitempty" json:"contains,omitempty"`
 	// Matches is the regular expression to match the output against.
-	Matches string `yaml:"matches,omitempty" json:"matches,omitempty"`
+	Matches []string `yaml:"matches,omitempty" json:"matches,omitempty"`
 	// StartsWith is the string to check if the output starts with.
 	StartsWith string `yaml:"starts_with,omitempty" json:"starts_with,omitempty"`
 	// EndsWith is the string to check if the output ends with.
@@ -96,7 +96,7 @@ func (c *CheckOutputError) Error() string {
 
 // IsEmpty is used to determine if there are any checks to perform.
 func (c CheckOutput) IsEmpty() bool {
-	return c.Equals == "" && len(c.Contains) == 0 && c.Matches == "" && c.StartsWith == "" && c.EndsWith == "" && !c.Empty
+	return c.Equals == "" && len(c.Contains) == 0 && len(c.Matches) == 0 && c.StartsWith == "" && c.EndsWith == "" && !c.Empty
 }
 
 func (t *TestSpec) validate() error {
@@ -132,11 +132,13 @@ func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string, a
 	}
 	c.EndsWith = updated
 
-	updated, err = expandArgs(lex, c.Matches, args, allowArg)
-	if err != nil {
-		return fmt.Errorf("%w: matches", err)
+	for i, matches := range c.Matches {
+		updated, err = expandArgs(lex, matches, args, allowArg)
+		if err != nil {
+			return fmt.Errorf("%w: matches at list index %d", err, i)
+		}
+		c.Matches[i] = updated
 	}
-	c.Matches = updated
 
 	updated, err = expandArgs(lex, c.Equals, args, allowArg)
 	if err != nil {
@@ -260,14 +262,16 @@ func (c CheckOutput) Check(dt string, p string) (retErr error) {
 			return &CheckOutputError{Kind: "contains", Expected: contains, Actual: dt, Path: p}
 		}
 	}
-	if c.Matches != "" {
-		regexp, err := regexp.Compile(c.Matches)
-		if err != nil {
-			return err
-		}
+	for _, matches := range c.Matches {
+		if matches != "" {
+			regexp, err := regexp.Compile(matches)
+			if err != nil {
+				return err
+			}
 
-		if !regexp.Match([]byte(dt)) {
-			return &CheckOutputError{Kind: "matches", Expected: c.Matches, Actual: dt, Path: p}
+			if !regexp.Match([]byte(dt)) {
+				return &CheckOutputError{Kind: "matches", Expected: matches, Actual: dt, Path: p}
+			}
 		}
 	}
 

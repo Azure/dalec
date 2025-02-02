@@ -77,7 +77,7 @@ tests:
 
 #### Check that a file matches a regular expression:
 
-Here we check that the content of the file `/etc/foo.conf` matches the regular expression `foo=.*`.
+Here we check that the content of the file `/etc/foo.conf` matches one of the regular expressions (in this case only `foo=.*`).
 
 ```yaml
 name: My Package
@@ -87,7 +87,8 @@ tests:
   - name: My Test case
     files:
       /etc/foo.conf:
-        matches: "foo=.*"
+        matches: 
+          - "foo=.*"
 ```
 
 #### Check that a file does not exist
@@ -136,7 +137,8 @@ tests:
           - foo=bar
         starts_with: foo
         ends_with: bar
-        matches: "foo=.*"
+        matches: 
+          - "foo=.*"
         permissions: 0644
 ```
 
@@ -157,7 +159,8 @@ tests:
           - foo=bar
         starts_with: foo
         ends_with: bar
-        matches: "foo=.*"
+        matches: 
+          - "foo=.*"
         permissions: 0644
 ```
 

@@ -272,8 +272,11 @@
 					"description": "Contains is the list of strings to check if they are contained in the output."
 				},
 				"matches": {
-					"type": "string",
-					"description": "Matches is the regular expression to match the output against."
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Matches is the list of regular expressions to match the output against."
 				},
 				"starts_with": {
 					"type": "string",
@@ -369,8 +372,11 @@
 					"description": "Contains is the list of strings to check if they are contained in the output."
 				},
 				"matches": {
-					"type": "string",
-					"description": "Matches is the regular expression to match the output against."
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Matches is the list of regular expressions to match the output against."
 				},
 				"starts_with": {
 					"type": "string",
