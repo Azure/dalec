@@ -748,6 +748,11 @@ func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth) {
 		}
 	)
 
+	// Don't overwrite explicitly-specified auth
+	_, ok := gm.Auth[host]
+	if ok {
+		return
+	}
 	const defaultUsername = "git"
 
 	var gomodAuth GomodGitAuth
