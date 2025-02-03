@@ -713,7 +713,8 @@ func (git *SourceGit) fillDefaults(generators []*SourceGenerator) {
 
 	u, err := url.Parse(git.URL)
 	if err != nil {
-		//TODO(pmengelbert) this should be validated, but it looks like it's not
+		// This should be validated elsewhere
+		return
 	}
 
 	for _, generator := range generators {
