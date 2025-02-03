@@ -397,6 +397,86 @@ func TestSourceFillDefaults(t *testing.T) {
 				Path: ".",
 			},
 		},
+		{
+			title: "auto-propagate git auth to gomod auth",
+			before: Source{
+				Git: &SourceGit{
+					URL:    "https://github.com/auth/test.git",
+					Commit: t.Name(),
+					Auth: GitAuth{
+						Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+					},
+				},
+				Generate: []*SourceGenerator{
+					{
+						Gomod: &GeneratorGomod{},
+					},
+				},
+			},
+			after: Source{
+				Git: &SourceGit{
+					URL:    "https://github.com/auth/test.git",
+					Commit: t.Name(),
+					Auth: GitAuth{
+						Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+					},
+				},
+				Generate: []*SourceGenerator{
+					{
+						Gomod: &GeneratorGomod{
+							Auth: map[string]GomodGitAuth{
+								"github.com": {
+									Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			title: "don't overwrite existing git auth when auto-propagating",
+			before: Source{
+				Git: &SourceGit{
+					URL:    "https://github.com/auth/test.git",
+					Commit: t.Name(),
+					Auth: GitAuth{
+						Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+					},
+				},
+				Generate: []*SourceGenerator{
+					{
+						Gomod: &GeneratorGomod{
+							Auth: map[string]GomodGitAuth{
+								"github.com": {
+									Token: "ANOTHER_DALEC_GIT_AUTH_TOKEN_GITHUB",
+								},
+							},
+						},
+					},
+				},
+			},
+			after: Source{
+				Git: &SourceGit{
+					URL:    "https://github.com/auth/test.git",
+					Commit: t.Name(),
+					Auth: GitAuth{
+						Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
+					},
+				},
+				Generate: []*SourceGenerator{
+					{
+						Gomod: &GeneratorGomod{
+							Auth: map[string]GomodGitAuth{
+								"github.com": {
+									Token: "ANOTHER_DALEC_GIT_AUTH_TOKEN_GITHUB",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
