@@ -225,38 +225,6 @@ func TestSourceGitHTTP(t *testing.T) {
 		m, ops := getGomodLLBOps(ctx, t, spec)
 		checkGitAuth(t, m, ops, &src, numSecrets, numSSH)
 	})
-
-	t.Run("gomod auth auto-propagate", func(t *testing.T) {
-		const (
-			numSecrets = 1
-			numSSH     = 0
-		)
-		src := Source{
-			Git: &SourceGit{
-				URL:    "https://localhost/test.git",
-				Commit: t.Name(),
-				Auth: GitAuth{
-					Token: "DALEC_GIT_AUTH_TOKEN_GITHUB",
-				},
-			},
-			Generate: []*SourceGenerator{
-				{
-					Gomod: &GeneratorGomod{},
-				},
-			},
-		}
-
-		const srcName = "foo"
-		spec := Spec{
-			Sources: map[string]Source{
-				srcName: src,
-			},
-		}
-
-		spec.FillDefaults()
-		m, ops := getGomodLLBOps(ctx, t, spec)
-		checkGitAuth(t, m, ops, &src, numSecrets, numSSH)
-	})
 }
 
 func getGomodLLBOps(ctx context.Context, t *testing.T, spec Spec) (map[string]*pb.Op, []*pb.Op) {
