@@ -842,7 +842,7 @@
 			"properties": {
 				"auth": {
 					"additionalProperties": {
-						"$ref": "#/$defs/GitAuthWithUsername"
+						"$ref": "#/$defs/GomodGitAuth"
 					},
 					"type": [
 						"object",
@@ -885,46 +885,7 @@
 						"string",
 						"null"
 					],
-					"description": "SSH is the name of the secret which contains the ssh auth into when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
-				},
-				"token": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Token is the name of the secret which contains a git auth token when using\ntoken based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
-				}
-			},
-			"additionalProperties": {
-				"not": {}
-			},
-			"type": [
-				"object",
-				"null"
-			]
-		},
-		"GitAuthWithUsername": {
-			"properties": {
-				"header": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Header is the name of the secret which contains the git auth header.\nwhen using git auth header based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
-				},
-				"ssh": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "SSH is the name of the secret which contains the ssh auth into when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
-				},
-				"ssh_username": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "SSHUsername is the SSHUsername to use when connecting to a git repo"
+					"description": "SSH is the name of the secret which contains the ssh auth info when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
 				},
 				"token": {
 					"type": [
@@ -966,6 +927,60 @@
 				"null"
 			],
 			"description": "GoBuildCache is a cache for Go build artifacts."
+		},
+		"GomodGitAuth": {
+			"properties": {
+				"header": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Header is the name of the secret which contains the git auth header.\nwhen using git auth header based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				},
+				"ssh": {
+					"$ref": "#/$defs/GomodGitAuthSSH",
+					"description": "SSH is a struct container the name of the ssh ID which contains the\naddress of the ssh auth socket, plus the username to use for the git\nremote.\nNote: This should not have the *actual* socket address, just the name of\nthe ssh ID which was specified as a build secret."
+				},
+				"token": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Token is the name of the secret which contains a git auth token when using\ntoken based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			]
+		},
+		"GomodGitAuthSSH": {
+			"properties": {
+				"id": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "ID is the name of the ssh socket to mount, as provided via the `--ssh`\nflag to `docker build`."
+				},
+				"username": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Username is the username to use with this particular git remote. If none\nis provided, `git` will be inserted."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			]
 		},
 		"ImageConfig": {
 			"properties": {
