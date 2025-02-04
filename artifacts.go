@@ -108,6 +108,9 @@ func (a *ArtifactConfig) ResolveName(path string) string {
 
 // IsEmpty is used to determine if there are any artifacts to include in the package.
 func (a *Artifacts) IsEmpty() bool {
+	if a == nil {
+		return true
+	}
 	if len(a.Binaries) > 0 {
 		return false
 	}

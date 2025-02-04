@@ -1198,6 +1198,10 @@
 				"package_config": {
 					"$ref": "#/$defs/PackageConfig",
 					"description": "PackageConfig is the configuration to use for artifact targets, such as\nrpms, debs, or zip files containing Windows binaries"
+				},
+				"artifacts": {
+					"$ref": "#/$defs/Artifacts",
+					"description": "Artifacts describes all of the artifact configurations to include for this specific target."
 				}
 			},
 			"additionalProperties": false,

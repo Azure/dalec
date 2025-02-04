@@ -291,6 +291,24 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 		})
 	})
 
+	t.Run("test-dalec-empty-artifacts", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testEmptyArtifacts(ctx, t, testConfig.Target)
+	})
+
+	t.Run("test-dalec-single-artifact", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testArtifactsAtSpecLevel(ctx, t, testConfig.Target)
+	})
+
+	t.Run("test-dalec-multiple-artifacts", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testTargetArtifactsTakePrecedence(ctx, t, testConfig.Target)
+	})
+
 	t.Run("container", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
