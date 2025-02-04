@@ -58,7 +58,7 @@ type CheckOutput struct {
 	Equals string `yaml:"equals,omitempty" json:"equals,omitempty"`
 	// Contains is the list of strings to check if they are contained in the output.
 	Contains []string `yaml:"contains,omitempty" json:"contains,omitempty"`
-	// Matches is the regular expression to match the output against.
+	// Matches is the list of regular expressions to match the output against.
 	Matches []string `yaml:"matches,omitempty" json:"matches,omitempty"`
 	// StartsWith is the string to check if the output starts with.
 	StartsWith string `yaml:"starts_with,omitempty" json:"starts_with,omitempty"`
