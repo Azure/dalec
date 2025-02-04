@@ -263,15 +263,13 @@ func (c CheckOutput) Check(dt string, p string) (retErr error) {
 		}
 	}
 	for _, matches := range c.Matches {
-		if matches != "" {
-			regexp, err := regexp.Compile(matches)
-			if err != nil {
-				return err
-			}
+		regexp, err := regexp.Compile(matches)
+		if err != nil {
+			return err
+		}
 
-			if !regexp.Match([]byte(dt)) {
-				return &CheckOutputError{Kind: "matches", Expected: matches, Actual: dt, Path: p}
-			}
+		if !regexp.Match([]byte(dt)) {
+			return &CheckOutputError{Kind: "matches", Expected: matches, Actual: dt, Path: p}
 		}
 	}
 
