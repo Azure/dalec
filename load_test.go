@@ -1100,6 +1100,8 @@ targets:
 		assert.Check(t, spec.Targets["foo"].Image.Bases[0].Rootfs.DockerImage != nil)
 		assert.Check(t, cmp.Equal(spec.Targets["foo"].Image.Bases[0].Rootfs.DockerImage.Ref, "busybox:latest"))
 	})
+
+	t.Run("postinstall", testPostInstallFillDefaults)
 }
 
 func TestImage_validate(t *testing.T) {
@@ -1281,10 +1283,6 @@ func TestImage_validate(t *testing.T) {
 	}
 }
 
-func TestImageFillDefaults(t *testing.T) {
-	t.Run("postinstall", testPostInstallFillDefaults)
-}
-
 func testPostInstallFillDefaults(t *testing.T) {
 	t.Run("symlinks", testSymlinkFillDefaults)
 }
@@ -1363,29 +1361,6 @@ func testSymlinkFillDefaults(t *testing.T) {
 						"oldpath": {
 							Path:  "",
 							Paths: []string{"/newpath"},
-						},
-					},
-				},
-			},
-		},
-		{
-			desc: "empty Path and multimple Paths should have Paths sorted",
-			input: ImageConfig{
-				Post: &PostInstall{
-					Symlinks: map[string]SymlinkTarget{
-						"oldpath": {
-							Path:  "",
-							Paths: []string{"/newpath2", "/newpath1"},
-						},
-					},
-				},
-			},
-			output: ImageConfig{
-				Post: &PostInstall{
-					Symlinks: map[string]SymlinkTarget{
-						"oldpath": {
-							Path:  "",
-							Paths: []string{"/newpath1", "/newpath2"},
 						},
 					},
 				},

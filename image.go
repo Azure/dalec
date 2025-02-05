@@ -192,7 +192,7 @@ func (i *ImageConfig) fillDefaults() {
 		bi.fillDefaults()
 	}
 
-	i.Post.fillDefaults()
+	i.Post.normalizeSymlinks()
 }
 
 func (s *BaseImage) validate() error {
@@ -225,7 +225,7 @@ func (s *BaseImage) fillDefaults() {
 	fillDefaults(&s.Rootfs)
 }
 
-func (p *PostInstall) fillDefaults() {
+func (p *PostInstall) normalizeSymlinks() {
 	if p == nil {
 		return
 	}
