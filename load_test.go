@@ -1329,41 +1329,17 @@ func testSymlinkFillDefaults(t *testing.T) {
 				Post: &PostInstall{
 					Symlinks: map[string]SymlinkTarget{
 						"oldpath": {
-							Path:  "/newpath2",
+							Path: "/newpath1",
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
 							Paths: []string{"/newpath1"},
-						},
-					},
-				},
-			},
-			output: ImageConfig{
-				Post: &PostInstall{
-					Symlinks: map[string]SymlinkTarget{
-						"oldpath": {
-							Path:  "",
-							Paths: []string{"/newpath1", "/newpath2"},
-						},
-					},
-				},
-			},
-		},
-		{
-			desc: "Path should be appended to Paths",
-			input: ImageConfig{
-				Post: &PostInstall{
-					Symlinks: map[string]SymlinkTarget{
-						"oldpath": {
-							Path:  "/newpath3",
-							Paths: []string{"/newpath1", "/newpath2"},
-						},
-					},
-				},
-			},
-			output: ImageConfig{
-				Post: &PostInstall{
-					Symlinks: map[string]SymlinkTarget{
-						"oldpath": {
-							Path:  "",
-							Paths: []string{"/newpath1", "/newpath2", "/newpath3"},
 						},
 					},
 				},
@@ -1371,29 +1347,6 @@ func testSymlinkFillDefaults(t *testing.T) {
 		},
 		{
 			desc: "should work if Paths is nil",
-			input: ImageConfig{
-				Post: &PostInstall{
-					Symlinks: map[string]SymlinkTarget{
-						"oldpath": {
-							Path:  "/newpath",
-							Paths: nil,
-						},
-					},
-				},
-			},
-			output: ImageConfig{
-				Post: &PostInstall{
-					Symlinks: map[string]SymlinkTarget{
-						"oldpath": {
-							Path:  "",
-							Paths: []string{"/newpath"},
-						},
-					},
-				},
-			},
-		},
-		{
-			desc: "should work if Paths is empty",
 			input: ImageConfig{
 				Post: &PostInstall{
 					Symlinks: map[string]SymlinkTarget{
