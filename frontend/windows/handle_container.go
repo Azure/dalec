@@ -217,26 +217,3 @@ func copySymlinks(post *dalec.PostInstall) llb.StateOption {
 		return s
 	}
 }
-
-func getTargetPlatform(bc *dockerui.Client) (ocispecs.Platform, error) {
-	platform := defaultPlatform
-
-	switch len(bc.TargetPlatforms) {
-	case 0:
-	case 1:
-		platform = bc.TargetPlatforms[0]
-	default:
-		return ocispecs.Platform{},
-			fmt.Errorf("multiple target supplied for build: %v. note: only amd64 is supported for windows outputs", bc.TargetPlatforms)
-	}
-
-	return platform, nil
-}
-
-func getBaseOutputImage(spec *dalec.Spec, target, defaultBase string) string {
-	baseRef := defaultBase
-	if spec.Targets[target].Image != nil && spec.Targets[target].Image.Base != "" {
-		baseRef = spec.Targets[target].Image.Base
-	}
-	return baseRef
-}
