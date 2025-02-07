@@ -2,7 +2,7 @@
 title: Dependencies
 ---
 
-`PackageDependencies` is a list of dependencies for a package. This will be included in the package metadata so that the package manager can install the dependencies. It also includes build-time dependencies, which we'll install before running any build steps. They are overwritten if specified in the target map for the requested distro.
+`PackageDependencies` specifies dependency information for a particular package.  This includes dependencies for runtime, which will be installed along with the package by the package manager, as well as any dependencies needed to build and/or test the resulting package. Configuration for any additional package repositories which are required may also be added here.
 
 ### Fields
 
@@ -85,10 +85,13 @@ dependencies:
         myrepo:
           http:
             url: "https://example.com/myrepo.list"
+      # this assumes that a build context named `my-local-repo` containing a local repository will be passed 
+      # to the Dalec build.
+      # /opt/repo can now be referenced as a local repository in a repository config imported to dalec
       data:
-        - dest: "/etc/apt/sources.list.d/myrepo.list"
+        - dest: "/opt/repo"
           spec:
-            http:
-              url: "https://example.com/myrepo.list"
+            context:
+              name: "my-local-repo"
       envs: ["build", "install"]
 ```
