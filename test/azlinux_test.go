@@ -1270,6 +1270,104 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("test info file installation", func(t *testing.T) {
+		t.Parallel()
+		spec := &dalec.Spec{
+			Name:        "infofiles-test",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Should install specified info files",
+			Sources: map[string]dalec.Source{
+				"no_name_no_subpath": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+				"name_only": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+				"name_and_subpath": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+				"subpath_only": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+				"nested_subpath": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o755,
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				InfoFiles: map[string]dalec.ArtifactConfig{
+					"no_name_no_subpath": {},
+					"name_only": {
+						Name: "this_is_the_name_only",
+					},
+					"subpath_only": {
+						SubPath: "custom",
+					},
+					"name_and_subpath": {
+						SubPath: "subpath",
+						Name:    "custom_name",
+					},
+					"nested_subpath": {
+						SubPath: "info-test/abcdefg",
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/info/no_name_no_subpath", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/info/this_is_the_name_only", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/info/subpath/custom_name", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/info/custom/subpath_only", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/info/info-test/abcdefg/nested_subpath", 0o755); err != nil {
+				t.Fatal(err)
+			}
+		})
+	})
+
 	t.Run("test config files handled", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)

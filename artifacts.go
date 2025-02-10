@@ -24,6 +24,8 @@ type Artifacts struct {
 	ConfigFiles map[string]ArtifactConfig `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
 	// Docs is a list of doc files included in the package
 	Docs map[string]ArtifactConfig `yaml:"docs,omitempty" json:"docs,omitempty"`
+	// InfoFiles is a list of info files included in the package
+	InfoFiles map[string]ArtifactConfig `yaml:"infoFiles,omitempty" json:"infoFiles,omitempty"`
 	// Licenses is a list of doc files included in the package
 	Licenses map[string]ArtifactConfig `yaml:"licenses,omitempty" json:"licenses,omitempty"`
 	// Systemd is the list of systemd units and dropin files for the package
@@ -123,13 +125,14 @@ func (a *Artifacts) IsEmpty() bool {
 	if len(a.ConfigFiles) > 0 {
 		return false
 	}
-
 	if a.Systemd != nil &&
 		(len(a.Systemd.Units) > 0 || len(a.Systemd.Dropins) > 0) {
 		return false
 	}
-
 	if len(a.Docs) > 0 {
+		return false
+	}
+	if len(a.InfoFiles) > 0 {
 		return false
 	}
 	if len(a.Licenses) > 0 {
