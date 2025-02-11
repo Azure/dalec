@@ -1251,10 +1251,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						SubPath: "subpath",
 						Name:    "custom_name",
 					},
-					"subpath_only": dalec.ArtifactConfig{
+					"subpath_only": {
 						SubPath: "custom",
 					},
-					"nested_subpath": dalec.ArtifactConfig{
+					"nested_subpath": {
 						SubPath: "libexec-test/abcdefg",
 					},
 				},
@@ -1752,7 +1752,6 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx := startTestSpan(baseCtx, t)
 
 			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 				worker := getWorker(ctx, t, gwc)
@@ -2180,7 +2179,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 								Inline: &dalec.SourceInline{
 									Dir: &dalec.SourceInlineDir{
 										Files: map[string]*dalec.SourceInlineFile{
-											"some_file": &dalec.SourceInlineFile{
+											"some_file": {
 												Contents: "some file",
 											},
 										},
@@ -2195,7 +2194,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 								Inline: &dalec.SourceInline{
 									Dir: &dalec.SourceInlineDir{
 										Files: map[string]*dalec.SourceInlineFile{
-											"another_file": &dalec.SourceInlineFile{
+											"another_file": {
 												Contents: "some other file",
 											},
 										},
