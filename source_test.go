@@ -481,6 +481,54 @@ func TestSourceDockerImage(t *testing.T) {
 	})
 }
 
+func TestPatchSource_MalformedPatch(t *testing.T) {
+	worker := llb.Scratch()
+	sourceState := llb.Scratch().File(
+		llb.Mkfile("/file.txt", 0644, []byte("Hello World")),
+	)
+	sourceToState := map[string]llb.State{
+		"malformed_patch": llb.Scratch().File(
+			llb.Mkfile("/malformed.patch", 0644, []byte("invalid patch content")),
+		),
+	}
+	patchNames := []PatchSpec{
+		{
+			Source: "malformed_patch",
+		},
+	}
+
+	assert.Assert(t, func() {
+		patchSource(worker, sourceState, sourceToState, patchNames)
+	} != nil, "patch -p1 < /patch: exit status 1")
+}
+
+func TestPatchSource_ConflictingPatches(t *testing.T) {
+	worker := llb.Scratch()
+	sourceState := llb.Scratch().File(
+		llb.Mkfile("/file.txt", 0644, []byte("Hello World")),
+	)
+	sourceToState := map[string]llb.State{
+		"patch1": llb.Scratch().File(
+			llb.Mkfile("/patch1.patch", 0644, []byte("diff --git a/file.txt b/file.txt\nindex 123..456 100644\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-Decaf Bad\n+Cafe Good")),
+		),
+		"patch2": llb.Scratch().File(
+			llb.Mkfile("/patch2.patch", 0644, []byte("diff --git a/file.txt b/file.txt\nindex 123..789 100644\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-Decaf Bad\n+Caffeine Good")),
+		),
+	}
+	patchNames := []PatchSpec{
+		{
+			Source: "patch1",
+		},
+		{
+			Source: "patch2",
+		},
+	}
+
+	assert.Assert(t, func() {
+		patchSource(worker, sourceState, sourceToState, patchNames)
+	} != nil, "patch -p1 < /patch: exit status 1")
+}
+
 func getChildren(op *pb.Op, ops []*pb.Op, digests map[*pb.Op]digest.Digest) []*pb.Op {
 	children := make([]*pb.Op, 0, len(ops))
 	for _, maybeChild := range ops {
