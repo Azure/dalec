@@ -55,7 +55,6 @@ func newSimpleSpec() *dalec.Spec {
 func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*testing.T) {
 	return func(t *testing.T) {
 		t.Parallel()
-		ctx := startTestSpan(baseCtx, t)
 
 		newSigningSpec := func() *dalec.Spec {
 			spec := newSimpleSpec()
