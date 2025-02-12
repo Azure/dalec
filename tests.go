@@ -30,7 +30,7 @@ type TestSpec struct {
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 
 	// Steps is the list of commands to run to test the package.
-	Steps []TestStep `yaml:"steps" json:"steps" jsonschema:"required"`
+	Steps []TestStep `yaml:"steps,omitempty" json:"steps,omitempty"`
 
 	// Files is the list of files to check after running the steps.
 	Files map[string]FileCheckOutput `yaml:"files,omitempty" json:"files,omitempty"`

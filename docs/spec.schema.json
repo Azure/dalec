@@ -767,11 +767,15 @@
 			]
 		},
 		"ImageConfig": {
-			"required": [
-				"Bases"
-			],
 			"properties": {
-				"Bases": {
+				"base": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Deprecated: Use [Bases] instead."
+				},
+				"bases": {
 					"items": {
 						"$ref": "#/$defs/BaseImage"
 					},
@@ -779,13 +783,6 @@
 						"array"
 					],
 					"description": "Bases is used to specify a list of base images to build images for.  The\nintent of allowing multiple bases is for cases, such as Windows, where you\nmay want to publish multiple versions of a base image in one image.\n\nWindows is the example here because of the way Windows works, the image\nthat the base is based off of must match the OS version of the host machine.\nTherefore it is common to have multiple Windows images in one with a\ndifferent value for the os version field of the platform.\n\nFor the most part implementations are not expected to support multiple base\nimages and may error out if multiple are specified.\n\nThis should not be set if [Base] is also set."
-				},
-				"base": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Deprecated: Use [Bases] instead."
 				},
 				"cmd": {
 					"type": [
@@ -1891,8 +1888,7 @@
 		},
 		"TestSpec": {
 			"required": [
-				"name",
-				"steps"
+				"name"
 			],
 			"properties": {
 				"cache_dirs": {

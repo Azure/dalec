@@ -56,7 +56,7 @@ type ImageConfig struct {
 	// images and may error out if multiple are specified.
 	//
 	// This should not be set if [Base] is also set.
-	Bases []BaseImage `yaml:"bases,omitempty json:bases,omitempty"`
+	Bases []BaseImage `yaml:"bases,omitempty" json:"bases,omitempty"`
 
 	// Post is the post install configuration for the image.
 	// This allows making additional modifications to the container rootfs after the package(s) are installed.
