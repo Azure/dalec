@@ -3,7 +3,6 @@ package dalec
 import (
 	"context"
 	goerrors "errors"
-	"sort"
 
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/client/llb"
