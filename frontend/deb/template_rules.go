@@ -21,14 +21,14 @@ var (
 	rulesTmpl = template.Must(template.New("rules").Parse(string(rulesTmplContent)))
 )
 
-func Rules(spec *dalec.Spec, in llb.State, dir string) (llb.State, error) {
+func Rules(spec *dalec.Spec, in llb.State, dir, target string) (llb.State, error) {
 	buf := bytes.NewBuffer(nil)
 
 	if dir == "" {
 		dir = "debian"
 	}
 
-	if err := WriteRules(spec, buf); err != nil {
+	if err := WriteRules(spec, buf, target); err != nil {
 		return llb.Scratch(), err
 	}
 
@@ -38,12 +38,13 @@ func Rules(spec *dalec.Spec, in llb.State, dir string) (llb.State, error) {
 		nil
 }
 
-func WriteRules(spec *dalec.Spec, w io.Writer) error {
-	return rulesTmpl.Execute(w, &rulesWrapper{spec})
+func WriteRules(spec *dalec.Spec, w io.Writer, target string) error {
+	return rulesTmpl.Execute(w, &rulesWrapper{spec, target})
 }
 
 type rulesWrapper struct {
 	*dalec.Spec
+	target string
 }
 
 func (w *rulesWrapper) Envs() fmt.Stringer {
@@ -63,8 +64,10 @@ func (w *rulesWrapper) Envs() fmt.Stringer {
 func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 	b := &strings.Builder{}
 
+	artifacts := w.GetArtifacts(w.target)
+
 	var fixPerms bool
-	for _, cfg := range w.Spec.Artifacts.Directories.GetConfig() {
+	for _, cfg := range artifacts.Directories.GetConfig() {
 		if cfg.Mode != 0 {
 			fixPerms = true
 			break
@@ -72,7 +75,7 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 	}
 
 	if !fixPerms {
-		for _, cfg := range w.Spec.Artifacts.Directories.GetState() {
+		for _, cfg := range artifacts.Directories.GetState() {
 			if cfg.Mode != 0 {
 				fixPerms = true
 				break
@@ -112,7 +115,9 @@ func groupUnitsByBaseName(ls map[string]dalec.SystemdUnitConfig) map[string]map[
 func (w *rulesWrapper) OverrideSystemd() (fmt.Stringer, error) {
 	b := &strings.Builder{}
 
-	units := w.Spec.Artifacts.Systemd.GetUnits()
+	artifacts := w.GetArtifacts(w.target)
+
+	units := artifacts.Systemd.GetUnits()
 
 	if len(units) == 0 {
 		return b, nil

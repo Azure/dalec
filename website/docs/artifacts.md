@@ -84,7 +84,7 @@ build phase *before* any directory changes are made.
 
 ```yaml
 artifacts:
-  managpes:
+  manpages:
     src/man/*:
       subpath: ""
       mode: 0o644

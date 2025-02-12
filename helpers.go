@@ -357,6 +357,16 @@ func (s *Spec) GetImagePost(target string) *PostInstall {
 	return nil
 }
 
+func (s *Spec) GetArtifacts(targetKey string) Artifacts {
+	if t, ok := s.Targets[targetKey]; ok {
+		// If unset then we should use the global artifacts but if set or deliberately empty then we should use that.
+		if t.Artifacts != nil {
+			return *t.Artifacts
+		}
+	}
+	return s.Artifacts
+}
+
 // ShArgs returns a RunOption that runs the given command in a shell.
 func ShArgs(args string) llb.RunOption {
 	return llb.Args(append([]string{"sh", "-c"}, args))

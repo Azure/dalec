@@ -29,8 +29,9 @@ var (
 // executed with the `--no-enable` option.
 // This handles enabled or not enabled for this special case instead of using
 // the postinst provided by `dh_installsystemd` without `--no-eable` set.
-func customDHInstallSystemdPostinst(spec *dalec.Spec) ([]byte, error) {
-	units := spec.Artifacts.Systemd.GetUnits()
+func customDHInstallSystemdPostinst(spec *dalec.Spec, target string) ([]byte, error) {
+	artifacts := spec.GetArtifacts(target)
+	units := artifacts.Systemd.GetUnits()
 	grouped := groupUnitsByBaseName(units)
 
 	buf := bytes.NewBuffer(nil)
