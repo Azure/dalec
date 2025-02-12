@@ -239,7 +239,6 @@ func (p *PostInstall) normalizeSymlinks() {
 
 		cfg.Paths = append(cfg.Paths, cfg.Path)
 		cfg.Path = ""
-		sort.Strings(cfg.Paths)
 		p.Symlinks[oldpath] = cfg
 	}
 }

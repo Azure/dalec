@@ -473,7 +473,7 @@ func validateSymlinks(symlinks map[string]SymlinkTarget) error {
 			errs = append(errs, err)
 		}
 
-		if cfg.Path != "" && len(cfg.Paths) != 0 || cfg.Path == "" && len(cfg.Paths) == 0 {
+		if (cfg.Path != "" && len(cfg.Paths) > 0) || (cfg.Path == "" && len(cfg.Paths) == 0 ) {
 			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required: "+
 				"symlink to %s", oldpath)
 
