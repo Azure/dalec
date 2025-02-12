@@ -359,7 +359,8 @@ func (s *Spec) GetImagePost(target string) *PostInstall {
 
 func (s *Spec) GetArtifacts(targetKey string) Artifacts {
 	if t, ok := s.Targets[targetKey]; ok {
-		if t.Artifacts != nil && !t.Artifacts.IsEmpty() {
+		// If unset then we should use the global artifacts but if set or deliberately empty then we should use that.
+		if t.Artifacts != nil {
 			return *t.Artifacts
 		}
 	}
