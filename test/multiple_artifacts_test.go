@@ -106,7 +106,7 @@ func testTargetArtifactsTakePrecedence(ctx context.Context, t *testing.T, target
 		License:     "MIT",
 		Targets: map[string]dalec.Target{
 			primaryTarget: {
-				Artifacts: dalec.Artifacts{
+				Artifacts: &dalec.Artifacts{
 					Binaries: map[string]dalec.ArtifactConfig{
 						"hello.txt": {},
 					},
@@ -127,7 +127,7 @@ func testTargetArtifactsTakePrecedence(ctx context.Context, t *testing.T, target
 				},
 			},
 			secondaryTarget: {
-				Artifacts: dalec.Artifacts{
+				Artifacts: &dalec.Artifacts{
 					Binaries: map[string]dalec.ArtifactConfig{
 						"contributors.md": {},
 					},
@@ -148,7 +148,7 @@ func testTargetArtifactsTakePrecedence(ctx context.Context, t *testing.T, target
 				},
 			},
 			tertiaryTarget: {
-				Artifacts: dalec.Artifacts{
+				Artifacts: &dalec.Artifacts{
 					Binaries: map[string]dalec.ArtifactConfig{
 						"readme.md":       {},
 						"contributors.md": {},
@@ -191,7 +191,7 @@ func testTargetArtifactsTakePrecedence(ctx context.Context, t *testing.T, target
 	t.Run(primaryTarget, func(t *testing.T) {
 		t.Parallel()
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("mariner2"))
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(primaryTarget))
 			solveT(ctx, t, gwc, sr)
 		})
 	})

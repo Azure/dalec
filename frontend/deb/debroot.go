@@ -321,9 +321,6 @@ func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 
 func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string) []llb.State {
 	artifacts := spec.GetArtifacts(target)
-	if artifacts.IsEmpty() {
-		return nil
-	}
 
 	states := make([]llb.State, 1)
 	base := llb.Scratch().File(llb.Mkdir(dir, 0o755, llb.WithParents(true)))

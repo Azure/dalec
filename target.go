@@ -30,7 +30,7 @@ type Target struct {
 	PackageConfig *PackageConfig `yaml:"package_config,omitempty" json:"package_config,omitempty"`
 
 	// Artifacts describes all of the artifact configurations to include for this specific target.
-	Artifacts Artifacts `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
+	Artifacts *Artifacts `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 }
 
 func (t *Target) validate() error {

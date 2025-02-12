@@ -359,8 +359,8 @@ func (s *Spec) GetImagePost(target string) *PostInstall {
 
 func (s *Spec) GetArtifacts(targetKey string) Artifacts {
 	if t, ok := s.Targets[targetKey]; ok {
-		if !t.Artifacts.IsEmpty() {
-			return t.Artifacts
+		if t.Artifacts != nil && !t.Artifacts.IsEmpty() {
+			return *t.Artifacts
 		}
 	}
 	return s.Artifacts

@@ -437,10 +437,6 @@ func (w *specWrapper) Install() fmt.Stringer {
 	fmt.Fprintln(b, "%install")
 
 	artifacts := w.GetArtifacts(w.Target)
-	if artifacts.IsEmpty() {
-		b.WriteString("\n")
-		return b
-	}
 
 	copyArtifact := func(root, p string, cfg *dalec.ArtifactConfig) {
 		if cfg == nil {
@@ -576,10 +572,6 @@ func (w *specWrapper) Files() fmt.Stringer {
 	fmt.Fprintf(b, "%%files\n")
 
 	artifacts := w.GetArtifacts(w.Target)
-	if artifacts.IsEmpty() {
-		b.WriteString("\n")
-		return b
-	}
 
 	if len(artifacts.Binaries) > 0 {
 		binKeys := dalec.SortMapKeys(artifacts.Binaries)
