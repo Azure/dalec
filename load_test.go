@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/moby/buildkit/frontend/dockerui"
@@ -1099,6 +1100,8 @@ targets:
 		assert.Check(t, spec.Targets["foo"].Image.Bases[0].Rootfs.DockerImage != nil)
 		assert.Check(t, cmp.Equal(spec.Targets["foo"].Image.Bases[0].Rootfs.DockerImage.Ref, "busybox:latest"))
 	})
+
+	t.Run("postinstall", testPostInstallFillDefaults)
 }
 
 func TestImage_validate(t *testing.T) {
@@ -1147,6 +1150,125 @@ func TestImage_validate(t *testing.T) {
 				},
 			},
 		},
+		{
+			Name: "valid SymlinkTarget should pass validation (path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path: "newpath",
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "valid SymlinkTarget should pass validation (paths, single)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Paths: []string{"newpath"},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "valid SymlinkTarget should pass validation (paths, multiple)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Paths: []string{"newpath1", "newpath2"},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty target",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {},
+					},
+				},
+			},
+			expectErr: "'path' and 'paths' fields are mutually exclusive, and at least one is required",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty key, valid target(paths)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"": {
+							Paths: []string{"/newpath_z", "/newpath_a"},
+						},
+					},
+				},
+			},
+			expectErr: "symlink source is empty",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty key: valid target(path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"": {
+							Path: "/newpath_z",
+						},
+					},
+				},
+			},
+			expectErr: "symlink source is empty",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique(paths)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path: "/also_valid",
+						},
+						"also_perfectly_valid": {
+							Paths: []string{"/also_valid"},
+						},
+					},
+				},
+			},
+			expectErr: "symlink 'newpaths' must be unique:",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique(path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path: "/also_valid",
+						},
+						"also_perfectly_valid": {
+							Path: "/also_valid",
+						},
+					},
+				},
+			},
+			expectErr: "symlink 'newpaths' must be unique:",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: path and paths are mutually exclusive",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path:  "/also_valid",
+							Paths: []string{"/also_valid_too", "also_valid_too,_also"},
+						},
+					},
+				},
+			},
+			expectErr: "'path' and 'paths' fields are mutually exclusive, and at least one is required",
+		},
 	}
 
 	for _, tc := range cases {
@@ -1159,4 +1281,128 @@ func TestImage_validate(t *testing.T) {
 			assert.NilError(t, err)
 		})
 	}
+}
+
+func testPostInstallFillDefaults(t *testing.T) {
+	t.Run("symlinks", testSymlinkFillDefaults)
+}
+
+func testSymlinkFillDefaults(t *testing.T) {
+	type tableEntry struct {
+		desc   string
+		input  ImageConfig
+		output ImageConfig
+	}
+
+	// note: fillDefaults is run after validation, so input is assumed to be
+	// valid
+
+	table := []tableEntry{
+		{
+			desc: "empty Path and single Paths should remain untouched",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "path should be moved to Paths",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path: "/newpath1",
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath1"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "should work if Paths is nil",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "/newpath",
+							Paths: nil,
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.desc, func(t *testing.T) {
+			cmp := func(v1 SymlinkTarget, v2 SymlinkTarget) bool {
+				if v1.Path != v2.Path {
+					return false
+				}
+
+				if !slices.Equal(v1.Paths, v2.Paths) {
+					return false
+				}
+
+				return true
+			}
+
+			test.input.fillDefaults()
+
+			in := test.input.Post.Symlinks
+			out := test.output.Post.Symlinks
+			if err := validateSymlinks(in); err != nil {
+				t.Errorf("you wrote a bad test. the input must be valid for the defaults to be filled.")
+				return
+			}
+
+			if err := validateSymlinks(out); err != nil {
+				t.Errorf("you wrote a bad test. the output specified fails validation")
+				return
+			}
+
+			if !maps.EqualFunc(in, out, cmp) {
+				in, _ := json.MarshalIndent(in, "", "\t")
+				out, _ := json.MarshalIndent(out, "", "\t")
+
+				t.Errorf("input and output are not matched:\nexpected: %s\n=======\nactual:%s\n", string(out), string(in))
+			}
+		})
+	}
+
 }

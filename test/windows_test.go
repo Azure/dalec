@@ -306,7 +306,7 @@ echo "$BAR" > bar.txt
 					Post: &dalec.PostInstall{
 						Symlinks: map[string]dalec.SymlinkTarget{
 							"/Windows/System32/src1": {Path: "/src1"},
-							"/Windows/System32/src3": {Path: "/non/existing/dir/src3"},
+							"/Windows/System32/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
 						},
 					},
 				},
@@ -328,30 +328,33 @@ echo "$BAR" > bar.txt
 
 		validateSymlinks := func(ctx context.Context, t *testing.T, ref gwclient.Reference, spec dalec.Spec) {
 			post := spec.GetImagePost("windowscross")
-			for srcPath, l := range post.Symlinks {
+			for oldpath, newpaths := range post.Symlinks {
 				b1, err := ref.ReadFile(ctx, gwclient.ReadRequest{
-					Filename: srcPath,
+					Filename: oldpath,
 				})
 				if err != nil {
-					t.Fatalf("couldn't find Windows \"symlink\" target %q: %v", srcPath, err)
+					t.Fatalf("couldn't find Windows \"symlink\" target %q: %v", oldpath, err)
 				}
 
-				b2, err := ref.ReadFile(ctx, gwclient.ReadRequest{
-					Filename: l.Path,
-				})
-				if err != nil {
-					t.Fatalf("couldn't find Windows \"symlink\" at destination %q: %v", l.Path, err)
-				}
+				for _, newpath := range newpaths.Paths {
+					b2, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+						Filename: newpath,
+					})
+					if err != nil {
+						t.Fatalf("couldn't find Windows \"symlink\" at destination %q: %v", newpath, err)
+					}
 
-				if len(b1) != len(b2) {
-					t.Fatalf("Windows \"symlink\" not identical to target file")
-				}
-
-				for i := range b1 {
-					if b1[i] != b2[i] {
+					if len(b1) != len(b2) {
 						t.Fatalf("Windows \"symlink\" not identical to target file")
 					}
+
+					for i := range b1 {
+						if b1[i] != b2[i] {
+							t.Fatalf("Windows \"symlink\" not identical to target file")
+						}
+					}
 				}
+
 			}
 		}
 

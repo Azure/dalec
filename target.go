@@ -49,6 +49,10 @@ func (t *Target) validate() error {
 		}
 	}
 
+	if err := t.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "postinstall"))
+	}
+
 	return goerrors.Join(errs...)
 }
 

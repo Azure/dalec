@@ -1148,16 +1148,38 @@
 			"description": "Spec is the specification for a package build."
 		},
 		"SymlinkTarget": {
+			"oneOf": [
+				{
+					"required": [
+						"path"
+					],
+					"title": "path"
+				},
+				{
+					"required": [
+						"paths"
+					],
+					"title": "paths"
+				}
+			],
 			"properties": {
 				"path": {
 					"type": "string",
-					"description": "Path is the path where the symlink should be placed"
+					"description": "Path is the path where the symlink should be placed\n\nDeprecated: This is here for backward compatibility. Use `Paths` instead."
+				},
+				"paths": {
+					"items": {
+						"type": "string"
+					},
+					"type": "array",
+					"description": "Path is a list of `newpath`s that will all point to the same `oldpath`."
 				}
 			},
 			"additionalProperties": false,
 			"type": "object",
 			"required": [
-				"path"
+				"path",
+				"paths"
 			],
 			"description": "SymlinkTarget specifies the properties of a symlink"
 		},

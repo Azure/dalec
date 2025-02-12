@@ -324,6 +324,8 @@ func (s *Spec) FillDefaults() {
 		t.fillDefaults()
 		s.Targets[k] = t
 	}
+
+	s.Image.fillDefaults()
 }
 
 func (s Spec) Validate() error {
@@ -386,8 +388,13 @@ func (s Spec) Validate() error {
 		}
 	}
 
+	if err := s.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "image"))
+	}
+
 	return goerrors.Join(errs...)
 }
+
 func validatePatch(patch PatchSpec, patchSrc Source) error {
 	if SourceIsDir(patchSrc) {
 		// Patch sources that use directory-backed sources require a subpath in the
@@ -448,6 +455,83 @@ func (b *ArtifactBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 			continue
 		}
 		b.Env[k] = updated
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func validateSymlinks(symlinks map[string]SymlinkTarget) error {
+	var (
+		errs     []error
+		numPairs int
+	)
+
+	for oldpath, cfg := range symlinks {
+		var err error
+		if oldpath == "" {
+			err = fmt.Errorf("symlink source is empty")
+			errs = append(errs, err)
+		}
+
+		if (cfg.Path != "" && len(cfg.Paths) > 0) || (cfg.Path == "" && len(cfg.Paths) == 0 ) {
+			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required: "+
+				"symlink to %s", oldpath)
+
+			errs = append(errs, err)
+		}
+
+		if err != nil {
+			continue
+		}
+
+		if cfg.Path != "" { // this means .Paths is empty
+			numPairs++
+			continue
+		}
+
+		for _, newpath := range cfg.Paths { // this means .Path is empty
+			numPairs++
+			if newpath == "" {
+				errs = append(errs, fmt.Errorf("symlink newpath should not be empty"))
+				continue
+			}
+		}
+	}
+
+	// The remainder of this function checks for duplicate `newpath`s in the
+	// symlink pairs. This is not allowed: neither the ordering of the
+	// `oldpath` map keys, nor that of the `.Paths` values can be trusted. We
+	// also sort both to avoid cache misses, so we would end up with
+	// inconsistent behavior -- regardless of whether the inputs are the same.
+	if numPairs < 2 {
+		return goerrors.Join(errs...)
+	}
+
+	var (
+		oldpath string
+		cfg     SymlinkTarget
+	)
+
+	seen := make(map[string]string, numPairs)
+	checkDuplicateNewpath := func(newpath string) {
+		if newpath == "" {
+			return
+		}
+
+		if seenPath, found := seen[newpath]; found {
+			errs = append(errs, fmt.Errorf("symlink 'newpaths' must be unique: %q points to both %q and %q",
+				newpath, oldpath, seenPath))
+		}
+
+		seen[newpath] = oldpath
+	}
+
+	for oldpath, cfg = range symlinks {
+		checkDuplicateNewpath(cfg.Path)
+
+		for _, newpath := range cfg.Paths {
+			checkDuplicateNewpath(newpath)
+		}
 	}
 
 	return goerrors.Join(errs...)
