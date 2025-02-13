@@ -1568,6 +1568,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testUserAndGroupCreation(ctx, t, testConfig.Target)
 	})
+
+	t.Run("test dalec target arg is set", func(t *testing.T) {
+		testDalecTargetArg(ctx, t, testConfig.Target)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -2267,5 +2271,29 @@ func testUserAndGroupCreation(ctx context.Context, t *testing.T, testCfg targetC
 		res := solveT(ctx, t, client, sr)
 		_, err := res.SingleRef()
 		assert.NilError(t, err)
+	})
+}
+
+func testDalecTargetArg(ctx context.Context, t *testing.T, testCfg targetConfig) {
+	t.Parallel()
+	ctx = startTestSpan(ctx, t)
+
+	spec := newSimpleSpec()
+	if spec.Args == nil {
+		spec.Args = make(map[string]string)
+	}
+	spec.Args["DALEC_TARGET"] = ""
+	if spec.Build.Env == nil {
+		spec.Build.Env = make(map[string]string)
+	}
+	spec.Build.Env["DALEC_TARGET"] = "$DALEC_TARGET"
+
+	expect, _, _ := strings.Cut(testCfg.Package, "/")
+	spec.Build.Steps = []dalec.BuildStep{
+		{Command: fmt.Sprintf("[ \"$DALEC_TARGET\" = %q ]", expect)},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		solveT(ctx, t, client, newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(testCfg.Package)))
 	})
 }

@@ -232,7 +232,7 @@ func maybeSetDalecTargetKey(client gwclient.Client, key string) gwclient.Client 
 		// this forces the client to use our cached opts from above
 		client = &clientWithCustomOpts{opts: opts, Client: client}
 	}
-	return setClientOptOption(client, keyTopLevelTarget, key)
+	return setClientOptOption(client, map[string]string{keyTopLevelTarget: key, "build-arg:" + dalec.KeyDalecTarget: key})
 }
 
 // list outputs the list of targets that are supported by the mux
@@ -518,9 +518,12 @@ func trimTargetOpt(client gwclient.Client, prefix string) *clientWithCustomOpts 
 	}
 }
 
-func setClientOptOption(client gwclient.Client, key, value string) *clientWithCustomOpts {
+func setClientOptOption(client gwclient.Client, extraOpts map[string]string) *clientWithCustomOpts {
 	opts := client.BuildOpts()
-	opts.Opts[key] = value
+
+	for key, value := range extraOpts {
+		opts.Opts[key] = value
+	}
 	return &clientWithCustomOpts{
 		Client: client,
 		opts:   opts,

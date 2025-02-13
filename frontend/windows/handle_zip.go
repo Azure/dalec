@@ -129,6 +129,11 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 		withSourcesMounted("/build", patched, spec.Sources),
 		llb.AddMount("/tmp/scripts", buildScript),
 		dalec.WithConstraints(opts...),
+		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			for k, v := range spec.Build.Env {
+				ei.State = ei.State.With(llb.AddEnv(k, v))
+			}
+		}),
 	).AddMount(outputDir, llb.Scratch())
 
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
