@@ -52,7 +52,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 		}
 
 		sort.Strings(paths)
-		script := g.gitconfigGeneratorScript()
+		script := g.gitconfigGeneratorScript(gomodDownloadWrapperBasename)
 		scriptPath := filepath.Join(scriptMountpoint, gomodDownloadWrapperBasename)
 
 		for _, path := range paths {
@@ -71,7 +71,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 	}
 }
 
-func (g *SourceGenerator) gitconfigGeneratorScript() llb.State {
+func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State {
 	var (
 		script bytes.Buffer
 		noop   = func() {}
@@ -120,7 +120,7 @@ func (g *SourceGenerator) gitconfigGeneratorScript() llb.State {
 	}
 
 	fmt.Fprintln(&script, "go mod download")
-	return llb.Scratch().File(llb.Mkfile(scriptRelativePath, 0o755, script.Bytes()))
+	return llb.Scratch().File(llb.Mkfile(scriptPath, 0o755, script.Bytes()))
 }
 
 func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
