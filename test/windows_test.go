@@ -520,6 +520,10 @@ echo "$BAR" > bar.txt
 		ctx := startTestSpan(baseCtx, t)
 		testBuildNetworkMode(ctx, t, tcfg)
 	})
+
+	t.Run("test dalec target arg is set", func(t *testing.T) {
+		testDalecTargetArg(ctx, t, tcfg)
+	})
 }
 
 func prepareWindowsSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
