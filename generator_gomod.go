@@ -2,7 +2,6 @@ package dalec
 
 import (
 	"bytes"
-	_ "embed"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -14,7 +13,6 @@ import (
 const (
 	gomodCacheDir       = "/go/pkg/mod"
 	gitConfigMountpoint = "/dev/shm/git"
-	scriptRelativePath  = "/go_mod_download.sh"
 )
 
 func (s *Source) isGomod() bool {
@@ -39,9 +37,10 @@ func (s *Spec) HasGomods() bool {
 func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		const (
-			fourKB           = 4096
-			workDir          = "/work/src"
-			scriptMountPoint = "/tmp/mnt"
+			fourKB                       = 4096
+			workDir                      = "/work/src"
+			scriptMountpoint             = "/tmp/dalec/internal/gomod"
+			gomodDownloadWrapperBasename = "go_mod_download.sh"
 		)
 
 		joinedWorkDir := filepath.Join(workDir, g.Subpath)
@@ -54,14 +53,14 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 
 		sort.Strings(paths)
 		script := g.gitconfigGeneratorScript()
-		scriptPath := filepath.Join(scriptMountPoint, scriptRelativePath)
+		scriptPath := filepath.Join(scriptMountpoint, gomodDownloadWrapperBasename)
 
 		for _, path := range paths {
 			in = worker.Run(
 				ShArgs(scriptPath),
 				llb.AddEnv("GOPATH", "/go"),
 				g.withGomodSecretsAndSockets(),
-				llb.AddMount(scriptMountPoint, script),
+				llb.AddMount(scriptMountpoint, script),
 				llb.AddMount(gitConfigMountpoint, llb.Scratch(), llb.Tmpfs(llb.TmpfsSize(fourKB))), // to house the gitconfig, which has secrets
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
