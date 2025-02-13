@@ -734,21 +734,6 @@ func (g *SourceGenerator) fillDefaults(host string, authInfo *GitAuth) {
 }
 
 func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth) {
-	var (
-		initialize = func() {
-			if gm.Auth == nil {
-				gm.Auth = make(map[string]GomodGitAuth)
-			}
-		}
-
-		noop = func() {}
-
-		initOnce = func() {
-			initialize()
-			initialize = noop
-		}
-	)
-
 	// Don't overwrite explicitly-specified auth
 	_, ok := gm.Auth[host]
 	if ok {
@@ -759,19 +744,20 @@ func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth) {
 	var gomodAuth GomodGitAuth
 	switch {
 	case authInfo.Token != "":
-		initOnce()
 		gomodAuth.Token = authInfo.Token
 	case authInfo.Header != "":
-		initOnce()
 		gomodAuth.Header = authInfo.Header
 	case authInfo.SSH != "":
-		initOnce()
 		gomodAuth.SSH = &GomodGitAuthSSH{
 			ID:       authInfo.SSH,
 			Username: defaultUsername,
 		}
 	default:
 		return
+	}
+
+	if gm.Auth == nil {
+		gm.Auth = make(map[string]GomodGitAuth)
 	}
 
 	gm.Auth[host] = gomodAuth
