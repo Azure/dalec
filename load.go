@@ -199,6 +199,10 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 		}
 	}
 
+	if err := s.Image.processBuildArgs(lex, args, cfg.AllowArg); err != nil {
+		appendErr(errors.Wrap(err, "package config"))
+	}
+
 	if err := s.Dependencies.processBuildArgs(args, cfg.AllowArg); err != nil {
 		appendErr(errors.Wrap(err, "dependencies"))
 	}
@@ -317,12 +321,15 @@ func (s *Spec) FillDefaults() {
 	}
 
 	s.Dependencies.fillDefaults()
+	s.Image.fillDefaults()
 
 	for k := range s.Targets {
 		t := s.Targets[k]
 		t.fillDefaults()
 		s.Targets[k] = t
 	}
+
+	s.Image.fillDefaults()
 }
 
 func (s Spec) Validate() error {
@@ -375,14 +382,23 @@ func (s Spec) Validate() error {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
 	}
 
+	if err := s.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "image"))
+	}
+
 	for k, t := range s.Targets {
 		if err := t.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "target %s", k))
 		}
 	}
 
+	if err := s.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "image"))
+	}
+
 	return goerrors.Join(errs...)
 }
+
 func validatePatch(patch PatchSpec, patchSrc Source) error {
 	if SourceIsDir(patchSrc) {
 		// Patch sources that use directory-backed sources require a subpath in the
@@ -446,4 +462,100 @@ func (b *ArtifactBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 	}
 
 	return goerrors.Join(errs...)
+}
+
+func validateSymlinks(symlinks map[string]SymlinkTarget) error {
+	var (
+		errs     []error
+		numPairs int
+	)
+
+	for oldpath, cfg := range symlinks {
+		var err error
+		if oldpath == "" {
+			err = fmt.Errorf("symlink source is empty")
+			errs = append(errs, err)
+		}
+
+		if (cfg.Path != "" && len(cfg.Paths) > 0) || (cfg.Path == "" && len(cfg.Paths) == 0) {
+			err = fmt.Errorf("'path' and 'paths' fields are mutually exclusive, and at least one is required: "+
+				"symlink to %s", oldpath)
+
+			errs = append(errs, err)
+		}
+
+		if err != nil {
+			continue
+		}
+
+		if cfg.Path != "" { // this means .Paths is empty
+			numPairs++
+			continue
+		}
+
+		for _, newpath := range cfg.Paths { // this means .Path is empty
+			numPairs++
+			if newpath == "" {
+				errs = append(errs, fmt.Errorf("symlink newpath should not be empty"))
+				continue
+			}
+		}
+	}
+
+	// The remainder of this function checks for duplicate `newpath`s in the
+	// symlink pairs. This is not allowed: neither the ordering of the
+	// `oldpath` map keys, nor that of the `.Paths` values can be trusted. We
+	// also sort both to avoid cache misses, so we would end up with
+	// inconsistent behavior -- regardless of whether the inputs are the same.
+	if numPairs < 2 {
+		return goerrors.Join(errs...)
+	}
+
+	var (
+		oldpath string
+		cfg     SymlinkTarget
+	)
+
+	seen := make(map[string]string, numPairs)
+	checkDuplicateNewpath := func(newpath string) {
+		if newpath == "" {
+			return
+		}
+
+		if seenPath, found := seen[newpath]; found {
+			errs = append(errs, fmt.Errorf("symlink 'newpaths' must be unique: %q points to both %q and %q",
+				newpath, oldpath, seenPath))
+		}
+
+		seen[newpath] = oldpath
+	}
+
+	for oldpath, cfg = range symlinks {
+		checkDuplicateNewpath(cfg.Path)
+
+		for _, newpath := range cfg.Paths {
+			checkDuplicateNewpath(newpath)
+		}
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (img *ImageConfig) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
+	if img == nil {
+		return nil
+	}
+
+	var errs error
+
+	for k, v := range img.Labels {
+		updated, err := expandArgs(lex, v, args, allowArg)
+		if err != nil {
+			errs = goerrors.Join(errs, errors.Wrapf(err, "env %s=%s", k, v))
+			continue
+		}
+		img.Labels[k] = updated
+	}
+
+	return errs
 }

@@ -43,7 +43,10 @@ type Artifacts struct {
 	// On linux this would typically be installed to /usr/include/.
 	Headers map[string]ArtifactConfig `yaml:"headers,omitempty" json:"headers,omitempty"`
 
-	// TODO: other types of artifacts (libexec, etc)
+	// Users is a list of users to add to the system when the package is installed.
+	Users []AddUserConfig `yaml:"users,omitempty" json:"users,omitempty"`
+	// Groups is a list of groups to add to the system when the package is installed.
+	Groups []AddGroupConfig `yaml:"groups,omitempty" json:"groups,omitempty"`
 }
 
 type ArtifactSymlinkConfig struct {
@@ -104,6 +107,18 @@ func (a *ArtifactConfig) ResolveName(path string) string {
 		return a.Name
 	}
 	return filepath.Base(path)
+}
+
+// AddUserConfig is the configuration for adding a user to the system.
+type AddUserConfig struct {
+	// Name is the name of the user to add to the system.
+	Name string `yaml:"name" json:"name"`
+}
+
+// AddGroupConfig is the configuration for adding a group to the system.
+type AddGroupConfig struct {
+	// Name is the name of the group to add to the system.
+	Name string `yaml:"name" json:"name"`
 }
 
 // IsEmpty is used to determine if there are any artifacts to include in the package.

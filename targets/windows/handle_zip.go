@@ -118,7 +118,8 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 
 	patched := dalec.PatchSources(worker, spec, sources, opts...)
 	buildScript := createBuildScript(spec, opts...)
-	binaries := maps.Keys(spec.Artifacts.Binaries)
+	artifacts := spec.GetArtifacts(targetKey)
+	binaries := maps.Keys(artifacts.Binaries)
 	script := generateInvocationScript(binaries)
 
 	builder := worker.With(dalec.SetBuildNetworkMode(spec))

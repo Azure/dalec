@@ -536,7 +536,13 @@ func (d *clientWithCustomOpts) CurrentFrontend() (*llb.State, error) {
 
 // Handler returns a [gwclient.BuildFunc] that uses the mux to route requests to appropriate handlers
 func (m *BuildMux) Handler(opts ...func(context.Context, gwclient.Client, *BuildMux) error) gwclient.BuildFunc {
-	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+	return func(ctx context.Context, client gwclient.Client) (_ *gwclient.Result, retErr error) {
+		defer func() {
+			if r := recover(); r != nil {
+				retErr = errors.Errorf("recovered panic in handler: %+v", r)
+			}
+		}()
+
 		if !SupportsDiffMerge(client) {
 			dalec.DisableDiffMerge(true)
 		}

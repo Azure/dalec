@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/moby/buildkit/frontend/dockerui"
@@ -589,6 +590,14 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 					Args: maps.Clone(pairs),
 				},
 			},
+			Image: &ImageConfig{
+				Labels: map[string]string{
+					"foo": "$FOO",
+				},
+				Volumes: map[string]struct{}{
+					"": {},
+				},
+			},
 		},
 	}
 
@@ -610,7 +619,7 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["BAR"], bar))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["REGULAR"], plainOleValue))
-
+	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Labels["foo"], foo))
 }
 
 func TestCustomRepoFillDefaults(t *testing.T) {
@@ -1072,4 +1081,336 @@ func Test_validatePatch(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestImage_fillDefaults(t *testing.T) {
+	t.Run("image.base is migrated to image.bases", func(t *testing.T) {
+		dt := []byte(`
+image:
+  base: busybox:latest
+
+targets:
+  foo:
+    image:
+      base: busybox:latest
+`)
+
+		spec, err := LoadSpec(dt)
+		assert.NilError(t, err)
+
+		// image.base should be migrated to image.bases
+		assert.Check(t, cmp.Equal(spec.Image.Base, ""))
+		assert.Check(t, cmp.Equal(spec.Targets["foo"].Image.Base, ""))
+		assert.Check(t, cmp.Len(spec.Image.Bases, 1))
+		assert.Check(t, spec.Image.Bases[0].Rootfs.DockerImage != nil)
+		assert.Check(t, cmp.Equal(spec.Image.Bases[0].Rootfs.DockerImage.Ref, "busybox:latest"))
+		assert.Check(t, cmp.Len(spec.Targets["foo"].Image.Bases, 1))
+		assert.Check(t, spec.Targets["foo"].Image.Bases[0].Rootfs.DockerImage != nil)
+		assert.Check(t, cmp.Equal(spec.Targets["foo"].Image.Bases[0].Rootfs.DockerImage.Ref, "busybox:latest"))
+	})
+
+	t.Run("postinstall", testPostInstallFillDefaults)
+}
+
+func TestImage_validate(t *testing.T) {
+	type testCase struct {
+		Name      string
+		Image     ImageConfig
+		expectErr string
+	}
+
+	cases := []testCase{
+		{
+			Name:  "No base image",
+			Image: ImageConfig{},
+		},
+		{
+			Name: "image.base set",
+			Image: ImageConfig{
+				Base: "busybox:latest",
+			},
+		},
+		{
+			Name: "image.bases set with valid sources",
+			Image: ImageConfig{
+				Bases: []BaseImage{
+					{Rootfs: Source{DockerImage: &SourceDockerImage{Ref: "busybox:latest"}}},
+					{Rootfs: Source{DockerImage: &SourceDockerImage{Ref: "alpine:latest"}}},
+				},
+			},
+		},
+		{
+			Name:      "both image.bases and image.base set",
+			expectErr: "cannot specify both",
+			Image: ImageConfig{
+				Base: "busybox:latest",
+				Bases: []BaseImage{
+					{Rootfs: Source{DockerImage: &SourceDockerImage{Ref: "busybox:latest"}}},
+				},
+			},
+		},
+		{
+			Name:      "image.bases set to anything other than image source type",
+			expectErr: "rootfs currently only supports image source types",
+			Image: ImageConfig{
+				Bases: []BaseImage{
+					{Rootfs: Source{Context: &SourceContext{}}},
+				},
+			},
+		},
+		{
+			Name: "valid SymlinkTarget should pass validation (path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path: "newpath",
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "valid SymlinkTarget should pass validation (paths, single)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Paths: []string{"newpath"},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "valid SymlinkTarget should pass validation (paths, multiple)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Paths: []string{"newpath1", "newpath2"},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty target",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {},
+					},
+				},
+			},
+			expectErr: "'path' and 'paths' fields are mutually exclusive, and at least one is required",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty key, valid target(paths)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"": {
+							Paths: []string{"/newpath_z", "/newpath_a"},
+						},
+					},
+				},
+			},
+			expectErr: "symlink source is empty",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: empty key: valid target(path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"": {
+							Path: "/newpath_z",
+						},
+					},
+				},
+			},
+			expectErr: "symlink source is empty",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique(paths)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path: "/also_valid",
+						},
+						"also_perfectly_valid": {
+							Paths: []string{"/also_valid"},
+						},
+					},
+				},
+			},
+			expectErr: "symlink 'newpaths' must be unique:",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: all symlink 'newpaths' should be unique(path)",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path: "/also_valid",
+						},
+						"also_perfectly_valid": {
+							Path: "/also_valid",
+						},
+					},
+				},
+			},
+			expectErr: "symlink 'newpaths' must be unique:",
+		},
+		{
+			Name: "invalid SymlinkTarget should fail validation: path and paths are mutually exclusive",
+			Image: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"perfectly_valid": {
+							Path:  "/also_valid",
+							Paths: []string{"/also_valid_too", "also_valid_too,_also"},
+						},
+					},
+				},
+			},
+			expectErr: "'path' and 'paths' fields are mutually exclusive, and at least one is required",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			err := tc.Image.validate()
+			if tc.expectErr != "" {
+				assert.ErrorContains(t, err, tc.expectErr)
+				return
+			}
+			assert.NilError(t, err)
+		})
+	}
+}
+
+func testPostInstallFillDefaults(t *testing.T) {
+	t.Run("symlinks", testSymlinkFillDefaults)
+}
+
+func testSymlinkFillDefaults(t *testing.T) {
+	type tableEntry struct {
+		desc   string
+		input  ImageConfig
+		output ImageConfig
+	}
+
+	// note: fillDefaults is run after validation, so input is assumed to be
+	// valid
+
+	table := []tableEntry{
+		{
+			desc: "empty Path and single Paths should remain untouched",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "path should be moved to Paths",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path: "/newpath1",
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath1"},
+						},
+					},
+				},
+			},
+		},
+		{
+			desc: "should work if Paths is nil",
+			input: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "/newpath",
+							Paths: nil,
+						},
+					},
+				},
+			},
+			output: ImageConfig{
+				Post: &PostInstall{
+					Symlinks: map[string]SymlinkTarget{
+						"oldpath": {
+							Path:  "",
+							Paths: []string{"/newpath"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range table {
+		t.Run(test.desc, func(t *testing.T) {
+			cmp := func(v1 SymlinkTarget, v2 SymlinkTarget) bool {
+				if v1.Path != v2.Path {
+					return false
+				}
+
+				if !slices.Equal(v1.Paths, v2.Paths) {
+					return false
+				}
+
+				return true
+			}
+
+			test.input.fillDefaults()
+
+			in := test.input.Post.Symlinks
+			out := test.output.Post.Symlinks
+			if err := validateSymlinks(in); err != nil {
+				t.Errorf("you wrote a bad test. the input must be valid for the defaults to be filled.")
+				return
+			}
+
+			if err := validateSymlinks(out); err != nil {
+				t.Errorf("you wrote a bad test. the output specified fails validation")
+				return
+			}
+
+			if !maps.EqualFunc(in, out, cmp) {
+				in, _ := json.MarshalIndent(in, "", "\t")
+				out, _ := json.MarshalIndent(out, "", "\t")
+
+				t.Errorf("input and output are not matched:\nexpected: %s\n=======\nactual:%s\n", string(out), string(in))
+			}
+		})
+	}
+
 }

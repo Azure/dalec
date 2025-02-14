@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -9,11 +10,16 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/targets/linux/deb/ubuntu"
 	"github.com/Azure/dalec/targets/windows"
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/llb/sourceresolver"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/exp/maps"
+	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 var windowsAmd64 = ocispecs.Platform{OS: "windows", Architecture: "amd64"}
@@ -186,37 +192,38 @@ func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 	t.Run("container", func(t *testing.T) {
 		t.Parallel()
 
-		spec := dalec.Spec{
-			Name:        "test-container-build",
-			Version:     "0.0.1",
-			Revision:    "1",
-			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
-			Vendor:      "Dalec",
-			Packager:    "Dalec",
-			Description: "Testing container target",
-			Sources: map[string]dalec.Source{
-				"src1": {
-					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents:    "#!/usr/bin/env bash\necho hello world",
-							Permissions: 0o700,
-						},
-					},
-				},
-				"src2": {
-					Inline: &dalec.SourceInline{
-						Dir: &dalec.SourceInlineDir{
-							Files: map[string]*dalec.SourceInlineFile{
-								"file1": {Contents: "file1 contents\n"},
+		newSpec := func() dalec.Spec {
+			return dalec.Spec{
+				Name:        "test-container-build",
+				Version:     "0.0.1",
+				Revision:    "1",
+				License:     "MIT",
+				Website:     "https://github.com/azure/dalec",
+				Vendor:      "Dalec",
+				Packager:    "Dalec",
+				Description: "Testing container target",
+				Sources: map[string]dalec.Source{
+					"src1": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents:    "#!/usr/bin/env bash\necho hello world",
+								Permissions: 0o700,
 							},
 						},
 					},
-				},
-				"src2-patch1": {
-					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents: `
+					"src2": {
+						Inline: &dalec.SourceInline{
+							Dir: &dalec.SourceInlineDir{
+								Files: map[string]*dalec.SourceInlineFile{
+									"file1": {Contents: "file1 contents\n"},
+								},
+							},
+						},
+					},
+					"src2-patch1": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents: `
 diff --git a/file1 b/file1
 index 84d55c5..22b9b11 100644
 --- a/file1
@@ -225,13 +232,13 @@ index 84d55c5..22b9b11 100644
 -file1 contents
 +file1 contents patched
 `,
+							},
 						},
 					},
-				},
-				"src2-patch2": {
-					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents: `
+					"src2-patch2": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents: `
 diff --git a/file2 b/file2
 new file mode 100700
 index 0000000..5260cb1
@@ -242,118 +249,202 @@ index 0000000..5260cb1
 +
 +echo "Added a new file"
 `,
+							},
+						},
+					},
+					"src3": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents:    "#!/usr/bin/env bash\necho goodbye",
+								Permissions: 0o700,
+							},
 						},
 					},
 				},
-				"src3": {
-					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents:    "#!/usr/bin/env bash\necho goodbye",
-							Permissions: 0o700,
-						},
+				Patches: map[string][]dalec.PatchSpec{
+					"src2": {
+						{Source: "src2-patch1"},
+						{Source: "src2-patch2"},
 					},
 				},
-			},
-			Patches: map[string][]dalec.PatchSpec{
-				"src2": {
-					{Source: "src2-patch1"},
-					{Source: "src2-patch2"},
-				},
-			},
 
-			Dependencies: &dalec.PackageDependencies{},
+				Dependencies: &dalec.PackageDependencies{},
 
-			Build: dalec.ArtifactBuild{
-				Steps: []dalec.BuildStep{
-					// These are "build" steps where we aren't really building things just verifying
-					// that sources are in the right place and have the right permissions and content
-					{
-						Command: "test -x ./src1",
-					},
-					{
-						Command: "./src1 | grep 'hello world'",
-					},
-					{
-						// file added by patch
-						Command: "test -x ./src2/file2",
-					},
-					{
-						Command: "grep 'Added a new file' ./src2/file2",
-					},
-					{
-						// Test that a multiline command works with env vars
-						Env: map[string]string{
-							"FOO": "foo",
-							"BAR": "bar",
+				Build: dalec.ArtifactBuild{
+					Steps: []dalec.BuildStep{
+						// These are "build" steps where we aren't really building things just verifying
+						// that sources are in the right place and have the right permissions and content
+						{
+							Command: "test -x ./src1",
 						},
-						Command: `
+						{
+							Command: "./src1 | grep 'hello world'",
+						},
+						{
+							// file added by patch
+							Command: "test -x ./src2/file2",
+						},
+						{
+							Command: "grep 'Added a new file' ./src2/file2",
+						},
+						{
+							// Test that a multiline command works with env vars
+							Env: map[string]string{
+								"FOO": "foo",
+								"BAR": "bar",
+							},
+							Command: `
 echo "${FOO}_0" > foo0.txt
 echo "${FOO}_1" > foo1.txt
 echo "$BAR" > bar.txt
 `,
+						},
 					},
 				},
-			},
 
-			Image: &dalec.ImageConfig{
-				Post: &dalec.PostInstall{
-					Symlinks: map[string]dalec.SymlinkTarget{
-						"/Windows/System32/src1": {Path: "/src1"},
-						"/Windows/System32/src3": {Path: "/non/existing/dir/src3"},
+				Image: &dalec.ImageConfig{
+					Post: &dalec.PostInstall{
+						Symlinks: map[string]dalec.SymlinkTarget{
+							"/Windows/System32/src1": {Path: "/src1"},
+							"/Windows/System32/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
+						},
 					},
 				},
-			},
 
-			Artifacts: dalec.Artifacts{
-				Binaries: map[string]dalec.ArtifactConfig{
-					"src1":       {},
-					"src2/file2": {},
-					"src3":       {},
-					// These are files we created in the build step
-					// They aren't really binaries but we want to test that they are created and have the right content
-					"foo0.txt": {},
-					"foo1.txt": {},
-					"bar.txt":  {},
+				Artifacts: dalec.Artifacts{
+					Binaries: map[string]dalec.ArtifactConfig{
+						"src1":       {},
+						"src2/file2": {},
+						"src3":       {},
+						// These are files we created in the build step
+						// They aren't really binaries but we want to test that they are created and have the right content
+						"foo0.txt": {},
+						"foo1.txt": {},
+						"bar.txt":  {},
+					},
 				},
-			},
+			}
 		}
 
-		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
-			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
-			sr.Evaluate = true
-			res := solveT(ctx, t, gwc, sr)
-
-			ref, err := res.SingleRef()
-			if err != nil {
-				t.Fatal(err)
-			}
-
+		validateSymlinks := func(ctx context.Context, t *testing.T, ref gwclient.Reference, spec dalec.Spec) {
 			post := spec.GetImagePost("windowscross")
-			for srcPath, l := range post.Symlinks {
+			for oldpath, newpaths := range post.Symlinks {
 				b1, err := ref.ReadFile(ctx, gwclient.ReadRequest{
-					Filename: srcPath,
+					Filename: oldpath,
 				})
 				if err != nil {
-					t.Fatalf("couldn't find Windows \"symlink\" target %q: %v", srcPath, err)
+					t.Fatalf("couldn't find Windows \"symlink\" target %q: %v", oldpath, err)
 				}
 
-				b2, err := ref.ReadFile(ctx, gwclient.ReadRequest{
-					Filename: l.Path,
-				})
-				if err != nil {
-					t.Fatalf("couldn't find Windows \"symlink\" at destination %q: %v", l.Path, err)
-				}
+				for _, newpath := range newpaths.Paths {
+					b2, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+						Filename: newpath,
+					})
+					if err != nil {
+						t.Fatalf("couldn't find Windows \"symlink\" at destination %q: %v", newpath, err)
+					}
 
-				if len(b1) != len(b2) {
-					t.Fatalf("Windows \"symlink\" not identical to target file")
-				}
-
-				for i := range b1 {
-					if b1[i] != b2[i] {
+					if len(b1) != len(b2) {
 						t.Fatalf("Windows \"symlink\" not identical to target file")
 					}
+
+					for i := range b1 {
+						if b1[i] != b2[i] {
+							t.Fatalf("Windows \"symlink\" not identical to target file")
+						}
+					}
 				}
+
 			}
+		}
+
+		t.Run("single-image", func(t *testing.T) {
+			t.Parallel()
+			ctx := startTestSpan(ctx, t)
+			spec := newSpec()
+
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(tcfg.Container), withWindowsAmd64)
+				sr.Evaluate = true
+				res := solveT(ctx, t, gwc, sr)
+
+				ref, err := res.SingleRef()
+				if err != nil {
+					t.Fatal(err)
+				}
+				validateSymlinks(ctx, t, ref, spec)
+			})
+		})
+
+		t.Run("multi-image", func(t *testing.T) {
+			t.Parallel()
+			ctx := startTestSpan(ctx, t)
+
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := newSpec()
+
+				spec.Image.Bases = []dalec.BaseImage{
+					{Rootfs: dalec.Source{DockerImage: &dalec.SourceDockerImage{Ref: "mcr.microsoft.com/windows/nanoserver:ltsc2022"}}},
+					{Rootfs: dalec.Source{DockerImage: &dalec.SourceDockerImage{Ref: "mcr.microsoft.com/windows/nanoserver:1809"}}},
+				}
+				sr := newSolveRequest(
+					withSpec(ctx, t, &spec),
+					withBuildTarget(tcfg.Container),
+					withWindowsAmd64,
+				)
+				sr.Evaluate = true
+				res := solveT(ctx, t, gwc, sr)
+
+				var metaPlatforms exptypes.Platforms
+				err := json.Unmarshal(res.Metadata["refs.platforms"], &metaPlatforms)
+				assert.NilError(t, err)
+				assert.Assert(t, cmp.Len(metaPlatforms.Platforms, 2))
+
+				// Go through each of the base images we requested and resolve
+				// them so we can get the platform info
+				// Then validate that the platform for the base image matches the platform
+				// in the result platforms.
+				for i, ref := range spec.Image.Bases {
+					actual := metaPlatforms.Platforms[i]
+
+					_, _, dt, err := gwc.ResolveImageConfig(ctx, ref.Rootfs.DockerImage.Ref, sourceresolver.Opt{
+						Platform: &windowsAmd64,
+					})
+					assert.NilError(t, err)
+
+					var cfg dalec.DockerImageSpec
+					assert.NilError(t, json.Unmarshal(dt, &cfg))
+					assert.Check(t, cmp.Equal(cfg.OS, actual.Platform.OS))
+					assert.Check(t, cmp.Equal(cfg.Architecture, actual.Platform.Architecture))
+					assert.Check(t, cmp.Equal(cfg.OSVersion, actual.Platform.OSVersion))
+				}
+
+				// NOTE: we are not using `res.SingleRef` because we requested multiple
+				// refs which would cause an error in this case.
+				// Instead we need to look at res.Refs
+				assert.Assert(t, cmp.Len(res.Refs, len(metaPlatforms.Platforms)))
+
+				for _, p := range metaPlatforms.Platforms {
+					ref, ok := res.Refs[platforms.FormatAll(p.Platform)]
+					assert.Assert(t, ok, "unepxected ref keys: %s", maps.Keys(res.Refs))
+					validateSymlinks(ctx, t, ref, spec)
+				}
+
+				// This should fail since the bases have the same platform
+				spec.Image.Bases = []dalec.BaseImage{
+					{Rootfs: dalec.Source{DockerImage: &dalec.SourceDockerImage{Ref: "mcr.microsoft.com/windows/nanoserver:ltsc2022"}}},
+					{Rootfs: dalec.Source{DockerImage: &dalec.SourceDockerImage{Ref: "mcr.microsoft.com/windows/nanoserver:ltsc2022-amd64"}}},
+				}
+
+				sr = newSolveRequest(
+					withSpec(ctx, t, &spec),
+					withBuildTarget(tcfg.Container),
+					withWindowsAmd64,
+				)
+				sr.Evaluate = true
+				_, err = gwc.Solve(ctx, sr)
+				assert.ErrorContains(t, err, "mutiple base images provided with the same")
+			})
 		})
 	})
 

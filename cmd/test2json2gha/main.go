@@ -142,9 +142,13 @@ func do(in io.Reader, out io.Writer, modName string, slowThreshold time.Duration
 			}
 		}
 
-		if err := writeResult(tr, buf, failBuf, slowBuf, slow, modName); err != nil {
+		if err := writeResult(tr, buf, failBuf, modName); err != nil {
 			slog.Error("Error writing result", "error", err)
 			continue
+		}
+
+		if tr.elapsed > slow {
+			fmt.Fprintf(slowBuf, "%s %.3fs\n", tr.name, tr.elapsed)
 		}
 
 		if err := buf.Flush(); err != nil {
@@ -188,7 +192,7 @@ func getSummaryFile() io.WriteCloser {
 	return f
 }
 
-func writeResult(tr *TestResult, out, failBuf, slowBuf io.Writer, slow float64, modName string) error {
+func writeResult(tr *TestResult, out, failBuf io.Writer, modName string) error {
 	if tr.name == "" {
 		return nil
 	}
@@ -218,16 +222,6 @@ func writeResult(tr *TestResult, out, failBuf, slowBuf io.Writer, slow float64, 
 	}()
 
 	var rdr io.Reader = tr.output
-
-	if tr.elapsed > slow {
-		buf := bytes.NewBuffer(nil)
-		rdr = io.TeeReader(rdr, buf)
-		defer func() {
-			if buf.Len() > 0 {
-				fmt.Fprintln(slowBuf, mdLog(fmt.Sprintf("%s %.3fs", tr.name, tr.elapsed), buf))
-			}
-		}()
-	}
 
 	if !tr.failed {
 		if _, err := io.Copy(out, rdr); err != nil {

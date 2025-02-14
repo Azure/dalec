@@ -16,9 +16,13 @@ func (cfg *Config) BuildContainer(_ gwclient.Client, worker llb.State, sOpt dale
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
-	rootfs := llb.Scratch()
-	if ref := dalec.GetBaseOutputImage(spec, targetKey); ref != "" {
-		rootfs = llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraints(opts...))
+	bi, err := spec.GetSingleBase(targetKey)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	rootfs, err := bi.ToState(sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
 	}
 
 	installTimeRepos := spec.GetInstallRepos(targetKey)
@@ -95,7 +99,7 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 			return nil, nil, err
 		}
 
-		img, err := linux.BuildImageConfig(ctx, sOpt.Resolver, spec, platform, targetKey)
+		img, err := linux.BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
 		if err != nil {
 			return nil, nil, err
 		}

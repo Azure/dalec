@@ -107,8 +107,19 @@ For more information, please see [Targets](targets.md).
 
 Image section is used to define the base image and post processing for the image.
 
-- `base`: The base image for the target.
-- `post`: The post processing for the image, such as symlinks.
+Example:
+
+```yaml
+image:
+  base: mcr.microsoft.com/cbl-mariner/distroless/minimal:2.0
+  post:
+    symlinks:
+      /usr/bin/my-binary:
+       path: /my-binary
+  entrypoint: /my-binary
+```
+
+For more information, please see [Images](image.md).
 
 ### Package Config section
 
@@ -160,7 +171,23 @@ dependencies:
   runtime:
     - libfoo
     - libbar
+  recommends:
+    - libcafe
+  test:
+    - kind
+  extra_repos:
+    - libdecaf
 ```
+
+`Build` dependencies are the list of packages required to build the package.
+
+`Runtime` dependencies are the list of packages required to install/run the package.
+
+`Recommends` dependencies are the list of packages recommended to install with the generated package.
+
+`Test` dependencies list packages required for running tests. These packages are only installed for tests which have steps that require running a command in the built container.
+
+See [dependencies](dependencies.md) for more details on dependency options.
 
 Sometimes you may need to add extra repositories in order to fulfill the
 specified dependencies.

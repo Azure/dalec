@@ -29,6 +29,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'spec',
         'sources',
+        'dependencies',
         'targets',
         'testing',
         'artifacts',

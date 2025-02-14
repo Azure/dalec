@@ -10,14 +10,6 @@ func BuildImageConfig(spec *Spec, targetKey string, img *DockerImageSpec) error 
 	return nil
 }
 
-func GetBaseOutputImage(spec *Spec, target string) string {
-	i := spec.Targets[target].Image
-	if i == nil || i.Base == "" {
-		return ""
-	}
-	return i.Base
-}
-
 func MergeSpecImage(spec *Spec, targetKey string) *ImageConfig {
 	var cfg ImageConfig
 

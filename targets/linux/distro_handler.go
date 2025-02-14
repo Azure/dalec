@@ -45,8 +45,8 @@ type DistroConfig interface {
 		targetKey string, opts ...llb.ConstraintsOpt) (gwclient.Reference, error)
 }
 
-func BuildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
-	img, err := resolveConfig(ctx, resolver, spec, platform, targetKey)
+func BuildImageConfig(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
+	img, err := resolveConfig(ctx, sOpt, spec, platform, targetKey)
 	if err != nil {
 		return nil, err
 	}
@@ -58,17 +58,21 @@ func BuildImageConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec 
 	return img, nil
 }
 
-func resolveConfig(ctx context.Context, resolver llb.ImageMetaResolver, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
-	ref := dalec.GetBaseOutputImage(spec, targetKey)
-	if ref == "" {
+func resolveConfig(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
+	bi, err := spec.GetSingleBase(targetKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if bi == nil {
 		return dalec.BaseImageConfig(platform), nil
 	}
 
-	_, _, dt, err := resolver.ResolveImageConfig(ctx, ref, sourceresolver.Opt{
+	dt, err := bi.ResolveImageConfig(ctx, sOpt, sourceresolver.Opt{
 		Platform: platform,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error resolving base image config")
 	}
 
 	var img dalec.DockerImageSpec
@@ -97,7 +101,7 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			img, err := BuildImageConfig(ctx, sOpt.Resolver, spec, platform, targetKey)
+			img, err := BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -163,7 +167,7 @@ func HandlePackage(cfg DistroConfig) gwclient.BuildFunc {
 			}
 
 			if ref, err := cfg.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, pg); err != nil {
-				cfg, _ := BuildImageConfig(ctx, client, spec, platform, targetKey)
+				cfg, _ := BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
 				return ref, cfg, err
 			}
 

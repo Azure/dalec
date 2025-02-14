@@ -7,13 +7,6 @@ group "test" {
 }
 
 variable "FRONTEND_REF" {
-    // Buildkit always checks the registry for the frontend image.
-    // AFAIK there is no way to tell it not to.
-    // Even if we have the image locally it will still check the registry and use that instead.
-    // As such we need to use a local only ref to ensure we always use the local image when testing things.
-    //
-    // We'll use this var to set the `BUILDKIT_SYNTAX` var in the builds that consume the frontend which will
-    // cause buildkit to use the local image.
     default = "local/dalec/frontend"
 }
 
@@ -23,11 +16,8 @@ variable "DALEC_DISABLE_DIFF_MERGE" {
     default = "0"
 }
 
-variable "DALEC_NO_CACHE_EXPORT" {
-    default = "0"
-}
-
 target "frontend" {
+    // uses default Dockerfile
     target = "frontend"
     tags = [FRONTEND_REF]
 }
@@ -68,8 +58,11 @@ target "runc-azlinux" {
         "RUNC_COMMIT" = RUNC_COMMIT
         "VERSION" = RUNC_VERSION
         "REVISION" = RUNC_REVISION
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     matrix = {
         distro = ["mariner2", "azlinux3"]
@@ -80,9 +73,6 @@ target "runc-azlinux" {
     tags = tgt == "container" ? ["runc:mariner2"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
-
-    cache-from = ["type=gha,scope=dalec/runc/mariner2/${tgt}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/mariner2/${tgt},mode=max"] : []
 }
 
 target "runc-jammy" {
@@ -92,8 +82,11 @@ target "runc-jammy" {
         "RUNC_COMMIT" = RUNC_COMMIT
         "VERSION" = RUNC_VERSION
         "REVISION" = RUNC_REVISION
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     matrix = {
         tgt = ["deb", "container"]
@@ -103,9 +96,6 @@ target "runc-jammy" {
     tags = tgt == "container" ? ["runc:jammy"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
-
-    cache-from = ["type=gha,scope=dalec/runc/jammy/${tgt}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/runc/jammy/${tgt},mode=max"] : []
 }
 
 target "runc-test" {
@@ -142,12 +132,13 @@ target "test-fixture" {
     dockerfile = "test/fixtures/${f}.yml"
 
     args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
+    }
     target = tgt
-    cache-from = ["type=gha,scope=dalec/${f}/${tgt}/${f}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/${f}/${tgt}/${f},mode=max"] : []
 }
 
 variable "BUILD_SPEC" {
@@ -162,16 +153,16 @@ target "build" {
     }
     dockerfile = BUILD_SPEC
     args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/${tgt}"
     // only tag the container target
     tags = tgt == "container" ? ["build:${distro}"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
-
-    cache-from = ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/${BUILD_SPEC}/${distro}/${tgt},mode=max"] : []
 }
 
 target "examples" {
@@ -181,7 +172,10 @@ target "examples" {
         f = ["go-md2man-2"]
     }
     args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/container"
     dockerfile = "docs/examples/${f}.yml"
@@ -200,12 +194,13 @@ dependencies:
         bash: {}
     EOT
     args = {
-        "BUILDKIT_SYNTAX" = FRONTEND_REF
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+      "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/container/depsonly"
     tags = ["local/dalec/deps-only:${distro}"]
-    cache-from = ["type=gha,scope=dalec/deps-only-${distro}"]
-    cache-to = DALEC_NO_CACHE_EXPORT != "1" ? ["type=gha,scope=dalec/deps-only-${distro},mode=max"] : []
 }
 
 target "test-deps-only" {
@@ -229,13 +224,11 @@ variable "CI_FRONTEND_CACHE_SCOPE" {
 
 target "frontend-ci" {
     inherits = ["frontend"]
-    cache-from = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE}"]
     output = ["type=registry"]
 }
 
 target "frontend-ci-full" {
     inherits = ["frontend-ci"]
-    cache-to = ["type=gha,scope=${CI_FRONTEND_CACHE_SCOPE},mode=max"]
     platforms = ["linux/amd64", "linux/arm64"]
 }
 

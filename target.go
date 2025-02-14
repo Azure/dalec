@@ -28,6 +28,9 @@ type Target struct {
 	// PackageConfig is the configuration to use for artifact targets, such as
 	// rpms, debs, or zip files containing Windows binaries
 	PackageConfig *PackageConfig `yaml:"package_config,omitempty" json:"package_config,omitempty"`
+
+	// Artifacts describes all of the artifact configurations to include for this specific target.
+	Artifacts *Artifacts `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 }
 
 func (t *Target) validate() error {
@@ -36,10 +39,18 @@ func (t *Target) validate() error {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
 	}
 
+	if err := t.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "image"))
+	}
+
 	for _, test := range t.Tests {
 		if err := test.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "test %s", test.Name))
 		}
+	}
+
+	if err := t.Image.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "postinstall"))
 	}
 
 	return goerrors.Join(errs...)
@@ -59,6 +70,10 @@ func (t *Target) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 		}
 	}
 
+	if err := t.Image.processBuildArgs(lex, args, allowArg); err != nil {
+		errs = append(errs, errors.Wrap(err, "package config"))
+	}
+
 	if err := t.Dependencies.processBuildArgs(args, allowArg); err != nil {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
 	}
@@ -68,4 +83,5 @@ func (t *Target) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 
 func (t *Target) fillDefaults() {
 	t.Dependencies.fillDefaults()
+	t.Image.fillDefaults()
 }

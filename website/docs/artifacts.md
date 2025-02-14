@@ -84,7 +84,7 @@ build phase *before* any directory changes are made.
 
 ```yaml
 artifacts:
-  managpes:
+  manpages:
     src/man/*:
       subpath: ""
       mode: 0o644
@@ -287,3 +287,32 @@ Note that headers are not installed within a subdirectory of `/usr/include/`
 with the name of the package. They are installed directly into `/usr/include/`.
 For instance, for the above examples, the headers would be installed to
 `/usr/include/my_header.h` and `/usr/include/my_headers/` respectively.
+
+### Users
+
+Users allow you to specify a list of users to be created when installing the
+package.
+In most cases this will require a shell to be available on the target system.
+
+Example:
+
+```yaml
+artifacts:
+  users:
+    - name: myuser
+```
+
+### Groups
+
+Groups allow you to specify a list of groups to be created when installing the
+package.
+In most cases this will require a shell to be available on the target system.
+
+Example:
+
+```yaml
+artifacts:
+  groups:
+    - name: mygroup
+```
+

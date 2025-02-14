@@ -291,6 +291,24 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 		})
 	})
 
+	t.Run("test-dalec-empty-artifacts", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testEmptyArtifacts(ctx, t, testConfig.Target)
+	})
+
+	t.Run("test-dalec-single-artifact", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testArtifactsAtSpecLevel(ctx, t, testConfig.Target)
+	})
+
+	t.Run("test-dalec-multiple-artifacts", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testTargetArtifactsTakePrecedence(ctx, t, testConfig.Target)
+	})
+
 	t.Run("container", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
@@ -466,7 +484,7 @@ echo "$BAR" > bar.txt
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
 						"/usr/bin/src1": {Path: "/src1"},
-						"/usr/bin/src3": {Path: "/non/existing/dir/src3"},
+						"/usr/bin/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
 					},
 				},
 			},
@@ -588,8 +606,13 @@ echo "$BAR" > bar.txt
 					Steps: []dalec.TestStep{
 						{Command: "/bin/bash -c 'test -L /src1'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
+						{Command: "/bin/bash -c 'test -L /non/existing/dir/src3'"},
+						{Command: "/bin/bash -c 'test \"$(readlink /non/existing/dir/src3)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -c 'test -L /non/existing/dir2/src3'"},
+						{Command: "/bin/bash -c 'test \"$(readlink /non/existing/dir2/src3)\" = \"/usr/bin/src3\"'"},
 						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 						{Command: "/non/existing/dir/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
+						{Command: "/non/existing/dir2/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 					},
 				},
 				{
@@ -1233,10 +1256,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						SubPath: "subpath",
 						Name:    "custom_name",
 					},
-					"subpath_only": dalec.ArtifactConfig{
+					"subpath_only": {
 						SubPath: "custom",
 					},
-					"nested_subpath": dalec.ArtifactConfig{
+					"nested_subpath": {
 						SubPath: "libexec-test/abcdefg",
 					},
 				},
@@ -1539,6 +1562,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testBuildNetworkMode(ctx, t, testConfig.Target)
 	})
+
+	t.Run("user and group creation", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testUserAndGroupCreation(ctx, t, testConfig.Target)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -1734,7 +1763,6 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx := startTestSpan(baseCtx, t)
 
 			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 				worker := getWorker(ctx, t, gwc)
@@ -2162,7 +2190,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 								Inline: &dalec.SourceInline{
 									Dir: &dalec.SourceInlineDir{
 										Files: map[string]*dalec.SourceInlineFile{
-											"some_file": &dalec.SourceInlineFile{
+											"some_file": {
 												Contents: "some file",
 											},
 										},
@@ -2177,7 +2205,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 								Inline: &dalec.SourceInline{
 									Dir: &dalec.SourceInlineDir{
 										Files: map[string]*dalec.SourceInlineFile{
-											"another_file": &dalec.SourceInlineFile{
+											"another_file": {
 												Contents: "some other file",
 											},
 										},
@@ -2201,5 +2229,43 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 			_, err = res.SingleRef()
 			assert.NilError(t, err)
 		})
+	})
+}
+
+func testUserAndGroupCreation(ctx context.Context, t *testing.T, testCfg targetConfig) {
+	spec := newSimpleSpec()
+
+	spec.Artifacts.Groups = []dalec.AddGroupConfig{
+		{Name: "testgroup"},
+	}
+	spec.Artifacts.Users = []dalec.AddUserConfig{
+		{Name: "testuser"},
+	}
+
+	spec.Tests = []*dalec.TestSpec{
+		{
+			Files: map[string]dalec.FileCheckOutput{
+				"/etc/group": {
+					CheckOutput: dalec.CheckOutput{
+						Contains: []string{
+							"testgroup:x:",
+							"testuser:x:",
+						},
+					},
+				},
+				"/etc/passwd": {
+					CheckOutput: dalec.CheckOutput{
+						Contains: []string{"testuser:x:"},
+					},
+				},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(testCfg.Container))
+		res := solveT(ctx, t, client, sr)
+		_, err := res.SingleRef()
+		assert.NilError(t, err)
 	})
 }
