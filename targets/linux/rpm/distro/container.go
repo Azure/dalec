@@ -2,6 +2,7 @@ package distro
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/Azure/dalec"
@@ -60,6 +61,11 @@ func (cfg *Config) BuildContainer(_ gwclient.Client, worker llb.State, sOpt dale
 
 func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
+		deps := spec.GetRuntimeDeps(targetKey)
+		if len(deps) == 0 {
+			return nil, nil, fmt.Errorf("no runtime deps found for '%s'", targetKey)
+		}
+
 		pg := dalec.ProgressGroup("Build " + targetKey + " deps-only container for: " + spec.Name)
 
 		sOpt, err := frontend.SourceOptFromClient(ctx, client)
@@ -72,14 +78,12 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 			return nil, nil, err
 		}
 
-		deps := spec.GetRuntimeDeps(targetKey)
 		var rpmDir = llb.Scratch()
 		if len(deps) > 0 {
 			withDownloads := worker.Run(dalec.ShArgs("set -ex; mkdir -p /tmp/rpms/RPMS/$(uname -m)")).
 				Run(cfg.Install(spec.GetRuntimeDeps(targetKey),
 					DnfDownloadAllDeps("/tmp/rpms/RPMS/$(uname -m)"))).Root()
 			rpmDir = llb.Scratch().File(llb.Copy(withDownloads, "/tmp/rpms", "/", dalec.WithDirContentsOnly()))
-
 		}
 
 		ctr, err := cfg.BuildContainer(client, worker, sOpt, spec, targetKey, rpmDir, pg)
