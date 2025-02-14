@@ -12,6 +12,12 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+const (
+	// KeyDalecTarget is the key used the build arg name which may be used to read
+	// the target name.
+	KeyDalecTarget = "DALEC_TARGET"
+)
+
 func knownArg(key string) bool {
 	switch key {
 	case "BUILDKIT_SYNTAX":
@@ -27,6 +33,8 @@ func knownArg(key string) bool {
 	case "SOURCE_DATE_EPOCH":
 		return true
 	case "DALEC_SKIP_TESTS":
+		return true
+	case KeyDalecTarget:
 		return true
 	}
 

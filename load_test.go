@@ -993,6 +993,7 @@ build:
     - command: echo '$OS'
       env:
         OS: ${TARGETOS}
+        TARGET: ${DALEC_TARGET}
 `)
 		spec, err := LoadSpec(dt)
 		if err != nil {
