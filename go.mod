@@ -7,7 +7,7 @@ toolchain go1.23.1
 require (
 	github.com/atombender/go-jsonschema v0.17.0
 	github.com/containerd/platforms v1.0.0-rc.1
-	github.com/goccy/go-yaml v1.15.22
+	github.com/goccy/go-yaml v1.15.23
 	github.com/google/go-cmp v0.6.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/invopop/jsonschema v0.12.0
@@ -60,21 +60,16 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/in-toto/in-toto-golang v0.5.0 // indirect
-	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/patternmatcher v0.6.0 // indirect
 	github.com/moby/sys/signal v0.7.1 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sanity-io/litter v1.5.5 // indirect
 	github.com/secure-systems-lab/go-securesystemslib v0.4.0 // indirect
 	github.com/shibumi/go-pathspec v1.3.0 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tonistiigi/dchapes-mode v0.0.0-20241001053921-ca0759fec205 // indirect
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4 // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
