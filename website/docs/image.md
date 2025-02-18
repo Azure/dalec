@@ -86,7 +86,8 @@ image:
   post:
     symlinks:
       /usr/bin/my-binary: # Where the symlink points to
-        path: /my-binary # Where to place the symlink 
+        paths: # a list of symlinks that will point to /usr/bin/my-binary
+         - /my-binary
 ```
 
 ### Labels
