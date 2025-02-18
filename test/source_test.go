@@ -13,6 +13,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/opencontainers/go-digest"
+	"gotest.tools/v3/assert"
 )
 
 func TestSourceCmd(t *testing.T) {
@@ -712,4 +713,70 @@ func checkFileStat(t *testing.T, dir fs.FS, p string, opt checkFileStatOpt) {
 	if stat.IsDir() != opt.IsDir {
 		t.Errorf("expected file %q isDir=%v, got %v", p, opt.IsDir, stat.IsDir())
 	}
+}
+
+func TestPatchSources_MalformedPatch(t *testing.T) {
+	worker := llb.Scratch()
+	sourceToState := map[string]llb.State{
+		"source1": llb.Scratch().File(
+			llb.Mkfile("/file.txt", 0o644, []byte("Hello World")),
+		),
+		"malformed_patch": llb.Scratch().File(
+			llb.Mkfile("/malformed.patch", 0o644, []byte("invalid patch content")),
+		),
+	}
+	patchNames := []dalec.PatchSpec{
+		{
+			Source: "malformed_patch",
+		},
+	}
+
+	spec := &dalec.Spec{
+		Patches: map[string][]dalec.PatchSpec{
+			"patchSource": patchNames,
+		},
+		Sources: map[string]dalec.Source{
+			"source1": {},
+		},
+	}
+
+	states := dalec.PatchSources(worker, spec, sourceToState)
+	_, ok := states["patchSource"]
+	assert.Assert(t, !ok)
+}
+
+func TestPatchSources_ConflictingPatches(t *testing.T) {
+	worker := llb.Scratch()
+	sourceToState := map[string]llb.State{
+		"source1": llb.Scratch().File(
+			llb.Mkfile("/file.txt", 0o644, []byte("Hello World")),
+		),
+		"patch1": llb.Scratch().File(
+			llb.Mkfile("/patch1.patch", 0o644, []byte("diff --git a/file.txt b/file.txt\nindex 123..456 100644\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-Hello World\n+Hello Universe")),
+		),
+		"patch2": llb.Scratch().File(
+			llb.Mkfile("/patch2.patch", 0o644, []byte("diff --git a/file.txt b/file.txt\nindex 123..789 100644\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-Hello World\n+Hello Galaxy")),
+		),
+	}
+	patchNames := []dalec.PatchSpec{
+		{
+			Source: "patch1",
+		},
+		{
+			Source: "patch2",
+		},
+	}
+
+	spec := &dalec.Spec{
+		Patches: map[string][]dalec.PatchSpec{
+			"patchSource": patchNames,
+		},
+		Sources: map[string]dalec.Source{
+			"source1": {},
+		},
+	}
+
+	states := dalec.PatchSources(worker, spec, sourceToState)
+	_, ok := states["patchSource"]
+	assert.Assert(t, !ok)
 }
