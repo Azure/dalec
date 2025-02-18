@@ -9,6 +9,7 @@ It is possible to use Dalec when you wish to build a minimal image from scratch 
 # syntax=ghcr.io/azure/dalec/frontend:latest
 name: my-minimal-image
 version: 0.1.0
+license: MIT
 description: A minimal distroless image with only curl and shell access
 revision: 1
 
