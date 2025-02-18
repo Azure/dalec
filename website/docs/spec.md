@@ -92,7 +92,8 @@ targets:
       post:
         symlinks:
           /usr/bin/my-binary:
-            path: /my-binary
+            paths:
+              - /my-binary
     package_config:
       signer:
         image: azcutools.azurecr.io/azcu-dalec/signer:latest
@@ -118,7 +119,8 @@ image:
   post:
     symlinks:
       /usr/bin/my-binary:
-       path: /my-binary
+       paths:
+         - /my-binary
   entrypoint: /my-binary
 ```
 
