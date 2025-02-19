@@ -1447,6 +1447,9 @@ X-capitalized: world2
 	checkExt(t, spec, "capitalized", "world2")
 	checkExt(t, spec, "X-capitalized", "world2")
 
+	err = spec.Ext("x-not-exists", &struct{}{})
+	assert.ErrorIs(t, err, ErrNodeNotFound)
+
 	// marshal and unmarshal to ensure the extension fields are preserved
 
 	dt, err = yaml.Marshal(spec)
@@ -1463,4 +1466,11 @@ X-capitalized: world2
 	checkExt(t, spec2, "x-foo", []string{"bar", "baz"})
 	checkExt(t, spec2, "capitalized", "world2")
 	checkExt(t, spec2, "X-capitalized", "world2")
+
+	// Check no extension fields present
+	var spec3 Spec
+	err = spec3.Ext("foo", &struct{}{})
+	assert.ErrorIs(t, err, ErrNodeNotFound)
+	err = spec3.Ext("x-foo", &struct{}{})
+	assert.ErrorIs(t, err, ErrNodeNotFound)
 }
