@@ -2,6 +2,8 @@
 package dalec
 
 import (
+	stderrors "errors"
+	"fmt"
 	"io/fs"
 	"strings"
 	"time"
@@ -444,32 +446,46 @@ type ExtDecodeConfig struct {
 	AllowUnknownFields bool
 }
 
+var ErrNodeNotFound = errors.New("node not found")
+
 // Ext reads the extension field from the spec and unmarshals it into the target
 // value.
 func (s Spec) Ext(key string, target interface{}, opts ...func(*ExtDecodeConfig)) error {
+	if s.extRaw == nil {
+		return errors.Wrap(ErrNodeNotFound, "extension fields not set")
+	}
+
 	lookup := key
 	addPrefix := !strings.HasPrefix(key, "x-") && !strings.HasPrefix(key, "X-")
 	if addPrefix {
 		lookup = "x-" + key
 	}
 
-	p, err := yaml.PathString("$." + lookup)
-	if err != nil {
-		return err
+	lookupNode := func(key string) (ast.Node, error) {
+		p, err := yaml.PathString("$." + key)
+		if err != nil {
+			return nil, err
+		}
+
+		node, err := p.FilterFile(s.extRaw)
+		if err != nil {
+			if errors.Is(err, yaml.ErrNotFoundNode) {
+				return nil, fmt.Errorf("%w: %s", ErrNodeNotFound, key)
+			}
+			return nil, errors.Wrap(err, "error filtering extension field")
+		}
+		return node, nil
 	}
 
-	node, err := p.FilterFile(s.extRaw)
+	node, err := lookupNode(lookup)
 	if err != nil {
-		if addPrefix {
-			lookup = "X-" + key
-			p, err = yaml.PathString("$." + lookup)
-			if err != nil {
-				return err
-			}
-			node, err = p.FilterFile(s.extRaw)
+		if !errors.Is(err, ErrNodeNotFound) || !addPrefix {
+			return errors.Wrapf(err, "error looking up extension field %q", key)
 		}
-		if err != nil {
-			return errors.Wrap(err, "error filtering node")
+		var err2 error
+		node, err2 = lookupNode("X-" + key)
+		if err2 != nil {
+			return stderrors.Join(err, err2)
 		}
 	}
 
