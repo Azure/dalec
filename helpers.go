@@ -286,55 +286,27 @@ func ProgressGroup(name string) llb.ConstraintsOpt {
 }
 
 func (s *Spec) GetRuntimeDeps(targetKey string) []string {
-	var deps *PackageDependencies
-	if t, ok := s.Targets[targetKey]; ok {
-		deps = t.Dependencies
-	}
-
+	deps := s.GetPackageDeps(targetKey)
 	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
+		return nil
 	}
 
-	var out []string
-	for p := range deps.Runtime {
-		out = append(out, p)
-	}
-
-	sort.Strings(out)
-	return out
-
+	return SortMapKeys(deps.Runtime)
 }
 
 func (s *Spec) GetBuildDeps(targetKey string) map[string]PackageConstraints {
-	var deps *PackageDependencies
-	if t, ok := s.Targets[targetKey]; ok {
-		deps = t.Dependencies
-	}
-
+	deps := s.GetPackageDeps(targetKey)
 	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
+		return nil
 	}
 
 	return deps.Build
 }
 
 func (s *Spec) GetTestDeps(targetKey string) []string {
-	var deps *PackageDependencies
-	if t, ok := s.Targets[targetKey]; ok {
-		deps = t.Dependencies
-	}
-
+	deps := s.GetPackageDeps(targetKey)
 	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
+		return nil
 	}
 
 	out := slices.Clone(deps.Test)
@@ -445,14 +417,73 @@ func SortedMapValues[T any](m map[string]T) []T {
 	return out
 }
 
+// MergeDependencies merges two sets of package dependencies, a child and a parent.
+// If a dependency is set in both, the one from depsB is used, otherwise, the dependency from depsA is used.
+// MergeDependencies(nil, child) = child, MergeDependencies(parent, nil) = parent
+func MergeDependencies(base, target *PackageDependencies) *PackageDependencies {
+	var (
+		build      map[string]PackageConstraints
+		runtime    map[string]PackageConstraints
+		recommends map[string]PackageConstraints
+		test       []string
+		extraRepos []PackageRepositoryConfig
+	)
+
+	if base == nil {
+		return target
+	}
+
+	if target == nil {
+		return base
+	}
+
+	if len(target.Build) > 0 {
+		build = target.Build
+	} else {
+		build = base.Build
+	}
+
+	if len(target.Runtime) > 0 {
+		runtime = target.Runtime
+	} else {
+		runtime = base.Runtime
+	}
+
+	if len(target.Recommends) > 0 {
+		recommends = target.Recommends
+	} else {
+		recommends = base.Recommends
+	}
+
+	if len(target.Test) > 0 {
+		test = target.Test
+	} else {
+		test = base.Test
+	}
+
+	if len(target.ExtraRepos) > 0 {
+		extraRepos = target.ExtraRepos
+	} else {
+		extraRepos = base.ExtraRepos
+	}
+
+	return &PackageDependencies{
+		Build:      build,
+		Runtime:    runtime,
+		Recommends: recommends,
+		Test:       test,
+		ExtraRepos: extraRepos,
+	}
+}
+
 // GetPackageDeps returns the package dependencies for the given target.
 // If the target does not have dependencies, the global dependencies are returned.
 func (s *Spec) GetPackageDeps(target string) *PackageDependencies {
-	if deps := s.Targets[target]; deps.Dependencies != nil {
-		return deps.Dependencies
+	if _, ok := s.Targets[target]; !ok {
+		return s.Dependencies
 	}
 
-	return s.Dependencies
+	return MergeDependencies(s.Dependencies, s.Targets[target].Dependencies)
 }
 
 type gitOptionFunc func(*llb.GitInfo)
