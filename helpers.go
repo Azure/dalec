@@ -417,8 +417,8 @@ func SortedMapValues[T any](m map[string]T) []T {
 	return out
 }
 
-// MergeDependencies merges two sets of package dependencies, a child and a parent.
-// If a dependency is set in both, the one from depsB is used, otherwise, the dependency from depsA is used.
+// MergeDependencies merges two sets of package dependencies, a base and a target.
+// If a dependency is set in both, the one from `target` is used, otherwise, the dependency from parent is used.
 // MergeDependencies(nil, child) = child, MergeDependencies(parent, nil) = parent
 func MergeDependencies(base, target *PackageDependencies) *PackageDependencies {
 	var (
