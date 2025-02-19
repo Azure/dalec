@@ -74,6 +74,49 @@ func TestMergeDependencies(t *testing.T) {
 				Test: []string{"test1"},
 			},
 		},
+		{
+			name: "custom repo in target",
+			base: &PackageDependencies{
+				Build: map[string]PackageConstraints{
+					"pkg1": {},
+				},
+				Runtime: map[string]PackageConstraints{
+					"pkg2": {},
+				},
+			},
+			target: &PackageDependencies{
+				ExtraRepos: []PackageRepositoryConfig{
+					{
+						Config: map[string]Source{
+							"custom.repo": {
+								HTTP: &SourceHTTP{
+									URL: "my.repo.com/custom.repo",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &PackageDependencies{
+				Build: map[string]PackageConstraints{
+					"pkg1": {},
+				},
+				Runtime: map[string]PackageConstraints{
+					"pkg2": {},
+				},
+				ExtraRepos: []PackageRepositoryConfig{
+					{
+						Config: map[string]Source{
+							"custom.repo": {
+								HTTP: &SourceHTTP{
+									URL: "my.repo.com/custom.repo",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
