@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/deb/distro"
-	"github.com/Azure/dalec/frontend/ubuntu"
+	"github.com/Azure/dalec/targets/linux/deb/distro"
+	"github.com/Azure/dalec/targets/linux/deb/ubuntu"
 	"github.com/moby/buildkit/client/llb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )

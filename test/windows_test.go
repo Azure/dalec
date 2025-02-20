@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/ubuntu"
-	"github.com/Azure/dalec/frontend/windows"
+	"github.com/Azure/dalec/targets/linux/deb/ubuntu"
+	"github.com/Azure/dalec/targets/windows"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/azlinux"
+	"github.com/Azure/dalec/targets/linux/rpm/azlinux"
 	"github.com/google/go-cmp/cmp"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"

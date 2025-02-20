@@ -1,0 +1,211 @@
+package distro
+
+import (
+	"context"
+	"io/fs"
+	"path/filepath"
+	"strings"
+
+	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/Azure/dalec/packaging/linux/deb"
+	"github.com/moby/buildkit/client/llb"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
+)
+
+func (d *Config) Validate(spec *dalec.Spec) error {
+	return nil
+}
+
+func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	opts = append(opts, dalec.ProgressGroup("Build deb package"))
+
+	versionID := d.VersionID
+	if versionID == "" {
+		var err error
+		versionID, err = deb.ReadDistroVersionID(ctx, client, worker)
+		if err != nil {
+			return worker, err
+		}
+	}
+
+	worker = worker.With(d.InstallBuildDeps(sOpt, spec, targetKey))
+
+	var cfg deb.SourcePkgConfig
+	extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, opts...)
+	if err != nil {
+		return worker, err
+	}
+
+	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, opts...)
+	if err != nil {
+		return worker, err
+	}
+
+	builder := worker.With(dalec.SetBuildNetworkMode(spec))
+
+	st, err := deb.BuildDeb(builder, spec, srcPkg, versionID, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
+}
+
+func noOpStateOpt(in llb.State) llb.State {
+	return in
+}
+
+func prepareGo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePkgConfig, worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	goBin, err := searchForAltGolang(ctx, client, spec, targetKey, worker, opts...)
+	if err != nil {
+		return noOpStateOpt, errors.Wrap(err, "error while looking for alternate go bin path")
+	}
+
+	if goBin == "" {
+		return noOpStateOpt, nil
+	}
+	cfg.PrependPath = append(cfg.PrependPath, goBin)
+	return addPaths([]string{goBin}, opts...), nil
+}
+
+func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, in llb.State, opts ...llb.ConstraintsOpt) (string, error) {
+	if !spec.HasGomods() {
+		return "", nil
+	}
+	var candidates []string
+
+	deps := spec.GetBuildDeps(targetKey)
+	if _, hasNormalGo := deps["golang"]; hasNormalGo {
+		return "", nil
+	}
+
+	for dep := range deps {
+		if strings.HasPrefix(dep, "golang-") {
+			// Get the base version component
+			_, ver, _ := strings.Cut(dep, "-")
+			// Trim off any potential extra stuff like `golang-1.20-go` (ie the `-go` bit)
+			// This is just for having definitive search paths to check it should
+			// not be an issue if this is not like the above example and its
+			// something else like `-doc` since we are still going to check the
+			// binary exists anyway (plus this would be highly unlikely in any case).
+			ver, _, _ = strings.Cut(ver, "-")
+			candidates = append(candidates, "usr/lib/go-"+ver+"/bin")
+		}
+	}
+
+	if len(candidates) == 0 {
+		return "", nil
+	}
+
+	stfs, err := bkfs.FromState(ctx, &in, client, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	for _, p := range candidates {
+		_, err := fs.Stat(stfs, filepath.Join(p, "go"))
+		if err == nil {
+			// bkfs does not allow a leading `/` in the stat path per spec for [fs.FS]
+			// Add that in here
+			p := "/" + p
+			return p, nil
+		}
+	}
+
+	return "", nil
+}
+
+// prepends the provided values to $PATH
+func addPaths(paths []string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(in llb.State) llb.State {
+		if len(paths) == 0 {
+			return in
+		}
+		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
+			opts := []llb.ConstraintsOpt{dalec.WithConstraint(c), dalec.WithConstraints(opts...)}
+			pathEnv, _, err := in.GetEnv(ctx, "PATH", opts...)
+			if err != nil {
+				return in, err
+			}
+			return in.AddEnv("PATH", strings.Join(append(paths, pathEnv), ":")), nil
+		})
+	}
+}
+
+func (cfg *Config) RunTests(ctx context.Context, client gwclient.Client, _ llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, ctr llb.State, targetKey string, opts ...llb.ConstraintsOpt) (gwclient.Reference, error) {
+	def, err := ctr.Marshal(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Solve(ctx, gwclient.SolveRequest{
+		Definition: def.ToPB(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		return nil, err
+	}
+
+	withTestDeps := cfg.InstallTestDeps(sOpt, targetKey, spec, opts...)
+	err = frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey)
+	return ref, err
+}
+
+func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
+		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		pg := dalec.ProgressGroup(spec.Name)
+
+		worker, err := cfg.Worker(sOpt, pg)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		versionID, err := deb.ReadDistroVersionID(ctx, client, worker)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		worker = worker.With(cfg.InstallBuildDeps(sOpt, spec, targetKey, pg))
+
+		var cfg deb.SourcePkgConfig
+		extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, pg)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "error building source package")
+		}
+
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "error marshalling source package state")
+		}
+
+		res, err := client.Solve(ctx, gwclient.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ref, err := res.SingleRef()
+		if err != nil {
+			return nil, nil, err
+		}
+		return ref, nil, nil
+	})
+}
