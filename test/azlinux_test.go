@@ -1572,6 +1572,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 	t.Run("test dalec target arg is set", func(t *testing.T) {
 		testDalecTargetArg(ctx, t, testConfig.Target)
 	})
+
+	t.Run("inherited dependencies", func(t *testing.T) {
+		testMixGlobalTargetDependencies(ctx, t, testConfig)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -2295,5 +2299,44 @@ func testDalecTargetArg(ctx context.Context, t *testing.T, testCfg targetConfig)
 
 	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 		solveT(ctx, t, client, newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(testCfg.Package)))
+	})
+}
+
+func testMixGlobalTargetDependencies(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	t.Run("global target dependencies", func(t *testing.T) {
+		distro := strings.Split(cfg.Target.Container, "/")[0]
+		spec := newSimpleSpec()
+		spec.Dependencies = &dalec.PackageDependencies{
+			Runtime: map[string]dalec.PackageConstraints{
+				"curl": {},
+			},
+		}
+
+		spec.Targets = map[string]dalec.Target{
+			distro: {
+				Dependencies: &dalec.PackageDependencies{
+					Build: map[string]dalec.PackageConstraints{
+						"golang": {},
+					},
+				},
+			},
+		}
+
+		// Spec had target specific build dependency of golang,
+		// but the global runtime dependency of curl should still be installed
+		spec.Tests = []*dalec.TestSpec{
+			{
+				Name: "Check that dependencies are installed",
+				Files: map[string]dalec.FileCheckOutput{
+					"/usr/bin/curl": {
+						Permissions: 0o755,
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			solveT(ctx, t, client, newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package)))
+		})
 	})
 }
