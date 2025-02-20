@@ -1440,11 +1440,8 @@ X-capitalized: world2
 	assert.NilError(t, err)
 
 	assert.Check(t, cmp.Equal(spec.Name, "test"), spec)
-	checkExt(t, spec, "hello", "world")
 	checkExt(t, spec, "x-hello", "world")
-	checkExt(t, spec, "foo", []string{"bar", "baz"})
 	checkExt(t, spec, "x-foo", []string{"bar", "baz"})
-	checkExt(t, spec, "capitalized", "world2")
 	checkExt(t, spec, "X-capitalized", "world2")
 
 	err = spec.Ext("x-not-exists", &struct{}{})
@@ -1460,17 +1457,20 @@ X-capitalized: world2
 	assert.NilError(t, err)
 
 	assert.Check(t, cmp.Equal(spec2.Name, "test"), spec2)
-	checkExt(t, spec2, "hello", "world")
 	checkExt(t, spec2, "x-hello", "world")
-	checkExt(t, spec2, "foo", []string{"bar", "baz"})
 	checkExt(t, spec2, "x-foo", []string{"bar", "baz"})
-	checkExt(t, spec2, "capitalized", "world2")
 	checkExt(t, spec2, "X-capitalized", "world2")
 
 	// Check no extension fields present
 	var spec3 Spec
-	err = spec3.Ext("foo", &struct{}{})
-	assert.ErrorIs(t, err, ErrNodeNotFound)
 	err = spec3.Ext("x-foo", &struct{}{})
 	assert.ErrorIs(t, err, ErrNodeNotFound)
+
+	err = spec3.WithExtension("x-foo", "bar")
+	assert.NilError(t, err)
+	checkExt(t, spec3, "x-foo", "bar")
+
+	err = spec3.WithExtension("x-foo", "baz")
+	assert.NilError(t, err)
+	checkExt(t, spec3, "x-foo", "baz")
 }
