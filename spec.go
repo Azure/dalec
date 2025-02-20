@@ -2,14 +2,12 @@
 package dalec
 
 import (
-	stderrors "errors"
-	"fmt"
 	"io/fs"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
@@ -101,10 +99,10 @@ type Spec struct {
 	// Each [TestSpec] is run with a separate rootfs, asynchronously from other [TestSpec].
 	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
 
-	// extRaw is the raw AST of the extension fields in the spec.
-	// This is used to extract the ext fields in [Spec.Ext]
-	extRaw *ast.File
+	extensions extensionFields `yaml:"-" json:"-"`
 }
+
+type extensionFields map[string]rawYAML
 
 // PatchSpec is used to apply a patch to a source with a given set of options.
 // This is used in [Spec.Patches]
@@ -446,64 +444,60 @@ type ExtDecodeConfig struct {
 	AllowUnknownFields bool
 }
 
-var ErrNodeNotFound = errors.New("node not found")
+var (
+	ErrNodeNotFound  = errors.New("node not found")
+	ErrInvalidExtKey = errors.New("extension keys must start with \"x-\"")
+)
 
 // Ext reads the extension field from the spec and unmarshals it into the target
 // value.
-func (s Spec) Ext(key string, target interface{}, opts ...func(*ExtDecodeConfig)) error {
-	if s.extRaw == nil {
-		return errors.Wrap(ErrNodeNotFound, "extension fields not set")
+func (s *Spec) Ext(key string, target interface{}, opts ...func(*ExtDecodeConfig)) error {
+	v, ok := s.extensions[key]
+	if !ok {
+		return errors.Wrapf(ErrNodeNotFound, "extension field not found %q", key)
 	}
 
-	lookup := key
-	addPrefix := !strings.HasPrefix(key, "x-") && !strings.HasPrefix(key, "X-")
-	if addPrefix {
-		lookup = "x-" + key
+	var yamlOpts []yaml.DecodeOption
+	if len(opts) > 0 {
+		var cfg ExtDecodeConfig
+		for _, opt := range opts {
+			opt(&cfg)
+		}
+
+		if !cfg.AllowUnknownFields {
+			yamlOpts = append(yamlOpts, yaml.Strict())
+		}
 	}
 
-	lookupNode := func(key string) (ast.Node, error) {
-		p, err := yaml.PathString("$." + key)
+	return yaml.UnmarshalWithOptions(v, target, yamlOpts...)
+}
+
+// WithExtension adds an extension field to the spec.
+// If the value is set to a []byte, it is used as-is and is expected to already
+// be in YAML format.
+func (s *Spec) WithExtension(key string, value interface{}) error {
+	if !strings.HasPrefix(key, "x-") && !strings.HasPrefix(key, "X-") {
+		return errors.Wrap(ErrInvalidExtKey, key)
+	}
+
+	if s.extensions == nil {
+		s.extensions = make(extensionFields)
+	}
+
+	dt, ok := value.([]byte)
+	if ok {
+		_, err := parser.ParseBytes(dt, parseModeIgnoreComments)
 		if err != nil {
-			return nil, err
+			return errors.Wrap(err, "extension value provided is a []byte but is not valid YAML")
 		}
-
-		node, err := p.FilterFile(s.extRaw)
-		if err != nil {
-			if errors.Is(err, yaml.ErrNotFoundNode) {
-				return nil, fmt.Errorf("%w: %s", ErrNodeNotFound, key)
-			}
-			return nil, errors.Wrap(err, "error filtering extension field")
-		}
-		return node, nil
+		s.extensions[key] = dt
+		return nil
 	}
 
-	node, err := lookupNode(lookup)
+	dt, err := yaml.Marshal(value)
 	if err != nil {
-		if !errors.Is(err, ErrNodeNotFound) || !addPrefix {
-			return errors.Wrapf(err, "error looking up extension field %q", key)
-		}
-		var err2 error
-		node, err2 = lookupNode("X-" + key)
-		if err2 != nil {
-			return stderrors.Join(err, err2)
-		}
+		return errors.Wrapf(err, "failed to marshal extension field %q", key)
 	}
-
-	var cfg ExtDecodeConfig
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-
-	var decodeOpts []yaml.DecodeOption
-	if !cfg.AllowUnknownFields {
-		decodeOpts = append(decodeOpts, yaml.Strict())
-	}
-
-	dt := node.String()
-	err = yaml.UnmarshalWithOptions([]byte(dt), target, decodeOpts...)
-	if err != nil {
-		return errors.Wrapf(err, "error unmarshalling extension field %q into target", key)
-	}
-
+	s.extensions[key] = dt
 	return nil
 }

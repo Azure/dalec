@@ -19,6 +19,8 @@ const (
 	// KeyDalecTarget is the key used the build arg name which may be used to read
 	// the target name.
 	KeyDalecTarget = "DALEC_TARGET"
+
+	parseModeIgnoreComments = 0
 )
 
 func knownArg(key string) bool {
@@ -237,6 +239,61 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	return &spec, nil
 }
 
+// rawYAML is similar to json.RawMessage
+// We use this to store the raw yaml data for extension fields
+type rawYAML []byte
+
+func (y rawYAML) MarshalYAML() ([]byte, error) {
+	return y, nil
+}
+
+func (y *rawYAML) UnmarshalYAML(dt []byte) error {
+	*y = dt
+	return nil
+}
+
+func (f *extensionFields) UnmarshalYAML(dt []byte) error {
+	// We need to store the raw yaml data for each extension key.
+	// Parse the yaml, grab all the extension keys and store the raw values in f.
+
+	parsed, err := parser.ParseBytes(dt, parser.ParseComments)
+	if err != nil {
+		return errors.Wrapf(err, "error parsing yaml: \n%s", string(dt))
+	}
+
+	if len(parsed.Docs) != 1 {
+		return errors.New("expected exactly one yaml document")
+	}
+
+	doc := parsed.Docs[0]
+	if doc.Body == nil {
+		return nil
+	}
+
+	body, ok := doc.Body.(*ast.MappingNode)
+	if !ok {
+		return errors.Errorf("expected a mapping node, got %T", body)
+	}
+
+	var ext extensionFields
+	for _, v := range body.Values {
+		key := v.Key.String()
+		if !strings.HasPrefix(key, "x-") && !strings.HasPrefix(key, "X-") {
+			return errors.Errorf("extension mapping key %q must not start with x-", key)
+		}
+
+		if ext == nil {
+			ext = make(extensionFields)
+		}
+		ext[key] = rawYAML(v.Value.String())
+	}
+
+	if ext != nil {
+		*f = ext
+	}
+	return nil
+}
+
 func (s *Spec) UnmarshalYAML(dt []byte) error {
 	parsed, err := parser.ParseBytes(dt, parser.ParseComments)
 	if err != nil {
@@ -247,6 +304,8 @@ func (s *Spec) UnmarshalYAML(dt []byte) error {
 		return errors.New("expected exactly one yaml document")
 	}
 
+	// Remove extension nodes from the main AST and store them so we can unmarshal
+	// them separately.
 	body := parsed.Docs[0].Body.(*ast.MappingNode)
 	var extNodes []*ast.MappingValueNode
 	for i := 0; i < len(body.Values); i++ {
@@ -267,6 +326,7 @@ func (s *Spec) UnmarshalYAML(dt []byte) error {
 		return errors.Wrapf(err, "error parsing yaml: \n%s", parsed.String())
 	}
 
+	// Use an internal type to avoid infinite recursion of UnmarshalYAML.
 	type internalSpec Spec
 	var s2 internalSpec
 
@@ -277,35 +337,59 @@ func (s *Spec) UnmarshalYAML(dt []byte) error {
 
 	*s = Spec(s2)
 
-	node := ast.Mapping(token.MappingStart("", &token.Position{}), false, extNodes...)
-	doc := ast.Document(&token.Token{Position: &token.Position{}}, node)
-	s.extRaw = &ast.File{Docs: []*ast.DocumentNode{doc}}
+	if len(extNodes) > 0 {
+		// Unmarshal all the extension nodes.
+
+		node := ast.Mapping(token.MappingStart("", &token.Position{}), false, extNodes...)
+		doc := ast.Document(&token.Token{Position: &token.Position{}}, node)
+
+		var ext extensionFields
+		if err := yaml.NewDecoder(doc).Decode(&ext); err != nil {
+			return errors.Wrap(err, "error unmarshalling extension nodes")
+		}
+
+		s.extensions = ext
+		if len(ext) == 0 {
+			panic("ext should not be empty")
+		}
+	}
 
 	return nil
 }
 
 func (s Spec) MarshalYAML() ([]byte, error) {
-	// We need to define a new type to avoid infinite recursion of MarshalYAML.
+	dtExt, err := yaml.Marshal(s.extensions)
+	if err != nil {
+		return nil, errors.Wrap(err, "error marshaling extensions")
+	}
+
+	parsedExt, err := parser.ParseBytes(dtExt, 0)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error parsing yaml: \n%s", string(dtExt))
+	}
+
 	type internalSpec Spec
+	ss := internalSpec(s)
 
-	if s.extRaw == nil {
-		return yaml.Marshal(internalSpec(s))
+	dt, err := yaml.Marshal(ss)
+	if err != nil {
+		return nil, errors.Wrap(err, "error marshaling spec")
 	}
 
-	var ext map[string]interface{}
-	if err := yaml.NewDecoder(s.extRaw).Decode(&ext); err != nil {
-		return nil, errors.Wrap(err, "error unmarshalling extension nodes")
+	parsed, err := parser.ParseBytes(dt, parser.ParseComments)
+	if err != nil {
+		return nil, errors.Wrap(err, "error re-parsing spec yaml")
 	}
 
-	type specExt struct {
-		internalSpec `yaml:",inline"`
-		Ext          map[string]interface{} `yaml:",omitempty,inline"`
+	p, err := yaml.PathString("$")
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating path selector")
+	}
+	if err := p.MergeFromFile(parsed, parsedExt); err != nil {
+		return nil, errors.Wrap(err, "error merging extension nodes")
 	}
 
-	return yaml.Marshal(specExt{
-		internalSpec: internalSpec(s),
-		Ext:          ext,
-	})
+	return []byte(parsed.String()), nil
 }
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
