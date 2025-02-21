@@ -63,7 +63,13 @@ image:
   bases:
     - rootfs:
         image:
-          ref: mcr.microsoft.com/cbl-mariner/distroless/minimal:2.0
+          ref: mcr.microsoft.com/windows/nanoserver:1809
+    - rootfs:
+        image:
+          ref: mcr.microsoft.com/windows/nanoserver:ltsc2025
+    - rootfs:
+        image:
+          ref: mcr.microsoft.com/windows/nanoserver:ltsc2022
 ```
 
 The data type allows specifying any kind of [source](sources.md) for the base image,
