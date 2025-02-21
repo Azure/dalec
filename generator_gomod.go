@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
@@ -34,13 +35,16 @@ func (s *Spec) HasGomods() bool {
 	return false
 }
 
-func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
+func withGomod(g *SourceGenerator, srcSt, worker, credHelper llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		const (
 			fourKB                       = 4096
 			workDir                      = "/work/src"
 			scriptMountpoint             = "/tmp/dalec/internal/gomod"
 			gomodDownloadWrapperBasename = "go_mod_download.sh"
+			authConfigMountPath          = "/tmp/dalec/internal/git_auth_config"
+			authConfigBasename           = "authconfig.yml"
+			credHelperBaseDir            = "/usr/local/bin"
 		)
 
 		joinedWorkDir := filepath.Join(workDir, g.Subpath)
@@ -52,18 +56,22 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 		}
 
 		sort.Strings(paths)
-		script := g.gitconfigGeneratorScript(gomodDownloadWrapperBasename)
+		authConfigPath := filepath.Join(authConfigMountPath, authConfigBasename)
+		script := g.gitconfigGeneratorScript(gomodDownloadWrapperBasename, authConfigPath)
 		scriptPath := filepath.Join(scriptMountpoint, gomodDownloadWrapperBasename)
+		credHelperPath := filepath.Join(credHelperBaseDir, GitCredentialHelperGomod)
 
 		for _, path := range paths {
 			in = worker.Run(
 				ShArgs(scriptPath),
 				llb.AddEnv("GOPATH", "/go"),
+				withCredHelper(credHelper, credHelperPath),
 				g.withGomodSecretsAndSockets(),
+				g.mountGitAuthConfig(authConfigMountPath, authConfigBasename),
 				llb.AddMount(scriptMountpoint, script),
-				llb.AddMount(gitConfigMountpoint, llb.Scratch(), llb.Tmpfs(llb.TmpfsSize(fourKB))), // to house the gitconfig, which has secrets
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
+				llb.IgnoreCache,
 				WithConstraints(opts...),
 			).AddMount(gomodCacheDir, in)
 		}
@@ -71,52 +79,39 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 	}
 }
 
-func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State {
-	var (
-		script bytes.Buffer
-		noop   = func() {}
+func withCredHelper(credHelper llb.State, credHelperPath string) RunOptFunc {
+	return func(ei *llb.ExecInfo) {
+		llb.AddMount(credHelperPath, credHelper, llb.SourcePath(GitCredentialHelperGomod)).SetRunOption(ei)
+	}
+}
 
-		createPreamble = func() {
-			fmt.Fprintln(&script, `set -eu`)
-			fmt.Fprintf(&script, `ln -sf %s/.gitconfig "${HOME}/.gitconfig"`, gitConfigMountpoint)
-			script.WriteRune('\n')
-		}
-	)
-
-	fmt.Fprintln(&script, `#!/usr/bin/env sh`)
-
-	for host, auth := range g.Gomod.Auth {
-		// Only do this the first time through the loop
-		createPreamble()
-		createPreamble = noop
-
-		var headerArg string
-		if auth.Header != "" {
-			headerArg = fmt.Sprintf(`Authorization: ${%s}`, auth.Header)
+func (g *SourceGenerator) mountGitAuthConfig(mountPoint, basename string) llb.RunOption {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
+		if g.Gomod == nil || g.Gomod.Auth == nil {
+			return
 		}
 
-		if auth.Token != "" && headerArg == "" {
-			line := fmt.Sprintf(`tkn="$(echo -n "x-access-token:${%s}" | base64)"`, auth.Token)
-			fmt.Fprintln(&script, line)
-
-			headerArg = `Authorization: basic ${tkn}`
+		b, err := yaml.Marshal(&g.Gomod.Auth)
+		if err != nil {
+			panic("cannot marshal dalec spec yaml")
 		}
 
-		if headerArg != "" {
-			fmt.Fprintf(&script, `git config --global http."https://%s".extraheader "%s"`, host, headerArg)
-			script.WriteRune('\n')
-			continue
-		}
+		st := llb.Scratch().File(llb.Mkfile("/"+basename, 0o644, b))
+		llb.AddMount(mountPoint, st).SetRunOption(ei)
+	})
+}
 
-		username := "git"
-		if auth.SSH != nil {
-			if auth.SSH.Username != "" {
-				username = auth.SSH.Username
-			}
+func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath, configPath string) llb.State {
+	var script bytes.Buffer
 
-			fmt.Fprintf(&script, `git config --global "url.ssh://%[1]s@%[2]s/.insteadOf" https://%[2]s/`, username, host)
-			script.WriteRune('\n')
-		}
+	sortedHosts := SortMapKeys(g.Gomod.Auth)
+	if len(sortedHosts) > 0 {
+		fmt.Fprintln(&script, `set -eu`)
+	}
+
+	for _, host := range sortedHosts {
+		fmt.Fprintf(&script, `git config --global credential."https://%s".helper "gomod %s"`, host, configPath)
+		script.WriteRune('\n')
 	}
 
 	fmt.Fprintln(&script, "go mod download")
@@ -161,7 +156,7 @@ func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
 		}
 
 		for secret := range secrets {
-			secretToEnv(secret).SetRunOption(ei)
+			llb.AddSecret("/run/secrets/"+secret, llb.SecretID(secret)).SetRunOption(ei)
 		}
 	})
 }
@@ -199,13 +194,18 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 
 	sorted := SortMapKeys(patched)
 
+	credHelper, err := sOpt.GitCredentialHelpers[GitCredentialHelperGomod]()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get git credential helper")
+	}
+
 	for _, key := range sorted {
 		src := s.Sources[key]
 
 		opts := append(opts, ProgressGroup("Fetch go module dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
-				in = in.With(withGomod(gen, patched[key], worker, opts...))
+				in = in.With(withGomod(gen, patched[key], worker, credHelper, opts...))
 			}
 			return in
 		})
