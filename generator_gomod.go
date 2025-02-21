@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	gomodCacheDir       = "/go/pkg/mod"
-	gitConfigMountpoint = "/dev/shm/git"
+	gomodCacheDir = "/go/pkg/mod"
 )
 
 func (s *Source) isGomod() bool {
@@ -71,7 +70,6 @@ func withGomod(g *SourceGenerator, srcSt, worker, credHelper llb.State, opts ...
 				llb.AddMount(scriptMountpoint, script),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
-				llb.IgnoreCache,
 				WithConstraints(opts...),
 			).AddMount(gomodCacheDir, in)
 		}
