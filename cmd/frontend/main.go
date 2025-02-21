@@ -3,7 +3,7 @@ package main
 import (
 	_ "embed"
 	"os"
-	"strings"
+	"path/filepath"
 
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/debug"
@@ -23,16 +23,19 @@ import (
 const (
 	Package = "github.com/Azure/dalec/cmd/frontend"
 
-	frontendPath = "/frontend"
+	frontendBasename        = "frontend"
+	gomodCredHelperBasename = "git-credential-gomod"
 )
 
 func main() {
-	cmd := os.Args[0]
+	cmd := filepath.Base(os.Args[0])
 
 	// each "sub-main" function handles its own exit
-	switch {
-	case strings.HasSuffix(cmd, "git-credential-gomod"):
+	switch cmd {
+	case gomodCredHelperBasename:
 		gomodMain()
+	case frontendBasename:
+		dalecMain()
 	default:
 		dalecMain()
 	}
