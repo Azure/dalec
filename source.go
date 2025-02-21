@@ -781,8 +781,6 @@ func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth) {
 	gm.Auth[host] = gomodAuth
 }
 
-// func (gm *GeneratorGomod) fillDefaults
-
 func (s *Source) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
 	lex := shell.NewLex('\\')
 	// force the shell lexer to skip unresolved env vars so they aren't
