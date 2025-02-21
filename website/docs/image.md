@@ -158,7 +158,7 @@ image:
   user: my-user:my-group
 ```
 
-Alterantively
+Alternatively
 
 ```yaml
 image:

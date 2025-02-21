@@ -443,7 +443,7 @@ echo "$BAR" > bar.txt
 				)
 				sr.Evaluate = true
 				_, err = gwc.Solve(ctx, sr)
-				assert.ErrorContains(t, err, "mutiple base images provided with the same")
+				assert.ErrorContains(t, err, "multiple base images provided with the same")
 			})
 		})
 	})

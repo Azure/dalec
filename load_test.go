@@ -559,7 +559,7 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	err := spec.SubstituteArgs(env)
 	assert.ErrorIs(t, err, errUnknownArg, "args not defined in the spec should error out")
 
-	// Now with the arg explicitly allowed as a passhtrough
+	// Now with the arg explicitly allowed as a passthrough
 	err = spec.SubstituteArgs(env, func(cfg *SubstituteConfig) {
 		cfg.AllowArg = func(key string) bool {
 			return key == "FOO"

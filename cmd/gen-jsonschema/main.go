@@ -31,7 +31,7 @@ func main() {
 		panic(err)
 	}
 
-	// The above libary used is good for generating the schema from the go types,
+	// The above library used is good for generating the schema from the go types,
 	// but it doesn't give us everything we need to make manipulations to the schema
 	// since the data is not represented in go correctly.
 	// So we convert the schema to JSON and then back to another go type that is more

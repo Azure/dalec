@@ -111,7 +111,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 	for _, p := range targets {
 		s := platforms.FormatAll(p)
 		if _, ok := seen[s]; ok {
-			return nil, fmt.Errorf("mutiple base images provided with the same platform value")
+			return nil, fmt.Errorf("multiple base images provided with the same platform value")
 		}
 		seen[s] = struct{}{}
 	}
