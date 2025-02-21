@@ -197,7 +197,7 @@ func (i *ImageConfig) fillDefaults() {
 func (s *BaseImage) validate() error {
 	if s.Rootfs.DockerImage == nil {
 		// In the future we may support other source types but this adds a lot of complexity
-		// that is currently unecessary.
+		// that is currently unnecessary.
 		return errors.New("rootfs currently only supports image source types")
 	}
 	if err := s.Rootfs.validate(); err != nil {
