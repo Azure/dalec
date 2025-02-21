@@ -20,6 +20,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	GitCredentialHelperGomod       = "git-credential-gomod"
+	GitCredentialHelperGomodSrcDir = "/usr/bin"
+)
+
 type FilterFunc = func(string, []string, []string, ...llb.ConstraintsOpt) llb.StateOption
 
 var errNoSourceVariant = fmt.Errorf("no source variant found")
@@ -228,12 +233,14 @@ var (
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 
 type ForwarderFunc func(llb.State, *SourceBuild, ...llb.ConstraintsOpt) (llb.State, error)
+type GitCredHelperGetter func() (llb.State, error)
 
 type SourceOpts struct {
-	Resolver       llb.ImageMetaResolver
-	Forward        ForwarderFunc
-	GetContext     func(string, ...llb.LocalOption) (*llb.State, error)
-	TargetPlatform *ocispecs.Platform
+	Resolver             llb.ImageMetaResolver
+	Forward              ForwarderFunc
+	GetContext           func(string, ...llb.LocalOption) (*llb.State, error)
+	TargetPlatform       *ocispecs.Platform
+	GitCredentialHelpers map[string]GitCredHelperGetter
 }
 
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
