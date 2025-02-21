@@ -947,8 +947,3 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 
 	return retErr
 }
-
-func secretToEnv(secretName string, opts ...llb.SecretOption) llb.RunOption {
-	allOpts := append([]llb.SecretOption{llb.SecretID(secretName), llb.SecretAsEnv(true)}, opts...)
-	return llb.AddSecret(secretName, allOpts...)
-}
