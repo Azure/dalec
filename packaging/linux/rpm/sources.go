@@ -61,11 +61,6 @@ func buildScript(spec *dalec.Spec) string {
 	return b.String()
 }
 
-func secretToEnv(secretName string, opts ...llb.SecretOption) llb.RunOption {
-	allOpts := append([]llb.SecretOption{llb.SecretID(secretName), llb.SecretAsEnv(true)}, opts...)
-	return llb.AddSecret(secretName, allOpts...)
-}
-
 func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
 	sources, err := dalec.Sources(spec, sOpt)
 	if err != nil {

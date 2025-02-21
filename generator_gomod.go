@@ -15,8 +15,7 @@ const (
 	gomodCacheDir = "/go/pkg/mod"
 	// GoModCacheKey is the key used to identify the go module cache in the buildkit cache.
 	// It is exported only for testing purposes.
-	GomodCacheKey       = "dalec-gomod-proxy-cache"
-	gitConfigMountpoint = "/dev/shm/git"
+	GomodCacheKey = "dalec-gomod-proxy-cache"
 )
 
 func (s *Source) isGomod() bool {
@@ -85,7 +84,6 @@ func withGomod(g *SourceGenerator, srcSt, worker, credHelper llb.State, opts ...
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				llb.AddMount(proxyPath, llb.Scratch(), llb.AsPersistentCacheDir(GomodCacheKey, llb.CacheMountShared)),
-				llb.IgnoreCache,
 				WithConstraints(opts...),
 			).AddMount(gomodCacheDir, in)
 		}
