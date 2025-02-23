@@ -661,7 +661,7 @@ func Tar(work llb.State, src llb.State, dest string, opts ...llb.ConstraintsOpt)
 	out := filepath.Join(outBase, filepath.Dir(dest))
 	worker := work.Run(
 		llb.AddMount("/src", src, llb.Readonly),
-		ShArgs("tar -C /src -cvzf /tmp/st ."),
+		ShArgs("tar -C /src -czf /tmp/st ."),
 		WithConstraints(opts...),
 	).
 		Run(
