@@ -128,9 +128,7 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 			return st, err
 		},
 		GitCredentialHelpers: map[string]dalec.GitCredHelperGetter{
-			dalec.GitCredentialHelperGomod: func() (llb.State, error) {
-				return GetGitCredHelper(c)
-			},
+			dalec.GitCredentialHelperGomod: GomodGitCredentialHelperGetter(c),
 		},
 	}
 }
