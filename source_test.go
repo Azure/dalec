@@ -228,9 +228,6 @@ func TestSourceGitHTTP(t *testing.T) {
 }
 
 func getGomodLLBOps(ctx context.Context, t *testing.T, spec Spec) (map[string]*pb.Op, []*pb.Op) {
-	type currentFrontend interface {
-		CurrentFrontend() (*llb.State, error)
-	}
 	sOpt := SourceOpts{
 		GetContext: func(name string, opts ...llb.LocalOption) (*llb.State, error) {
 			st := llb.Local(name, opts...)
