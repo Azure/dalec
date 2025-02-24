@@ -67,21 +67,35 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 	artifacts := w.GetArtifacts(w.target)
 
 	var fixPerms bool
-	for _, cfg := range artifacts.Directories.GetConfig() {
-		if cfg.Mode != 0 {
-			fixPerms = true
-			break
-		}
-	}
-
-	if !fixPerms {
-		for _, cfg := range artifacts.Directories.GetState() {
-			if cfg.Mode != 0 {
-				fixPerms = true
-				break
+	checkPerms := func(cfgs map[string]dalec.ArtifactConfig) bool {
+		for _, cfg := range cfgs {
+			if cfg.Mode.Perm() != 0 {
+				return true
 			}
 		}
+		return false
 	}
+
+	checkDirPerms := func(dirConfigs map[string]dalec.ArtifactDirConfig) bool {
+		for _, cfg := range dirConfigs {
+			if cfg.Mode.Perm() != 0 {
+				return true
+			}
+		}
+		return false
+	}
+
+	fixPerms = checkPerms(artifacts.Binaries) ||
+		checkPerms(artifacts.ConfigFiles) ||
+		checkPerms(artifacts.Manpages) ||
+		checkPerms(artifacts.Headers) ||
+		checkPerms(artifacts.Licenses) ||
+		checkPerms(artifacts.Docs) ||
+		checkPerms(artifacts.Libs) ||
+		checkPerms(artifacts.Libexec) ||
+		checkPerms(artifacts.DataDirs) ||
+		checkDirPerms(artifacts.Directories.GetConfig()) ||
+		checkDirPerms(artifacts.Directories.GetState())
 
 	if fixPerms {
 		// Normally this should be `execute_after_dh_fixperms`, however this doesn't

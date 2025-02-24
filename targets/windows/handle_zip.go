@@ -13,7 +13,6 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -119,8 +118,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	patched := dalec.PatchSources(worker, spec, sources, opts...)
 	buildScript := createBuildScript(spec, opts...)
 	artifacts := spec.GetArtifacts(targetKey)
-	binaries := maps.Keys(artifacts.Binaries)
-	script := generateInvocationScript(binaries)
+	script := generateInvocationScript(artifacts.Binaries)
 
 	builder := worker.With(dalec.SetBuildNetworkMode(spec))
 	st := builder.Run(
@@ -150,13 +148,18 @@ func getZipLLB(worker llb.State, name string, artifacts llb.State, opts ...llb.C
 	return zipped
 }
 
-func generateInvocationScript(binaries []string) *strings.Builder {
+func generateInvocationScript(binaries map[string]dalec.ArtifactConfig) *strings.Builder {
 	script := &strings.Builder{}
 	fmt.Fprintln(script, "#!/usr/bin/env sh")
 	fmt.Fprintln(script, "set -ex")
 	fmt.Fprintf(script, "/tmp/scripts/%s\n", buildScriptName)
-	for _, bin := range binaries {
+	sorted := dalec.SortMapKeys(binaries)
+	for _, bin := range sorted {
+		config := binaries[bin]
 		fmt.Fprintf(script, "mv '%s' '%s'\n", bin, outputDir)
+		if config.Mode.Perm() != 0 {
+			fmt.Fprintf(script, "chmod %o '%s/%s'\n", config.Mode.Perm(), outputDir, bin)
+		}
 	}
 	return script
 }

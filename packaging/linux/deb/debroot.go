@@ -24,6 +24,15 @@ import (
 const (
 	DebHelperCompat           = "11"
 	customSystemdPostinstFile = "custom_systemd_postinst.sh.partial"
+	BinariesPath              = "/usr/bin"
+	ConfigFilesPath           = "/etc"
+	ManpagesPath              = "/usr/share/doc/manpages"
+	HeadersPath               = "/usr/include"
+	LicensesPath              = "/usr/share/doc"
+	DocsPath                  = "/usr/share/doc"
+	LibsPath                  = "/usr/lib"
+	LibexecPath               = "/usr/libexec"
+	DataDirsPath              = "/usr/share"
 )
 
 //go:embed templates/patch-header.txt
@@ -205,27 +214,78 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 	writeScriptHeader(buf, cfg)
 
 	basePath := filepath.Join("debian", spec.Name)
-
 	artifacts := spec.GetArtifacts(target)
-	if artifacts.Directories == nil {
-		return nil
-	}
 
-	sorted := dalec.SortMapKeys(artifacts.Directories.GetConfig())
-	for _, name := range sorted {
-		cfg := artifacts.Directories.Config[name]
-		if cfg.Mode.Perm() != 0 {
-			p := filepath.Join(basePath, "etc", name)
-			fmt.Fprintf(buf, "chmod %o %q\n", cfg.Mode.Perm(), p)
+	checkAndWritePerms := func(artifacts map[string]dalec.ArtifactConfig, dir string) {
+		if artifacts == nil {
+			return
+		}
+		sorted := dalec.SortMapKeys(artifacts)
+		for _, key := range sorted {
+			cfg := artifacts[key]
+			resolvedName := cfg.ResolveName(key)
+			p := filepath.Join(basePath, dir, resolvedName)
+
+			if cfg.Mode.Perm() != 0 {
+				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Mode.Perm(), p)
+				continue
+			}
+
+			// Debian does not keep original permissions for files, so we check if artifact matches a source name
+			// and if so, we apply the source permissions for inline sources.
+			srcKey, subpath, _ := strings.Cut(key, "/")
+			src, ok := spec.Sources[srcKey]
+			if !ok || src.Inline == nil {
+				continue
+			}
+
+			if src.Inline.File != nil && src.Inline.File.Permissions.Perm() != 0 {
+				fmt.Fprintf(buf, "chmod %o %q\n", src.Inline.File.Permissions.Perm(), p)
+				continue
+			}
+
+			if src.Inline.Dir == nil {
+				continue
+			}
+			if subpath == "" {
+				if src.Inline.Dir.Permissions.Perm() != 0 {
+					fmt.Fprintf(buf, "chmod %o %q\n", src.Inline.Dir.Permissions.Perm(), p)
+				}
+				continue
+			}
+			if f, ok := src.Inline.Dir.Files[subpath]; ok && f.Permissions.Perm() != 0 {
+				fmt.Fprintf(buf, "chmod %o %q\n", f.Permissions.Perm(), p)
+			}
 		}
 	}
 
-	sorted = dalec.SortMapKeys(artifacts.Directories.GetState())
-	for _, name := range sorted {
-		cfg := artifacts.Directories.State[name]
-		if cfg.Mode.Perm() != 0 {
-			p := filepath.Join(basePath, "var/lib", name)
-			fmt.Fprintf(buf, "chmod %o %q\n", cfg.Mode.Perm(), p)
+	checkAndWritePerms(artifacts.Binaries, BinariesPath)
+	checkAndWritePerms(artifacts.ConfigFiles, ConfigFilesPath)
+	checkAndWritePerms(artifacts.Manpages, filepath.Join(ManpagesPath, spec.Name))
+	checkAndWritePerms(artifacts.Headers, HeadersPath)
+	checkAndWritePerms(artifacts.Licenses, filepath.Join(LicensesPath, spec.Name))
+	checkAndWritePerms(artifacts.Docs, filepath.Join(DocsPath, spec.Name))
+	checkAndWritePerms(artifacts.Libs, filepath.Join(LibsPath, spec.Name))
+	checkAndWritePerms(artifacts.Libexec, LibexecPath)
+	checkAndWritePerms(artifacts.DataDirs, DataDirsPath)
+
+	if artifacts.Directories != nil {
+		sorted := dalec.SortMapKeys(artifacts.Directories.GetConfig())
+		for _, name := range sorted {
+			cfg := artifacts.Directories.Config[name]
+			if cfg.Mode.Perm() != 0 {
+				p := filepath.Join(basePath, "/etc", name)
+				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Mode.Perm(), p)
+			}
+		}
+
+		sorted = dalec.SortMapKeys(artifacts.Directories.GetState())
+		for _, name := range sorted {
+			cfg := artifacts.Directories.State[name]
+			if cfg.Mode.Perm() != 0 {
+				p := filepath.Join(basePath, "/var/lib", name)
+				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Mode.Perm(), p)
+			}
 		}
 	}
 
@@ -364,7 +424,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 		sorted := dalec.SortMapKeys(artifacts.Binaries)
 		for _, key := range sorted {
 			cfg := artifacts.Binaries[key]
-			writeInstall(key, filepath.Join("/usr/bin", cfg.SubPath), cfg.ResolveName(key))
+			writeInstall(key, filepath.Join(BinariesPath, cfg.SubPath), cfg.ResolveName(key))
 		}
 	}
 
@@ -373,7 +433,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 		for _, p := range sorted {
 			cfg := artifacts.ConfigFiles[p]
 
-			dir := filepath.Join("/etc", cfg.SubPath)
+			dir := filepath.Join(ConfigFilesPath, cfg.SubPath)
 			name := cfg.ResolveName(p)
 			writeInstall(p, dir, name)
 		}
@@ -387,7 +447,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 			cfg := artifacts.Manpages[key]
 			if cfg.Name != "" || (cfg.SubPath != "" && cfg.SubPath != filepath.Base(filepath.Dir(key))) {
 				resolved := cfg.ResolveName(key)
-				writeInstall(key, filepath.Join("/usr/share/doc/manpages", spec.Name, cfg.SubPath), resolved)
+				writeInstall(key, filepath.Join(ManpagesPath, spec.Name, cfg.SubPath), resolved)
 				continue
 			}
 			fmt.Fprintln(buf, key)
@@ -422,7 +482,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 			cfg := artifacts.Docs[key]
 			resolved := cfg.ResolveName(key)
 			if resolved != key || cfg.SubPath != "" {
-				writeInstall(key, filepath.Join("/usr/share/doc", spec.Name, cfg.SubPath), resolved)
+				writeInstall(key, filepath.Join(DocsPath, spec.Name, cfg.SubPath), resolved)
 			} else {
 				fmt.Fprintln(buf, key)
 			}
@@ -433,7 +493,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 			cfg := artifacts.Licenses[key]
 			resolved := cfg.ResolveName(key)
 			if resolved != key || cfg.SubPath != "" {
-				writeInstall(key, filepath.Join("/usr/share/doc", spec.Name, cfg.SubPath), resolved)
+				writeInstall(key, filepath.Join(LicensesPath, spec.Name, cfg.SubPath), resolved)
 			} else {
 				fmt.Fprintln(buf, key)
 			}
@@ -449,7 +509,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 		for _, key := range sorted {
 			cfg := artifacts.Headers[key]
 			resolved := cfg.ResolveName(key)
-			writeInstall(key, filepath.Join("/usr/include", cfg.SubPath), resolved)
+			writeInstall(key, filepath.Join(HeadersPath, cfg.SubPath), resolved)
 		}
 	}
 
@@ -503,8 +563,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 		for _, key := range sorted {
 			cfg := artifacts.DataDirs[key]
 			resolved := cfg.ResolveName(key)
-
-			writeInstall(key, filepath.Join("/usr/share", cfg.SubPath), resolved)
+			writeInstall(key, filepath.Join(DataDirsPath, cfg.SubPath), resolved)
 		}
 	}
 
@@ -513,7 +572,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 		for _, key := range sorted {
 			cfg := artifacts.Libexec[key]
 			resolved := cfg.ResolveName(key)
-			targetDir := filepath.Join(`/usr/libexec`, cfg.SubPath)
+			targetDir := filepath.Join(LibexecPath, cfg.SubPath)
 			writeInstall(key, targetDir, resolved)
 		}
 	}
@@ -523,8 +582,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 		for _, key := range sorted {
 			cfg := artifacts.Libs[key]
 			resolved := cfg.ResolveName(key)
-
-			writeInstall(key, filepath.Join("/usr/lib", spec.Name, cfg.SubPath), resolved)
+			writeInstall(key, filepath.Join(LibsPath, spec.Name, cfg.SubPath), resolved)
 		}
 	}
 

@@ -515,6 +515,9 @@ func (w *specWrapper) Install() fmt.Stringer {
 			targetPath = targetDir + "/"
 		}
 		fmt.Fprintln(b, "cp -r", p, targetPath)
+		if cfg.Mode.Perm() != 0 {
+			fmt.Fprintf(b, "chmod %o %s\n", cfg.Mode, targetPath)
+		}
 	}
 
 	if len(artifacts.Binaries) > 0 {
