@@ -220,6 +220,14 @@ func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 							},
 						},
 					},
+					"src-change": {
+						Inline: &dalec.SourceInline{
+							File: &dalec.SourceInlineFile{
+								Contents:    "#!/usr/bin/env bash\necho hello windows world",
+								Permissions: 0o700,
+							},
+						},
+					},
 					"src2-patch1": {
 						Inline: &dalec.SourceInline{
 							File: &dalec.SourceInlineFile{
@@ -318,9 +326,10 @@ echo "$BAR" > bar.txt
 						"src3":       {},
 						// These are files we created in the build step
 						// They aren't really binaries but we want to test that they are created and have the right content
-						"foo0.txt": {},
-						"foo1.txt": {},
-						"bar.txt":  {},
+						"foo0.txt":   {},
+						"foo1.txt":   {},
+						"bar.txt":    {},
+						"src-change": {Mode: 0o644},
 					},
 				},
 			}
@@ -373,6 +382,10 @@ echo "$BAR" > bar.txt
 					t.Fatal(err)
 				}
 				validateSymlinks(ctx, t, ref, spec)
+				if err := validatePathAndPermissions(ctx, ref, "/Windows/System32/src-change", 0o644); err != nil {
+					t.Fatal(err)
+				}
+
 			})
 		})
 

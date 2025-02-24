@@ -1093,6 +1093,79 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("test artifact permissions", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		spec := &dalec.Spec{
+			Name:        "test-artifact-permissions",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Should Create Specified Directories",
+			Sources: map[string]dalec.Source{
+				"src-original-perm": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o644,
+						},
+					},
+				},
+				"src-change-perm": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"src-dir": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"another_nested_data_file": {
+									Contents:    "Hello World!\n",
+									Permissions: 0o644,
+								},
+							},
+						},
+					},
+				},
+			},
+			Build: dalec.ArtifactBuild{},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src-original-perm": {},
+					"src-change-perm": {
+						Mode: 0o755,
+					},
+					"src-dir/another_nested_data_file": {},
+				},
+			},
+		}
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, client, req)
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-original-perm", 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-change-perm", 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+		})
+	})
+
 	t.Run("test data file installation", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)

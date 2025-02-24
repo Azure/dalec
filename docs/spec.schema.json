@@ -100,6 +100,12 @@
 		},
 		"ArtifactConfig": {
 			"properties": {
+				"mode": {
+					"type": [
+						"integer"
+					],
+					"description": "Mode is the file mode to use for the artifact.\nMode is represented as an fs.FileMode."
+				},
 				"name": {
 					"type": [
 						"string",
