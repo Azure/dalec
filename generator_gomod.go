@@ -2,11 +2,11 @@ package dalec
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"path/filepath"
 	"sort"
 
-	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
@@ -103,12 +103,13 @@ func (g *SourceGenerator) mountGitAuthConfig(mountPoint, basename string) llb.Ru
 			return
 		}
 
-		b, err := yaml.Marshal(&g.Gomod.Auth)
-		if err != nil {
-			panic("cannot marshal dalec spec yaml")
+		var b bytes.Buffer
+		enc := gob.NewEncoder(&b)
+		if err := enc.Encode(g.Gomod.Auth); err != nil {
+			panic("cannot marshal dalec spec bytes")
 		}
 
-		st := llb.Scratch().File(llb.Mkfile("/"+basename, 0o644, b))
+		st := llb.Scratch().File(llb.Mkfile("/"+basename, 0o644, b.Bytes()))
 		llb.AddMount(mountPoint, st).SetRunOption(ei)
 	})
 }

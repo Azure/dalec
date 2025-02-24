@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/Azure/dalec"
-	"github.com/goccy/go-yaml"
 )
 
 const (
@@ -210,7 +210,10 @@ func getHostAuthFromConfigFile(configFile, hostname string) (*dalec.GomodGitAuth
 		return nil, err
 	}
 
-	if err := yaml.Unmarshal(b, &m); err != nil {
+	buf := bytes.NewBuffer(b)
+	dec := gob.NewDecoder(buf)
+
+	if err := dec.Decode(&m); err != nil {
 		return nil, err
 	}
 
