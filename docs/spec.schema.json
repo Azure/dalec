@@ -242,7 +242,7 @@
 					],
 					"description": "Libexec is the list of additional binaries that may be invoked by the main package binary."
 				},
-				"libraries": {
+				"libs": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactConfig"
 					},
