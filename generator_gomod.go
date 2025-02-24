@@ -123,6 +123,17 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath, configPath string
 	}
 
 	for _, host := range sortedHosts {
+		if sshConfig := g.Gomod.Auth[host].SSH; sshConfig != nil {
+			username := "git"
+			if sshConfig.Username != "" {
+				username = sshConfig.Username
+			}
+
+			fmt.Fprintf(&script, `git config --global "url.ssh://%[1]s@%[2]s/.insteadOf" https://%[2]s/`, username, host)
+			script.WriteRune('\n')
+			continue
+		}
+
 		fmt.Fprintf(&script, `git config --global credential."https://%s".helper "gomod %s"`, host, configPath)
 		script.WriteRune('\n')
 	}
