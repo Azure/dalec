@@ -228,10 +228,21 @@ func TestSourceGitHTTP(t *testing.T) {
 }
 
 func getGomodLLBOps(ctx context.Context, t *testing.T, spec Spec) (map[string]*pb.Op, []*pb.Op) {
+	type currentFrontend interface {
+		CurrentFrontend() (*llb.State, error)
+	}
 	sOpt := SourceOpts{
 		GetContext: func(name string, opts ...llb.LocalOption) (*llb.State, error) {
 			st := llb.Local(name, opts...)
 			return &st, nil
+		},
+		GitCredentialHelpers: map[string]GitCredHelperGetter{
+			GitCredentialHelperGomod: func() (llb.State, error) {
+				return llb.Scratch().File(llb.Mkfile("/git-credential-gomod", 0o755, []byte(`
+#!/usr/bin/env bash
+exit 0
+                `))), nil
+			},
 		},
 	}
 
@@ -1018,29 +1029,33 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 	}
 }
 
-func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, numSecrets, numSSH int) {
+func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, expectedNumSecrets, expectedNumSSH int) {
 	const (
-		scriptExecOpIdx = 2
+		scriptExecOpIdx = 4
+	)
+
+	var (
+		actualNumSecrets int
+		actualNumSSH     int
 	)
 
 	// Check that the requests for secrets are there for when the script runs.
 	scriptOp := ops[scriptExecOpIdx].GetExec()
-	assert.Check(t, cmp.Len(scriptOp.Secretenv, numSecrets), scriptOp)
 
 	secrets := map[string]struct{}{}
-	for _, s := range scriptOp.Secretenv {
-		secrets[s.ID] = struct{}{}
-	}
-
 	for _, mnt := range scriptOp.Mounts {
-		if mnt.MountType != pb.MountType_SSH {
-			continue
+		switch mnt.MountType {
+		case pb.MountType_SSH:
+			secrets[mnt.SSHOpt.ID] = struct{}{}
+			actualNumSSH++
+		case pb.MountType_SECRET:
+			secrets[mnt.SecretOpt.ID] = struct{}{}
+			actualNumSecrets++
 		}
-
-		secrets[mnt.SSHOpt.ID] = struct{}{}
 	}
 
-	assert.Check(t, cmp.Len(secrets, numSecrets+numSSH), secrets)
+	assert.Check(t, cmp.Equal(actualNumSecrets, expectedNumSecrets), secrets)
+	assert.Check(t, cmp.Equal(actualNumSSH, expectedNumSSH), secrets)
 
 	for _, auth := range src.Generate[0].Gomod.Auth {
 		var chk string
@@ -1060,47 +1075,59 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, 
 		assert.Check(t, requiresSecret, secrets)
 	}
 
-	inpDigest := ops[scriptExecOpIdx].Inputs[0].Digest
-	mf, hasMkFileDigest := m[inpDigest]
-	assert.Check(t, hasMkFileDigest)
-	mkFileOp := mf.GetFile()
-
-	// check that "/dev/shm/git" is a tmpfs mount
-	assert.Check(t, hasTmpFSMount(scriptOp), scriptOp)
-
 	// check that an ssh socket will be mounted
-	if numSSH > 0 {
+	if expectedNumSSH > 0 {
 		assert.Check(t, hasSSHMount(scriptOp), scriptOp)
 	}
 
-	// Check that it depends on the `mkfile` op which generates the script.
-	assert.Check(t, cmp.Len(mkFileOp.Actions, 1), mkFileOp)
-	famf, ok := mkFileOp.Actions[0].Action.(*pb.FileAction_Mkfile)
-	assert.Check(t, ok, mkFileOp)
-	assert.Check(t, cmp.Equal(famf.Mkfile.Path, "/go_mod_download.sh"), famf.Mkfile)
-	assert.Check(t, strings.HasPrefix(string(famf.Mkfile.Data), "#!/usr/bin/env sh"), string(famf.Mkfile.Data))
-	assert.Check(t, strings.Contains(string(famf.Mkfile.Data), "git config"), string(famf.Mkfile.Data))
-}
+	// check that the gomod git credential helper will be mounted
+	assert.Check(t, hasCredentialHelperMount(scriptOp), scriptOp)
 
-func hasTmpFSMount(scriptOp *pb.ExecOp) bool {
-	for _, mnt := range scriptOp.Mounts {
-		trimmed := strings.TrimRight(mnt.Dest, "/")
-		if trimmed != "/dev/shm/git" {
+	validBasenames := map[string]struct{}{
+		"go_mod_download.sh": {},
+		"authconfig.yml":     {},
+	}
+
+	// check that the inputs are mounted
+	for i := range ops[scriptExecOpIdx].Inputs {
+		inpDigest := ops[scriptExecOpIdx].Inputs[i].Digest
+		mf, hasMkFileDigest := m[inpDigest]
+		assert.Check(t, hasMkFileDigest)
+		mkFileOp := mf.GetFile()
+
+		if mkFileOp == nil {
 			continue
 		}
 
-		tfso := mnt.GetTmpfsOpt()
-		if tfso == nil || tfso.Size == 0 {
-			return false
-		}
-	}
+		// Check that it depends on the `mkfile` op which generates the script.
+		assert.Check(t, cmp.Len(mkFileOp.Actions, 1), mkFileOp)
+		famf, ok := mkFileOp.Actions[0].Action.(*pb.FileAction_Mkfile)
+		assert.Check(t, ok, mkFileOp)
+		basename := strings.TrimPrefix(filepath.Base(famf.Mkfile.Path), "/")
 
-	return true
+		// This is from the way the test is set up, but will not be the case during actual runtime
+		if basename == "git-credential-gomod" {
+			continue
+		}
+
+		_, hasValidFilename := validBasenames[basename]
+		assert.Check(t, hasValidFilename, basename)
+	}
 }
 
 func hasSSHMount(scriptOp *pb.ExecOp) bool {
 	for _, mnt := range scriptOp.Mounts {
 		if mnt.MountType == pb.MountType_SSH {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasCredentialHelperMount(scriptOp *pb.ExecOp) bool {
+	for _, mnt := range scriptOp.Mounts {
+		if mnt.Dest == "/usr/local/bin/git-credential-gomod" {
 			return true
 		}
 	}

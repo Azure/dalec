@@ -172,7 +172,7 @@ func GetCurrentFrontend(client gwclient.Client) (llb.State, error) {
 	return *f, nil
 }
 
-func GetGitCredHelper(client gwclient.Client) (llb.State, error) {
+func getGomodGitCredHelper(client gwclient.Client) (llb.State, error) {
 	const srcPath = "/frontend"
 	f, err := GetCurrentFrontend(client)
 	if err != nil {
@@ -180,4 +180,10 @@ func GetGitCredHelper(client gwclient.Client) (llb.State, error) {
 	}
 
 	return llb.Scratch().File(llb.Copy(f, srcPath, dalec.GitCredentialHelperGomod)), nil
+}
+
+func GomodGitCredentialHelperGetter(client gwclient.Client) func() (llb.State, error) {
+	return func() (llb.State, error) {
+		return getGomodGitCredHelper(client)
+	}
 }
