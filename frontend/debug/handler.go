@@ -21,6 +21,10 @@ func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		Name:        "sources",
 		Description: "Outputs all sources from a dalec spec file.",
 	})
+	r.Add("patched-sources", PatchedSources, &targets.Target{
+		Name:        "patched-sources",
+		Description: "Outputs all patched sources from a dalec spec file.",
+	})
 	r.Add("gomods", Gomods, &targets.Target{
 		Name:        "gomods",
 		Description: "Outputs all the gomodule dependencies for the spec",

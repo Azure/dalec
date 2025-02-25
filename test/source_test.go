@@ -717,8 +717,16 @@ func checkFileStat(t *testing.T, dir fs.FS, p string, opt checkFileStatOpt) {
 func TestPatchSources_MalformedPatch(t *testing.T) {
 	t.Parallel()
 
+	contextSt := llb.Scratch()
+
 	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		spec := &dalec.Spec{
+			Name:        "test-patch-sources",
+			License:     "MIT",
+			Version:     "1.0.0",
+			Revision:    "1",
+			Description: "This is a test package",
+			Website:     "https://example.com",
 			Patches: map[string][]dalec.PatchSpec{
 				"source1": {
 					{Source: "malformed_patch"},
@@ -742,7 +750,7 @@ func TestPatchSources_MalformedPatch(t *testing.T) {
 			},
 		}
 
-		req := newSolveRequest(withSpec(ctx, t, spec))
+		req := newSolveRequest(withBuildTarget("debug/patched-sources"), withBuildContext(ctx, t, "context", contextSt), withSpec(ctx, t, spec))
 		req.Evaluate = true
 		_, err := gwc.Solve(ctx, req)
 		if err == nil {
@@ -754,8 +762,16 @@ func TestPatchSources_MalformedPatch(t *testing.T) {
 func TestPatchSources_ConflictingPatches(t *testing.T) {
 	t.Parallel()
 
+	contextSt := llb.Scratch()
+
 	testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
 		spec := &dalec.Spec{
+			Name:        "test-patch-sources",
+			License:     "MIT",
+			Version:     "1.0.0",
+			Revision:    "1",
+			Description: "This is a test package",
+			Website:     "https://example.com",
 			Patches: map[string][]dalec.PatchSpec{
 				"source1": {
 					{Source: "patch1"},
@@ -787,7 +803,7 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 			},
 		}
 
-		req := newSolveRequest(withSpec(ctx, t, spec))
+		req := newSolveRequest(withBuildTarget("debug/patched-sources"), withBuildContext(ctx, t, "context", contextSt), withSpec(ctx, t, spec))
 		req.Evaluate = true
 		_, err := gwc.Solve(ctx, req)
 		if err == nil {
