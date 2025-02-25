@@ -31,7 +31,7 @@ type Artifacts struct {
 
 	// Libs is the list of library files to be installed.
 	// On linux this would typically be installed to /usr/lib/<package name>
-	Libs map[string]ArtifactConfig `yaml:"libs,omitempty" json:"libraries,omitempty"`
+	Libs map[string]ArtifactConfig `yaml:"libs,omitempty" json:"libs,omitempty"`
 
 	// Links is the list of symlinks to be installed with the package
 	// Links should only be used if the *package* should contain the link.
