@@ -325,10 +325,40 @@ index 0000000..5260cb1
 +
 +echo "Added another new file"
 `)
-		src2Patch3Context := llb.Scratch().File(
-			llb.Mkfile(src2Patch3File, 0o600, src2Patch3Content),
-		)
-		src2Patch3ContextName := "patch-context"
+
+		src2Patch4Content := []byte(`
+diff --git a/file4 b/file4
+new file mode 100700
+index 0000000..5260cb1
+--- /dev/null
++++ b/file4
+@@ -0,0 +1,3 @@
++#!/usr/bin/env bash
++
++echo "Added yet another new file"
+`)
+
+		src2Patch5Content := []byte(`
+diff --git a/file5 b/file5
+new file mode 100700
+index 0000000..5260cb1
+--- /dev/null
++++ b/file5
+@@ -0,0 +1,3 @@
++#!/usr/bin/env bash
++
++echo "Added yet again...another new file"
+`)
+
+		const src2Patch4File = "patches/patch4"
+		const src2Patch5File = "patches/patch5"
+		const patchContextName = "patch-context"
+
+		patchContext := llb.Scratch().
+			File(llb.Mkfile(src2Patch3File, 0o600, src2Patch3Content)).
+			File(llb.Mkdir("patches", 0o755)).
+			File(llb.Mkfile(src2Patch4File, 0o600, src2Patch4Content)).
+			File(llb.Mkfile(src2Patch5File, 0o600, src2Patch5Content))
 
 		spec := dalec.Spec{
 			Name:        "test-container-build",
@@ -395,8 +425,20 @@ index 0000000..5260cb1
 				},
 				"src2-patch3": {
 					Context: &dalec.SourceContext{
-						Name: src2Patch3ContextName,
+						Name: patchContextName,
 					},
+				},
+				"src2-patch4": {
+					Context: &dalec.SourceContext{
+						Name: patchContextName,
+					},
+					Includes: []string{src2Patch4File},
+				},
+				"src2-patch5": {
+					Context: &dalec.SourceContext{
+						Name: patchContextName,
+					},
+					Path: src2Patch5File,
 				},
 				"src3": {
 					Inline: &dalec.SourceInline{
@@ -412,6 +454,8 @@ index 0000000..5260cb1
 					{Source: "src2-patch1"},
 					{Source: "src2-patch2", Path: "the-patch"},
 					{Source: "src2-patch3", Path: src2Patch3File},
+					{Source: "src2-patch4", Path: src2Patch4File},
+					{Source: "src2-patch5", Path: filepath.Base(src2Patch5File)},
 				},
 			},
 
@@ -637,7 +681,7 @@ echo "$BAR" > bar.txt
 			sr := newSolveRequest(
 				withSpec(ctx, t, &spec),
 				withBuildTarget(testConfig.Target.Container),
-				withBuildContext(ctx, t, src2Patch3ContextName, src2Patch3Context),
+				withBuildContext(ctx, t, patchContextName, patchContext),
 			)
 			sr.Evaluate = true
 

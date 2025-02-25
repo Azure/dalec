@@ -101,7 +101,6 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 		llb.AddMount("/work/pkg/debian", dr, llb.SourcePath("debian")), // This cannot be readonly because the debian directory gets modified by dpkg-buildpackage
 		llb.AddMount("/work/pkg/debian/patches", patches, llb.Readonly),
 		llb.AddEnv("DH_VERBOSE", "1"),
-		mountSources(sources, "/work/pkg", sanitizeSourceKey),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 			// Mount all the tar+gz'd sources into the build which will get picked p by debbuild
 			for key, src := range debSources {
