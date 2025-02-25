@@ -1326,6 +1326,28 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						},
 					},
 				},
+				"src3": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"hello": {
+									Contents: "world",
+								},
+							},
+						},
+					},
+				},
+				"src4": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"hello": {
+									Contents: "world4",
+								},
+							},
+						},
+					},
+				},
 			},
 			Build: dalec.ArtifactBuild{},
 			Artifacts: dalec.Artifacts{
@@ -1333,6 +1355,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					"src1": {},
 					"src2": {
 						SubPath: "sysconfig",
+					},
+					"src3": {},
+					"src4": {
+						SubPath: "dirWithSubpath",
 					},
 				},
 			},
@@ -1342,6 +1368,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					Files: map[string]dalec.FileCheckOutput{
 						"/etc/src1":           {},
 						"/etc/sysconfig/src2": {},
+						"/etc/src3/hello": {
+							CheckOutput: dalec.CheckOutput{Equals: "world"},
+						},
+						"/etc/dirWithSubpath/src4/hello": {
+							CheckOutput: dalec.CheckOutput{Equals: "world4"},
+						},
 					},
 				},
 			},
