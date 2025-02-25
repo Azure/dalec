@@ -369,7 +369,6 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 	}
 
 	if len(artifacts.ConfigFiles) > 0 {
-		buf := bytes.NewBuffer(nil)
 		sorted := dalec.SortMapKeys(artifacts.ConfigFiles)
 		for _, p := range sorted {
 			cfg := artifacts.ConfigFiles[p]
@@ -377,11 +376,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 			dir := filepath.Join("/etc", cfg.SubPath)
 			name := cfg.ResolveName(p)
 			writeInstall(p, dir, name)
-			fmt.Fprintln(buf, filepath.Join(dir, name))
 		}
-
-		// See: https://man7.org/linux/man-pages/man5/deb-conffiles.5.html for tracking config files in packages
-		states = append(states, base.File(llb.Mkfile(filepath.Join(dir, "conffiles"), 0o640, buf.Bytes())))
 	}
 
 	if len(artifacts.Manpages) > 0 {
