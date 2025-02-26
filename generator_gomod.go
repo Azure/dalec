@@ -2,7 +2,6 @@ package dalec
 
 import (
 	"bytes"
-	"encoding/gob"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -37,16 +36,12 @@ func (s *Spec) HasGomods() bool {
 	return false
 }
 
-func withGomod(g *SourceGenerator, srcSt, worker, credHelper llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
+func withGomod(g *SourceGenerator, srcSt, worker llb.State, credHelper llb.RunOption, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		const (
-			fourKB                       = 4096
 			workDir                      = "/work/src"
 			scriptMountpoint             = "/tmp/dalec/internal/gomod"
 			gomodDownloadWrapperBasename = "go_mod_download.sh"
-			authConfigMountPath          = "/tmp/dalec/internal/git_auth_config"
-			authConfigBasename           = "authconfig.yml"
-			credHelperBaseDir            = "/usr/local/bin"
 		)
 
 		joinedWorkDir := filepath.Join(workDir, g.Subpath)
@@ -61,10 +56,8 @@ func withGomod(g *SourceGenerator, srcSt, worker, credHelper llb.State, opts ...
 
 		// Pass in git auth if necessary
 		sort.Strings(paths)
-		authConfigPath := filepath.Join(authConfigMountPath, authConfigBasename)
-		script := g.gitconfigGeneratorScript(gomodDownloadWrapperBasename, authConfigPath)
+		script := g.gitconfigGeneratorScript(gomodDownloadWrapperBasename)
 		scriptPath := filepath.Join(scriptMountpoint, gomodDownloadWrapperBasename)
-		credHelperPath := filepath.Join(credHelperBaseDir, GitCredentialHelperGomod)
 
 		for _, path := range paths {
 			in = worker.Run(
@@ -74,10 +67,9 @@ func withGomod(g *SourceGenerator, srcSt, worker, credHelper llb.State, opts ...
 				// the same deps over and over again.
 				ShArgs(`set -e; GOMODCACHE="${TMP_GOMODCACHE}" `+scriptPath+`; GOPROXY="file://${TMP_GOMODCACHE}/cache/download" `+scriptPath),
 				g.withGomodSecretsAndSockets(),
-				g.mountGitAuthConfig(authConfigMountPath, authConfigBasename),
 				llb.AddMount(scriptMountpoint, script),
 				llb.AddEnv("GOPATH", "/go"),
-				withCredHelper(credHelper, credHelperPath),
+				credHelper,
 				llb.AddEnv("TMP_GOMODCACHE", proxyPath),
 				llb.AddEnv("SSH_AUTH_SOCK", "/sshsock/S.gpg-agent.ssh"),
 				llb.AddEnv("GIT_SSH_COMMAND", "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"),
@@ -91,30 +83,7 @@ func withGomod(g *SourceGenerator, srcSt, worker, credHelper llb.State, opts ...
 	}
 }
 
-func withCredHelper(credHelper llb.State, credHelperPath string) RunOptFunc {
-	return func(ei *llb.ExecInfo) {
-		llb.AddMount(credHelperPath, credHelper, llb.SourcePath(GitCredentialHelperGomod)).SetRunOption(ei)
-	}
-}
-
-func (g *SourceGenerator) mountGitAuthConfig(mountPoint, basename string) llb.RunOption {
-	return RunOptFunc(func(ei *llb.ExecInfo) {
-		if g.Gomod == nil || g.Gomod.Auth == nil {
-			return
-		}
-
-		var b bytes.Buffer
-		enc := gob.NewEncoder(&b)
-		if err := enc.Encode(g.Gomod.Auth); err != nil {
-			panic("cannot marshal dalec spec bytes")
-		}
-
-		st := llb.Scratch().File(llb.Mkfile("/"+basename, 0o644, b.Bytes()))
-		llb.AddMount(mountPoint, st).SetRunOption(ei)
-	})
-}
-
-func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath, configPath string) llb.State {
+func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State {
 	var script bytes.Buffer
 
 	sortedHosts := SortMapKeys(g.Gomod.Auth)
@@ -123,7 +92,8 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath, configPath string
 	}
 
 	for _, host := range sortedHosts {
-		if sshConfig := g.Gomod.Auth[host].SSH; sshConfig != nil {
+		auth := g.Gomod.Auth[host]
+		if sshConfig := auth.SSH; sshConfig != nil {
 			username := "git"
 			if sshConfig.Username != "" {
 				username = sshConfig.Username
@@ -134,7 +104,17 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath, configPath string
 			continue
 		}
 
-		fmt.Fprintf(&script, `git config --global credential."https://%s".helper "gomod %s"`, host, configPath)
+		var kind string
+		switch {
+		case auth.Token != "":
+			kind = "token"
+		case auth.Header != "":
+			kind = "header"
+		default:
+			continue
+		}
+
+		fmt.Fprintf(&script, `git config --global credential."https://%[1]s.helper" "/usr/local/bin/frontend credential-helper --kind='%[2]s'"`, host, kind)
 		script.WriteRune('\n')
 	}
 
@@ -148,39 +128,29 @@ func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
 			return
 		}
 
-		var (
-			setenv = func() {
-				llb.AddEnv(
-					"GIT_SSH_COMMAND",
-					`ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`,
-				).SetRunOption(ei)
-			}
+		const basePath = "/run/secrets"
 
-			noop = func() {}
-		)
-
-		secrets := make(map[string]struct{}, len(g.Gomod.Auth))
-		for _, auth := range g.Gomod.Auth {
+		for host, auth := range g.Gomod.Auth {
 			if auth.Token != "" {
-				secrets[auth.Token] = struct{}{}
+				p := filepath.Join(basePath, host, "token")
+				llb.AddSecret(p, llb.SecretID(auth.Token)).SetRunOption(ei)
 				continue
 			}
 
 			if auth.Header != "" {
-				secrets[auth.Header] = struct{}{}
+				p := filepath.Join(basePath, host, "header")
+				llb.AddSecret(p, llb.SecretID(auth.Header)).SetRunOption(ei)
 				continue
 			}
 
 			if auth.SSH != nil && auth.SSH.ID != "" {
 				llb.AddSSHSocket(llb.SSHID(auth.SSH.ID)).SetRunOption(ei)
 
-				setenv()
-				setenv = noop
+				llb.AddEnv(
+					"GIT_SSH_COMMAND",
+					`ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`,
+				).SetRunOption(ei)
 			}
-		}
-
-		for secret := range secrets {
-			llb.AddSecret("/run/secrets/"+secret, llb.SecretID(secret)).SetRunOption(ei)
 		}
 	})
 }
@@ -218,7 +188,7 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 
 	sorted := SortMapKeys(patched)
 
-	credHelper, err := sOpt.GitCredentialHelpers[GitCredentialHelperGomod]()
+	credHelperRunOpt, err := sOpt.GitCredHelperOpt()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get git credential helper")
 	}
@@ -229,7 +199,7 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 		opts := append(opts, ProgressGroup("Fetch go module dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
-				in = in.With(withGomod(gen, patched[key], worker, credHelper, opts...))
+				in = in.With(withGomod(gen, patched[key], worker, credHelperRunOpt, opts...))
 			}
 			return in
 		})
