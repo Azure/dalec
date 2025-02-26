@@ -233,13 +233,14 @@ func getGomodLLBOps(ctx context.Context, t *testing.T, spec Spec) (map[string]*p
 			st := llb.Local(name, opts...)
 			return &st, nil
 		},
-		GitCredentialHelpers: map[string]GitCredHelperGetter{
-			GitCredentialHelperGomod: func() (llb.State, error) {
-				return llb.Scratch().File(llb.Mkfile("/git-credential-gomod", 0o755, []byte(`
+		GitCredHelperOpt: func() (llb.RunOption, error) {
+			st := llb.Scratch().File(llb.Mkfile("/frontend", 0o755, []byte(`
 #!/usr/bin/env bash
 exit 0
-                `))), nil
-			},
+                `)))
+			return RunOptFunc(func(ei *llb.ExecInfo) {
+				llb.AddMount("/usr/local/bin/frontend", st, llb.SourcePath("/frontend")).SetRunOption(ei)
+			}), nil
 		},
 	}
 
@@ -1028,7 +1029,7 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 
 func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, expectedNumSecrets, expectedNumSSH int) {
 	const (
-		scriptExecOpIdx = 4
+		scriptExecOpIdx = 3
 	)
 
 	var (
@@ -1103,7 +1104,7 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, 
 		basename := strings.TrimPrefix(filepath.Base(famf.Mkfile.Path), "/")
 
 		// This is from the way the test is set up, but will not be the case during actual runtime
-		if basename == "git-credential-gomod" {
+		if basename == "frontend" {
 			continue
 		}
 
@@ -1124,7 +1125,7 @@ func hasSSHMount(scriptOp *pb.ExecOp) bool {
 
 func hasCredentialHelperMount(scriptOp *pb.ExecOp) bool {
 	for _, mnt := range scriptOp.Mounts {
-		if mnt.Dest == "/usr/local/bin/git-credential-gomod" {
+		if mnt.Dest == "/usr/local/bin/frontend" {
 			return true
 		}
 	}

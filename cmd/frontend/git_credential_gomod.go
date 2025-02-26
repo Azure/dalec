@@ -4,21 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
-	"encoding/gob"
-	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/Azure/dalec"
 )
 
-const (
-	authTypeToken = iota
-	authTypeHeader
-)
+const secretDir = "/run/secrets/"
 
 type gitPayload struct {
 	protocol          string   `gitCredential:"protocol"`
@@ -38,30 +32,25 @@ type gitPayload struct {
 	state             []string `gitCredential:"state[]"`
 }
 
-func exit(msg string, code int) {
-	out := os.Stderr
-	if code == 0 {
-		out = os.Stdout
-	}
-	fmt.Fprintln(out, msg)
-	os.Exit(code)
+func exit1(msgs ...any) {
+	fmt.Fprintln(os.Stderr, msgs...)
+	os.Exit(1)
 }
 
-func exit1(msg string) {
-	exit(msg, 1)
+type credConfig struct {
+	kind string
 }
 
-func gomodMain() {
-	var err error
+func gomodMain(args []string) {
+	var cfg credConfig
+	fs := flag.NewFlagSet(credHelperSubcmd, flag.ExitOnError)
+	fs.Func("kind", "the kind of secret to retrieve (token or header)", readKind(&cfg.kind))
 
-	if len(os.Args) < 3 {
-		msg := fmt.Sprintf("%#v\n", os.Args)
-		exit1("an action and config file are required: " + msg)
+	if err := fs.Parse(args); err != nil {
+		exit1("could not parse args", err)
 	}
 
-	configFile := os.Args[1]
-	action := os.Args[2]
-
+	action := fs.Arg(0)
 	payload := readPayload(os.Stdin)
 
 	switch action {
@@ -77,41 +66,42 @@ func gomodMain() {
 
 	if payload.protocol != "http" && payload.protocol != "https" {
 		sendContinue(&payload)
-		os.Exit(1)
-	}
-
-	auth, err := getHostAuthFromConfigFile(configFile, payload.host)
-	if err != nil {
-		exit1(err.Error())
-	}
-
-	var (
-		resp string
-	)
-
-	switch {
-	case auth.Token != "":
-		resp, err = generateResponse(&payload, auth.Token, authTypeToken)
-	case auth.Header != "":
-		resp, err = generateResponse(&payload, auth.Header, authTypeHeader)
-	default:
-		sendContinue(&payload)
 		os.Exit(0)
 	}
 
+	file := filepath.Join(secretDir, payload.host, cfg.kind)
+	secret, err := os.ReadFile(file)
 	if err != nil {
-		exit1(err.Error())
+		if os.IsNotExist(err) {
+			exit1(fmt.Errorf("secret not found for host %q and kind %q: %w", payload.host, cfg.kind, err))
+		}
+		exit1(err)
+	}
+
+	resp, err := generateResponse(&payload, secret, cfg.kind)
+	if err != nil {
+		exit1(err)
 	}
 
 	fmt.Println(resp)
 }
 
+func readKind(kind *string) func(s string) error {
+	return func(s string) error {
+		switch s {
+		case "token", "header":
+			*kind = s
+		default:
+			return fmt.Errorf("kind must be `token` or `header`")
+		}
+
+		return nil
+	}
+}
+
 func sendContinue(payload *gitPayload) {
 	payload.kontinue = "true"
-	resp, err := printPayload(payload)
-	if err != nil {
-		exit1(err.Error())
-	}
+	resp := printPayload(payload)
 	fmt.Println(resp)
 }
 
@@ -124,7 +114,7 @@ func readPayload(r io.Reader) gitPayload {
 		k, v, ok := strings.Cut(line, "=")
 
 		if !ok {
-			exit("improper payload from git", 1)
+			exit1("improper payload from git")
 		}
 
 		switch k {
@@ -166,16 +156,15 @@ func readPayload(r io.Reader) gitPayload {
 	return payload
 }
 
-func printPayload(payload *gitPayload) (string, error) {
+func printPayload(payload *gitPayload) string {
 	var buf bytes.Buffer
 
-	var errs []error
 	fill := func(k, v string) {
-		if v != "" {
-			if _, err := fmt.Fprintln(&buf, k+"="+v); err != nil {
-				errs = append(errs, err)
-			}
+		if v == "" {
+			return
 		}
+
+		fmt.Fprintf(&buf, "%s=%s\n", k, v)
 	}
 
 	fillArray := func(k string, v []string) {
@@ -199,47 +188,18 @@ func printPayload(payload *gitPayload) (string, error) {
 	fillArray("capability[]", payload.capability)
 	fillArray("state[]", payload.state)
 
-	return buf.String(), errors.Join(errs...)
+	return buf.String()
 }
 
-func getHostAuthFromConfigFile(configFile, hostname string) (*dalec.GomodGitAuth, error) {
-	var m map[string]dalec.GomodGitAuth
-
-	b, err := os.ReadFile(configFile)
-	if err != nil {
-		return nil, err
+func generateResponse(payload *gitPayload, secret []byte, kind string) (string, error) {
+	switch kind {
+	case "token":
+		return handleSecretToken(secret, payload)
+	case "header":
+		return handleSecretHeader(secret, payload)
 	}
 
-	buf := bytes.NewBuffer(b)
-	dec := gob.NewDecoder(buf)
-
-	if err := dec.Decode(&m); err != nil {
-		return nil, err
-	}
-
-	auth, ok := m[hostname]
-	if !ok {
-		return nil, fmt.Errorf("cannot find host in auth config: %q", hostname)
-	}
-
-	return &auth, nil
-}
-
-func generateResponse(payload *gitPayload, secret string, authType int) (string, error) {
-	secretPath := filepath.Join("/run/secrets", secret)
-	b, err := os.ReadFile(secretPath)
-	if err != nil {
-		return "", err
-	}
-
-	switch authType {
-	case authTypeToken:
-		return handleSecretToken(b, payload)
-	case authTypeHeader:
-		return handleSecretHeader(b, payload)
-	}
-
-	return "", fmt.Errorf("unrecognized authType: %d", authType)
+	return "", fmt.Errorf("unrecognized authType: %q", kind)
 }
 
 func handleSecretHeader(b []byte, payload *gitPayload) (string, error) {
@@ -252,21 +212,16 @@ func handleSecretHeader(b []byte, payload *gitPayload) (string, error) {
 	payload.authtype = authtype
 	payload.credential = credential
 
-	return printPayload(payload)
+	return printPayload(payload), nil
 }
 
 func handleSecretToken(b []byte, payload *gitPayload) (string, error) {
 	var buf bytes.Buffer
-	if _, err := buf.WriteString("x-access-token:"); err != nil {
-		return "", err
-	}
-
-	if _, err := buf.Write(b); err != nil {
-		return "", err
-	}
+	buf.WriteString("x-access-token:")
+	buf.Write(b)
 
 	payload.authtype = "basic"
 	payload.credential = base64.StdEncoding.EncodeToString(buf.Bytes())
 
-	return printPayload(payload)
+	return printPayload(payload), nil
 }
