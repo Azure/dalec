@@ -120,6 +120,7 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 			}
 			return st, nil
 		},
+		GitCredHelperOpt: withCredHelper(c),
 	}
 }
 
