@@ -229,18 +229,15 @@ func GetCurrentFrontend(client gwclient.Client) (llb.State, error) {
 	return *f, nil
 }
 
-func getGomodGitCredHelper(client gwclient.Client) (llb.State, error) {
-	const srcPath = "/frontend"
-	f, err := GetCurrentFrontend(client)
-	if err != nil {
-		return llb.Scratch(), err
-	}
+func withCredHelper(c gwclient.Client) func() (llb.RunOption, error) {
+	return func() (llb.RunOption, error) {
+		f, err := GetCurrentFrontend(c)
+		if err != nil {
+			return nil, err
+		}
 
-	return llb.Scratch().File(llb.Copy(f, srcPath, dalec.GitCredentialHelperGomod)), nil
-}
-
-func GomodGitCredentialHelperGetter(client gwclient.Client) func() (llb.State, error) {
-	return func() (llb.State, error) {
-		return getGomodGitCredHelper(client)
+		return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			llb.AddMount("/usr/local/bin/frontend", f, llb.SourcePath("/frontend")).SetRunOption(ei)
+		}), nil
 	}
 }
