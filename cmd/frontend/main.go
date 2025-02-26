@@ -2,8 +2,9 @@ package main
 
 import (
 	_ "embed"
+	"flag"
+	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/debug"
@@ -23,18 +24,35 @@ import (
 const (
 	Package = "github.com/Azure/dalec/cmd/frontend"
 
-	frontendBasename        = "frontend"
-	gomodCredHelperBasename = "git-credential-gomod"
+	frontendBasename = "frontend"
+	credHelperSubcmd = "credential-helper"
 )
 
+func init() {
+	bklog.L.Logger.SetOutput(os.Stderr)
+	grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(bklog.L.WriterLevel(logrus.InfoLevel), bklog.L.WriterLevel(logrus.WarnLevel), bklog.L.WriterLevel(logrus.ErrorLevel), 1))
+}
+
 func main() {
-	cmd := filepath.Base(os.Args[0])
+	fs := flag.CommandLine
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `usage: %s [subcommand [args...]]`, os.Args[0])
+	}
+
+	if err := fs.Parse(os.Args); err != nil {
+		bklog.L.WithError(err).Fatal("error parsing frontend args")
+		os.Exit(137)
+	}
+
+	subCmd := fs.Arg(1)
 
 	// each "sub-main" function handles its own exit
-	switch cmd {
-	case gomodCredHelperBasename:
-		gomodMain()
-	case frontendBasename:
+	switch subCmd {
+	case credHelperSubcmd:
+		args := flag.Args()[2:]
+		// skip os.Args[0] and "credential-helper"
+		gomodMain(args)
+	case "", frontendBasename:
 		dalecMain()
 	default:
 		dalecMain()
@@ -42,9 +60,6 @@ func main() {
 }
 
 func dalecMain() {
-	bklog.L.Logger.SetOutput(os.Stderr)
-	grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(bklog.L.WriterLevel(logrus.InfoLevel), bklog.L.WriterLevel(logrus.WarnLevel), bklog.L.WriterLevel(logrus.ErrorLevel), 1))
-
 	ctx := appcontext.Context()
 
 	var mux frontend.BuildMux
