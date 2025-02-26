@@ -17,4 +17,4 @@ COPY --from=frontend-build /frontend /frontend
 COPY --from=frontend-build /dalec-redirectio /dalec-redirectio
 LABEL moby.buildkit.frontend.network.none="true"
 LABEL moby.buildkit.frontend.caps="moby.buildkit.frontend.inputs,moby.buildkit.frontend.subrequests,moby.buildkit.frontend.contexts"
-ENTRYPOINT ["/frontend"]
+ENTRYPOINT ["/frontend", "frontend"]
