@@ -46,8 +46,9 @@ func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, s
 		copySrc := patch.Source
 		if patch.Path != "" {
 			src.Includes = append(src.Includes, patch.Path)
-			copySrc = filepath.Base(patch.Path)
+			copySrc = patch.Path
 		}
+
 		st, err := src.AsState(patch.Source, sOpt, opts...)
 		if err != nil {
 			return nil, errors.Wrap(err, "error creating patch state")
