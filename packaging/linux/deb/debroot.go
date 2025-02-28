@@ -226,8 +226,8 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 			resolvedName := cfg.ResolveName(key)
 			p := filepath.Join(basePath, dir, resolvedName)
 
-			if cfg.Mode.Perm() != 0 {
-				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Mode.Perm(), p)
+			if cfg.Permissions.Perm() != 0 {
+				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Permissions.Perm(), p)
 				continue
 			}
 

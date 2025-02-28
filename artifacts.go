@@ -100,9 +100,9 @@ type ArtifactConfig struct {
 	// Name is file or dir name to use for the artifact in the package.
 	// If empty, the file or dir name from the produced artifact will be used.
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
-	// Mode is the file mode to use for the artifact.
-	// Mode is represented as an fs.FileMode.
-	Mode fs.FileMode `yaml:"mode,omitempty" json:"mode,omitempty"`
+	// Permissions is the file permissions to set on the artifact.
+	// If not set, the default value will depend on the kind of artifact or the underlying artifact's already set permissions.
+	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
 }
 
 func (a *ArtifactConfig) ResolveName(path string) string {

@@ -69,7 +69,7 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 	var fixPerms bool
 	checkPerms := func(cfgs map[string]dalec.ArtifactConfig) bool {
 		for _, cfg := range cfgs {
-			if cfg.Mode.Perm() != 0 {
+			if cfg.Permissions.Perm() != 0 {
 				return true
 			}
 		}

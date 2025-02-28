@@ -329,7 +329,7 @@ echo "$BAR" > bar.txt
 						"foo0.txt":   {},
 						"foo1.txt":   {},
 						"bar.txt":    {},
-						"src-change": {Mode: 0o644},
+						"src-change": {Permissions: 0o644},
 					},
 				},
 			}

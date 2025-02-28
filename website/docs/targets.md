@@ -144,13 +144,13 @@ This works the same way in the `azlinux3`:
   i. `--build-context mcr.microsoft.com/azurelinux/base/core:3.0=<new ref>`
 2. A build context named `dalec-mariner2-worker`
   i. `--build-context dalec-azlinux3-worker=<new ref>`
-  
+
 ### Target Defined Artifacts
 
-There are some situations where you may want to have multiple builds and for those different 
+There are some situations where you may want to have multiple builds and for those different
 targets they may require different binaries to exist that are not globally applicable to all
-of the builds. For example, `windowscross` may require specific artifacts (binaries, docs, 
-config files, etc.) that are not relevant to `azlinux3`, and vice versa. 
+of the builds. For example, `windowscross` may require specific artifacts (binaries, docs,
+config files, etc.) that are not relevant to `azlinux3`, and vice versa.
 
 To address this you can define artifacts per target. Target-defined artifacts will override
 global (spec-defined) artifacts if there is a conflict. However, if a target does not define
@@ -171,7 +171,7 @@ targets:
       binaries:
         bin/linux-binary:
           subpath: ""
-          mode: 0o755
+          permissions: 0o755
 ```
 
 For more details on how Artifacts are structured and configured, see the [Artifacts](artifacts.md) documentation.
