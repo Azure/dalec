@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/targets/linux/rpm/azlinux"
-	"github.com/google/go-cmp/cmp"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -20,172 +18,8 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/exp/maps"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
-
-var azlinuxConstraints = constraintsSymbols{
-	Equal:              "==",
-	GreaterThan:        ">",
-	GreaterThanOrEqual: ">=",
-	LessThan:           "<",
-	LessThanOrEqual:    "<=",
-}
-
-var azlinuxTestRepoConfig = func(keyPath string) map[string]dalec.Source {
-	return map[string]dalec.Source{
-		"local.repo": {
-			Inline: &dalec.SourceInline{
-				File: &dalec.SourceInlineFile{
-					Contents: fmt.Sprintf(`[Local]
-name=Local Repository
-baseurl=file:///opt/repo
-repo_gpgcheck=1
-priority=0
-enabled=1
-gpgkey=file:///etc/pki/rpm-gpg/%s
-	`, keyPath),
-				},
-			},
-		},
-	}
-}
-
-func TestMariner2(t *testing.T) {
-	t.Parallel()
-
-	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, testLinuxConfig{
-		Target: targetConfig{
-			Package:   "mariner2/rpm",
-			Container: "mariner2/container",
-			Worker:    "mariner2/worker",
-			FormatDepEqual: func(v, _ string) string {
-				return v
-			},
-			ListExpectedSignFiles: azlinuxListSignFiles("cm2"),
-		},
-		LicenseDir: "/usr/share/licenses",
-		SystemdDir: struct {
-			Units   string
-			Targets string
-		}{
-			Units:   "/usr/lib/systemd",
-			Targets: "/etc/systemd/system",
-		},
-		Worker: workerConfig{
-			ContextName:    azlinux.Mariner2WorkerContextName,
-			CreateRepo:     azlinuxWithRepo,
-			SignRepo:       signRepoAzLinux,
-			TestRepoConfig: azlinuxTestRepoConfig,
-			Constraints:    azlinuxConstraints,
-		},
-		Release: OSRelease{
-			ID:        "mariner",
-			VersionID: "2.0",
-		},
-	})
-}
-
-func TestAzlinux3(t *testing.T) {
-	t.Parallel()
-
-	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, testLinuxConfig{
-		Target: targetConfig{
-			Package:               "azlinux3/rpm",
-			Container:             "azlinux3/container",
-			Worker:                "azlinux3/worker",
-			ListExpectedSignFiles: azlinuxListSignFiles("azl3"),
-		},
-		LicenseDir: "/usr/share/licenses",
-		SystemdDir: struct {
-			Units   string
-			Targets string
-		}{
-			Units:   "/usr/lib/systemd",
-			Targets: "/etc/systemd/system",
-		},
-		Worker: workerConfig{
-			ContextName:    azlinux.Azlinux3WorkerContextName,
-			CreateRepo:     azlinuxWithRepo,
-			SignRepo:       signRepoAzLinux,
-			TestRepoConfig: azlinuxTestRepoConfig,
-			Constraints:    azlinuxConstraints,
-		},
-		Release: OSRelease{
-			ID:        "azurelinux",
-			VersionID: "3.0",
-		},
-	})
-}
-
-func azlinuxListSignFiles(ver string) func(*dalec.Spec, ocispecs.Platform) []string {
-	return func(spec *dalec.Spec, platform ocispecs.Platform) []string {
-		base := fmt.Sprintf("%s-%s-%s.%s", spec.Name, spec.Version, spec.Revision, ver)
-
-		var arch string
-		switch platform.Architecture {
-		case "amd64":
-			arch = "x86_64"
-		case "arm64":
-			arch = "aarch64"
-		default:
-			arch = platform.Architecture
-		}
-
-		return []string{
-			filepath.Join("SRPMS", fmt.Sprintf("%s.src.rpm", base)),
-			filepath.Join("RPMS", arch, fmt.Sprintf("%s.%s.rpm", base, arch)),
-		}
-	}
-}
-
-func signRepoAzLinux(gpgKey llb.State) llb.StateOption {
-	// key should be a state that has a public key under /public.key
-	return func(in llb.State) llb.State {
-		return in.Run(
-			dalec.ShArgs("gpg --import < /tmp/gpg/private.key"),
-			llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
-			dalec.ProgressGroup("Importing gpg key")).
-			Run(
-				dalec.ShArgs(`ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2) && \
-					gpg --list-keys --keyid-format LONG && \
-					gpg --detach-sign --default-key "$ID" --armor --yes /opt/repo/repodata/repomd.xml`),
-				llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
-			).Root()
-	}
-}
-
-func azlinuxWithRepo(rpms llb.State, opts ...llb.StateOption) llb.StateOption {
-	return func(in llb.State) llb.State {
-		localRepo := []byte(`
-[Local]
-name=Local Repository
-baseurl=file:///opt/repo
-gpgcheck=0
-priority=0
-enabled=1
-`)
-		pg := dalec.ProgressGroup("Install local repo for test")
-		withRepos := in.
-			File(llb.Mkdir("/opt/repo/RPMS", 0o755, llb.WithParents(true)), pg).
-			File(llb.Mkdir("/opt/repo/SRPMS", 0o755), pg).
-			Run(dalec.ShArgs("tdnf install -y createrepo"), pg).
-			File(llb.Mkfile("/etc/yum.repos.d/local.repo", 0o644, localRepo), pg).
-			Run(
-				llb.AddMount("/tmp/st", rpms, llb.Readonly),
-				dalec.ShArgs("cp /tmp/st/RPMS/$(uname -m)/* /opt/repo/RPMS/ && cp /tmp/st/SRPMS/* /opt/repo/SRPMS"),
-				pg,
-			).
-			Run(dalec.ShArgs("createrepo --compatibility /opt/repo"), pg).
-			Root()
-
-		for _, opt := range opts {
-			withRepos = withRepos.With(opt)
-		}
-
-		return withRepos
-	}
-}
 
 type workerConfig struct {
 	// CreateRepo takes in a state which is the output of the sign target,
@@ -240,6 +74,7 @@ type testLinuxConfig struct {
 		Units   string
 		Targets string
 	}
+	Libdir  string
 	Worker  workerConfig
 	Release OSRelease
 }
@@ -664,11 +499,14 @@ echo "$BAR" > bar.txt
 					Files: map[string]dalec.FileCheckOutput{
 						"/etc/os-release": {
 							CheckOutput: dalec.CheckOutput{
-								Contains: []string{
-									fmt.Sprintf("ID=%s\n", testConfig.Release.ID),
-									// Note: the value of `VERSION_ID` needs to be quoted!
-									// TODO: Something is stripping the quotes here...
-									// fmt.Sprintf("VERSION_ID=%q\n", testConfig.Release.VersionID),
+								Matches: []string{
+									// Som distros have quotes around the values
+									// Regex is to match the values with or without quotes
+									// "(?m)" enables multi-line mode so that ^ and $ match the start and end of lines rathe than the full document.
+									//
+									// Due to these values getting processed for build args, quotes are stripped unless they are escaped.
+									`(?m)^ID=(\")?` + testConfig.Release.ID + `(\")?`,
+									`(?m)^VERSION_ID=(\")?` + testConfig.Release.VersionID + `(\")?`,
 								},
 							},
 						},
@@ -1941,6 +1779,11 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 
 		ctx := startTestSpan(ctx, t)
 
+		libDir := "/usr/lib"
+		if cfg.Libdir != "" {
+			libDir = cfg.Libdir
+		}
+
 		spec := &dalec.Spec{
 			Name:        "test-library-files",
 			Version:     "0.0.1",
@@ -1969,10 +1812,10 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 				{
 					Name: "Check that lib files exist under package dir",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/test-library-files/lib1": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib1"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib1",
 						}},
-						"/usr/lib/test-library-files/lib2": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib2"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib2",
 						}},
 					},
@@ -1992,6 +1835,10 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 		t.Parallel()
 
 		ctx := startTestSpan(ctx, t)
+		libDir := "/usr/lib"
+		if cfg.Libdir != "" {
+			libDir = cfg.Libdir
+		}
 
 		spec := &dalec.Spec{
 			Name:        "test-library-files",
@@ -2020,10 +1867,10 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 				{
 					Name: "Check that lib files exist under package dir",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/test-library-files/lib1": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib1"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib1",
 						}},
-						"/usr/lib/test-library-files/lib2": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib2"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib2",
 						}},
 					},
@@ -2043,6 +1890,11 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 		t.Parallel()
 
 		ctx := startTestSpan(ctx, t)
+
+		libDir := "/usr/lib"
+		if cfg.Libdir != "" {
+			libDir = cfg.Libdir
+		}
 
 		spec := &dalec.Spec{
 			Name:        "test-library-files",
@@ -2079,13 +1931,13 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 				{
 					Name: "Check that lib files exist under package dir",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib/test-library-files/lib1": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib1"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib1",
 						}},
-						"/usr/lib/test-library-files/lib2": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib2"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib2",
 						}},
-						"/usr/lib/test-library-files/lib3": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib3"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib3",
 						}},
 					},
@@ -2295,6 +2147,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 			Dependencies: &dalec.PackageDependencies{
 				Test: []string{
 					"bash",
+					"grep",
 				},
 			},
 			Artifacts: dalec.Artifacts{
