@@ -109,7 +109,7 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 			if ref == dockerui.DefaultLocalNameContext {
 				return dc.MainContext(ctx, opts...)
 			}
-			st, _, err := dc.NamedContext(ctx, ref, dockerui.ContextOpt{
+			nc, err := dc.NamedContext(ref, dockerui.ContextOpt{
 				ResolveMode: dc.ImageResolveMode.String(),
 				AsyncLocalOpts: func() []llb.LocalOption {
 					return opts
@@ -118,7 +118,11 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 			if err != nil {
 				return nil, err
 			}
-			return st, nil
+			if nc == nil {
+				return nil, nil
+			}
+			st, _, err := nc.Load(ctx)
+			return st, err
 		},
 	}
 }
