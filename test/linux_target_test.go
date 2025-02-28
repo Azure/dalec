@@ -2147,6 +2147,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 			Dependencies: &dalec.PackageDependencies{
 				Test: []string{
 					"bash",
+					"grep",
 				},
 			},
 			Artifacts: dalec.Artifacts{
