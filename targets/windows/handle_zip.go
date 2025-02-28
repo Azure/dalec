@@ -157,8 +157,8 @@ func generateInvocationScript(binaries map[string]dalec.ArtifactConfig) *strings
 	for _, bin := range sorted {
 		config := binaries[bin]
 		fmt.Fprintf(script, "mv '%s' '%s'\n", bin, outputDir)
-		if config.Mode.Perm() != 0 {
-			fmt.Fprintf(script, "chmod %o '%s/%s'\n", config.Mode.Perm(), outputDir, bin)
+		if config.Permissions.Perm() != 0 {
+			fmt.Fprintf(script, "chmod %o '%s/%s'\n", config.Permissions.Perm(), outputDir, bin)
 		}
 	}
 	return script

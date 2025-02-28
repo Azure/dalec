@@ -1140,7 +1140,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				Binaries: map[string]dalec.ArtifactConfig{
 					"src-original-perm": {},
 					"src-change-perm": {
-						Mode: 0o755,
+						Permissions: 0o755,
 					},
 					"src-dir/another_nested_data_file": {},
 				},

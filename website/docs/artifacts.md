@@ -19,7 +19,7 @@ Configuration options shared by most artifacts:
 - *subpath*(string): The provided path is joined to the typical install path,
                      e.g. `/usr/bin/<subpath>`, where the artifact will be
                      installed to.
-- *mode*(octal): file permissions to apply to the artifact.
+- *permissions*(octal): file permissions to apply to the artifact.
 
 
 ### Binaries
@@ -39,7 +39,7 @@ artifacts:
   binaries:
     src/my_bin:
       subpath: ""
-      mode: 0o755
+      permissions: 0o755
 ```
 
 You may use a trailing wildcard to specify multiple binaries in a directory,
@@ -87,7 +87,7 @@ artifacts:
   manpages:
     src/man/*:
       subpath: ""
-      mode: 0o644
+      permissions: 0o644
 ```
 
 You may use a trailing wildcard to specify multiple binaries in a directory,
@@ -109,7 +109,7 @@ artifacts:
   data_dirs:
     build_output/my_bin:
       subpath: ""
-      mode: 0o755
+      permissions: 0o755
 ```
 
 ### Directories
@@ -152,7 +152,7 @@ artifacts:
   configFiles:
     src/my_config.json:
       subpath: ""
-      mode: 0o644
+      permissions: 0o644
 ```
 
 ### Docs
@@ -171,7 +171,7 @@ artifacts:
   docs:
     src/doc/info.md:
       subpath: ""
-      mode: 0o644
+      permissions: 0o644
 ```
 
 You may use a trailing wildcard to specify multiple binaries in a directory,
@@ -192,7 +192,7 @@ artifacts:
   licenses:
     src/LICENSE.md:
       subpath: ""
-      mode: 0o644
+      permissions: 0o644
 ```
 
 ### Systemd
@@ -236,7 +236,7 @@ artifacts:
   libs:
     my_output_dir/lib.o:
         subpath: ""
-        mode: 0o644
+        permissions: 0o644
 ```
 
 You may use a trailing wildcard to specify multiple binaries in a directory,
@@ -315,4 +315,3 @@ artifacts:
   groups:
     - name: mygroup
 ```
-

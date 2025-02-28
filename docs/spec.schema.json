@@ -100,18 +100,18 @@
 		},
 		"ArtifactConfig": {
 			"properties": {
-				"mode": {
-					"type": [
-						"integer"
-					],
-					"description": "Mode is the file mode to use for the artifact.\nMode is represented as an fs.FileMode."
-				},
 				"name": {
 					"type": [
 						"string",
 						"null"
 					],
 					"description": "Name is file or dir name to use for the artifact in the package.\nIf empty, the file or dir name from the produced artifact will be used."
+				},
+				"permissions": {
+					"type": [
+						"integer"
+					],
+					"description": "Permissions is the file permissions to set on the artifact.\nIf not set, the default value will depend on the kind of artifact or the underlying artifact's already set permissions."
 				},
 				"subpath": {
 					"type": [
