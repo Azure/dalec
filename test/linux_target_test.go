@@ -1779,6 +1779,11 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 
 		ctx := startTestSpan(ctx, t)
 
+		libDir := "/usr/lib"
+		if cfg.Libdir != "" {
+			libDir = cfg.Libdir
+		}
+
 		spec := &dalec.Spec{
 			Name:        "test-library-files",
 			Version:     "0.0.1",
@@ -1807,10 +1812,10 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 				{
 					Name: "Check that lib files exist under package dir",
 					Files: map[string]dalec.FileCheckOutput{
-						"/usr/lib64/test-library-files/lib1": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib1"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib1",
 						}},
-						"/usr/lib64/test-library-files/lib2": {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "test-library-files/lib2"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib2",
 						}},
 					},
