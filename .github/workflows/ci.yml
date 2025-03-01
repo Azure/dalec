@@ -53,6 +53,8 @@ jobs:
         with:
           version: v1.61
           args: --timeout=30m
+      - name: custom linters
+        run: go run ./cmd/lint ./...
       - name: validate generated files
         run: |
           go generate || exit $?
