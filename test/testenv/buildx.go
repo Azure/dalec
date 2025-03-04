@@ -231,14 +231,6 @@ type keyVal struct {
 	v string
 }
 
-func withSecrets(so *client.SolveOpt, kvs ...keyVal) {
-	m := map[string][]byte{}
-	for _, kv := range kvs {
-		m[kv.k] = []byte(kv.v)
-	}
-	so.Session = []session.Attachable{secretsprovider.FromMap(m)}
-}
-
 // withResolveLocal tells buildkit to prefer local images when resolving image references.
 // This prevents unnecessary API requests to registries.
 func withResolveLocal(so *client.SolveOpt) {
@@ -260,6 +252,7 @@ type TestRunnerConfig struct {
 	// SolveStatusFn replaces the builtin status logger with a custom implementation.
 	// This is useful particularly if you need to inspect the solve statuses.
 	SolveStatusFn func(*client.SolveStatus)
+	SolveOptFns   []func(*client.SolveOpt)
 }
 
 type TestRunnerOpt func(*TestRunnerConfig)
@@ -267,10 +260,23 @@ type TestRunnerOpt func(*TestRunnerConfig)
 // SolveStatus is convenience wrapper for [client.SolveStatus] to help disambiguate
 // imports of the [client] package.
 type SolveStatus = client.SolveStatus
+type SolveOpt = client.SolveOpt
 
 func WithSolveStatusFn(f func(*SolveStatus)) TestRunnerOpt {
 	return func(cfg *TestRunnerConfig) {
 		cfg.SolveStatusFn = f
+	}
+}
+
+func WithSecrets(kvs ...keyVal) TestRunnerOpt {
+	return func(cfg *TestRunnerConfig) {
+		cfg.SolveOptFns = append(cfg.SolveOptFns, func(so *client.SolveOpt) {
+			m := map[string][]byte{}
+			for _, kv := range kvs {
+				m[kv.k] = []byte(kv.v)
+			}
+			so.Session = []session.Attachable{secretsprovider.FromMap(m)}
+		})
 	}
 }
 
@@ -314,15 +320,9 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	err = withSourcePolicy(&so)
 	assert.NilError(t, err)
 
-	withSecrets(&so,
-		keyVal{
-			k: "GIT_AUTH_TOKEN",
-			v: os.Getenv("GIT_AUTH_TOKEN"),
-		},
-		keyVal{
-			k: "GIT_AUTH_HEADER",
-			v: os.Getenv("GIT_AUTH_HEADER")},
-	)
+	for _, f := range cfg.SolveOptFns {
+		f(&so)
+	}
 
 	_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		gwc = &clientForceDalecWithInput{gwc}
