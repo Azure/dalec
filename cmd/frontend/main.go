@@ -22,7 +22,6 @@ import (
 const (
 	Package = "github.com/Azure/dalec/cmd/frontend"
 
-	frontendBasename = "frontend"
 	credHelperSubcmd = "credential-helper"
 )
 
@@ -50,8 +49,8 @@ func main() {
 		args := flag.Args()[2:]
 		// skip os.Args[0] and "credential-helper"
 		gomodMain(args)
-	case "", frontendBasename:
-		dalecMain()
+	case "":
+		fallthrough
 	default:
 		dalecMain()
 	}
