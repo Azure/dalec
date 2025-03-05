@@ -13,6 +13,7 @@ require (
 	github.com/invopop/jsonschema v0.12.0
 	github.com/moby/buildkit v0.20.1
 	github.com/moby/docker-image-spec v1.3.1
+	github.com/moby/sys/userns v0.1.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pkg/errors v0.9.1
