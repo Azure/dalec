@@ -6,7 +6,7 @@ import (
 
 const (
 	v8TargetKey    = "almalinux8"
-	dnfCacheNameV8 = "v8-dnf-cache"
+	dnfCacheNameV8 = "almalinux8-dnf-cache"
 
 	// v8Ref is the image ref used for the base worker image
 	v8Ref      = "mcr.microsoft.com/mirror/docker/library/almalinux:8"

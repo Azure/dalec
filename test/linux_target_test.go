@@ -500,9 +500,9 @@ echo "$BAR" > bar.txt
 						"/etc/os-release": {
 							CheckOutput: dalec.CheckOutput{
 								Matches: []string{
-									// Som distros have quotes around the values
+									// Some distros have quotes around the values
 									// Regex is to match the values with or without quotes
-									// "(?m)" enables multi-line mode so that ^ and $ match the start and end of lines rathe than the full document.
+									// "(?m)" enables multi-line mode so that ^ and $ match the start and end of lines rather than the full document.
 									//
 									// Due to these values getting processed for build args, quotes are stripped unless they are escaped.
 									`(?m)^ID=(\")?` + testConfig.Release.ID + `(\")?`,
