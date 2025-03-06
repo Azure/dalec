@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	_ "embed"
@@ -9,6 +10,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -16,9 +18,10 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/Azure/dalec/test/testenv"
+	ps "github.com/mitchellh/go-ps"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/identity"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -27,33 +30,50 @@ var (
 	isRootlessOnce sync.Once
 )
 
-func TestGomodGitAuth(t *testing.T) {
+func TestGomodGitAuthHTTPS(t *testing.T) {
 	t.Parallel()
 
-	const host = "host.docker.internal"
+	// this is needed because go behaves differently when the host is
+	// recognized if it sees `host.docker.internal` it will first try to
+	// resolve the metadata by connecting to the resolved IP address on port
+	// 443, which will fail.
+	const host = "github.com"
 
 	ctx := startTestSpan(baseCtx, t)
-	sourceName := "sock"
+	sourceName := "gitauth"
 
-	randomData := identity.NewID()
+	// randomData := identity.NewID()
 
-	testSpec := func() *dalec.Spec {
-		return &dalec.Spec{
-			Name: "cmd-source-ref",
+	testEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
+		outsideAddr, insideAddr := getSvcAddrs(ctx, t, c)
+
+		port := getAvailablePort(t)
+		port = 9999
+		spec := &dalec.Spec{
+			Name: "gomod-git-auth",
 			Sources: map[string]dalec.Source{
 				sourceName: {
-					Path: "/tmp/output",
-					Build: &dalec.SourceBuild{
-						Source: dalec.Source{
-							Inline: &dalec.SourceInline{
-								File: &dalec.SourceInlineFile{
-									Contents: `
-FROM mcr.microsoft.com/mirror/docker/library/alpine:3.16
-ARG PORT
-RUN apk add netcat-openbsd
-WORKDIR /tmp/output
-RUN echo "` + randomData + `" | nc -Nv ` + host + ` ${PORT} > out
-                                    `,
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"go.mod": {
+									Contents: `module ` + host + `/user/public
+
+go 1.23.5
+
+require ` + host + `/user/private v0.0.0
+`,
+								},
+							},
+						},
+					},
+					Generate: []*dalec.SourceGenerator{
+						{
+							Gomod: &dalec.GeneratorGomod{
+								Auth: map[string]dalec.GomodGitAuth{
+									fmt.Sprintf("%s:%d", host, port): {
+										Token: "super-secret",
+									},
 								},
 							},
 						},
@@ -61,63 +81,213 @@ RUN echo "` + randomData + `" | nc -Nv ` + host + ` ${PORT} > out
 				},
 			},
 		}
-	}
+		spec.FillDefaults()
+		// pip := net.ParseIP(insideAddr)
+		worker := llb.Image("alpine:latest", llb.WithMetaResolver(c)).
+			Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
+		worker = worker.Run(
+			llb.Shlex(`sh -c 'git config --global "url.http://${HOST}:${PORT}/.insteadOf" "https://${HOST}"'`),
+			llb.AddEnv("HOST", host),
+			llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
+		).Root()
+		worker = worker.AddExtraHost(host, net.ParseIP(insideAddr))
 
-	spec := testSpec()
-	testEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
-		outsideAddr, insideAddr := getAddrs(ctx, t, c)
+		// ec := make(chan error)
+		// go runTCPService(t, outsideAddr, port, ec)
 
-		port := getAvailablePort(t)
-		spec.Sources[sourceName].Build.Args = map[string]string{
-			"PORT": fmt.Sprintf("%d", port),
-		}
+		_ = outsideAddr
+		sr := newSolveRequest(withBuildTarget("debug/gomods"), withSpec(ctx, t, spec), withExtraHost(host, insideAddr), withBuildContext(ctx, t, "gomod-worker", worker))
 
-		go runTCPService(t, outsideAddr, port)
-
-		sr := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec), withExtraHost(host, insideAddr))
 		res := solveT(ctx, t, c, sr)
-		checkFile(ctx, t, "sock/out", res, []byte("hey\n"))
-	})
+		// if err := <-ec; err != nil {
+		// 	t.Fatal(err)
+		// }
+		x, err := res.SingleRef()
+		if err != nil {
+			t.Fatal(err)
+		}
+		y, err := x.ReadFile(ctx, gwclient.ReadRequest{
+			Filename: "/root/.gitconfig",
+		})
+		t.Fatalf("%s\n", string(y))
+
+		// checkFile(ctx, t, "gitauth/go.mod", res, []byte("hey\n"))
+	}, testenv.WithSecrets(testenv.KeyVal{
+		K: "super-secret",
+		V: "value",
+	}))
 }
 
-func getAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
-	outsideAddr := "localhost"
-	insideAddr := "10.0.2.2"
+func getSvcAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
+	const (
+		rootlessOutsideAddr = "localhost"
+		rootlessInsideAddr  = "10.0.2.2" // as per the docs
+	)
 
 	if !isRootless(ctx, t, c) {
-		outsideAddr = getExtraHostRootful(t)
-		insideAddr = outsideAddr
+		addr := getExtraHostRootful(t)
+		return addr, addr
 	}
 
-	return outsideAddr, insideAddr
+	// These may fast-fail the test if the configuration is wrong
+	dockerdPid := getDockerdPid(t)
+	assertDockerdEnvironment(t, dockerdPid)
+
+	return rootlessOutsideAddr, rootlessInsideAddr
 }
 
-func runTCPService(t *testing.T, extraHost string, p int) {
-	h := extraHost
-	if h == "10.0.2.2" {
-		h = "localhost"
+func nullCharSplit(data []byte, atEOF bool) (int, []byte, error) {
+	var (
+		i   int
+		err error
+	)
+
+	for i = 0; i < len(data); i++ {
+		if data[i] == 0 {
+			break
+		}
 	}
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", h, p))
+
+	if atEOF {
+		err = bufio.ErrFinalToken
+	}
+
+	return i + 1, data[:i], err
+}
+
+func assertDockerdEnvironment(t *testing.T, dockerdPid int) {
+	const (
+		envVarRootlessKitLocalhostKey   = "DOCKERD_ROOTLESS_ROOTLESSKIT_DISABLE_HOST_LOOPBACK"
+		envVarRootlessKitLocalhostValue = "false"
+	)
+
+	f, err := os.Open(fmt.Sprintf("/proc/%d/environ", dockerdPid))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
+	}
+
+	scanner := bufio.NewScanner(f)
+	scanner.Split(nullCharSplit)
+
+	for scanner.Scan() {
+		k, v, ok := strings.Cut(scanner.Text(), "=")
+		if !ok || k != envVarRootlessKitLocalhostKey {
+			continue
+		}
+
+		if v != envVarRootlessKitLocalhostValue {
+			t.Fatalf("You have a rootless setup. In order to permit TCP service forwarding, you must restart the docker daemon with the %q env var set to %q", envVarRootlessKitLocalhostKey, envVarRootlessKitLocalhostValue)
+		}
+	}
+}
+
+func getDockerdPid(t *testing.T) int {
+	const dockerProcName = "dockerd"
+	procs, err := ps.Processes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var pid int
+
+outer:
+	for _, proc := range procs {
+		name := proc.Executable()
+		if filepath.Base(name) != dockerProcName {
+			continue
+		}
+
+		pp := proc.Pid()
+
+		f, err := os.Open(fmt.Sprintf("/proc/%d/status", pp))
+		if err != nil {
+			t.Fatal(err)
+		}
+		scanner := bufio.NewScanner(f)
+
+		for scanner.Scan() {
+			t := scanner.Text()
+			_, val, ok := strings.Cut(t, "Uid:")
+			if !ok {
+				continue
+			}
+
+			val = strings.TrimSpace(val)
+			if !strings.HasPrefix(val, currentUser.Uid) {
+				continue outer
+			}
+
+			pid = pp
+			break outer
+		}
+	}
+
+	if pid == 0 {
+		t.Fatal("cannot find pid of docker daemon")
+	}
+	return pid
+}
+
+func runTCPService(t *testing.T, outsideAddr string, p int, ec chan error) {
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", outsideAddr, p))
+	if err != nil {
+		ec <- err
+		return
 	}
 	defer l.Close()
 
 	c, err := l.Accept()
 	if err != nil {
-		panic(err)
+		ec <- err
+		return
 	}
 	defer c.Close()
 
 	b, err := io.ReadAll(c)
 	if err != nil {
-		panic(err)
+		ec <- err
+		return
 	}
 	t.Log(string(b))
 
 	s := []byte("hey\n")
 	if _, err := c.Write(s); err != nil {
-		panic(err)
+		ec <- err
+		return
+	}
+}
+
+func runGitServer(t *testing.T, outsideAddr string, p int, ec chan error) {
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", outsideAddr, p))
+	if err != nil {
+		ec <- err
+		return
+	}
+	defer l.Close()
+
+	c, err := l.Accept()
+	if err != nil {
+		ec <- err
+		return
+	}
+	defer c.Close()
+
+	b, err := io.ReadAll(c)
+	if err != nil {
+		ec <- err
+		return
+	}
+	t.Log(string(b))
+
+	s := []byte("hey\n")
+	if _, err := c.Write(s); err != nil {
+		ec <- err
+		return
 	}
 }
 

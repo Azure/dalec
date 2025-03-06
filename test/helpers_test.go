@@ -63,6 +63,11 @@ func specToSolveRequest(ctx context.Context, t *testing.T, spec *dalec.Spec, sr 
 		sr.FrontendInputs = make(map[string]*pb.Definition)
 	}
 
+	if bctx, ok := sr.FrontendInputs[dockerui.DefaultLocalNameContext]; ok {
+		sr.FrontendInputs["dalec-project-root"] = bctx
+		sr.FrontendOpt["context:dalec-project-root"] = "input:dalec-project-root"
+	}
+
 	sr.FrontendInputs[dockerui.DefaultLocalNameContext] = def.ToPB()
 	sr.FrontendInputs[dockerui.DefaultLocalNameDockerfile] = def.ToPB()
 }
