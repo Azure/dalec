@@ -1,7 +1,10 @@
 package dalec
 
 import (
+	"bytes"
+	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
@@ -30,9 +33,14 @@ func (s *Spec) HasGomods() bool {
 	return false
 }
 
-func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
+func withGomod(g *SourceGenerator, srcSt, worker llb.State, credHelper llb.RunOption, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
-		workDir := "/work/src"
+		const (
+			workDir                      = "/work/src"
+			scriptMountpoint             = "/tmp/dalec/internal/gomod"
+			gomodDownloadWrapperBasename = "go_mod_download.sh"
+		)
+
 		joinedWorkDir := filepath.Join(workDir, g.Subpath)
 		srcMount := llb.AddMount(workDir, srcSt)
 
@@ -41,10 +49,17 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 			paths = []string{"."}
 		}
 
+		sort.Strings(paths)
+		script := g.gitconfigGeneratorScript(gomodDownloadWrapperBasename)
+		scriptPath := filepath.Join(scriptMountpoint, gomodDownloadWrapperBasename)
+
 		for _, path := range paths {
 			in = worker.Run(
-				ShArgs("go mod download"),
+				ShArgs(scriptPath),
 				llb.AddEnv("GOPATH", "/go"),
+				credHelper,
+				g.withGomodSecretsAndSockets(),
+				llb.AddMount(scriptMountpoint, script),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
@@ -52,6 +67,78 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 		}
 		return in
 	}
+}
+
+func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State {
+	var script bytes.Buffer
+
+	sortedHosts := SortMapKeys(g.Gomod.Auth)
+	if len(sortedHosts) > 0 {
+		fmt.Fprintln(&script, `set -eu`)
+	}
+
+	for _, host := range sortedHosts {
+		auth := g.Gomod.Auth[host]
+		if sshConfig := auth.SSH; sshConfig != nil {
+			username := "git"
+			if sshConfig.Username != "" {
+				username = sshConfig.Username
+			}
+
+			fmt.Fprintf(&script, `git config --global "url.ssh://%[1]s@%[2]s/.insteadOf" https://%[2]s/`, username, host)
+			script.WriteRune('\n')
+			continue
+		}
+
+		var kind string
+		switch {
+		case auth.Token != "":
+			kind = "token"
+		case auth.Header != "":
+			kind = "header"
+		default:
+			continue
+		}
+
+		fmt.Fprintf(&script, `git config --global credential."https://%[1]s.helper" "/usr/local/bin/frontend credential-helper --kind='%[2]s'"`, host, kind)
+		script.WriteRune('\n')
+	}
+
+	fmt.Fprintln(&script, "go mod download")
+	return llb.Scratch().File(llb.Mkfile(scriptPath, 0o755, script.Bytes()))
+}
+
+func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
+	return runOptionFunc(func(ei *llb.ExecInfo) {
+		if g.Gomod == nil {
+			return
+		}
+
+		const basePath = "/run/secrets"
+
+		for host, auth := range g.Gomod.Auth {
+			if auth.Token != "" {
+				p := filepath.Join(basePath, host, "token")
+				llb.AddSecret(p, llb.SecretID(auth.Token)).SetRunOption(ei)
+				continue
+			}
+
+			if auth.Header != "" {
+				p := filepath.Join(basePath, host, "header")
+				llb.AddSecret(p, llb.SecretID(auth.Header)).SetRunOption(ei)
+				continue
+			}
+
+			if auth.SSH != nil && auth.SSH.ID != "" {
+				llb.AddSSHSocket(llb.SSHID(auth.SSH.ID)).SetRunOption(ei)
+
+				llb.AddEnv(
+					"GIT_SSH_COMMAND",
+					`ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`,
+				).SetRunOption(ei)
+			}
+		}
+	})
 }
 
 func (s *Spec) gomodSources() map[string]Source {
@@ -87,13 +174,18 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 
 	sorted := SortMapKeys(patched)
 
+	credHelperRunOpt, err := sOpt.GitCredHelperOpt()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get git credential helper")
+	}
+
 	for _, key := range sorted {
 		src := s.Sources[key]
 
 		opts := append(opts, ProgressGroup("Fetch go module dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
-				in = in.With(withGomod(gen, patched[key], worker, opts...))
+				in = in.With(withGomod(gen, patched[key], worker, credHelperRunOpt, opts...))
 			}
 			return in
 		})

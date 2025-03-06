@@ -2,6 +2,8 @@ package main
 
 import (
 	_ "embed"
+	"flag"
+	"fmt"
 	"os"
 
 	"github.com/Azure/dalec/frontend"
@@ -21,12 +23,42 @@ import (
 
 const (
 	Package = "github.com/Azure/dalec/cmd/frontend"
+
+	credHelperSubcmd = "credential-helper"
 )
 
-func main() {
+func init() {
 	bklog.L.Logger.SetOutput(os.Stderr)
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2WithVerbosity(bklog.L.WriterLevel(logrus.InfoLevel), bklog.L.WriterLevel(logrus.WarnLevel), bklog.L.WriterLevel(logrus.ErrorLevel), 1))
+}
 
+func main() {
+	fs := flag.CommandLine
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, `usage: %s [subcommand [args...]]`, os.Args[0])
+	}
+
+	if err := fs.Parse(os.Args); err != nil {
+		bklog.L.WithError(err).Fatal("error parsing frontend args")
+		os.Exit(137)
+	}
+
+	subCmd := fs.Arg(1)
+
+	// each "sub-main" function handles its own exit
+	switch subCmd {
+	case credHelperSubcmd:
+		args := flag.Args()[2:]
+		// skip os.Args[0] and "credential-helper"
+		gomodMain(args)
+	case "":
+		fallthrough
+	default:
+		dalecMain()
+	}
+}
+
+func dalecMain() {
 	ctx := appcontext.Context()
 
 	var mux frontend.BuildMux
