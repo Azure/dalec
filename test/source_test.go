@@ -18,6 +18,7 @@ import (
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/identity"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -26,20 +27,18 @@ var (
 	isRootlessOnce sync.Once
 )
 
-// func getPort(t *testing.T) int
-
-func TestSourceRootless(t *testing.T) {
+func TestGomodGitAuth(t *testing.T) {
 	t.Parallel()
 
 	const host = "host.docker.internal"
 
 	ctx := startTestSpan(baseCtx, t)
 	sourceName := "sock"
+
+	randomData := identity.NewID()
+
 	testSpec := func() *dalec.Spec {
 		return &dalec.Spec{
-			Args: map[string]string{
-				"BAR": "bar",
-			},
 			Name: "cmd-source-ref",
 			Sources: map[string]dalec.Source{
 				sourceName: {
@@ -53,7 +52,7 @@ FROM mcr.microsoft.com/mirror/docker/library/alpine:3.16
 ARG PORT
 RUN apk add netcat-openbsd
 WORKDIR /tmp/output
-RUN echo " yhe hloet are" | nc -Nv ` + host + ` ${PORT} > out
+RUN echo "` + randomData + `" | nc -Nv ` + host + ` ${PORT} > out
                                     `,
 								},
 							},
@@ -66,62 +65,77 @@ RUN echo " yhe hloet are" | nc -Nv ` + host + ` ${PORT} > out
 
 	spec := testSpec()
 	testEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
-		extraHost := "10.0.2.2"
-		if !isRootless(ctx, t, c) {
-			extraHost = getExtraHostRootful(t)
-		}
+		outsideAddr, insideAddr := getAddrs(ctx, t, c)
 
-		addr, err := net.ResolveTCPAddr("tcp", ":0")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		l, err := net.ListenTCP("tcp", addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		p := l.Addr().(*net.TCPAddr).Port
-		l.Close()
-
+		port := getAvailablePort(t)
 		spec.Sources[sourceName].Build.Args = map[string]string{
-			"PORT": fmt.Sprintf("%d", p),
+			"PORT": fmt.Sprintf("%d", port),
 		}
 
-		go func() {
-			h := extraHost
-			if h == "10.0.2.2" {
-				h = "localhost"
-			}
-			l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", h, p))
-			if err != nil {
-				panic(err)
-			}
-			defer l.Close()
+		go runTCPService(t, outsideAddr, port)
 
-			c, err := l.Accept()
-			if err != nil {
-				panic(err)
-			}
-			defer c.Close()
-
-			// b := make([]byte, 1024*4, 1024*4)
-			b, err := io.ReadAll(c)
-			if err != nil {
-				panic(err)
-			}
-			t.Log(string(b))
-
-			s := []byte("hey\n")
-			if _, err := c.Write(s); err != nil {
-				panic(err)
-			}
-		}()
-
-		sr := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec), withExtraHost(host, extraHost))
+		sr := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec), withExtraHost(host, insideAddr))
 		res := solveT(ctx, t, c, sr)
 		checkFile(ctx, t, "sock/out", res, []byte("hey\n"))
 	})
+}
+
+func getAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
+	outsideAddr := "localhost"
+	insideAddr := "10.0.2.2"
+
+	if !isRootless(ctx, t, c) {
+		outsideAddr = getExtraHostRootful(t)
+		insideAddr = outsideAddr
+	}
+
+	return outsideAddr, insideAddr
+}
+
+func runTCPService(t *testing.T, extraHost string, p int) {
+	h := extraHost
+	if h == "10.0.2.2" {
+		h = "localhost"
+	}
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", h, p))
+	if err != nil {
+		panic(err)
+	}
+	defer l.Close()
+
+	c, err := l.Accept()
+	if err != nil {
+		panic(err)
+	}
+	defer c.Close()
+
+	b, err := io.ReadAll(c)
+	if err != nil {
+		panic(err)
+	}
+	t.Log(string(b))
+
+	s := []byte("hey\n")
+	if _, err := c.Write(s); err != nil {
+		panic(err)
+	}
+}
+
+func getAvailablePort(t *testing.T) int {
+	addr, err := net.ResolveTCPAddr("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	defer l.Close()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := l.Addr().(*net.TCPAddr).Port
+	return p
 }
 
 func withExtraHost(host string, ipv4 string) func(cfg *newSolveRequestConfig) {
