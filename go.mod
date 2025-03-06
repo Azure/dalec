@@ -11,9 +11,9 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/invopop/jsonschema v0.12.0
+	github.com/mitchellh/go-ps v1.0.0
 	github.com/moby/buildkit v0.20.1
 	github.com/moby/docker-image-spec v1.3.1
-	github.com/moby/sys/userns v0.1.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pkg/errors v0.9.1
