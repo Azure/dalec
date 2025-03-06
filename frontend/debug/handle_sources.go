@@ -39,6 +39,9 @@ func Sources(ctx context.Context, client gwclient.Client) (*client.Result, error
 
 		res, err := client.Solve(ctx, gwclient.SolveRequest{
 			Definition: def.ToPB(),
+			FrontendOpt: map[string]string{
+				"add-hosts": "host.docker.internal=10.0.2.2",
+			},
 		})
 		if err != nil {
 			return nil, nil, err
