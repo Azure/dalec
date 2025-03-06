@@ -226,9 +226,9 @@ type FrontendSpec struct {
 	Build gwclient.BuildFunc
 }
 
-type keyVal struct {
-	k string
-	v string
+type KeyVal struct {
+	K string
+	V string
 }
 
 // withResolveLocal tells buildkit to prefer local images when resolving image references.
@@ -268,12 +268,12 @@ func WithSolveStatusFn(f func(*SolveStatus)) TestRunnerOpt {
 	}
 }
 
-func WithSecrets(kvs ...keyVal) TestRunnerOpt {
+func WithSecrets(kvs ...KeyVal) TestRunnerOpt {
 	return func(cfg *TestRunnerConfig) {
 		cfg.SolveOptFns = append(cfg.SolveOptFns, func(so *client.SolveOpt) {
 			m := map[string][]byte{}
 			for _, kv := range kvs {
-				m[kv.k] = []byte(kv.v)
+				m[kv.K] = []byte(kv.V)
 			}
 			so.Session = []session.Attachable{secretsprovider.FromMap(m)}
 		})
