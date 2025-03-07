@@ -6,9 +6,9 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"io"
 	"io/fs"
 	"net"
+	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -16,6 +16,8 @@ import (
 	"sync"
 	"testing"
 
+	githttp "github.com/AaronO/go-git-http"
+	"github.com/AaronO/go-git-http/auth"
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/Azure/dalec/test/testenv"
@@ -37,7 +39,7 @@ func TestGomodGitAuthHTTPS(t *testing.T) {
 	// recognized if it sees `host.docker.internal` it will first try to
 	// resolve the metadata by connecting to the resolved IP address on port
 	// 443, which will fail.
-	const host = "github.com"
+	const host = "host.docker.internal"
 
 	ctx := startTestSpan(baseCtx, t)
 	sourceName := "gitauth"
@@ -45,10 +47,16 @@ func TestGomodGitAuthHTTPS(t *testing.T) {
 	// randomData := identity.NewID()
 
 	testEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
-		outsideAddr, insideAddr := getSvcAddrs(ctx, t, c)
+		const gomodFmt = `module %[1]s/user/public
 
+go 1.23.5
+
+require %[1]s/user/private.git v0.0.0
+`
+
+		gomodContents := fmt.Sprintf(gomodFmt, host)
 		port := getAvailablePort(t)
-		port = 9999
+
 		spec := &dalec.Spec{
 			Name: "gomod-git-auth",
 			Sources: map[string]dalec.Source{
@@ -57,12 +65,7 @@ func TestGomodGitAuthHTTPS(t *testing.T) {
 						Dir: &dalec.SourceInlineDir{
 							Files: map[string]*dalec.SourceInlineFile{
 								"go.mod": {
-									Contents: `module ` + host + `/user/public
-
-go 1.23.5
-
-require ` + host + `/user/private v0.0.0
-`,
+									Contents: gomodContents,
 								},
 							},
 						},
@@ -81,44 +84,47 @@ require ` + host + `/user/private v0.0.0
 				},
 			},
 		}
-		spec.FillDefaults()
-		// pip := net.ParseIP(insideAddr)
-		worker := llb.Image("alpine:latest", llb.WithMetaResolver(c)).
-			Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
-		worker = worker.Run(
-			llb.Shlex(`sh -c 'git config --global "url.http://${HOST}:${PORT}/.insteadOf" "https://${HOST}"'`),
-			llb.AddEnv("HOST", host),
-			llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
-		).Root()
-		worker = worker.AddExtraHost(host, net.ParseIP(insideAddr))
 
-		// ec := make(chan error)
-		// go runTCPService(t, outsideAddr, port, ec)
+		outsideAddr, insideAddr := getGitServerAddrs(ctx, t, c)
+		go runGitServer(outsideAddr, port)
 
-		_ = outsideAddr
-		sr := newSolveRequest(withBuildTarget("debug/gomods"), withSpec(ctx, t, spec), withExtraHost(host, insideAddr), withBuildContext(ctx, t, "gomod-worker", worker))
-
+		sr := newSolveRequest(
+			withBuildTarget("debug/gomods"),
+			withSpec(ctx, t, spec),
+			withExtraHost(host, insideAddr),
+			withBuildContext(ctx, t, "gomod-worker", initGomodWorker(c, host, port)),
+		)
 		res := solveT(ctx, t, c, sr)
-		// if err := <-ec; err != nil {
-		// 	t.Fatal(err)
-		// }
-		x, err := res.SingleRef()
-		if err != nil {
-			t.Fatal(err)
-		}
-		y, err := x.ReadFile(ctx, gwclient.ReadRequest{
-			Filename: "/root/.gitconfig",
-		})
-		t.Fatalf("%s\n", string(y))
 
-		// checkFile(ctx, t, "gitauth/go.mod", res, []byte("hey\n"))
+		filename := filepath.Join(host, "user/private.git@v0.0.0/hello")
+		checkFile(ctx, t, filename, res, []byte("hello\n"))
 	}, testenv.WithSecrets(testenv.KeyVal{
 		K: "super-secret",
 		V: "value",
 	}))
 }
 
-func getSvcAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
+func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
+	worker := llb.Image("alpine:latest", llb.WithMetaResolver(c)).
+		Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
+
+	// tell git to use the port along with the host
+	worker = worker.Run(
+		llb.Shlex(`sh -c 'git config --global "url.http://${HOST}:${PORT}/.insteadOf" "https://${HOST}"'`),
+		llb.AddEnv("HOST", host),
+		llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
+	).Root()
+
+	// tell git to use the credential helper for the host:port combination
+	worker = worker.Run(
+		llb.Shlex(`sh -c 'git config --global credential."http://${HOST}:${PORT}.helper" "/usr/local/bin/frontend credential-helper --kind=token"'`),
+		llb.AddEnv("HOST", host),
+		llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
+	).Root()
+	return worker
+}
+
+func getGitServerAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
 	const (
 		rootlessOutsideAddr = "localhost"
 		rootlessInsideAddr  = "10.0.2.2" // as per the docs
@@ -233,61 +239,33 @@ outer:
 	return pid
 }
 
-func runTCPService(t *testing.T, outsideAddr string, p int, ec chan error) {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", outsideAddr, p))
+func runGitServer(addr string, port int) {
+	wd, err := os.Getwd()
 	if err != nil {
-		ec <- err
-		return
+		panic(err)
 	}
-	defer l.Close()
 
-	c, err := l.Accept()
+	wd, err = filepath.Abs(wd)
 	if err != nil {
-		ec <- err
-		return
+		panic(err)
 	}
-	defer c.Close()
 
-	b, err := io.ReadAll(c)
-	if err != nil {
-		ec <- err
-		return
-	}
-	t.Log(string(b))
+	git := githttp.New(filepath.Join(wd, "fixtures/git/"))
+	authr := auth.Authenticator(func(ai auth.AuthInfo) (bool, error) {
+		if ai.Push {
+			return false, nil
+		}
 
-	s := []byte("hey\n")
-	if _, err := c.Write(s); err != nil {
-		ec <- err
-		return
-	}
-}
+		if ai.Username == "x-access-token" && ai.Password == "value" {
+			return true, nil
+		}
 
-func runGitServer(t *testing.T, outsideAddr string, p int, ec chan error) {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", outsideAddr, p))
-	if err != nil {
-		ec <- err
-		return
-	}
-	defer l.Close()
+		return false, nil
+	})
 
-	c, err := l.Accept()
-	if err != nil {
-		ec <- err
-		return
-	}
-	defer c.Close()
-
-	b, err := io.ReadAll(c)
-	if err != nil {
-		ec <- err
-		return
-	}
-	t.Log(string(b))
-
-	s := []byte("hey\n")
-	if _, err := c.Write(s); err != nil {
-		ec <- err
-		return
+	http.Handle("/", authr(git))
+	if err := http.ListenAndServe(fmt.Sprintf("%s:%d", addr, port), nil); err != nil {
+		panic(err)
 	}
 }
 
@@ -298,11 +276,10 @@ func getAvailablePort(t *testing.T) int {
 	}
 
 	l, err := net.ListenTCP("tcp", addr)
-	defer l.Close()
-
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer l.Close()
 
 	p := l.Addr().(*net.TCPAddr).Port
 	return p

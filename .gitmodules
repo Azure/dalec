@@ -1,0 +1,3 @@
+[submodule "test/fixtures/git/user/private"]
+	path = test/fixtures/git/user/private
+	url = ./test/fixtures/git/user/private
