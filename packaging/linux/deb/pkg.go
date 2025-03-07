@@ -93,7 +93,8 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 	}
 
 	patches := createPatches(spec, sources, worker, dr, opts...)
-	debSources := debSources(worker, sources)
+
+	debSources := dalec.TarMultiple(worker, sources, "src.tar.gz", opts...)
 
 	work := worker.Run(
 		dalec.ShArgs("set -e; ls -lh; dpkg-buildpackage -S -us -uc; mkdir -p /tmp/out; ls -lh; cp -r /work/"+spec.Name+"_"+spec.Version+"* /tmp/out; ls -lh /tmp/out"),
@@ -101,13 +102,7 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 		llb.AddMount("/work/pkg/debian", dr, llb.SourcePath("debian")), // This cannot be readonly because the debian directory gets modified by dpkg-buildpackage
 		llb.AddMount("/work/pkg/debian/patches", patches, llb.Readonly),
 		llb.AddEnv("DH_VERBOSE", "1"),
-		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
-			// Mount all the tar+gz'd sources into the build which will get picked p by debbuild
-			for key, src := range debSources {
-				tarName := fmt.Sprintf("%s_%s.orig-%s.tar.gz", spec.Name, spec.Version, sanitizeSourceKey(key))
-				llb.AddMount(filepath.Join("/work", tarName), src, llb.SourcePath("src.tar.gz"), llb.Readonly).SetRunOption(ei)
-			}
-		}),
+		llb.AddMount("/work/"+spec.Name+"_"+spec.Version+".orig.tar.gz", debSources, llb.SourcePath("src.tar.gz")),
 		dalec.WithConstraints(opts...),
 	)
 
@@ -127,15 +122,4 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersio
 		).AddMount("/tmp/out", llb.Scratch())
 
 	return dalec.MergeAtPath(llb.Scratch(), []llb.State{st, srcPkg}, "/"), nil
-}
-
-func debSources(worker llb.State, sources map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
-	out := make(map[string]llb.State, len(sources))
-
-	for key, src := range sources {
-		st := dalec.Tar(worker, src, "src.tar.gz", opts...)
-		out[key] = st
-	}
-
-	return out
 }

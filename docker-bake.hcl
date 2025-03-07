@@ -23,6 +23,18 @@ target "frontend" {
 }
 
 
+target "spec" {
+    dockerfile = "test/fixtures/deb.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+        "dalec_frontend" = "target:frontend"
+    }
+    target = "jammy/testing/container"
+    tags = ["local/dalec/spec:jammy"]
+}
+
 # Run linters
 # Note: CI is using the github actions golangci-lint action which automatically sets up caching for us rather than using this bake target
 # If you change this, please also change the github action
@@ -62,7 +74,7 @@ target "runc-azlinux" {
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     contexts = {
-      "dalec_frontend" = "target:frontend"
+        "dalec_frontend" = "target:frontend"
     }
     matrix = {
         distro = ["mariner2", "azlinux3"]
@@ -86,7 +98,7 @@ target "runc-jammy" {
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     contexts = {
-      "dalec_frontend" = "target:frontend"
+        "dalec_frontend" = "target:frontend"
     }
     matrix = {
         tgt = ["deb", "container"]
@@ -124,9 +136,9 @@ target "test-fixture" {
     matrix = {
         f = DALEC_DISABLE_NESTED == "1" ? (
             ["http-src", "frontend", "local-context", "cmd-src-ref"]
-         ) : (
+        ) : (
             ["http-src", "frontend", "local-context", "cmd-src-ref", "nested"]
-         )
+        )
         tgt = ["mariner2/container"]
     }
     dockerfile = "test/fixtures/${f}.yml"
@@ -136,7 +148,7 @@ target "test-fixture" {
         "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
     }
     contexts = {
-      "dalec_frontend" = "target:frontend"
+        "dalec_frontend" = "target:frontend"
     }
     target = tgt
 }
@@ -156,7 +168,7 @@ target "build" {
         "BUILDKIT_SYNTAX" = "dalec_frontend"
     }
     contexts = {
-      "dalec_frontend" = "target:frontend"
+        "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/${tgt}"
     // only tag the container target
@@ -175,7 +187,7 @@ target "examples" {
         "BUILDKIT_SYNTAX" = "dalec_frontend"
     }
     contexts = {
-      "dalec_frontend" = "target:frontend"
+        "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/container"
     dockerfile = "docs/examples/${f}.yml"
@@ -197,7 +209,7 @@ dependencies:
         "BUILDKIT_SYNTAX" = "dalec_frontend"
     }
     contexts = {
-      "dalec_frontend" = "target:frontend"
+        "dalec_frontend" = "target:frontend"
     }
     target = "${distro}/container/depsonly"
     tags = ["local/dalec/deps-only:${distro}"]
@@ -231,4 +243,3 @@ target "frontend-ci-full" {
     inherits = ["frontend-ci"]
     platforms = ["linux/amd64", "linux/arm64"]
 }
-

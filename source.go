@@ -672,6 +672,27 @@ func Tar(work llb.State, src llb.State, dest string, opts ...llb.ConstraintsOpt)
 	return worker.AddMount(outBase, llb.Scratch())
 }
 
+func TarMultiple(work llb.State, srcs map[string]llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
+	outBase := "/tmp/out"
+	out := filepath.Join(outBase, filepath.Dir(dest))
+	worker := work.Run(
+		llb.AddMount("/src", llb.Scratch()),
+		RunOptFunc(func(ei *llb.ExecInfo) {
+			for key, src := range srcs {
+				llb.AddMount(filepath.Join("/src", key), src, llb.Readonly).SetRunOption(ei)
+			}
+		}),
+		ShArgs("tar -C /src -cvzf /tmp/st ."),
+		WithConstraints(opts...),
+	).
+		Run(
+			llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + out + " && mv /tmp/st " + filepath.Join(out, filepath.Base(dest))}),
+			WithConstraints(opts...),
+		)
+
+	return worker.AddMount(outBase, llb.Scratch())
+}
+
 func DefaultTarWorker(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State {
 	return llb.Image("busybox:latest", llb.WithMetaResolver(resolver), withConstraints(opts))
 }
