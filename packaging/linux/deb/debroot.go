@@ -136,8 +136,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	installers := createInstallScripts(worker, spec, dir, target)
 
 	const (
-		sourceFormat  = "3.0 (quilt)"
-		sourceOptions = "create-empty-orig"
+		sourceFormat = "3.0 (quilt)"
 	)
 
 	debian := base.
@@ -147,8 +146,8 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 				return in
 			}
 			return in.
-				File(llb.Mkfile(filepath.Join(dir, "source/format"), 0o640, []byte(sourceFormat)), opts...).
-				File(llb.Mkfile(filepath.Join(dir, "source/options"), 0o640, []byte(sourceOptions)), opts...)
+				File(llb.Mkfile(filepath.Join(dir, "source/format"), 0o640, []byte(sourceFormat)), opts...)
+			// File(llb.Mkfile(filepath.Join(dir, "source/options"), 0o640, []byte(sourceOptions)), opts...)
 		}).
 		File(llb.Mkdir(filepath.Join(dir, "dalec"), 0o755), opts...).
 		File(llb.Mkfile(filepath.Join(dir, "source/include-binaries"), 0o640, append([]byte("dalec"), '\n')), opts...)
