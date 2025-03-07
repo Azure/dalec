@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.2
 
 require (
+	github.com/AaronO/go-git-http v0.0.0-20161214145340-1d9485b3a98f
 	github.com/atombender/go-jsonschema v0.17.0
 	github.com/cavaliergopher/rpm v1.3.0
 	github.com/containerd/platforms v1.0.0-rc.1
