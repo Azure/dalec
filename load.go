@@ -538,6 +538,10 @@ func (s Spec) Validate() error {
 		}
 	}
 
+	if s.Artifacts.Licenses == nil {
+		errs = append(errs, errMissingLicense)
+	}
+
 	if err := s.Image.validate(); err != nil {
 		errs = append(errs, errors.Wrap(err, "image"))
 	}
