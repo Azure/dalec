@@ -46,10 +46,8 @@ func Gomods(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 			return nil, nil, err
 		}
 
-		// fopts := getAddedHosts(client)
 		res, err := client.Solve(ctx, gwclient.SolveRequest{
 			Definition: def.ToPB(),
-			// FrontendOpt: fopts,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -61,16 +59,6 @@ func Gomods(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		}
 		return ref, &dalec.DockerImageSpec{}, nil
 	})
-}
-
-func getAddedHosts(client gwclient.Client) map[string]string {
-	bopts := client.BuildOpts().Opts
-	var fopts map[string]string
-	if v, ok := bopts["add-hosts"]; ok {
-		fopts = make(map[string]string)
-		fopts["add-hosts"] = v
-	}
-	return fopts
 }
 
 func addedHosts(client gwclient.Client) llb.StateOption {
