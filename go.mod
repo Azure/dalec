@@ -5,6 +5,7 @@ go 1.22.0
 toolchain go1.23.1
 
 require (
+	github.com/AaronO/go-git-http v0.0.0-20161214145340-1d9485b3a98f
 	github.com/atombender/go-jsonschema v0.17.0
 	github.com/containerd/platforms v1.0.0-rc.1
 	github.com/goccy/go-yaml v1.15.23

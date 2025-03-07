@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
@@ -65,6 +66,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, credHelper llb.RunOp
 				WithConstraints(opts...),
 			).AddMount(gomodCacheDir, in)
 		}
+
 		return in
 	}
 }
@@ -75,10 +77,17 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State 
 	sortedHosts := SortMapKeys(g.Gomod.Auth)
 	if len(sortedHosts) > 0 {
 		fmt.Fprintln(&script, `set -eu`)
+		script.WriteRune('\n')
 	}
+
+	goPrivate := []string{}
 
 	for _, host := range sortedHosts {
 		auth := g.Gomod.Auth[host]
+		gpHost, _, _ := strings.Cut(host, ":")
+		goPrivate = append(goPrivate, gpHost)
+
+		script.WriteRune('\n')
 		if sshConfig := auth.SSH; sshConfig != nil {
 			username := "git"
 			if sshConfig.Username != "" {
@@ -104,6 +113,8 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State 
 		script.WriteRune('\n')
 	}
 
+	fmt.Fprintf(&script, "export GOPRIVATE=%s", strings.Join(goPrivate, ","))
+	script.WriteRune('\n')
 	fmt.Fprintln(&script, "go mod download")
 	return llb.Scratch().File(llb.Mkfile(scriptPath, 0o755, script.Bytes()))
 }
