@@ -75,9 +75,6 @@ func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.Forw
 		req, err := newSolveRequest(
 			toDockerfile(ctx, st, dockerfileDt, spec, dalec.ProgressGroup("prepare dockerfile to forward to frontend")),
 			copyForForward(ctx, client),
-			func(sr *gwclient.SolveRequest) error {
-				return nil
-			},
 		)
 		if err != nil {
 			return llb.Scratch(), err

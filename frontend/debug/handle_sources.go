@@ -23,24 +23,18 @@ func Sources(ctx context.Context, client gwclient.Client) (*gwclient.Result, err
 			return nil, nil, err
 		}
 
-		// extraHosts
 		for k, v := range sources {
 			st := llb.Scratch().File(llb.Copy(v, "/", k))
 			sources[k] = st
 		}
 
-		st := dalec.MergeAtPath(llb.Scratch(), dalec.SortedMapValues(sources), "/")
-		// st := llb.Scratch().File(llb.Mkfile("/out", 0o644, []byte(fmt.Sprintf("%#v", client.BuildOpts().Opts))))
-		def, err := st.Marshal(ctx)
+		def, err := dalec.MergeAtPath(llb.Scratch(), dalec.SortedMapValues(sources), "/").Marshal(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		res, err := client.Solve(ctx, gwclient.SolveRequest{
 			Definition: def.ToPB(),
-			FrontendOpt: map[string]string{
-				"add-hosts": "host.docker.internal=10.0.2.2",
-			},
 		})
 		if err != nil {
 			return nil, nil, err
