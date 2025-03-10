@@ -8,7 +8,6 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -33,7 +32,7 @@ func Gomods(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		// This is useful for keeping pre-built worker image, especially for CI.
 		worker, ok := inputs[keyGomodWorker]
 		if !ok {
-			worker = llb.Image("alpine:latest", llb.Platform(v1.Platform{Architecture: runtime.GOARCH, OS: "linux"}), llb.WithMetaResolver(client)).
+			worker = llb.Image("alpine:latest", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"}), llb.WithMetaResolver(client)).
 				Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
 		}
 		worker = worker.With(addedHosts(client))
