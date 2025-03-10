@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -35,10 +36,6 @@ var (
 func TestGomodGitAuthHTTPS(t *testing.T) {
 	t.Parallel()
 
-	// this is needed because go behaves differently when the host is
-	// recognized if it sees `host.docker.internal` it will first try to
-	// resolve the metadata by connecting to the resolved IP address on port
-	// 443, which will fail.
 	const host = "host.docker.internal"
 
 	ctx := startTestSpan(baseCtx, t)
@@ -86,7 +83,9 @@ require %[1]s/user/private.git v0.0.0
 		}
 
 		outsideAddr, insideAddr := getGitServerAddrs(ctx, t, c)
-		go runGitServer(outsideAddr, port)
+		if err := runGitServer(ctx, t, outsideAddr, port); err != nil {
+			t.Fatal(err)
+		}
 
 		sr := newSolveRequest(
 			withBuildTarget("debug/gomods"),
@@ -108,19 +107,18 @@ func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
 	worker := llb.Image("alpine:latest", llb.WithMetaResolver(c)).
 		Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
 
-	// tell git to use the port along with the host
-	worker = worker.Run(
-		llb.Shlex(`sh -c 'git config --global "url.http://${HOST}:${PORT}/.insteadOf" "https://${HOST}"'`),
-		llb.AddEnv("HOST", host),
-		llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
-	).Root()
+	run := func(cmd string) {
+		// tell git to use the port along with the host
+		worker = worker.Run(
+			llb.Shlex(cmd),
+			llb.AddEnv("HOST", host),
+			llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
+		).Root()
+	}
 
-	// tell git to use the credential helper for the host:port combination
-	worker = worker.Run(
-		llb.Shlex(`sh -c 'git config --global credential."http://${HOST}:${PORT}.helper" "/usr/local/bin/frontend credential-helper --kind=token"'`),
-		llb.AddEnv("HOST", host),
-		llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
-	).Root()
+	run(`sh -c 'git config --global "url.http://${HOST}:${PORT}.insteadOf" "https://${HOST}"'`)
+	run(`sh -c 'git config --global credential."http://${HOST}:${PORT}.helper" "/usr/local/bin/frontend credential-helper --kind=token"'`)
+
 	return worker
 }
 
@@ -239,18 +237,46 @@ outer:
 	return pid
 }
 
-func runGitServer(addr string, port int) {
-	wd, err := os.Getwd()
-	if err != nil {
-		panic(err)
+func runGitServer(ctx context.Context, t *testing.T, addr string, port int) error {
+	td := t.TempDir()
+	privateGitRepo := filepath.Join(td, "user", "private")
+	if err := os.MkdirAll(privateGitRepo, 0o755); err != nil {
+		t.Fatal(err)
 	}
 
-	wd, err = filepath.Abs(wd)
-	if err != nil {
-		panic(err)
+	git := func(args ...string) {
+		c := exec.Command("git", args...)
+		c.Dir = privateGitRepo
+		c.Env = append(c.Env, "GIT_CONFIG_NOGLOBAL=true")
+
+		out, err := c.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %s", err, out)
+		}
 	}
 
-	git := githttp.New(filepath.Join(wd, "fixtures/git/"))
+	git("init")
+	git("config", "user.name", "foo")
+	git("config", "user.email", "foo@bar.com")
+
+	const repoFileBase = "hello"
+	repoFile := filepath.Join(privateGitRepo, repoFileBase)
+
+	if err := os.WriteFile(repoFile, []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(privateGitRepo, "go.mod"), []byte(`module host.docker.internal/user/private.git
+
+go 1.23.5
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	git("add", "-A")
+	git("commit", "-m", "commit", "--no-gpg-sign")
+	git("tag", "v0.0.0")
+
+	gitHandler := githttp.New(td)
 	authr := auth.Authenticator(func(ai auth.AuthInfo) (bool, error) {
 		if ai.Push {
 			return false, nil
@@ -263,10 +289,20 @@ func runGitServer(addr string, port int) {
 		return false, nil
 	})
 
-	http.Handle("/", authr(git))
-	if err := http.ListenAndServe(fmt.Sprintf("%s:%d", addr, port), nil); err != nil {
-		panic(err)
-	}
+	s := http.Server{Addr: fmt.Sprintf("%s:%d", addr, port)}
+	http.Handle("/", authr(gitHandler))
+	t.Cleanup(func() {
+		s.Shutdown(ctx)
+	})
+
+	t.Logf("starting git server on %s:%d, hosted in directory %s", addr, port, td)
+	go func() {
+		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			t.Logf("unexpected server error: %s", err)
+		}
+	}()
+
+	return nil
 }
 
 func getAvailablePort(t *testing.T) int {
