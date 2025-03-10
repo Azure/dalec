@@ -20,11 +20,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	GitCredentialHelperGomod       = "git-credential-gomod"
-	GitCredentialHelperGomodSrcDir = "/usr/bin"
-)
-
 type FilterFunc = func(string, []string, []string, ...llb.ConstraintsOpt) llb.StateOption
 
 var errNoSourceVariant = fmt.Errorf("no source variant found")
