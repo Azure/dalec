@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
@@ -50,7 +49,6 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, credHelper llb.RunOp
 			paths = []string{"."}
 		}
 
-		sort.Strings(paths)
 		script := g.gitconfigGeneratorScript(gomodDownloadWrapperBasename)
 		scriptPath := filepath.Join(scriptMountpoint, gomodDownloadWrapperBasename)
 
@@ -109,11 +107,11 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State 
 			continue
 		}
 
-		fmt.Fprintf(&script, `git config --global credential."https://%[1]s.helper" "/usr/local/bin/frontend credential-helper --kind='%[2]s'"`, host, kind)
+		fmt.Fprintf(&script, `git config --global credential."https://%[1]s.helper" "/usr/local/bin/frontend credential-helper --kind=%[2]s"`, host, kind)
 		script.WriteRune('\n')
 	}
 
-	fmt.Fprintf(&script, "export GOPRIVATE=%s", strings.Join(goPrivate, ","))
+	fmt.Fprintf(&script, "go env -w GOPRIVATE=%s", strings.Join(goPrivate, ","))
 	script.WriteRune('\n')
 	fmt.Fprintln(&script, "go mod download")
 	return llb.Scratch().File(llb.Mkfile(scriptPath, 0o755, script.Bytes()))
