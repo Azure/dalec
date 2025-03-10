@@ -713,6 +713,7 @@ func (git *SourceGit) fillDefaults(generators []*SourceGenerator) {
 	}
 
 	host := git.URL
+
 	u, err := url.Parse(git.URL)
 	if err == nil {
 		host = u.Host
@@ -857,6 +858,47 @@ func (s *Source) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 			appendErr(err)
 		}
 		s.Build.Target = updated
+	}
+
+	for _, gen := range s.Generate {
+		if err := gen.processBuildArgs(args, allowArg); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (g *SourceGenerator) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
+	var errs []error
+
+	if g.Gomod != nil {
+		if err := g.Gomod.processBuildArgs(args, allowArg); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (g *GeneratorGomod) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
+	var errs []error
+	lex := shell.NewLex('\\')
+	// force the shell lexer to skip unresolved env vars so they aren't
+	// replaced with ""
+	lex.SkipUnsetEnv = true
+
+	for host, auth := range g.Auth {
+		subbed, err := expandArgs(lex, host, args, allowArg)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		g.Auth[subbed] = auth
+		if subbed != host {
+			delete(g.Auth, host)
+		}
 	}
 
 	return goerrors.Join(errs...)
