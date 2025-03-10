@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +27,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/opencontainers/go-digest"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 var (
@@ -104,7 +106,7 @@ require %[1]s/user/private.git v0.0.0
 }
 
 func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
-	worker := llb.Image("alpine:latest", llb.WithMetaResolver(c)).
+	worker := llb.Image("alpine:latest", llb.Platform(v1.Platform{Architecture: runtime.GOARCH, OS: "linux"}), llb.WithMetaResolver(c)).
 		Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
 
 	run := func(cmd string) {
@@ -1388,7 +1390,7 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 
 func isRootless(ctx context.Context, t *testing.T, client gwclient.Client) bool {
 	isRootlessOnce.Do(func() {
-		st := llb.Image("mcr.microsoft.com/azurelinux/base/core:3.0").Run(llb.Args([]string{
+		st := llb.Image("mcr.microsoft.com/azurelinux/base/core:3.0", llb.Platform(v1.Platform{Architecture: runtime.GOARCH, OS: "linux"})).Run(llb.Args([]string{
 			"bash", "-c", `
 set -exu
 read -r x < /proc/self/uid_map
