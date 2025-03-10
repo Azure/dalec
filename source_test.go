@@ -19,7 +19,6 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -263,7 +262,7 @@ exit 0
 	for _, dt := range def.Def[:len(def.Def)-1] {
 		var op pb.Op
 		err := op.Unmarshal(dt)
-		require.NoError(t, err)
+		assert.NilError(t, err)
 		dgst := digest.FromBytes(dt)
 		m[string(dgst)] = &op
 		arr = append(arr, &op)
@@ -1063,11 +1062,11 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, 
 		case auth.Header != "":
 			chk = auth.Header
 		default:
-			require.NotNil(t, auth.SSH)
+			assert.Check(t, auth.SSH != nil)
 			chk = auth.SSH.ID
 		}
 
-		require.NotEqual(t, chk, "")
+		assert.Check(t, chk != "")
 
 		_, requiresSecret := secrets[chk]
 		assert.Check(t, requiresSecret, secrets)
