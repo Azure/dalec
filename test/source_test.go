@@ -27,7 +27,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/opencontainers/go-digest"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 var (
@@ -83,7 +83,7 @@ require %[1]s/user/private.git v0.0.0
 		}
 
 		outsideAddr, insideAddr := getGitServerAddrs(ctx, t, c)
-		if err := runGitServer(ctx, t, outsideAddr, port); err != nil {
+		if err := runGitServer(ctx, t, outsideAddr, port, host); err != nil {
 			t.Fatal(err)
 		}
 
@@ -104,7 +104,7 @@ require %[1]s/user/private.git v0.0.0
 }
 
 func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
-	worker := llb.Image("alpine:latest", llb.Platform(v1.Platform{Architecture: runtime.GOARCH, OS: "linux"}), llb.WithMetaResolver(c)).
+	worker := llb.Image("alpine:latest", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"}), llb.WithMetaResolver(c)).
 		Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
 
 	run := func(cmd string) {
@@ -237,7 +237,7 @@ outer:
 	return pid
 }
 
-func runGitServer(ctx context.Context, t *testing.T, addr string, port int) error {
+func runGitServer(ctx context.Context, t *testing.T, addr string, port int, host string) error {
 	td := t.TempDir()
 	privateGitRepo := filepath.Join(td, "user", "private")
 	if err := os.MkdirAll(privateGitRepo, 0o755); err != nil {
@@ -265,10 +265,10 @@ func runGitServer(ctx context.Context, t *testing.T, addr string, port int) erro
 	if err := os.WriteFile(repoFile, []byte("hello\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(privateGitRepo, "go.mod"), []byte(`module host.docker.internal/user/private.git
+	if err := os.WriteFile(filepath.Join(privateGitRepo, "go.mod"), []byte(fmt.Sprintf(`module %s/user/private.git
 
 go 1.23.5
-`), 0o644); err != nil {
+`, host)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1388,7 +1388,7 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 
 func isRootless(ctx context.Context, t *testing.T, client gwclient.Client) bool {
 	isRootlessOnce.Do(func() {
-		st := llb.Image("mcr.microsoft.com/azurelinux/base/core:3.0", llb.Platform(v1.Platform{Architecture: runtime.GOARCH, OS: "linux"})).Run(llb.Args([]string{
+		st := llb.Image("mcr.microsoft.com/azurelinux/base/core:3.0", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"})).Run(llb.Args([]string{
 			"bash", "-c", `
 set -exu
 read -r x < /proc/self/uid_map
