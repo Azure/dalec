@@ -11,7 +11,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/invopop/jsonschema v0.12.0
-	github.com/moby/buildkit v0.20.0
+	github.com/moby/buildkit v0.20.1
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.0
@@ -39,7 +39,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/containerd/console v1.0.4 // indirect
 	github.com/containerd/containerd/api v1.8.0 // indirect
-	github.com/containerd/containerd/v2 v2.0.2 // indirect
+	github.com/containerd/containerd/v2 v2.0.3 // indirect
 	github.com/containerd/continuity v0.4.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
