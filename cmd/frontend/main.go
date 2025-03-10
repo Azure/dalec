@@ -51,8 +51,6 @@ func main() {
 		args := flag.Args()[2:]
 		// skip os.Args[0] and "credential-helper"
 		gomodMain(args)
-	case "":
-		fallthrough
 	default:
 		dalecMain()
 	}
