@@ -127,7 +127,7 @@ func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
 func getGitServerAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
 	const (
 		rootlessOutsideAddr = "localhost"
-		rootlessInsideAddr  = "10.0.2.2" // as per the docs
+		rootlessInsideAddr  = "10.0.2.2" // as per the docs here: https://docs.docker.com/engine/release-notes/26.0/#new
 	)
 
 	if !isRootless(ctx, t, c) {
