@@ -43,8 +43,6 @@ func TestGomodGitAuthHTTPS(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	sourceName := "gitauth"
 
-	// randomData := identity.NewID()
-
 	testEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
 		const gomodFmt = `module %[1]s/user/public
 
