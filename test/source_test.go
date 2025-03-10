@@ -292,7 +292,9 @@ go 1.23.5
 	s := http.Server{Addr: fmt.Sprintf("%s:%d", addr, port)}
 	http.Handle("/", authr(gitHandler))
 	t.Cleanup(func() {
-		s.Shutdown(ctx)
+		if err := s.Shutdown(ctx); err != nil {
+			t.Log(err)
+		}
 	})
 
 	t.Logf("starting git server on %s:%d, hosted in directory %s", addr, port, td)
