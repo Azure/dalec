@@ -712,15 +712,16 @@ func (git *SourceGit) fillDefaults(generators []*SourceGenerator) {
 		return
 	}
 
+	host := git.URL
 	u, err := url.Parse(git.URL)
-	if err != nil {
-		panic(err) // This should be validated elsewhere
+	if err == nil {
+		host = u.Host
 	}
 
 	// Thes the git auth from the git source is autofilled for the gomods, so
 	// the user doesn't have to repeat themselves.
 	for _, generator := range generators {
-		generator.fillDefaults(u.Host, &git.Auth)
+		generator.fillDefaults(host, &git.Auth)
 	}
 }
 
