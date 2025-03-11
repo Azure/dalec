@@ -266,7 +266,7 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 	checkAndWritePerms(artifacts.Headers, HeadersPath)
 	checkAndWritePerms(artifacts.Licenses, filepath.Join(LicensesPath, spec.Name))
 	checkAndWritePerms(artifacts.Docs, filepath.Join(DocsPath, spec.Name))
-	checkAndWritePerms(artifacts.Libs, filepath.Join(LibsPath, spec.Name))
+	checkAndWritePerms(artifacts.Libs, filepath.Join(LibsPath))
 	checkAndWritePerms(artifacts.Libexec, LibexecPath)
 	checkAndWritePerms(artifacts.DataDirs, DataDirsPath)
 
@@ -583,7 +583,7 @@ func createInstallScripts(worker llb.State, spec *dalec.Spec, dir, target string
 		for _, key := range sorted {
 			cfg := artifacts.Libs[key]
 			resolved := cfg.ResolveName(key)
-			writeInstall(key, filepath.Join(LibsPath, spec.Name, cfg.SubPath), resolved)
+			writeInstall(key, filepath.Join(LibsPath, cfg.SubPath), resolved)
 		}
 	}
 
