@@ -614,7 +614,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 	libs := dalec.SortMapKeys(artifacts.Libs)
 	for _, l := range libs {
 		cfg := artifacts.Libs[l]
-		root := filepath.Join(`%{buildroot}/%{_libdir}`, w.Name)
+		root := filepath.Join(`%{buildroot}/%{_libdir}`)
 		copyArtifact(root, l, &cfg)
 	}
 
@@ -756,7 +756,7 @@ func (w *specWrapper) Files() fmt.Stringer {
 	libKeys := dalec.SortMapKeys(artifacts.Libs)
 	for _, l := range libKeys {
 		cfg := artifacts.Libs[l]
-		path := filepath.Join(`%{_libdir}`, w.Name, cfg.SubPath, cfg.ResolveName(l))
+		path := filepath.Join(`%{_libdir}`, cfg.SubPath, cfg.ResolveName(l))
 		fmt.Fprintln(b, path)
 	}
 

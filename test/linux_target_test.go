@@ -1812,10 +1812,10 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 				{
 					Name: "Check that lib files exist under package dir",
 					Files: map[string]dalec.FileCheckOutput{
-						filepath.Join(libDir, "test-library-files/lib1"): {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "lib1"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib1",
 						}},
-						filepath.Join(libDir, "test-library-files/lib2"): {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "lib2"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib2",
 						}},
 					},
@@ -1867,10 +1867,10 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 				{
 					Name: "Check that lib files exist under package dir",
 					Files: map[string]dalec.FileCheckOutput{
-						filepath.Join(libDir, "test-library-files/lib1"): {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "lib1"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib1",
 						}},
-						filepath.Join(libDir, "test-library-files/lib2"): {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "lib2"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib2",
 						}},
 					},
@@ -1931,13 +1931,13 @@ func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConf
 				{
 					Name: "Check that lib files exist under package dir",
 					Files: map[string]dalec.FileCheckOutput{
-						filepath.Join(libDir, "test-library-files/lib1"): {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "lib1"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib1",
 						}},
-						filepath.Join(libDir, "test-library-files/lib2"): {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "lib2"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib2",
 						}},
-						filepath.Join(libDir, "test-library-files/lib3"): {CheckOutput: dalec.CheckOutput{
+						filepath.Join(libDir, "lib3"): {CheckOutput: dalec.CheckOutput{
 							Equals: "this is lib3",
 						}},
 					},
