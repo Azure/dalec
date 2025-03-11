@@ -215,10 +215,10 @@ func handleSecretHeader(b []byte, payload *gitPayload) (string, error) {
 	return printPayload(payload), nil
 }
 
-func handleSecretToken(b []byte, payload *gitPayload) (string, error) {
+func handleSecretToken(token []byte, payload *gitPayload) (string, error) {
 	var buf bytes.Buffer
 	buf.WriteString("x-access-token:")
-	buf.Write(b)
+	buf.Write(token)
 
 	payload.authtype = "basic"
 	payload.credential = base64.StdEncoding.EncodeToString(buf.Bytes())
