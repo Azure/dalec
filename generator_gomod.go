@@ -106,7 +106,11 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State 
 				username = sshConfig.Username
 			}
 
-			fmt.Fprintf(&script, `git config --global "url.ssh://%[1]s@%[2]s/.insteadOf" https://%[2]s/`, username, host)
+			// By default, go will make a request to git for the source of a
+			// package, and it will specify the remote url as https://<package
+			// name>. Because SSH auth was requested for this host, tell git to
+			// use ssh for upstreams with this host name.
+			fmt.Fprintf(&script, `git config --global url."ssh://%[1]s@%[2]s/".insteadOf https://%[2]s/`, username, host)
 			script.WriteRune('\n')
 			continue
 		}
