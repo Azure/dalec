@@ -838,5 +838,22 @@ OrderWithRequires(postun): systemd
 		want := "Requires(post): /usr/sbin/groupadd, /usr/bin/getent\n"
 		assert.Equal(t, got, want)
 	})
+}
 
+func TestTemplate_DisableStrip(t *testing.T) {
+	spec := &dalec.Spec{
+		Artifacts: dalec.Artifacts{
+			DisableStrip: true,
+		},
+	}
+
+	w := &specWrapper{Spec: spec}
+	want := `%global __strip /bin/true`
+	got := w.DisableStrip()
+	assert.Equal(t, got, want)
+
+	spec.Artifacts.DisableStrip = false
+	want = ""
+	got = w.DisableStrip()
+	assert.Equal(t, got, want)
 }

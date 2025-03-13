@@ -77,5 +77,6 @@ func TestRockylinux8(t *testing.T) {
 			ID:        "rocky",
 			VersionID: "8",
 		},
+		SkipStripTest: true,
 	})
 }

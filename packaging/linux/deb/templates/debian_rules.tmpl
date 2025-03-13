@@ -34,6 +34,8 @@ override_dh_dwz:
 
 {{ .OverrideSystemd }}
 
+{{ .OverrideStrip }}
+
 %:
 	dh $@ -v
 

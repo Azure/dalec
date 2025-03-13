@@ -47,6 +47,9 @@ type Artifacts struct {
 	Users []AddUserConfig `yaml:"users,omitempty" json:"users,omitempty"`
 	// Groups is a list of groups to add to the system when the package is installed.
 	Groups []AddGroupConfig `yaml:"groups,omitempty" json:"groups,omitempty"`
+
+	// DisableStrip is used to disable stripping of artifacts.
+	DisableStrip bool `yaml:"disable_strip,omitempty" json:"disable_strip,omitempty"`
 }
 
 type ArtifactSymlinkConfig struct {

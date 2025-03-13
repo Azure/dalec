@@ -190,3 +190,17 @@ Depends: ${misc:Depends},
 	actual = strings.TrimSpace(buf.String())
 	assert.Check(t, cmp.Equal(actual, strings.TrimSpace(expect)))
 }
+
+func TestRules_OverrideStrip(t *testing.T) {
+	w := &rulesWrapper{
+		Spec: &dalec.Spec{},
+	}
+
+	got := w.OverrideStrip()
+	assert.Equal(t, got.String(), "")
+
+	w.Spec.Artifacts.DisableStrip = true
+	got = w.OverrideStrip()
+	expect := "override_dh_strip:\n"
+	assert.Equal(t, got.String(), expect)
+}

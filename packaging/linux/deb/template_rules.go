@@ -182,3 +182,14 @@ func (w *rulesWrapper) OverrideSystemd() (fmt.Stringer, error) {
 
 	return b, nil
 }
+
+func (w *rulesWrapper) OverrideStrip() fmt.Stringer {
+	artifacts := w.Spec.GetArtifacts(w.target)
+
+	buf := &strings.Builder{}
+
+	if artifacts.DisableStrip {
+		buf.WriteString("override_dh_strip:\n")
+	}
+	return buf
+}
