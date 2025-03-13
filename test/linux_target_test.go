@@ -1,6 +1,8 @@
 package test
 
 import (
+	_ "embed"
+
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,9 +18,11 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	pkgerrors "github.com/pkg/errors"
 	"golang.org/x/exp/maps"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
+	"gotest.tools/v3/skip"
 )
 
 type workerConfig struct {
@@ -77,6 +81,8 @@ type testLinuxConfig struct {
 	Libdir  string
 	Worker  workerConfig
 	Release OSRelease
+
+	SkipStripTest bool
 }
 
 type OSRelease struct {
@@ -1561,7 +1567,13 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 	})
 
 	t.Run("inherited dependencies", func(t *testing.T) {
+		t.Parallel()
 		testMixGlobalTargetDependencies(ctx, t, testConfig)
+	})
+
+	t.Run("disable strip", func(t *testing.T) {
+		t.Parallel()
+		testDisableStrip(ctx, t, testConfig)
 	})
 }
 
@@ -2339,6 +2351,92 @@ func testMixGlobalTargetDependencies(ctx context.Context, t *testing.T, cfg test
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			solveT(ctx, t, client, newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package)))
+		})
+	})
+}
+
+func testDisableStrip(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	skip.If(t, cfg.SkipStripTest, "skipping test as it is not supported for this target: "+cfg.Target.Container)
+
+	newSpec := func() *dalec.Spec {
+		spec := newSimpleSpec()
+		spec.Args = map[string]string{
+			"TARGETARCH": "",
+		}
+
+		spec.Sources = map[string]dalec.Source{
+			"src": {
+				Generate: []*dalec.SourceGenerator{
+					{
+						Gomod: &dalec.GeneratorGomod{},
+					},
+				},
+				Inline: &dalec.SourceInline{
+					Dir: &dalec.SourceInlineDir{
+						Files: map[string]*dalec.SourceInlineFile{
+							"main.go": {Contents: gomodFixtureMain},
+							"go.mod":  {Contents: gomodFixtureMod},
+							"go.sum":  {Contents: gomodFixtureSum},
+						},
+					},
+				},
+			},
+		}
+
+		spec.Dependencies = &dalec.PackageDependencies{
+			Build: map[string]dalec.PackageConstraints{
+				cfg.GetPackage("golang"): {},
+			},
+		}
+		spec.Artifacts = dalec.Artifacts{
+			Binaries: map[string]dalec.ArtifactConfig{
+				"bad-executable": {},
+			},
+			Libs: map[string]dalec.ArtifactConfig{
+				"bad-executable": {},
+			},
+		}
+
+		spec.Build.Env = map[string]string{
+			"TARGETARCH": "$TARGETARCH",
+		}
+
+		spec.Build.Steps = []dalec.BuildStep{
+			// Build a binary for a different architecture
+			// This should make `strip` fail.
+			//
+			// Note: The test is specifically using ppc64le as GOARCH
+			// because it seems alma/rockylinux do not error ons trip except for ppc64le.
+			// Even this is a stretch as that does not even work as expected at verison < v9.
+			{
+				Command: `cd src; if [ "${TARGETARCH}" = "ppc64le" ]; then export GOARCH=amd64; else export GOARCH=ppc64le; fi; go build -o ../bad-executable main.go`,
+			},
+		}
+		return spec
+	}
+
+	t.Run("strip enabled", func(t *testing.T) {
+		// Make sure that we get a build failure when strip is enabled
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			spec := newSpec()
+			req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+
+			_, err := client.Solve(ctx, req)
+			assert.ErrorType(t, pkgerrors.Cause(err), &moby_buildkit_v1_frontend.ExitError{})
+		})
+	})
+
+	t.Run("strip disabled", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			spec := newSpec()
+			spec.Artifacts.DisableStrip = true
+
+			req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			solveT(ctx, t, client, req)
 		})
 	})
 }

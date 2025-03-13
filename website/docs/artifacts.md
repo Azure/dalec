@@ -315,3 +315,12 @@ artifacts:
   groups:
     - name: mygroup
 ```
+
+## Automatic Stripping
+
+Some builds may not work with binary stripping, in which case you can disable
+automatic stripping by setting `disable_strip: true`
+This is a global setting that applies to all artifacts only.
+
+If you want some binaries stripped and others not, you will need to manually
+strip them in the build phase.

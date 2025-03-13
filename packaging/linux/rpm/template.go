@@ -18,6 +18,7 @@ const gomodsName = "__gomods"
 const buildScriptName = "build.sh"
 
 var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
+{{.DisableStrip}}
 Name: {{.Name}}
 Version: {{.Version}}
 Release: {{.Release}}%{?dist}
@@ -774,6 +775,14 @@ func (w *specWrapper) Files() fmt.Stringer {
 	}
 	b.WriteString("\n")
 	return b
+}
+
+func (w *specWrapper) DisableStrip() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if artifacts.DisableStrip {
+		return "%global __strip /bin/true"
+	}
+	return ""
 }
 
 // WriteSpec generates an rpm spec from the provided [dalec.Spec] and distro target and writes it to the passed in writer

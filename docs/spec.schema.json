@@ -209,6 +209,12 @@
 					],
 					"description": "DataDirs is a list of read-only architecture-independent data files, to be placed in /usr/share/"
 				},
+				"disable_strip": {
+					"type": [
+						"boolean"
+					],
+					"description": "DisableStrip is used to disable stripping of artifacts."
+				},
 				"docs": {
 					"additionalProperties": {
 						"$ref": "#/$defs/ArtifactConfig"

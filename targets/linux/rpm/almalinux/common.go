@@ -10,6 +10,7 @@ import (
 
 var (
 	builderPackages = []string{
+		"binutils",
 		"rpm-build",
 		"ca-certificates",
 	}

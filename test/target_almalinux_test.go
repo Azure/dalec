@@ -77,5 +77,6 @@ func TestAlmalinux8(t *testing.T) {
 			ID:        "almalinux",
 			VersionID: "8",
 		},
+		SkipStripTest: true,
 	})
 }
