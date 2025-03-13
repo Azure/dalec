@@ -21,6 +21,10 @@ type LoadConfig struct {
 
 type LoadOpt func(*LoadConfig)
 
+type frontendClient interface {
+	CurrentFrontend() (*llb.State, error)
+}
+
 func WithAllowArgs(args ...string) LoadOpt {
 	return func(cfg *LoadConfig) {
 		set := make(map[string]struct{}, len(args))
@@ -153,4 +157,30 @@ func GetBaseImage(sOpt dalec.SourceOpts, ref string) llb.State {
 		}
 		return llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraint(c)), nil
 	})
+}
+
+func GetCurrentFrontend(client gwclient.Client) (llb.State, error) {
+	f, err := client.(frontendClient).CurrentFrontend()
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	if f == nil {
+		return llb.Scratch(), fmt.Errorf("nil frontend state returned")
+	}
+
+	return *f, nil
+}
+
+func withCredHelper(c gwclient.Client) func() (llb.RunOption, error) {
+	return func() (llb.RunOption, error) {
+		f, err := GetCurrentFrontend(c)
+		if err != nil {
+			return nil, err
+		}
+
+		return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			llb.AddMount("/usr/local/bin/frontend", f, llb.SourcePath("/frontend")).SetRunOption(ei)
+		}), nil
+	}
 }

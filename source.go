@@ -7,6 +7,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"io"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -228,9 +229,10 @@ type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, er
 type ForwarderFunc func(llb.State, *SourceBuild) (llb.State, error)
 
 type SourceOpts struct {
-	Resolver   llb.ImageMetaResolver
-	Forward    ForwarderFunc
-	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
+	Resolver         llb.ImageMetaResolver
+	Forward          ForwarderFunc
+	GetContext       func(string, ...llb.LocalOption) (*llb.State, error)
+	GitCredHelperOpt func() (llb.RunOption, error)
 }
 
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -703,6 +705,7 @@ func fillDefaults(s *Source) {
 			}
 		}
 	case s.Git != nil:
+		s.Git.fillDefaults(s.Generate)
 	case s.HTTP != nil:
 	case s.Context != nil:
 		if s.Context.Name == "" {
@@ -712,6 +715,67 @@ func fillDefaults(s *Source) {
 		fillDefaults(&s.Build.Source)
 	case s.Inline != nil:
 	}
+
+}
+
+func (git *SourceGit) fillDefaults(generators []*SourceGenerator) {
+	if git == nil {
+		return
+	}
+
+	host := git.URL
+
+	u, err := url.Parse(git.URL)
+	if err == nil {
+		host = u.Host
+	}
+
+	// Thes the git auth from the git source is autofilled for the gomods, so
+	// the user doesn't have to repeat themselves.
+	for _, generator := range generators {
+		generator.fillDefaults(host, &git.Auth)
+	}
+}
+
+func (g *SourceGenerator) fillDefaults(host string, authInfo *GitAuth) {
+	if g == nil || authInfo == nil {
+		return
+	}
+
+	switch {
+	case g.Gomod != nil:
+		g.Gomod.fillDefaults(host, authInfo)
+	}
+}
+
+func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth) {
+	// Don't overwrite explicitly-specified auth
+	_, ok := gm.Auth[host]
+	if ok {
+		return
+	}
+	const defaultUsername = "git"
+
+	var gomodAuth GomodGitAuth
+	switch {
+	case authInfo.Token != "":
+		gomodAuth.Token = authInfo.Token
+	case authInfo.Header != "":
+		gomodAuth.Header = authInfo.Header
+	case authInfo.SSH != "":
+		gomodAuth.SSH = &GomodGitAuthSSH{
+			ID:       authInfo.SSH,
+			Username: defaultUsername,
+		}
+	default:
+		return
+	}
+
+	if gm.Auth == nil {
+		gm.Auth = make(map[string]GomodGitAuth)
+	}
+
+	gm.Auth[host] = gomodAuth
 }
 
 func (s *Source) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
@@ -779,6 +843,47 @@ func (s *Source) processBuildArgs(args map[string]string, allowArg func(key stri
 			appendErr(err)
 		}
 		s.Build.Target = updated
+	}
+
+	for _, gen := range s.Generate {
+		if err := gen.processBuildArgs(args, allowArg); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (g *SourceGenerator) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
+	var errs []error
+
+	if g.Gomod != nil {
+		if err := g.Gomod.processBuildArgs(args, allowArg); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (g *GeneratorGomod) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
+	var errs []error
+	lex := shell.NewLex('\\')
+	// force the shell lexer to skip unresolved env vars so they aren't
+	// replaced with ""
+	lex.SkipUnsetEnv = true
+
+	for host, auth := range g.Auth {
+		subbed, err := expandArgs(lex, host, args, allowArg)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		g.Auth[subbed] = auth
+		if subbed != host {
+			delete(g.Auth, host)
+		}
 	}
 
 	return goerrors.Join(errs...)
