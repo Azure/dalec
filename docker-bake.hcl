@@ -23,6 +23,18 @@ target "frontend" {
 }
 
 
+target "spec" {
+    dockerfile = "test/fixtures/deb.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+        "dalec_frontend" = "target:frontend"
+    }
+    target = "jammy/testing/container"
+    tags = ["local/dalec/spec:jammy"]
+}
+
 # Run linters
 # Note: CI is using the github actions golangci-lint action which automatically sets up caching for us rather than using this bake target
 # If you change this, please also change the github action
@@ -231,4 +243,3 @@ target "frontend-ci-full" {
     inherits = ["frontend-ci"]
     platforms = ["linux/amd64", "linux/arm64"]
 }
-
