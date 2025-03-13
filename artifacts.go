@@ -4,6 +4,12 @@ import (
 	"io/fs"
 	"maps"
 	"path/filepath"
+
+	"github.com/pkg/errors"
+)
+
+var (
+	errMissingLicense = errors.New("missing required license in artifacts")
 )
 
 // Artifacts describes all the artifacts to include in the package.
