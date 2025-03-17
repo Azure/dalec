@@ -154,3 +154,29 @@ func GetBaseImage(sOpt dalec.SourceOpts, ref string) llb.State {
 		return llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraint(c)), nil
 	})
 }
+
+// WithDefaultPlatform is a helper function to set a default platform for a build
+// if the client does not provide one.
+func WithDefaultPlatform(platform ocispecs.Platform, build gwclient.BuildFunc) gwclient.BuildFunc {
+	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		if client.BuildOpts().Opts["platform"] != "" {
+			return build(ctx, client)
+		}
+		client = &clientWithPlatform{
+			Client:   client,
+			platform: &platform,
+		}
+		return build(ctx, client)
+	}
+}
+
+type clientWithPlatform struct {
+	gwclient.Client
+	platform *ocispecs.Platform
+}
+
+func (c *clientWithPlatform) BuildOpts() gwclient.BuildOpts {
+	opts := c.Client.BuildOpts()
+	opts.Opts["platform"] = platforms.Format(*c.platform)
+	return opts
+}

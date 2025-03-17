@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/targets/linux/deb/distro"
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -47,12 +48,15 @@ var (
 func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	var mux frontend.BuildMux
 
-	mux.Add("zip", handleZip, &bktargets.Target{
+	defaultPlatform := platforms.DefaultSpec()
+	defaultPlatform.OS = "windows"
+
+	mux.Add("zip", frontend.WithDefaultPlatform(defaultPlatform, handleZip), &bktargets.Target{
 		Name:        "zip",
 		Description: "Builds binaries combined into a zip file",
 	})
 
-	mux.Add("container", handleContainer, &bktargets.Target{
+	mux.Add("container", frontend.WithDefaultPlatform(defaultPlatform, handleContainer), &bktargets.Target{
 		Name:        "container",
 		Description: "Builds binaries and installs them into a Windows base image",
 		Default:     true,
