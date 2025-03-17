@@ -115,6 +115,12 @@ deb [trusted=yes] copy:/opt/repo/ /
 		}
 		testPinnedBuildDeps(ctx, t, testConfig)
 	})
+
+	t.Run("default platform", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testWindowsDefaultPlatform(ctx, t)
+	})
 }
 
 // Windows is only supported on amd64 (ie there is no arm64 windows image currently)
@@ -654,5 +660,25 @@ func testCustomWindowscrossWorker(ctx context.Context, t *testing.T, targetCfg t
 		// TODO: we should have a test to make sure this also works with source policies.
 		// Unfortunately it seems like there is an issue with the gateway client passing
 		// in source policies.
+	})
+}
+
+// Make sure that when no platform is specified, that TARGETOS is set to "windows".
+func testWindowsDefaultPlatform(ctx context.Context, t *testing.T) {
+	spec := newSimpleSpec()
+
+	spec.Args = make(map[string]string)
+	spec.Args["TARGETOS"] = ""
+	spec.Build.Env = make(map[string]string)
+	spec.Build.Env["TARGETOS"] = "${TARGETOS}"
+	spec.Build.Steps = []dalec.BuildStep{
+		{
+			Command: "echo $TARGETOS | grep windows",
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"))
+		solveT(ctx, t, gwc, sr)
 	})
 }
