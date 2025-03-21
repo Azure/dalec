@@ -39,7 +39,7 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 			return nil, nil, fmt.Errorf("unable to build binaries: %w", err)
 		}
 
-		st := getZipLLB(worker, spec.Name, bin, pg)
+		st := getZipLLB(worker, platform, spec, bin, pg)
 
 		def, err := st.Marshal(ctx)
 		if err != nil {
@@ -137,8 +137,9 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
 }
 
-func getZipLLB(worker llb.State, name string, artifacts llb.State, opts ...llb.ConstraintsOpt) llb.State {
-	outName := filepath.Join(outputDir, name+".zip")
+func getZipLLB(worker llb.State, platform *ocispecs.Platform, spec *dalec.Spec, artifacts llb.State, opts ...llb.ConstraintsOpt) llb.State {
+	fileName := fmt.Sprintf("%s_%s-%s_%s.zip", spec.Name, spec.Version, spec.Revision, platform.Architecture)
+	outName := filepath.Join(outputDir, fileName)
 	zipped := worker.Run(
 		dalec.ShArgs("zip "+outName+" *"),
 		llb.Dir("/tmp/artifacts"),
