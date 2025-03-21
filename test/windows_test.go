@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -120,6 +122,12 @@ deb [trusted=yes] copy:/opt/repo/ /
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 		testWindowsDefaultPlatform(ctx, t)
+	})
+
+	t.Run("test zip filename", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testWindowsZipFilename(ctx, t)
 	})
 }
 
@@ -680,5 +688,37 @@ func testWindowsDefaultPlatform(ctx context.Context, t *testing.T) {
 	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"))
 		solveT(ctx, t, gwc, sr)
+	})
+}
+
+func testWindowsZipFilename(ctx context.Context, t *testing.T) {
+	spec := newSimpleSpec()
+	spec.Build.Steps = []dalec.BuildStep{
+		{
+			Command: "echo \"hello world\" >> output.ps1",
+		},
+	}
+	spec.Artifacts.Binaries = map[string]dalec.ArtifactConfig{
+		"output.ps1": {},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget("windowscross/zip"))
+		res := solveT(ctx, t, gwc, sr)
+		ref, err := res.SingleRef()
+		if err != nil {
+			t.Fatalf("shouldn't get an error wile calling SingleRef()")
+		}
+		filename := fmt.Sprintf("/%s_%s-%s_%s.zip", spec.Name, spec.Version, spec.Revision, runtime.GOARCH)
+		stat, err := ref.StatFile(ctx, gwclient.StatRequest{Path: filename})
+		if err != nil {
+			t.Fatalf("should have gotten a file: %s: %s", filename, err)
+		}
+		if stat == nil {
+			t.Fatalf("should have gotten stat when getting %s", filename)
+		}
+		if stat.Path != filepath.Base(filename) {
+			t.Fatalf("expected paths to match: %s - %s", stat.Path, filename)
+		}
 	})
 }
