@@ -2178,21 +2178,28 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 				},
 				{
 					Name: "Test that test mounts work",
+					Files: map[string]dalec.FileCheckOutput{
+						"/tmp/step0": {},
+						"/tmp/step1": {},
+						"/tmp/step2": {},
+						"/tmp/step3": {},
+						"/tmp/step4": {},
+					},
 					Steps: []dalec.TestStep{
 						{
-							Command: "/bin/sh -c 'test -f /mount0'",
+							Command: "/bin/sh -ec 'test -f /mount0 > /tmp/step0'",
 						},
 						{
-							Command: "/bin/sh -c 'test -d /mount1'",
+							Command: "/bin/sh -ec 'test -d /mount1 > /tmp/step1'",
 						},
 						{
-							Command: `/bin/sh -c 'grep "some file" /mount1/some_file'`,
+							Command: `/bin/sh -ec 'grep "some file" /mount1/some_file > /tmp/step2'`,
 						},
 						{
-							Command: "/bin/sh -c 'test -f /mount2'",
+							Command: "/bin/sh -ec 'test -f /mount2 > /tmp/step3'",
 						},
 						{
-							Command: `/bin/sh -c 'grep "some other file" /mount2'`,
+							Command: `/bin/sh -ec 'grep "some other file" /mount2 > /tmp/step4'`,
 						},
 					},
 					Mounts: []dalec.SourceMount{
