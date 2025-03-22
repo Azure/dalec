@@ -1,0 +1,78 @@
+# syntax=local/dalec/frontend:latest
+
+args:
+  VERSION: 1.1.0
+  COMMIT: 32022caedd6a177a7717aa8680cbe179e1045935
+  REVISION: 6
+
+name: azcu-publish-test-deb
+packager: Azure Container Upstream
+vendor: Microsoft Corporation
+license: Apache-2.0
+website: https://github.com/golang/example
+description: Fake project to use when testing workflows
+x-build-extensions:
+  image-name: hello-world-deb
+  repository: testing
+  build-targets:
+    - jammy/testing/container
+    - jammy/deb
+    - bookworm/deb
+
+version: ${VERSION}
+revision: ${REVISION}
+
+sources:
+  example:
+    generate:
+      - gomod: {}
+    git:
+      url: https://github.com/golang/example.git
+      commit: ${COMMIT}
+      keepGitDir: true
+  extra-example:
+    generate:
+      - gomod: {}
+    git:
+      url: https://github.com/golang/example.git
+      commit: ${COMMIT}
+      keepGitDir: true
+
+build:
+  env:
+    VERSION: ${VERSION}
+    GOPROXY: direct
+    #GOEXPERIMENT: systemcrypto #disabled due to lack of msft go for now
+    CGO_ENABLED: "1"
+  steps:
+    - command: |
+        set -e
+        export GOMODCACHE="$(pwd)/gomods"
+
+        cd example/hello
+        go build -o bin/hello .
+        tree
+        pwd
+
+artifacts:
+  binaries:
+    example/hello/bin/hello: {}
+
+tests:
+  - name: Check files
+    files:
+      /usr/bin/hello:
+        permissions: 0755
+
+image:
+  entrypoint: /usr/bin/hello
+
+dependencies:
+  build:
+    golang:
+    git:
+    make:
+    gcc:
+    tree:
+  runtime:
+    libssl-dev:
