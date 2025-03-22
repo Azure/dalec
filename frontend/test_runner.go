@@ -107,10 +107,11 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 
 		opts = append(opts, pg)
 		if len(test.Steps) > 0 {
-			exec := ctrWithDeps
-			var worker llb.State
 			var needsStdioMount bool
 			ios := map[int]llb.State{}
+
+			worker := ctrWithDeps
+
 			for i, step := range test.Steps {
 				var stepOpts []llb.RunOption
 				id := identity.NewID()
@@ -156,12 +157,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 				}))
 				stepOpts = append(opts, stepOpts...)
 
-				var est llb.ExecState
-				if i == 0 {
-					est = exec.Run(stepOpts...)
-				} else {
-					est = exec.Run(stepOpts...)
-				}
+				est := worker.Run(stepOpts...)
 				if needsStdioMount {
 					ioSt = est.AddMount(filepath.Join("/tmp", id), ioSt)
 					ios[i] = ioSt
