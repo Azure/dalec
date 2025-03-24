@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/targets/linux/rpm/azlinux"
 	"github.com/moby/buildkit/client/llb"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -42,7 +44,7 @@ func TestMariner2(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, testLinuxConfig{
+	cfg := testLinuxConfig{
 		Target: targetConfig{
 			Package:   "mariner2/rpm",
 			Container: "mariner2/container",
@@ -71,14 +73,17 @@ func TestMariner2(t *testing.T) {
 			ID:        "mariner",
 			VersionID: "2.0",
 		},
-	})
+	}
+
+	testLinuxDistro(ctx, t, cfg)
+	testAzlinuxExtra(ctx, t, cfg)
 }
 
 func TestAzlinux3(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, testLinuxConfig{
+	cfg := testLinuxConfig{
 		Target: targetConfig{
 			Package:               "azlinux3/rpm",
 			Container:             "azlinux3/container",
@@ -104,6 +109,30 @@ func TestAzlinux3(t *testing.T) {
 			ID:        "azurelinux",
 			VersionID: "3.0",
 		},
+	}
+	testLinuxDistro(ctx, t, cfg)
+	testAzlinuxExtra(ctx, t, cfg)
+}
+
+func testAzlinuxExtra(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	t.Run("ca-certs override", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testAzlinuxCaCertsOverride(ctx, t, cfg.Target)
+	})
+}
+
+func testAzlinuxCaCertsOverride(ctx context.Context, t *testing.T, target targetConfig) {
+	spec := newSimpleSpec()
+	spec.Dependencies = &dalec.PackageDependencies{
+		Runtime: map[string]dalec.PackageConstraints{
+			"ca-certificates": {},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(target.Container))
+		solveT(ctx, t, client, req)
 	})
 }
 
