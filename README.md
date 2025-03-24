@@ -11,7 +11,7 @@ Our goal is to provide a secure and reproducible way to build packages and conta
 
 - 🐳 No additional tools are needed except for [Docker](https://docs.docker.com/engine/install/)!
 - 🚀 Easy to use declarative configuration that provides reproducible builds
-- 📦 Build packages and/or containers for a number of different [targets](https://github.com/azure.github.io/dalec/targets) such as Ubuntu, Azure Linux and Windows (cross compilation only)
+- 📦 Build packages and/or containers for a number of different [targets](https://azure.github.io/dalec/targets) such as Ubuntu, Azure Linux and Windows (cross compilation only)
 - 🔌 Pluggable support for other operating systems
 - 🤏 Minimal image size, resulting in less vulnerabilities and smaller attack surface
 - 🪟 Support for Windows containers
