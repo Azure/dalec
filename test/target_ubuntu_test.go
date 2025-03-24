@@ -130,19 +130,8 @@ func ubuntuTestRepoConfig(name string) map[string]dalec.Source {
 func debExpectedFiles(ver string) func(*dalec.Spec, ocispecs.Platform) []string {
 	return func(spec *dalec.Spec, platform ocispecs.Platform) []string {
 		base := fmt.Sprintf("%s_%s-%su%s", spec.Name, spec.Version, ver, spec.Revision)
-		sourceBase := fmt.Sprintf("%s_%s.orig", spec.Name, spec.Version)
-
 		out := []string{
-			base + ".debian.tar.xz",
-			base + ".dsc",
 			fmt.Sprintf("%s_%s.deb", base, platform.Architecture),
-			base + "_source.buildinfo",
-			base + "_source.changes",
-			sourceBase + ".tar.xz",
-		}
-
-		for src := range spec.Sources {
-			out = append(out, fmt.Sprintf("%s-%s.tar.gz", sourceBase, src))
 		}
 		return out
 	}

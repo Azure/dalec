@@ -51,7 +51,23 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 	if err != nil {
 		return llb.Scratch(), err
 	}
-	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt)
+
+	// Filter out everything except the .deb files
+	filtered := llb.Scratch().File(
+		llb.Copy(st, "/", "/",
+			dalec.WithIncludes([]string{"**/*.deb"}),
+		),
+	)
+
+	signed, err := frontend.MaybeSign(ctx, client, filtered, spec, targetKey, sOpt)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	// Merge the signed state with the original state
+	// The signed files should overwrite the unsigned ones.
+	st = st.File(llb.Copy(signed, "/", "/"))
+	return st, nil
 }
 
 func noOpStateOpt(in llb.State) llb.State {
