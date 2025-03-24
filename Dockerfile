@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/oss/go/microsoft/golang:1.23@sha256:40eca8471660cee37f90c16dadc50dd216d14e1f13d8f7787480bb496047afca AS go
+FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/oss/go/microsoft/golang:1.23@sha256:9d1e6e1665111c96cf579c6a68c9a119c72467fe7218e69bdb1d50e7d66f9be5 AS go
 
 FROM go  AS frontend-build
 WORKDIR /build
