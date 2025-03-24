@@ -11,9 +11,10 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 )
 
-func (cfg *Config) BuildContainer(_ gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, rpmDir llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, rpmDir llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
 	const workPath = "/tmp/rootfs"
 
@@ -21,6 +22,8 @@ func (cfg *Config) BuildContainer(_ gwclient.Client, worker llb.State, sOpt dale
 	if err != nil {
 		return llb.Scratch(), err
 	}
+
+	skipBase := bi != nil
 	rootfs, err := bi.ToState(sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
@@ -31,12 +34,9 @@ func (cfg *Config) BuildContainer(_ gwclient.Client, worker llb.State, sOpt dale
 	if err != nil {
 		return llb.Scratch(), err
 	}
-
 	importRepos := []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
 
 	rpmMountDir := "/tmp/rpms"
-	pkgs := cfg.BasePackages
-	pkgs = append(pkgs, filepath.Join(rpmMountDir, "**/*.rpm"))
 
 	installOpts := []DnfInstallOpt{DnfAtRoot(workPath)}
 	installOpts = append(installOpts, importRepos...)
@@ -44,9 +44,43 @@ func (cfg *Config) BuildContainer(_ gwclient.Client, worker llb.State, sOpt dale
 		DnfNoGPGCheck,
 		dnfInstallWithConstraints(opts)}...)
 
+	baseMountPath := rpmMountDir + "-base"
+	basePkgs := llb.Scratch().File(llb.Mkdir("/RPMS", 0o755))
+	pkgs := []string{
+		filepath.Join(rpmMountDir, "**/*.rpm"),
+	}
+
+	if !skipBase && len(cfg.BasePackages) > 0 {
+		opts := append(opts, dalec.ProgressGroup("Create base virtual package"))
+		baseSpec := &dalec.Spec{
+			Name:        "dalec-base",
+			Version:     "0.0.1",
+			License:     "Apache-2.0",
+			Revision:    "1",
+			Description: "Virtual package for including base packages",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: func() map[string]dalec.PackageConstraints {
+					out := make(map[string]dalec.PackageConstraints, len(cfg.BasePackages))
+					for _, pkg := range cfg.BasePackages {
+						out[pkg] = dalec.PackageConstraints{}
+					}
+					return out
+				}(),
+			},
+		}
+
+		basePkgs, err = cfg.BuildPkg(ctx, client, worker, sOpt, baseSpec, targetKey, opts...)
+		if err != nil {
+			return llb.Scratch(), errors.Wrap(err, "error building base runtime deps package")
+		}
+
+		pkgs = append(pkgs, filepath.Join(baseMountPath, "**/*.rpm"))
+	}
+
 	rootfs = worker.Run(
 		cfg.Install(pkgs, installOpts...),
 		llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
+		llb.AddMount(baseMountPath, basePkgs, llb.SourcePath("/RPMS")),
 		dalec.WithConstraints(opts...),
 	).AddMount(workPath, rootfs)
 
@@ -79,14 +113,14 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 		}
 
 		var rpmDir = llb.Scratch()
+
 		if len(deps) > 0 {
 			withDownloads := worker.Run(dalec.ShArgs("set -ex; mkdir -p /tmp/rpms/RPMS/$(uname -m)")).
 				Run(cfg.Install(spec.GetRuntimeDeps(targetKey),
 					DnfDownloadAllDeps("/tmp/rpms/RPMS/$(uname -m)"))).Root()
 			rpmDir = llb.Scratch().File(llb.Copy(withDownloads, "/tmp/rpms", "/", dalec.WithDirContentsOnly()))
 		}
-
-		ctr, err := cfg.BuildContainer(client, worker, sOpt, spec, targetKey, rpmDir, pg)
+		ctr, err := cfg.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, rpmDir, pg)
 		if err != nil {
 			return nil, nil, err
 		}

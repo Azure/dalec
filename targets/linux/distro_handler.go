@@ -35,7 +35,7 @@ type DistroConfig interface {
 
 	// BuildContainer consumes an llb.State containing the built package from the
 	// given *dalec.Spec, and installs it in a target container.
-	BuildContainer(client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts,
+	BuildContainer(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts,
 		spec *dalec.Spec, targetKey string,
 		pkgState llb.State, opts ...llb.ConstraintsOpt) (llb.State, error)
 
@@ -106,7 +106,7 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			ctr, err := c.BuildContainer(client, worker, sOpt, spec, targetKey, deb)
+			ctr, err := c.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, deb)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -161,7 +161,7 @@ func HandlePackage(cfg DistroConfig) gwclient.BuildFunc {
 				return ref, nil, err
 			}
 
-			ctr, err := cfg.BuildContainer(client, worker, sOpt, spec, targetKey, pkgSt)
+			ctr, err := cfg.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, pkgSt)
 			if err != nil {
 				return ref, nil, err
 			}

@@ -1,6 +1,7 @@
 package distro
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Azure/dalec"
@@ -8,7 +9,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
-func (c *Config) BuildContainer(client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, debSt llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, debSt llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	bi, err := spec.GetSingleBase(targetKey)
 	if err != nil {
 		return llb.Scratch(), err

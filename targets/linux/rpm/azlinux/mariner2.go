@@ -22,7 +22,7 @@ var Mariner2Config = &distro.Config{
 
 	ReleaseVer:         "2.0",
 	BuilderPackages:    builderPackages,
-	BasePackages:       []string{"distroless-packages-minimal", "prebuilt-ca-certificates"},
+	BasePackages:       []string{"distroless-packages-minimal", "(prebuilt-ca-certificates or ca-certificates)"},
 	RepoPlatformConfig: &defaultAzlinuxRepoPlatform,
 	InstallFunc:        distro.TdnfInstall,
 }
