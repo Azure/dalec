@@ -24,7 +24,7 @@ type Config struct {
 	BuilderPackages []string
 
 	// Dependencies to install in base image
-	BasePackages       []string
+	BasePackages       []dalec.Spec
 	RepoPlatformConfig *dalec.RepoPlatformConfig
 
 	DefaultOutputImage string

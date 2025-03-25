@@ -24,7 +24,7 @@ var ConfigV8 = &distro.Config{
 
 	ReleaseVer:         "8",
 	BuilderPackages:    builderPackages,
-	BasePackages:       []string{"almalinux-release", "tzdata"},
+	BasePackages:       basePackages(v8TargetKey),
 	RepoPlatformConfig: &defaultPlatformConfig,
 	InstallFunc:        distro.DnfInstall,
 }

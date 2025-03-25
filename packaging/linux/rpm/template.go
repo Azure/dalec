@@ -35,6 +35,7 @@ BuildArch: noarch
 {{- .Provides -}}
 {{- .Replaces -}}
 {{- .Requires -}}
+{{- .Recommends -}}
 
 %description
 {{.Description}}
@@ -184,6 +185,26 @@ func (w *specWrapper) Requires() fmt.Stringer {
 		writeDep(b, "Requires", name, constraints)
 	}
 
+	b.WriteString("\n")
+	return b
+}
+
+func (w *specWrapper) Recommends() fmt.Stringer {
+	b := &strings.Builder{}
+	deps := w.GetPackageDeps(w.Target)
+	if deps == nil {
+		return b
+	}
+
+	if len(deps.Recommends) == 0 {
+		return b
+	}
+
+	keys := dalec.SortMapKeys(deps.Recommends)
+	for _, name := range keys {
+		constraints := deps.Recommends[name]
+		writeDep(b, "Recommends", name, constraints)
+	}
 	b.WriteString("\n")
 	return b
 }

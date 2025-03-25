@@ -52,28 +52,17 @@ func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, w
 
 	if !skipBase && len(cfg.BasePackages) > 0 {
 		opts := append(opts, dalec.ProgressGroup("Create base virtual package"))
-		baseSpec := &dalec.Spec{
-			Name:        "dalec-base",
-			Version:     "0.0.1",
-			License:     "Apache-2.0",
-			Revision:    "1",
-			Description: "Virtual package for including base packages",
-			Dependencies: &dalec.PackageDependencies{
-				Runtime: func() map[string]dalec.PackageConstraints {
-					out := make(map[string]dalec.PackageConstraints, len(cfg.BasePackages))
-					for _, pkg := range cfg.BasePackages {
-						out[pkg] = dalec.PackageConstraints{}
-					}
-					return out
-				}(),
-			},
+
+		var basePkgStates []llb.State
+		for _, spec := range cfg.BasePackages {
+			pkg, err := cfg.BuildPkg(ctx, client, worker, sOpt, &spec, targetKey, opts...)
+			if err != nil {
+				return llb.Scratch(), errors.Wrap(err, "error building base runtime deps package")
+			}
+			basePkgStates = append(basePkgStates, pkg)
 		}
 
-		basePkgs, err = cfg.BuildPkg(ctx, client, worker, sOpt, baseSpec, targetKey, opts...)
-		if err != nil {
-			return llb.Scratch(), errors.Wrap(err, "error building base runtime deps package")
-		}
-
+		basePkgs = dalec.MergeAtPath(basePkgs, basePkgStates, "/")
 		pkgs = append(pkgs, filepath.Join(baseMountPath, "**/*.rpm"))
 	}
 

@@ -25,7 +25,7 @@ var Azlinux3Config = &distro.Config{
 
 	ReleaseVer:         "3.0",
 	BuilderPackages:    builderPackages,
-	BasePackages:       []string{"distroless-packages-minimal", "(prebuilt-ca-certificates or ca-certificates)"},
+	BasePackages:       basePackages(AzLinux3TargetKey),
 	RepoPlatformConfig: &defaultAzlinuxRepoPlatform,
 	InstallFunc:        distro.TdnfInstall,
 }
