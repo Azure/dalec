@@ -188,46 +188,6 @@ func DnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Run
 	return dalec.WithRunOptions(runOpts...)
 }
 
-type buildDepsInstallerFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.RunOption, error)
-
-func (cfg *Config) installBuildDepsPackage(worker llb.State, target string, packageName string, deps map[string]dalec.PackageConstraints, installOpts ...DnfInstallOpt) buildDepsInstallerFunc {
-	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
-	depsOnly := dalec.Spec{
-		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
-		Description: "Provides build dependencies for mariner2 and azlinux3",
-		Version:     "1.0",
-		License:     "Apache 2.0",
-		Revision:    "1",
-		Dependencies: &dalec.PackageDependencies{
-			Runtime: deps,
-		},
-	}
-
-	return func(ctx context.Context, client gwclient.Client, sOpt dalec.SourceOpts) (llb.RunOption, error) {
-		pg := dalec.ProgressGroup("Building container for build dependencies")
-
-		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := cfg.BuildPkg(ctx, client, worker, sOpt, &depsOnly, target, pg)
-		if err != nil {
-			return nil, err
-		}
-
-		var opts []llb.ConstraintsOpt
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-
-		rpmMountDir := "/tmp/rpms"
-
-		installOpts = append([]DnfInstallOpt{
-			DnfNoGPGCheck,
-			DnfWithMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
-			dnfInstallWithConstraints(opts),
-		}, installOpts...)
-
-		// install the built RPMs into the worker itself
-		return cfg.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
-	}
-}
-
 func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	deps := spec.GetBuildDeps(targetKey)
 	if len(deps) == 0 {
@@ -250,13 +210,43 @@ func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client,
 			importRepos := []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
 
 			opts = append(opts, dalec.ProgressGroup("Install build deps"))
-			installOpt, err := cfg.installBuildDepsPackage(s, targetKey, spec.Name, deps,
-				append(importRepos, dnfInstallWithConstraints(opts))...)(ctx, client, sOpt)
+
+			// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
+			depsOnly := dalec.Spec{
+				Name:        fmt.Sprintf("%s-build-dependencies", spec.Name),
+				Description: "Provides build dependencies for mariner2 and azlinux3",
+				Version:     "1.0",
+				License:     "Apache 2.0",
+				Revision:    "1",
+				Dependencies: &dalec.PackageDependencies{
+					Runtime: deps,
+				},
+			}
+
+			pg := dalec.ProgressGroup("Building container for build dependencies")
+
+			// create an SRPM with just the build dependencies, using our same base worker
+			srpmDir, err := cfg.BuildPkg(ctx, client, s, sOpt, &depsOnly, targetKey, pg)
 			if err != nil {
 				return llb.Scratch(), err
 			}
 
-			return s.Run(installOpt, dalec.WithConstraints(opts...)).Root(), nil
+			srpmMountDir := "/tmp/srpms"
+
+			installOpts := append([]DnfInstallOpt{
+				DnfWithMounts(llb.AddMount(srpmMountDir, srpmDir, llb.SourcePath("/SRPMS"))),
+			}, importRepos...)
+
+			// install the build dependencies from the generated SRPM
+			cmdArgs := fmt.Sprintf("dnf install -y --builddeps %s/*.rpm", srpmMountDir)
+			runOpts := []llb.RunOption{dalec.ShArgs(cmdArgs)}
+			dnfCfg := &dnfInstallConfig{}
+			for _, opt := range installOpts {
+				opt(dnfCfg)
+			}
+			runOpts = append(runOpts, dnfCfg.mounts...)
+
+			return s.Run(dalec.WithRunOptions(runOpts...), dalec.WithConstraints(opts...)).Root(), nil
 		})
 	}
 }
