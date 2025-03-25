@@ -112,13 +112,20 @@ func TestAzlinux3(t *testing.T) {
 	}
 	testLinuxDistro(ctx, t, cfg)
 	testAzlinuxExtra(ctx, t, cfg)
-}
 
-func testAzlinuxExtra(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 	t.Run("ca-certs override", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
 		testAzlinuxCaCertsOverride(ctx, t, cfg.Target)
+	})
+}
+
+func testAzlinuxExtra(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+
+	t.Run("base deps", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testAzlinuxBaseDeps(ctx, t, cfg.Target)
 	})
 }
 
@@ -171,4 +178,31 @@ func signRepoAzLinux(gpgKey llb.State) llb.StateOption {
 				llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
 			).Root()
 	}
+}
+
+func testAzlinuxBaseDeps(ctx context.Context, t *testing.T, cfg targetConfig) {
+	spec := newSimpleSpec()
+	spec.Tests = []*dalec.TestSpec{
+		{
+			Name: "validate no shell",
+			Files: map[string]dalec.FileCheckOutput{
+				"/bin/sh/": {
+					NotExist: true,
+				},
+				"/bin/bash/": {
+					NotExist: true,
+				},
+				"/etc/pki": {
+					IsDir: true,
+				},
+				"/etc/localtime": {},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Container))
+		solveT(ctx, t, client, req)
+	})
+
 }

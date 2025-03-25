@@ -24,7 +24,7 @@ var ConfigV9 = &distro.Config{
 
 	ReleaseVer:         "9",
 	BuilderPackages:    append(builderPackages, "systemd-rpm-macros"),
-	BasePackages:       []string{"rocky-release", "tzdata"},
+	BasePackages:       basePackages(v9TargetKey),
 	RepoPlatformConfig: &defaultPlatformConfig,
 	InstallFunc:        distro.DnfInstall,
 }
