@@ -634,3 +634,12 @@ func BaseImageConfig(platform *ocispecs.Platform) *DockerImageSpec {
 
 	return img
 }
+
+// Platform returns a [llb.ConstraintsOpt] that sets the platform to the provided platform
+// If the platform is nil, the [llb.ConstraintOpt] is a no-op.
+func Platform(platform *ocispecs.Platform) llb.ConstraintsOpt {
+	if platform == nil {
+		return constraintsOptFunc(func(c *llb.Constraints) {})
+	}
+	return llb.Platform(*platform)
+}

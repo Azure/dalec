@@ -14,6 +14,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -31,7 +32,7 @@ const (
 )
 
 // Run tests runs the tests defined in the spec against the given target container.
-func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref gwclient.Reference, withTestDeps llb.StateOption, target string) error {
+func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref gwclient.Reference, withTestDeps llb.StateOption, target string, platform *ocispecs.Platform) error {
 	if skipVar := client.BuildOpts().Opts["build-arg:"+"DALEC_SKIP_TESTS"]; skipVar != "" {
 		skip, err := strconv.ParseBool(skipVar)
 		if err != nil {
@@ -67,7 +68,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		return err
 	}
 
-	sOpt, err := SourceOptFromClient(ctx, client)
+	sOpt, err := SourceOptFromClient(ctx, client, platform)
 	if err != nil {
 		return err
 	}
@@ -76,6 +77,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		st     llb.State
 		t      *dalec.TestSpec
 		stdios map[int]llb.State
+		opts   []llb.ConstraintsOpt
 	}
 
 	ctrWithDeps := ctr.With(withTestDeps)
@@ -93,7 +95,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		pg := llb.ProgressGroup(identity.NewID(), "Test: "+path.Join(target, test.Name), false)
 
 		for _, sm := range test.Mounts {
-			st, err := sm.Spec.AsMount(internalMountSourceName, sOpt, pg)
+			st, err := sm.Spec.AsMount(internalMountSourceName, sOpt, pg, dalec.Platform(platform))
 			if err != nil {
 				return err
 			}
@@ -119,18 +121,18 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 				if step.Stdin != "" {
 					needsStdioMount = true
 					stepOpts = append(stepOpts, llb.AddEnv("STDIN_FILE", filepath.Join("/tmp", id, "stdin")))
-					ioSt = ioSt.File(llb.Mkfile("stdin", 0444, []byte(step.Stdin)))
+					ioSt = ioSt.File(llb.Mkfile("stdin", 0444, []byte(step.Stdin)), pg)
 				}
 				if !step.Stdout.IsEmpty() {
 					needsStdioMount = true
 					stepOpts = append(stepOpts, llb.AddEnv("STDOUT_FILE", path.Join("/tmp", id, "stdout")))
-					ioSt = ioSt.File(llb.Mkfile("stdout", 0664, nil))
+					ioSt = ioSt.File(llb.Mkfile("stdout", 0664, nil), pg)
 				}
 
 				if !step.Stderr.IsEmpty() {
 					needsStdioMount = true
 					stepOpts = append(stepOpts, llb.AddEnv("STDERR_FILE", path.Join("/tmp", id, "stderr")))
-					ioSt = ioSt.File(llb.Mkfile("stderr", 0664, nil))
+					ioSt = ioSt.File(llb.Mkfile("stderr", 0664, nil), pg)
 				}
 
 				cmd, err := shlex.Split(step.Command)
@@ -165,9 +167,9 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 				worker = est.Root()
 			}
 
-			runs = append(runs, testPair{st: worker, t: test, stdios: ios})
+			runs = append(runs, testPair{st: worker, t: test, stdios: ios, opts: []llb.ConstraintsOpt{pg, dalec.Platform(platform)}})
 		} else {
-			runs = append(runs, testPair{st: base, t: test})
+			runs = append(runs, testPair{st: base, t: test, opts: []llb.ConstraintsOpt{pg, dalec.Platform(platform)}})
 		}
 	}
 
@@ -177,7 +179,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		pair := pair
 		wg.Add(1)
 		go func() {
-			if err := runTest(ctx, pair.t, pair.st, pair.stdios, client); err != nil {
+			if err := runTest(ctx, pair.t, pair.st, pair.stdios, client, pair.opts...); err != nil {
 				errs.Append(errors.Wrap(err, "FAILED: "+path.Join(target, pair.t.Name)))
 			}
 			wg.Done()
@@ -193,8 +195,8 @@ type frontendClient interface {
 	CurrentFrontend() (*llb.State, error)
 }
 
-func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]llb.State, client gwclient.Client) error {
-	def, err := st.Marshal(ctx)
+func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) error {
+	def, err := st.Marshal(ctx, opts...)
 	if err != nil {
 		return err
 	}
@@ -245,7 +247,7 @@ func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]l
 	}
 
 	for i, st := range ios {
-		def, err := st.Marshal(ctx)
+		def, err := st.Marshal(ctx, opts...)
 		if err != nil {
 			outErr = stderrors.Join(errors.Wrap(err, "failed to marshal stdio state"))
 			continue

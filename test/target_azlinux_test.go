@@ -73,6 +73,11 @@ func TestMariner2(t *testing.T) {
 			ID:        "mariner",
 			VersionID: "2.0",
 		},
+		Platforms: []ocispecs.Platform{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "arm64"},
+		},
+		PackageOutputPath: rpmTargetOutputPath("cm2"),
 	}
 
 	testLinuxDistro(ctx, t, cfg)
@@ -109,6 +114,11 @@ func TestAzlinux3(t *testing.T) {
 			ID:        "azurelinux",
 			VersionID: "3.0",
 		},
+		Platforms: []ocispecs.Platform{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "arm64"},
+		},
+		PackageOutputPath: rpmTargetOutputPath("azl3"),
 	}
 	testLinuxDistro(ctx, t, cfg)
 	testAzlinuxExtra(ctx, t, cfg)
