@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Azure/dalec"
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -83,6 +84,9 @@ type testLinuxConfig struct {
 	Release OSRelease
 
 	SkipStripTest bool
+
+	Platforms         []ocispecs.Platform
+	PackageOutputPath func(spec *dalec.Spec, platform ocispecs.Platform) string
 }
 
 type OSRelease struct {
@@ -96,6 +100,33 @@ func (cfg *testLinuxConfig) GetPackage(name string) string {
 		return updated
 	}
 	return name
+}
+
+func rpmTargetOutputPath(id string) func(spec *dalec.Spec, platform ocispecs.Platform) string {
+	return func(spec *dalec.Spec, platform ocispecs.Platform) string {
+		var arch string
+		switch platform.Architecture {
+		case "amd64":
+			arch = "x86_64"
+		case "arm64":
+			arch = "aarch64"
+		case "arm":
+			// this is not perfect, but all we really support in our tests for now, so its fine.
+			arch = "armv7l"
+		}
+		return fmt.Sprintf("/RPMS/%s/%s-%s-%s.%s.%s.rpm", arch, spec.Name, spec.Version, spec.Revision, id, arch)
+	}
+}
+
+func debTargetOutputPath(id string) func(spec *dalec.Spec, platform ocispecs.Platform) string {
+	return func(spec *dalec.Spec, platform ocispecs.Platform) string {
+		arch := platform.Architecture
+		if arch == "arm" {
+			// this is not perfect, but all we really support in our tests for now, so its fine.
+			arch = "armhf"
+		}
+		return fmt.Sprintf("%s_%s-%s_%s.deb", spec.Name, spec.Version, id+"u"+spec.Revision, arch)
+	}
 }
 
 func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
@@ -1575,6 +1606,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		testDisableStrip(ctx, t, testConfig)
 	})
+
+	t.Run("cross platform", func(t *testing.T) {
+		t.Parallel()
+		testTargetPlatform(ctx, t, testConfig)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -2445,5 +2481,69 @@ func testDisableStrip(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 			req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
 			solveT(ctx, t, client, req)
 		})
+	})
+}
+
+func testTargetPlatform(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	ctx = startTestSpan(ctx, t)
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		bp := readDefaultPlatform(ctx, t, client)
+
+		var tp ocispecs.Platform
+		for _, p := range cfg.Platforms {
+			if platforms.OnlyStrict(bp).Match(p) {
+				continue
+			}
+
+			tp = p
+
+			if bp.Architecture != "arm64" {
+				break
+			}
+			// On arm64, let's try and build for armv7 to help speed up tests
+			// Also makes sure that building arm on arm64 gives the correct result since this can run natively (usually)
+			if tp.Architecture == "arm" {
+				break
+			}
+		}
+
+		skip.If(t, tp.OS == "", "No other platforms available to test")
+		assert.Assert(t, tp.Architecture != bp.Architecture, "Target and build arches are the same")
+
+		spec := newSimpleSpec()
+		spec.Args = map[string]string{
+			"TARGETARCH": "",
+		}
+
+		spec.Build.Env = map[string]string{
+			"TARGETARCH": "$TARGETARCH",
+		}
+
+		spec.Build.Steps = []dalec.BuildStep{
+			{
+				Command: fmt.Sprintf(`[ "${TARGETARCH}" = "%s" ]`, tp.Architecture),
+			},
+		}
+
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package), withPlatform(tp))
+		res := solveT(ctx, t, client, sr)
+		ref, err := res.SingleRef()
+		assert.NilError(t, err)
+
+		_, err = ref.StatFile(ctx, gwclient.StatRequest{
+			Path: cfg.PackageOutputPath(spec, tp),
+		})
+		assert.NilError(t, err)
+
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container), withPlatform(tp))
+		res = solveT(ctx, t, client, sr)
+		dt, ok := res.Metadata[exptypes.ExporterImageConfigKey]
+		assert.Assert(t, ok, "missing image config in result metadata")
+
+		var img dalec.DockerImageSpec
+		err = json.Unmarshal(dt, &img)
+		assert.NilError(t, err)
+		assert.Assert(t, platforms.OnlyStrict(tp).Match(img.Platform), "platform mismatch, expected %v, got %v", tp, img.Platform)
 	})
 }

@@ -170,20 +170,21 @@ func (cfg *Config) RunTests(ctx context.Context, client gwclient.Client, _ llb.S
 	}
 
 	withTestDeps := cfg.InstallTestDeps(sOpt, targetKey, spec, opts...)
-	err = frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey)
+	err = frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey, sOpt.TargetPlatform)
 	return ref, err
 }
 
 func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		pg := dalec.ProgressGroup(spec.Name)
+		pc := dalec.Platform(platform)
 
-		worker, err := cfg.Worker(sOpt, pg)
+		worker, err := cfg.Worker(sOpt, pg, pc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -201,7 +202,7 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 			return nil, nil, err
 		}
 
-		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg)
+		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg, pc)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building source package")
 		}

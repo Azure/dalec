@@ -6,7 +6,6 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -17,23 +16,18 @@ import (
 // TODO: can this be refactored to share code?
 func (cfg *Config) HandleWorker(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		p := platforms.DefaultSpec()
-		if platform != nil {
-			p = *platform
-		}
-		pOpt := llb.Platform(p)
-
-		st, err := cfg.Worker(sOpt, pOpt)
+		pc := dalec.Platform(platform)
+		st, err := cfg.Worker(sOpt, pc)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		def, err := st.Marshal(ctx)
+		def, err := st.Marshal(ctx, pc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -77,7 +71,7 @@ func (cfg *Config) Worker(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (ll
 		}
 	}
 
-	base := frontend.GetBaseImage(sOpt, cfg.ImageRef).
+	base := frontend.GetBaseImage(sOpt, cfg.ImageRef, opts...).
 		Run(
 			dalec.WithConstraints(opts...),
 			cfg.Install(cfg.BuilderPackages),

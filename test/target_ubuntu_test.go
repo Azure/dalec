@@ -58,6 +58,13 @@ func debLinuxTestConfigFor(targetKey string, cfg *distro.Config, opts ...func(*t
 			TestRepoConfig: ubuntuTestRepoConfig,
 			Constraints:    debConstraintsSymbols,
 		},
+
+		Platforms: []ocispecs.Platform{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "arm64"},
+			{OS: "linux", Architecture: "arm", Variant: "v7"},
+		},
+		PackageOutputPath: debTargetOutputPath(cfg.VersionID),
 	}
 
 	for _, o := range opts {
