@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec/targets/linux/rpm/almalinux"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func TestAlmalinux9(t *testing.T) {
@@ -40,6 +41,7 @@ func TestAlmalinux9(t *testing.T) {
 			ID:        "almalinux",
 			VersionID: "9",
 		},
+		PackageOutputPath: rpmTargetOutputPath("el9"),
 	})
 }
 
@@ -78,5 +80,11 @@ func TestAlmalinux8(t *testing.T) {
 			VersionID: "8",
 		},
 		SkipStripTest: true,
+		Platforms: []ocispecs.Platform{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "arm64"},
+			{OS: "linux", Architecture: "arm", Variant: "v7"},
+		},
+		PackageOutputPath: rpmTargetOutputPath("el8"),
 	})
 }

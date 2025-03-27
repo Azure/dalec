@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec/targets/linux/rpm/rockylinux"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func TestRockylinux9(t *testing.T) {
@@ -78,5 +79,10 @@ func TestRockylinux8(t *testing.T) {
 			VersionID: "8",
 		},
 		SkipStripTest: true,
+		Platforms: []ocispecs.Platform{
+			{OS: "linux", Architecture: "amd64"},
+			{OS: "linux", Architecture: "arm64"},
+			{OS: "linux", Architecture: "arm", Variant: "v7"},
+		},
 	})
 }

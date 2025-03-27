@@ -25,7 +25,7 @@ func (c *Config) Validate(spec *dalec.Spec) error {
 }
 
 func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, targetKey, opts...))
+	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, opts...))
 
 	br, err := rpm.SpecToBuildrootLLB(worker, spec, sOpt, targetKey, opts...)
 	if err != nil {
@@ -61,7 +61,7 @@ func (cfg *Config) RunTests(ctx context.Context, client gwclient.Client, worker 
 	}
 
 	withTestDeps := cfg.InstallTestDeps(worker, sOpt, targetKey, spec, opts...)
-	err = frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey)
+	err = frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey, sOpt.TargetPlatform)
 	return ref, errors.Wrap(err, "TESTS FAILED")
 }
 

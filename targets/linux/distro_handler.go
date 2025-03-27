@@ -85,18 +85,19 @@ func resolveConfig(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec,
 func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 		return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-			sOpt, err := frontend.SourceOptFromClient(ctx, client)
+			sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 			if err != nil {
 				return nil, nil, err
 			}
 
 			pg := dalec.ProgressGroup(spec.Name)
-			worker, err := c.Worker(sOpt, pg)
+			pOpt := dalec.Platform(platform)
+			worker, err := c.Worker(sOpt, pg, pOpt)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			deb, err := c.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, pg)
+			deb, err := c.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, pg, pOpt)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -106,12 +107,12 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			ctr, err := c.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, deb)
+			ctr, err := c.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, deb, pg, pOpt)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			ref, err := c.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, pg)
+			ref, err := c.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, pg, pOpt)
 			return ref, img, err
 		})
 	}
@@ -125,22 +126,23 @@ func HandlePackage(cfg DistroConfig) gwclient.BuildFunc {
 			}
 
 			pg := dalec.ProgressGroup("Building " + targetKey + " package: " + spec.Name)
-			sOpt, err := frontend.SourceOptFromClient(ctx, client)
+			sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			worker, err := cfg.Worker(sOpt, pg)
+			pOpt := dalec.Platform(platform)
+			worker, err := cfg.Worker(sOpt, pg, pOpt)
 			if err != nil {
 				return nil, nil, errors.Wrap(err, "error building worker container")
 			}
 
-			pkgSt, err := cfg.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, pg)
+			pkgSt, err := cfg.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, pg, pOpt)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			def, err := pkgSt.Marshal(ctx, pg)
+			def, err := pkgSt.Marshal(ctx, pOpt)
 			if err != nil {
 				return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 			}
@@ -161,12 +163,12 @@ func HandlePackage(cfg DistroConfig) gwclient.BuildFunc {
 				return ref, nil, err
 			}
 
-			ctr, err := cfg.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, pkgSt)
+			ctr, err := cfg.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, pkgSt, pg, pOpt)
 			if err != nil {
 				return ref, nil, err
 			}
 
-			if ref, err := cfg.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, pg); err != nil {
+			if ref, err := cfg.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, pg, pOpt); err != nil {
 				cfg, _ := BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
 				return ref, cfg, err
 			}

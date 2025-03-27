@@ -61,7 +61,7 @@ func (src *SourceBuild) AsState(name string, sOpt SourceOpts, opts ...llb.Constr
 		st = llb.Scratch()
 	}
 
-	st, err = sOpt.Forward(st, src)
+	st, err = sOpt.Forward(st, src, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}

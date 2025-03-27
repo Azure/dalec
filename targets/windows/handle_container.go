@@ -47,7 +47,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		return nil, fmt.Errorf("multi-platform output is not supported")
 	}
 
-	sOpt := frontend.SourceOptFromUIClient(ctx, client, dc)
+	sOpt := frontend.SourceOptFromUIClient(ctx, client, dc, nil)
 
 	spec, err := frontend.LoadSpec(ctx, dc, nil)
 	if err != nil {

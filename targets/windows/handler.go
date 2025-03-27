@@ -8,7 +8,6 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/targets/linux/deb/distro"
 	"github.com/containerd/platforms"
-	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	bktargets "github.com/moby/buildkit/frontend/subrequests/targets"
@@ -72,17 +71,12 @@ func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 
 func handleWorker(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, nil)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		var opts []llb.ConstraintsOpt
-		if platform != nil {
-			opts = append(opts, llb.Platform(*platform))
-		}
-
-		st, err := distroConfig.Worker(sOpt, opts...)
+		st, err := distroConfig.Worker(sOpt)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -100,9 +94,7 @@ func handleWorker(ctx context.Context, client gwclient.Client) (*gwclient.Result
 			return nil, nil, err
 		}
 
-		_, _, dt, err := client.ResolveImageConfig(ctx, workerImgRef, sourceresolver.Opt{
-			Platform: platform,
-		})
+		_, _, dt, err := client.ResolveImageConfig(ctx, workerImgRef, sourceresolver.Opt{})
 		if err != nil {
 			return nil, nil, err
 		}
