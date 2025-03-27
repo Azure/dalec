@@ -677,9 +677,13 @@ func TarMultiple(work llb.State, srcs map[string]llb.State, dest string, opts ..
 	out := filepath.Join(outBase, filepath.Dir(dest))
 	worker := work.Run(
 		llb.AddMount("/src", llb.Scratch()),
+
 		RunOptFunc(func(ei *llb.ExecInfo) {
 			for key, src := range srcs {
 				llb.AddMount(filepath.Join("/src", key), src, llb.Readonly).SetRunOption(ei)
+			}
+			if len(srcs) == 1 {
+				llb.AddMount(filepath.Join("/src", ".dalec_dummy"), llb.Scratch(), llb.Readonly).SetRunOption(ei)
 			}
 		}),
 		ShArgs("tar -C /src -cvzf /tmp/st ."),
