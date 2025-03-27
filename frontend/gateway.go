@@ -13,6 +13,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/bklog"
 	"github.com/opencontainers/go-digest"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -55,12 +56,12 @@ func getDockerfile(ctx context.Context, client gwclient.Client, build *dalec.Sou
 // ForwarderFromClient creates a [dalec.ForwarderFunc] from a gateway client.
 // This is used for forwarding builds to other frontends in [dalec.Source2LLBGetter]
 func ForwarderFromClient(ctx context.Context, client gwclient.Client) dalec.ForwarderFunc {
-	return func(st llb.State, spec *dalec.SourceBuild) (llb.State, error) {
+	return func(st llb.State, spec *dalec.SourceBuild, opts ...llb.ConstraintsOpt) (llb.State, error) {
 		if spec == nil {
 			spec = &dalec.SourceBuild{}
 		}
 
-		def, err := st.Marshal(ctx)
+		def, err := st.Marshal(ctx, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -101,10 +102,11 @@ func GetBuildArg(client gwclient.Client, k string) (string, bool) {
 	return "", false
 }
 
-func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.Client) dalec.SourceOpts {
+func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.Client, platform *ocispecs.Platform) dalec.SourceOpts {
 	return dalec.SourceOpts{
-		Resolver: c,
-		Forward:  ForwarderFromClient(ctx, c),
+		TargetPlatform: platform,
+		Resolver:       c,
+		Forward:        ForwarderFromClient(ctx, c),
 		GetContext: func(ref string, opts ...llb.LocalOption) (*llb.State, error) {
 			if ref == dockerui.DefaultLocalNameContext {
 				return dc.MainContext(ctx, opts...)
@@ -114,6 +116,7 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 				AsyncLocalOpts: func() []llb.LocalOption {
 					return opts
 				},
+				Platform: platform,
 			})
 			if err != nil {
 				return nil, err
@@ -127,12 +130,12 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 	}
 }
 
-func SourceOptFromClient(ctx context.Context, c gwclient.Client) (dalec.SourceOpts, error) {
+func SourceOptFromClient(ctx context.Context, c gwclient.Client, platform *ocispecs.Platform) (dalec.SourceOpts, error) {
 	dc, err := dockerui.NewClient(c)
 	if err != nil {
 		return dalec.SourceOpts{}, err
 	}
-	return SourceOptFromUIClient(ctx, c, dc), nil
+	return SourceOptFromUIClient(ctx, c, dc, platform), nil
 }
 
 var (

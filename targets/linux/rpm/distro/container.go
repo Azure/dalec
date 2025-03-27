@@ -91,12 +91,13 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 
 		pg := dalec.ProgressGroup("Build " + targetKey + " deps-only container for: " + spec.Name)
 
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		worker, err := cfg.Worker(sOpt, pg)
+		pc := dalec.Platform(platform)
+		worker, err := cfg.Worker(sOpt, pg, pc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -109,12 +110,12 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 					DnfDownloadAllDeps("/tmp/rpms/RPMS/$(uname -m)"))).Root()
 			rpmDir = llb.Scratch().File(llb.Copy(withDownloads, "/tmp/rpms", "/", dalec.WithDirContentsOnly()))
 		}
-		ctr, err := cfg.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, rpmDir, pg)
+		ctr, err := cfg.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, rpmDir, pg, pc)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		def, err := ctr.Marshal(ctx, pg)
+		def, err := ctr.Marshal(ctx, pc)
 		if err != nil {
 			return nil, nil, err
 		}

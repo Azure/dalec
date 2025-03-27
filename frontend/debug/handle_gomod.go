@@ -16,7 +16,7 @@ const keyGomodWorker = "context:gomod-worker"
 // Gomods outputs all the gomodule dependencies for the spec
 func Gomods(ctx context.Context, client gwclient.Client) (*client.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -34,7 +34,7 @@ func Gomods(ctx context.Context, client gwclient.Client) (*client.Result, error)
 				Run(llb.Shlex("apk add --no-cache go git ca-certificates patch")).Root()
 		}
 
-		st, err := spec.GomodDeps(sOpt, worker)
+		st, err := spec.GomodDeps(sOpt, worker, dalec.Platform(platform))
 		if err != nil {
 			return nil, nil, err
 		}

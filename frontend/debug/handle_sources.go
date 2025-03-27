@@ -14,7 +14,7 @@ import (
 // Sources is a handler that outputs all the sources.
 func Sources(ctx context.Context, client gwclient.Client) (*client.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -53,7 +53,7 @@ func Sources(ctx context.Context, client gwclient.Client) (*client.Result, error
 func PatchedSources(ctx context.Context, client gwclient.Client) (*client.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		const keyPatchedSourcesWorker = "context:patched-sources-worker"
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -69,12 +69,13 @@ func PatchedSources(ctx context.Context, client gwclient.Client) (*client.Result
 				Run(llb.Shlex("apk add --no-cache go git ca-certificates patch")).Root()
 		}
 
-		sources, err := dalec.Sources(spec, sOpt)
+		pc := dalec.Platform(platform)
+		sources, err := dalec.Sources(spec, sOpt, pc)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		sources = dalec.PatchSources(worker, spec, sources)
+		sources = dalec.PatchSources(worker, spec, sources, pc)
 		if err != nil {
 			return nil, nil, err
 		}

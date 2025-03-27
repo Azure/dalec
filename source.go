@@ -15,6 +15,7 @@ import (
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -225,12 +226,13 @@ var (
 
 type LLBGetter func(sOpts SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
 
-type ForwarderFunc func(llb.State, *SourceBuild) (llb.State, error)
+type ForwarderFunc func(llb.State, *SourceBuild, ...llb.ConstraintsOpt) (llb.State, error)
 
 type SourceOpts struct {
-	Resolver   llb.ImageMetaResolver
-	Forward    ForwarderFunc
-	GetContext func(string, ...llb.LocalOption) (*llb.State, error)
+	Resolver       llb.ImageMetaResolver
+	Forward        ForwarderFunc
+	GetContext     func(string, ...llb.LocalOption) (*llb.State, error)
+	TargetPlatform *ocispecs.Platform
 }
 
 func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {

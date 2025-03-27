@@ -167,8 +167,12 @@ func BuildWithPlatformFromUIClient(ctx context.Context, client gwclient.Client, 
 // image in the build context matching the image ref.
 //
 // This follows the behavior of of the dockerfile frontend.
-func GetBaseImage(sOpt dalec.SourceOpts, ref string) llb.State {
+func GetBaseImage(sOpt dalec.SourceOpts, ref string, opts ...llb.ConstraintsOpt) llb.State {
 	return llb.Scratch().Async(func(ctx context.Context, _ llb.State, c *llb.Constraints) (llb.State, error) {
+		for _, o := range opts {
+			o.SetConstraintsOption(c)
+		}
+
 		fromClient, err := sOpt.GetContext(ref, dalec.WithConstraint(c))
 		if err != nil {
 			return llb.Scratch(), err
@@ -177,7 +181,8 @@ func GetBaseImage(sOpt dalec.SourceOpts, ref string) llb.State {
 		if fromClient != nil {
 			return *fromClient, nil
 		}
-		return llb.Image(ref, llb.WithMetaResolver(sOpt.Resolver), dalec.WithConstraint(c)), nil
+
+		return llb.Image(ref, dalec.WithConstraint(c), llb.WithMetaResolver(sOpt.Resolver)), nil
 	})
 }
 

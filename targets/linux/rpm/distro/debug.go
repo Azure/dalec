@@ -21,8 +21,8 @@ import (
 // It is most useful for `HandleSources` handler in which we aren't building a full worker image with
 // build dependencies because we aren't executing build steps, but we may still have source generators
 // which depend on `build` dependencies in the spec in order to run.
-func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, sOpt dalec.SourceOpts) (llb.State, error) {
-	worker, err := c.Worker(sOpt)
+func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	worker, err := c.Worker(sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -38,7 +38,7 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
 		}
 
-		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, targetKey))
+		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey))
 	}
 
 	return worker, nil
@@ -51,24 +51,25 @@ func (c *Config) HandleBuildroot(ctx context.Context, client gwclient.Client) (*
 		}
 
 		pg := dalec.ProgressGroup("Setting up " + targetKey + " rpm buildroot: " + spec.Name)
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		worker, err := c.Worker(sOpt, pg)
+		pc := dalec.Platform(platform)
+		worker, err := c.Worker(sOpt, pg, pc)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building worker container")
 		}
 
-		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, targetKey, pg))
+		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, pg, pc))
 
 		br, err := rpm.SpecToBuildrootLLB(worker, spec, sOpt, targetKey, pg)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		def, err := br.Marshal(ctx)
+		def, err := br.Marshal(ctx, pc)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 		}
@@ -96,17 +97,18 @@ func (c *Config) HandleBuildroot(ctx context.Context, client gwclient.Client) (*
 
 func (c *Config) HandleSources(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		sOpt, err := frontend.SourceOptFromClient(ctx, client)
+		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		worker, err := c.DebugWorker(ctx, client, spec, targetKey, sOpt)
+		pc := dalec.Platform(platform)
+		worker, err := c.DebugWorker(ctx, client, spec, targetKey, sOpt, pc)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		sources, err := rpm.ToSourcesLLB(worker, spec, sOpt)
+		sources, err := rpm.ToSourcesLLB(worker, spec, sOpt, pc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -114,7 +116,7 @@ func (c *Config) HandleSources(ctx context.Context, client gwclient.Client) (*gw
 		// Now we can merge sources into the desired path
 		st := dalec.MergeAtPath(llb.Scratch(), sources, "/SOURCES")
 
-		def, err := st.Marshal(ctx)
+		def, err := st.Marshal(ctx, pc)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 		}
@@ -136,12 +138,13 @@ func (c *Config) HandleSources(ctx context.Context, client gwclient.Client) (*gw
 
 func (c *Config) HandleSpec(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		st, err := rpm.ToSpecLLB(spec, llb.Scratch(), targetKey, "")
+		pc := dalec.Platform(platform)
+		st, err := rpm.ToSpecLLB(spec, llb.Scratch(), targetKey, "", pc)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		def, err := st.Marshal(ctx)
+		def, err := st.Marshal(ctx, pc)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
 		}
