@@ -1,0 +1,128 @@
+package main
+
+import (
+	"bytes"
+	"io"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"gotest.tools/v3/assert"
+)
+
+const (
+	testModuleName = "some/module/name"
+)
+
+func TestDo(t *testing.T) {
+	passGroup := "::group::some_package.TestGenPass\n" + testEventPassOutput + "::endgroup::\n"
+	failGroup := "::group::some_package.TestGenFail\n" + testEventFailOutput + "::endgroup::\n"
+	skipGroup := "::group::some_package.TestGenSkip\n" + testEventSkipOutput + "::endgroup::\n"
+	annotation := "::error file=foo_test.go,line=43::" + strings.ReplaceAll(testEventFailOutput, "\n", "%0A") + "\n"
+
+	t.Run("verbose=false", func(t *testing.T) {
+		input := strings.NewReader(testEventJSON)
+		var output bytes.Buffer
+
+		cfg := config{
+			slowThreshold: 200 * time.Millisecond,
+			modName:       testModuleName,
+			verbose:       false,
+			stream:        false,
+		}
+
+		anyFail, err := do(input, &output, cfg)
+		assert.NilError(t, err)
+		assert.Assert(t, anyFail, "expected anyFail to be true due to failed tests")
+
+		// Non-verbose output should only include the grouped fail events + error annotations
+		expected := failGroup + annotation
+		assert.Equal(t, output.String(), expected)
+	})
+
+	t.Run("verbose=true", func(t *testing.T) {
+		input := strings.NewReader(testEventJSON)
+		var output bytes.Buffer
+
+		cfg := config{
+			slowThreshold: 200 * time.Millisecond,
+			modName:       testModuleName,
+			verbose:       true,
+			stream:        false,
+		}
+
+		anyFail, err := do(input, &output, cfg)
+		assert.NilError(t, err)
+		assert.Assert(t, anyFail, "expected anyFail to be true due to failed tests")
+
+		// verbose output should include grouped events for all test results + error annotations
+		expected := failGroup + passGroup + skipGroup + annotation
+		t.Log(output.String())
+		assert.Equal(t, output.String(), expected)
+	})
+
+	t.Run("stream=true", func(t *testing.T) {
+		input := strings.NewReader(testEventJSON)
+		var output bytes.Buffer
+
+		cfg := config{
+			slowThreshold: 200 * time.Millisecond,
+			modName:       testModuleName,
+			verbose:       false,
+			stream:        true,
+		}
+
+		anyFail, err := do(input, &output, cfg)
+		assert.NilError(t, err)
+		assert.Assert(t, anyFail, "expected anyFail to be true due to failed tests")
+
+		// Stream output should include all the raw events + the grouped fail events + the annotation
+		expected := testEventPassOutput + testEventFailOutput + testEventSkipOutput + testEventPackageOutput + failGroup + annotation
+		assert.Equal(t, output.String(), expected)
+	})
+
+	t.Run("summary", func(t *testing.T) {
+		dir := t.TempDir()
+		f, err := os.CreateTemp(dir, "summary")
+		assert.NilError(t, err)
+		defer f.Close()
+
+		t.Setenv("GITHUB_STEP_SUMMARY", f.Name())
+
+		input := strings.NewReader(testEventJSON)
+
+		cfg := config{
+			slowThreshold: 200 * time.Millisecond,
+			modName:       testModuleName,
+			verbose:       false,
+			stream:        false,
+		}
+
+		anyFail, err := do(input, io.Discard, cfg)
+		assert.NilError(t, err)
+		assert.Assert(t, anyFail, "expected anyFail to be true due to failed tests")
+
+		output, err := os.ReadFile(f.Name())
+		assert.NilError(t, err)
+
+		expect := `## Test metrics
+**Skipped:** 1 &nbsp;&nbsp;&nbsp;&nbsp; **Failed:** 2 &nbsp;&nbsp;&nbsp;&nbsp; **Total:** 4 &nbsp;&nbsp;&nbsp;&nbsp; **Elapsed:** 0.250s
+
+` + "```" + `
+[ min  max] cnt total%  sum (4 events)
+[0.00 0.00] 3 75.00% 0.00 ...........................................................................
+[0.25 0.25] 1 25.00% 0.25 .........................
+` + "```" + `
+
+## Slow tests
+
+` + "```" + `
+some_package: 0.250s
+` + "```" + `
+
+`
+
+		assert.Equal(t, string(output), expect)
+	})
+}

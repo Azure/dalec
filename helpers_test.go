@@ -126,10 +126,3 @@ func TestMergeDependencies(t *testing.T) {
 		})
 	}
 }
-
-func TestMakeFail(t *testing.T) {
-	t.Log("This is a test that is intended to fail")
-	t.Log("This should not be merged into main")
-	t.Log("It is being used to test the CI/CD pipeline")
-	t.Fatal("This is a failure message")
-}
