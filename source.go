@@ -672,6 +672,86 @@ func Tar(work llb.State, src llb.State, dest string, opts ...llb.ConstraintsOpt)
 	return worker.AddMount(outBase, llb.Scratch())
 }
 
+func TarMultipleStates(work llb.State, srcs map[string]llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
+	outBase := "/tmp/out"
+	out := filepath.Join(outBase, filepath.Dir(dest))
+	worker := work.Run(
+		llb.AddMount("/src", llb.Scratch()),
+
+		RunOptFunc(func(ei *llb.ExecInfo) {
+			for key, src := range srcs {
+				if len(srcs) == 1 {
+					llb.AddMount(filepath.Join("/src", key, key), src).SetRunOption(ei)
+					break
+				}
+				// if strings.Contains(key, ".txt") {
+				// llb.AddMount(filepath.Join("/src", key), src, llb.SourcePath(filepath.Join("/", key))).SetRunOption(ei)
+				// } else {
+				llb.AddMount(filepath.Join("/src", key), src).SetRunOption(ei)
+				// }
+
+			}
+			// if len(srcs) == 1 {
+			// 	llb.AddMount(filepath.Join("/src", ".dalec_dummy"), llb.Scratch(), llb.Readonly).SetRunOption(ei)
+			// }
+		}),
+		ShArgs("tar -C /src -cvzf /tmp/st ."),
+		WithConstraints(opts...),
+	).
+		Run(
+			llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + out + " && mv /tmp/st " + filepath.Join(out, filepath.Base(dest))}),
+			WithConstraints(opts...),
+		)
+
+	return worker.AddMount(outBase, llb.Scratch())
+}
+
+func TarMultiple(work llb.State, spec *Spec, srcStates map[string]llb.State, dest string, sOpts SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
+	outBase := "/tmp/out"
+	out := filepath.Join(outBase, filepath.Dir(dest))
+
+	srcs, err := Sources(spec, sOpts, opts...)
+	if err != nil {
+		panic(err)
+	}
+
+	worker := work.Run(
+		llb.AddMount("/src", llb.Scratch()),
+		RunOptFunc(func(ei *llb.ExecInfo) {
+			for key, state := range srcStates {
+
+				mountOpts := []llb.MountOption{}
+				src, ok := spec.Sources[key]
+				isDir := true
+				if ok {
+					isDir = SourceIsDir(src)
+				}
+				if !isDir {
+					mountOpts = append(mountOpts, llb.SourcePath(filepath.Join("/", key)))
+				}
+
+				mounthPath := filepath.Join("/src", key)
+				if len(srcs) == 1 && isDir {
+					mounthPath = filepath.Join("/src", key, key)
+				}
+
+				llb.AddMount(mounthPath, state, mountOpts...).SetRunOption(ei)
+				if len(srcs) == 1 {
+					break
+				}
+			}
+		}),
+		ShArgs("tar -C /src -cvzf /tmp/st ."),
+		WithConstraints(opts...),
+	).
+		Run(
+			llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + out + " && mv /tmp/st " + filepath.Join(out, filepath.Base(dest))}),
+			WithConstraints(opts...),
+		)
+
+	return worker.AddMount(outBase, llb.Scratch())
+}
+
 func DefaultTarWorker(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State {
 	return llb.Image("busybox:latest", llb.WithMetaResolver(resolver), withConstraints(opts))
 }
