@@ -94,7 +94,7 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 
 	patches := createPatches(spec, sources, worker, dr, opts...)
 
-	debSources := dalec.TarMultiple(worker, sources, "src.tar.gz", opts...)
+	debSources := dalec.TarMultiple(worker, spec, sources, "src.tar.gz", sOpt, opts...)
 
 	work := worker.Run(
 		dalec.ShArgs("set -e; ls -lh; dpkg-buildpackage -S -us -uc; mkdir -p /tmp/out; ls -lh; cp -r /work/"+spec.Name+"_"+spec.Version+"* /tmp/out; ls -lh /tmp/out"),
