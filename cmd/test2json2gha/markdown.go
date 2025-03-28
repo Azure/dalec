@@ -26,6 +26,8 @@ type nopWriteCloser struct {
 	io.Writer
 }
 
+func (c *nopWriteCloser) Close() error { return nil }
+
 func mdLog(head string, content fmt.Stringer) string {
 	sb := &strings.Builder{}
 	sb.WriteString(mdSummary(head))
