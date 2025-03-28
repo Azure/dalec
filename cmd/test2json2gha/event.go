@@ -34,7 +34,7 @@ func (r *TestResult) Close() {
 
 func collectTestOutput(te *TestEvent, tr *TestResult) error {
 	if te.Output != "" {
-		_, err := tr.output.Write([]byte(te.Output))
+		_, err := tr.output.WriteString(te.Output)
 		if err != nil {
 			return errors.Wrap(err, "error collecting test event output")
 		}
