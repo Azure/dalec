@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -156,63 +155,6 @@ func (h *resultsHandler) HandleEvent(ctx context.Context, te *TestEvent) error {
 	return nil
 }
 
-func (h *resultsHandler) WriteAnnotations(modName string, out io.Writer) error {
-	buf := &strings.Builder{}
-
-	for _, tr := range h.results {
-		if tr.name == "" {
-			continue
-		}
-		if !tr.failed {
-			continue
-		}
-
-		_, err := tr.output.Seek(0, io.SeekStart)
-		if err != nil {
-			return errors.Wrap(err, "error seeking test output")
-		}
-		scanner := bufio.NewScanner(tr.output)
-		var file, line string
-
-		buf.Reset()
-		for scanner.Scan() {
-			text := scanner.Text()
-
-			f, l, ok := getTestOutputLoc(text)
-			if ok {
-				file = f
-				line = l
-			}
-
-			// Add url-encoded new line to the output
-			// This is needed so the annotation is displayed correctly in GitHub
-			buf.WriteString(text + "%0A")
-		}
-
-		if err := scanner.Err(); err != nil {
-			return errors.Wrap(err, "error reading test output")
-		}
-
-		pkg := strings.TrimPrefix(tr.pkg, modName)
-		pkg = strings.TrimPrefix(pkg, "/")
-		file = path.Join(pkg, file)
-
-		group := pkg
-		if group != "" && tr.name != "" {
-			group += "."
-		}
-		group += tr.name
-
-		fmt.Fprintln(out, "::group::"+group)
-		fmt.Fprintf(out, "::error file=%s,line=%s::%s\n", file, line, buf)
-		fmt.Fprintln(out, "::endgroup::")
-	}
-
-	fmt.Fprint(out, buf.String())
-
-	return nil
-}
-
 func (h *resultsHandler) Close() {
 	for _, tr := range h.results {
 		tr.Close()
@@ -229,17 +171,4 @@ type TestResult struct {
 
 func (r *TestResult) Close() {
 	r.output.Close()
-}
-
-func getTestOutputLoc(s string) (string, string, bool) {
-	file, other, ok := strings.Cut(s, ":")
-	if !ok {
-		return "", "", false
-	}
-	line, _, ok := strings.Cut(other, ":")
-	if !ok {
-		return "", "", false
-	}
-
-	return strings.TrimSpace(file), line, true
 }

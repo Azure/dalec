@@ -20,13 +20,25 @@ func main() {
 		panic(err)
 	}
 
-	var slowThreshold time.Duration
+	var (
+		slowThreshold time.Duration
+		name          = "test"
+	)
 	flag.DurationVar(&slowThreshold, "slow", 500*time.Millisecond, "Threshold to mark test as slow")
+	flag.StringVar(&name, "name", name, "GitHub action name, required")
 
 	flag.Parse()
 
+	if name == "" {
+		fmt.Fprintln(os.Stderr, "Error: --name is required")
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
+
+	ctx := context.Background()
 
 	info, _ := debug.ReadBuildInfo()
 	var mod string
@@ -40,7 +52,7 @@ func main() {
 
 	cleanup := func() { os.RemoveAll(tmp) }
 
-	anyFail, err := do(context.TODO(), os.Stdin, os.Stdout, mod, slowThreshold)
+	anyFail, err := do(ctx, os.Stdin, os.Stdout, mod, slowThreshold, name)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%+v", err)
 		cleanup()
@@ -55,7 +67,7 @@ func main() {
 	}
 }
 
-func do(ctx context.Context, in io.Reader, out io.Writer, modName string, slowThreshold time.Duration) (bool, error) {
+func do(ctx context.Context, in io.Reader, out io.Writer, modName string, slowThreshold time.Duration, checkName string) (bool, error) {
 	dec := json.NewDecoder(in)
 
 	te := &TestEvent{}
@@ -72,7 +84,8 @@ func do(ctx context.Context, in io.Reader, out io.Writer, modName string, slowTh
 
 	results := &resultsHandler{}
 	defer func() {
-		if err := results.WriteAnnotations(modName, out); err != nil {
+		annotator := newAnnotator(ctx, checkName, out)
+		if err := annotator.WriteAnnotations(ctx, results, modName); err != nil {
 			slog.Error("Error writing annotations", "error", err)
 		}
 		results.Close()
