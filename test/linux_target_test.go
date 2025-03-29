@@ -2445,5 +2445,6 @@ func testDisableStrip(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 			req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
 			solveT(ctx, t, client, req)
 		})
+		t.Error("Let's see what this error looks like")
 	})
 }
