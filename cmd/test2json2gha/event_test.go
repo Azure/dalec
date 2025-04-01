@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"iter"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -48,7 +50,7 @@ const (
 func mockTestResults(t *testing.T) iter.Seq[*TestResult] {
 	h := &resultsHandler{results: make(map[string]*TestResult)}
 	t.Cleanup(func() {
-		h.Close()
+		h.Cleanup()
 	})
 
 	return h.Results()
@@ -160,4 +162,30 @@ func TestCheckFailed(t *testing.T) {
 
 		assert.Assert(t, !bool(failed), "expected checkFailed to be false when no fail events are present")
 	})
+}
+
+func TestWriteLogs(t *testing.T) {
+	logDir := t.TempDir()
+	handler := &resultsHandler{results: make(map[string]*TestResult)}
+	defer handler.Cleanup()
+	events := readTestEvents(t)
+
+	for event := range events {
+		err := handler.HandleEvent(event)
+		assert.NilError(t, err)
+	}
+
+	results := handler.Results()
+
+	handler.WriteLogs(logDir)
+
+	// Validate that logs are written to the expected file names
+	for result := range results {
+		expectedFileName := filepath.Join(logDir, result.pkg, strings.ReplaceAll(result.name, "/", "_")+".txt")
+		content, err := os.ReadFile(expectedFileName)
+		assert.NilError(t, err)
+		output, err := io.ReadAll(result.Reader())
+		assert.NilError(t, err)
+		assert.Equal(t, string(content), string(output), "log file content does not match expected output")
+	}
 }
