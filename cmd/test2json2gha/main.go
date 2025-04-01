@@ -19,6 +19,7 @@ type config struct {
 	modName       string
 	verbose       bool
 	stream        bool
+	logDir        string
 }
 
 func main() {
@@ -31,6 +32,7 @@ func main() {
 	flag.DurationVar(&cfg.slowThreshold, "slow", 500*time.Millisecond, "Threshold to mark test as slow")
 	flag.BoolVar(&cfg.verbose, "verbose", false, "Enable verbose output")
 	flag.BoolVar(&cfg.stream, "stream", false, "Enable streaming output")
+	flag.StringVar(&cfg.logDir, "logdir", "", "Directory to store all test logs")
 
 	flag.Parse()
 
@@ -65,6 +67,8 @@ func do(in io.Reader, out io.Writer, cfg config) (bool, error) {
 	dec := json.NewDecoder(in)
 
 	results := &resultsHandler{}
+	defer results.Cleanup()
+
 	defer func() {
 		var wg waitGroup
 
@@ -90,13 +94,11 @@ func do(in io.Reader, out io.Writer, cfg config) (bool, error) {
 			summary.Close()
 		})
 
-		wg.Go(func() {
-
-		})
-
 		wg.Wait()
 
-		results.Close()
+		if cfg.logDir != "" {
+			results.WriteLogs(cfg.logDir)
+		}
 	}()
 
 	var anyFailed checkFailed

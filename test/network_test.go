@@ -27,7 +27,7 @@ func testBuildNetworkMode(ctx context.Context, t *testing.T, cfg targetConfig) {
 	for _, tc := range cases {
 		name := "mode=" + tc.mode
 		if tc.mode == "" {
-			name += "<unset>"
+			name += "unset"
 		}
 
 		t.Run(name, func(t *testing.T) {

@@ -125,4 +125,27 @@ some_package: 0.250s
 
 		assert.Equal(t, string(output), expect)
 	})
+
+	t.Run("LogDir", func(t *testing.T) {
+		input := strings.NewReader(testEventJSON)
+		var output bytes.Buffer
+
+		logDir := t.TempDir()
+		cfg := config{
+			slowThreshold: 500,
+			modName:       "github.com/Azure/dalec/cmd/test2json2gha",
+			verbose:       false,
+			stream:        false,
+			logDir:        logDir,
+		}
+
+		anyFail, err := do(input, &output, cfg)
+		assert.NilError(t, err)
+		assert.Assert(t, anyFail, "expected anyFail to be true due to failed tests")
+
+		// Validate that logs are written to the specified directory
+		entries, err := os.ReadDir(logDir)
+		assert.NilError(t, err)
+		assert.Assert(t, len(entries) > 0, "expected log files to be written to the log directory")
+	})
 }
