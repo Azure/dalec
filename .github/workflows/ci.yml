@@ -153,7 +153,7 @@ jobs:
           if [ -n "${TEST_SKIP}" ]; then
             skip="-skip=${TEST_SKIP}"
           fi
-          go test -timeout=30m -v -json ${run} ${skip} ./test | go run ./cmd/test2json2gha --slow 120s
+          go test -timeout=30m -v -json ${run} ${skip} ./test | go run ./cmd/test2json2gha --slow 120s --logdir /tmp/testlogs
         env:
           TEST_SUITE: ${{ matrix.suite }}
           TEST_SKIP: ${{ matrix.skip }}
@@ -174,6 +174,13 @@ jobs:
         with:
           name: integration-test-reports-${{matrix.suite}}
           path: /tmp/reports/*
+          retention-days: 1
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs-${{matrix.suite}}
+          path: /tmp/testlogs/*
           retention-days: 1
 
 

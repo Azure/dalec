@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"iter"
+	"log/slog"
 	"math"
 	"os"
 	"path"
@@ -117,6 +118,60 @@ func (h *resultsHandler) Results() iter.Seq[*TestResult] {
 func (h *resultsHandler) Close() {
 	for _, tr := range h.results {
 		tr.Close()
+	}
+}
+
+// WriteLogs writes the test logs to the specified directory
+func (h *resultsHandler) WriteLogs(dir string) {
+	for r := range h.Results() {
+		name := strings.ReplaceAll(r.name, "/", "_") + ".txt"
+		fullPath := path.Join(dir, r.pkg, name)
+
+		log, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				slog.Error("Error opening test log file", "error", err)
+				continue
+			}
+			if err := os.MkdirAll(path.Dir(fullPath), 0755); err != nil {
+				slog.Error("Error creating test log directory", "error", err)
+				continue
+			}
+			log, err = os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				slog.Error("Error opening test log file", "error", err)
+				continue
+			}
+		}
+
+		// Here will intentionally use the original *os.File instead of calling r.Reader()
+		// This allows potential optimizations in `io.Copy` to avoid actually copying data in userspace.
+		rdr, err := os.Open(r.output.Name())
+		if err != nil {
+			slog.Error("Error opening test log file", "error", err)
+			log.Close()
+			continue
+		}
+
+		_, err = io.Copy(log, rdr)
+		log.Close()
+		rdr.Close()
+		if err != nil {
+			slog.Error("Error writing test log file", "error", err)
+			continue
+		}
+	}
+}
+
+func (h *resultsHandler) Cleanup() {
+	h.Close()
+	for _, tr := range h.results {
+		if err := os.Remove(tr.output.Name()); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			slog.Error("Error removing test log file", "error", err)
+		}
 	}
 }
 
