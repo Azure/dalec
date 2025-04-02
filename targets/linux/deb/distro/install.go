@@ -139,12 +139,12 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 			opts := append(opts, dalec.ProgressGroup("Install build dependencies"))
 			opts = append([]llb.ConstraintsOpt{dalec.WithConstraint(c)}, opts...)
 
-			srcPkg, err := deb.SourcePackage(ctx, sOpt, in, depsSpec, targetKey, "", deb.SourcePkgConfig{}, opts...)
+			debRoot, err := deb.Debroot(ctx, sOpt, depsSpec, in, llb.Scratch(), targetKey, "", d.VersionID, deb.SourcePkgConfig{}, opts...)
 			if err != nil {
 				return in, err
 			}
 
-			pkg, err := deb.BuildDeb(in, depsSpec, srcPkg, "", opts...)
+			pkg, err := deb.BuildDebBinaryOnly(in, depsSpec, debRoot, "", opts...)
 			if err != nil {
 				return in, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
 			}
