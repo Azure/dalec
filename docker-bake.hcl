@@ -23,6 +23,20 @@ target "frontend" {
 }
 
 
+target "spec" {
+    dockerfile = "test/fixtures/yarn.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+        "dalec_frontend" = "target:frontend"
+    }
+    # target = "mariner2/rpm/debug/sources"
+    target = "mariner2/rpm"
+    output = ["_output2"]
+    tags = ["local/dalec/spec:az2-container"]
+}
+
 # Run linters
 # Note: CI is using the github actions golangci-lint action which automatically sets up caching for us rather than using this bake target
 # If you change this, please also change the github action

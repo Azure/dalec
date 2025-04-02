@@ -1,0 +1,37 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-test-fixture-yarn-stuff
+description: A test fixture for checking local context sources
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+sources:
+  src:
+    context: {}
+    path: "./website"
+    includes:
+    - "*"
+    generate:
+    - yarnmod: {}
+dependencies:
+  build:
+    npm: {}
+    ca-certificates: {}
+    nodejs: {}
+
+build:
+  network_mode: sandbox
+  steps:
+    - command: |
+        set -x
+        pwd
+        ls -lha
+        ls -lha yarn_dalec_cache
+        cd src
+        ls -lha
+        yarn install --offline
+        exit 33

@@ -322,6 +322,8 @@ type GeneratorGomod struct {
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 }
 
+type GeneratorYarnNodeMod struct{}
+
 // SourceGenerator holds the configuration for a source generator.
 // This can be used inside of a [Source] to generate additional sources from the given source.
 type SourceGenerator struct {
@@ -330,6 +332,8 @@ type SourceGenerator struct {
 
 	// Gomod is the go module generator.
 	Gomod *GeneratorGomod `yaml:"gomod" json:"gomod"`
+	// YarnNodeMod is the yarn node module generator.
+	YarnNodeMod *GeneratorYarnNodeMod `yaml:"yarnmod" json:"yarnmod"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
