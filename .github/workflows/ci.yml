@@ -142,6 +142,8 @@ jobs:
 
       - name: download deps
         run: go mod download
+      - name: Setup QEMU
+        run: docker run --rm --privileged tonistiigi/binfmt:latest --install all
       - name: Run integration tests
         run: |
           set -ex
