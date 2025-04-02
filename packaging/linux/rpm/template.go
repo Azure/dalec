@@ -16,6 +16,8 @@ import (
 
 const gomodsName = "__gomods"
 const yarnCacheName = "yarn_dalec_cache"
+
+// const npmCacheName = "npm_dalec_cache"
 const buildScriptName = "build.sh"
 
 var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
@@ -381,7 +383,6 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	}
 
 	fmt.Fprintf(b, "%%build\n")
-	fmt.Fprintf(b, "set -ex; echo here\n")
 	fmt.Fprintf(b, "%%{_sourcedir}/%s\n", buildScriptName)
 	b.WriteString("\n")
 
