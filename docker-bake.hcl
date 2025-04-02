@@ -32,8 +32,8 @@ target "spec" {
         "dalec_frontend" = "target:frontend"
     }
     # target = "mariner2/rpm/debug/sources"
-    target = "mariner2/rpm"
-    output = ["_output2"]
+    target = "mariner2/container"
+    # output = ["_output2"]
     tags = ["local/dalec/spec:az2-container"]
 }
 

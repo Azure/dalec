@@ -1,4 +1,3 @@
-// filepath: /mount/d/dev/dalec/dalec/generator_yarnnodemod.go
 package dalec
 
 import (
@@ -9,7 +8,9 @@ import (
 )
 
 const (
-	yarnCacheDir = "/yarn-dalec-cache"
+	yarnCacheDir = "/node-mods/yarn-dalec-cache"
+	npmCacheDir  = "/node-mods/npm-dalec-cache"
+	baseDir      = "/node-mods"
 )
 
 func (s *Source) isYarnNodeMod() bool {
@@ -38,11 +39,11 @@ func withYarnNodeMod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Co
 		srcMount := llb.AddMount(workDir, srcSt)
 
 		in = worker.Run(
-			ShArgs("npm install -g yarn; yarn config set yarn-offline-mirror "+yarnCacheDir+"; yarn install"),
+			ShArgs("npm install --cache "+npmCacheDir+" -g yarn; yarn config set yarn-offline-mirror "+yarnCacheDir+"; yarn install"),
 			llb.Dir(joinedWorkDir),
 			srcMount,
 			WithConstraints(opts...),
-		).AddMount(yarnCacheDir, in)
+		).AddMount(baseDir, in)
 
 		return in
 	}
@@ -69,8 +70,8 @@ func (s *Spec) YarnNodeModDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Co
 
 	deps := llb.Scratch()
 
-	// Get the patched sources for the Yarn node modules
-	// This is needed in case a patch includes changes to package.json or yarn.lock
+	// Get the patched sources for the npm node modules
+	// This is needed in case a patch includes changes to package.json or package-lock.json
 	patched, err := s.getPatchedSources(sOpt, worker, func(name string) bool {
 		_, ok := sources[name]
 		return ok
@@ -80,12 +81,11 @@ func (s *Spec) YarnNodeModDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Co
 	}
 
 	sorted := SortMapKeys(patched)
-	opts = append(opts, ProgressGroup("Fetch Yarn node module dependencies for source: all before: "))
+	opts = append(opts, ProgressGroup("Fetch npm node module dependencies for source: all before: "))
 	for _, key := range sorted {
 
 		src := s.Sources[key]
 
-		// opts = append(opts, ProgressGroup("Fetch Yarn node module dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
 				in = in.With(withYarnNodeMod(gen, patched[key], worker, opts...))
