@@ -381,6 +381,8 @@ type GeneratorCargohome struct {
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 }
 
+type GeneratorYarnNodeMod struct{}
+
 // SourceGenerator holds the configuration for a source generator.
 // This can be used inside of a [Source] to generate additional sources from the given source.
 type SourceGenerator struct {
@@ -392,6 +394,9 @@ type SourceGenerator struct {
 
 	// Cargohome is the cargo home generator.
 	Cargohome *GeneratorCargohome `yaml:"cargohome" json:"cargohome"`
+
+	// YarnNodeMod is the yarn node module generator.
+	YarnNodeMod *GeneratorYarnNodeMod `yaml:"yarnmod" json:"yarnmod"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).

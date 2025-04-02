@@ -861,6 +861,15 @@
 			],
 			"description": "GeneratorGomod is used to generate a go module cache from go module sources"
 		},
+		"GeneratorYarnNodeMod": {
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			]
+		},
 		"GitAuth": {
 			"properties": {
 				"header": {
@@ -1450,7 +1459,8 @@
 		"SourceGenerator": {
 			"required": [
 				"gomod",
-				"cargohome"
+				"cargohome",
+				"yarnmod"
 			],
 			"properties": {
 				"cargohome": {
@@ -1467,6 +1477,10 @@
 						"null"
 					],
 					"description": "Subpath is the path inside a source to run the generator from."
+				},
+				"yarnmod": {
+					"$ref": "#/$defs/GeneratorYarnNodeMod",
+					"description": "YarnNodeMod is the yarn node module generator."
 				}
 			},
 			"additionalProperties": {
