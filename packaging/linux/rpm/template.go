@@ -17,6 +17,7 @@ const (
 	gomodsName      = "__gomods"
 	cargohomeName   = "__cargohome"
 	buildScriptName = "build.sh"
+	yarnCacheName   = "yarn_dalec_cache"
 )
 
 var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
@@ -367,20 +368,19 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	// Sort keys for consistent output
 	keys := dalec.SortMapKeys(w.Spec.Sources)
 
-	prepareGomods := sync.OnceFunc(func() {
-		if !w.Spec.HasGomods() {
-			return
+	prepareGenerators := sync.OnceFunc(func() {
+		if w.Spec.HasGomods() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", gomodsName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
 		}
-		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", gomodsName)
-		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
-	})
-
-	prepareCargohomes := sync.OnceFunc(func() {
-		if !w.Spec.HasCargohomes() {
-			return
+		if w.Spec.HasYarnNodeMods() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", yarnCacheName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", yarnCacheName, yarnCacheName)
 		}
-		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", cargohomeName)
-		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", cargohomeName, cargohomeName)
+		if w.Spec.HasCargohomes() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", cargohomeName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", cargohomeName, cargohomeName)
+		}
 	})
 
 	// Extract all the sources from the rpm source dir
@@ -395,8 +395,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", key)
 		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", key, key)
 	}
-	prepareGomods()
-	prepareCargohomes()
+	prepareGenerators()
 
 	// Apply patches to all sources.
 	// Note: These are applied based on the key sorting algorithm (lexicographic).
@@ -435,6 +434,7 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	}
 
 	fmt.Fprintf(b, "%%build\n")
+	fmt.Fprintf(b, "set -ex; echo here\n")
 	fmt.Fprintf(b, "%%{_sourcedir}/%s\n", buildScriptName)
 	b.WriteString("\n")
 
