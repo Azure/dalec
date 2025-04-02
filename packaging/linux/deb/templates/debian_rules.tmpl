@@ -12,18 +12,12 @@ override_dh_auto_install:
 override_dh_auto_build:
 	./debian/dalec/build.sh
 
+.PHONY: fix_generators
 
-.PHONY: fix_sources
+fix_generators:
+	./debian/dalec/fix_generators.sh
 
-# Move file-backed (Dalec) sources into the correct location
-# Mainly this is needed because with the way the debian sources are setup, our file-backed sources
-# end up getting placed in a sub-directory, e.g. for source "foo", we end up with "foo/foo".
-# For the purposes of making dalec builds work across different platforms, we need to move these so it is only a file, "foo".
-fix_sources:
-	./debian/dalec/fix_sources.sh
-
-
-override_dh_auto_configure: fix_sources
+override_dh_auto_configure: fix_generators
 	@# Stop debhelper from running auto configure, which should be part of the build steps
 
 # dh_dwz is problematic for (some) go builds and causes the build to error out.
@@ -38,4 +32,3 @@ override_dh_dwz:
 
 %:
 	dh $@ -v
-

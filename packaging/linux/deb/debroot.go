@@ -41,11 +41,6 @@ var patchHeader []byte
 //go:embed templates/debian_install_header.sh
 var debianInstall []byte
 
-func sanitizeSourceKey(key string) string {
-	replacer := strings.NewReplacer("_", "", "-", "", ".", "")
-	return replacer.Replace(key)
-}
-
 // This creates a directory in the debian root directory for each patch, and copies the patch files into it.
 // The format for each patch dir matches what would normally be under `debian/patches`, just that this is a separate dir for every source we are patching
 // This is purely for documenting in the source package how patches are applied in a more readable way than the big merged patch file.
@@ -136,20 +131,12 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	installers := createInstallScripts(worker, spec, dir, target)
 
 	const (
-		sourceFormat  = "3.0 (quilt)"
-		sourceOptions = "create-empty-orig"
+		sourceFormat = "3.0 (quilt)"
 	)
 
 	debian := base.
 		File(llb.Mkdir(filepath.Join(dir, "source"), 0o755), opts...).
-		With(func(in llb.State) llb.State {
-			if len(spec.Sources) == 0 {
-				return in
-			}
-			return in.
-				File(llb.Mkfile(filepath.Join(dir, "source/format"), 0o640, []byte(sourceFormat)), opts...).
-				File(llb.Mkfile(filepath.Join(dir, "source/options"), 0o640, []byte(sourceOptions)), opts...)
-		}).
+		File(llb.Mkfile(filepath.Join(dir, "source/format"), 0o640, []byte(sourceFormat)), opts...).
 		File(llb.Mkdir(filepath.Join(dir, "dalec"), 0o755), opts...).
 		File(llb.Mkfile(filepath.Join(dir, "source/include-binaries"), 0o640, append([]byte("dalec"), '\n')), opts...)
 
@@ -161,7 +148,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/build.sh"), 0o700, createBuildScript(spec, &cfg)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/patch.sh"), 0o700, createPatchScript(spec, &cfg)), opts...))
-	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_sources.sh"), 0o700, fixupSources(spec, &cfg)), opts...))
+	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_generators.sh"), 0o700, fixupGenerators(spec, &cfg)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPerms(spec, target, &cfg)), opts...))
 
 	customEnable, err := customDHInstallSystemdPostinst(spec, target)
@@ -294,33 +281,10 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 }
 
 // For debian sources
-//  1. File backed sources are not in the correct format as expected by dalec.
-//  2. Sources with certain characters in the name had to be changed, so we need
-//     to bring those back.
-//
 // This is called from `debian/rules` after the source tarball has been extracted.
-func fixupSources(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
+func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
 	writeScriptHeader(buf, cfg)
-
-	// now, we need to find all the sources that are file-backed and fix them up
-	for name, src := range spec.Sources {
-		dirName := sanitizeSourceKey(name)
-
-		if dalec.SourceIsDir(src) {
-			if dirName == name {
-				continue
-			}
-			fmt.Fprintf(buf, "mv '%s' '%s'\n", dirName, name)
-			continue
-		}
-
-		fmt.Fprintf(buf, "mv '%s/%s' '%s.dalec.tmp' || (ls -lh %q; exit 2)\n", dirName, name, name, dirName)
-		fmt.Fprintf(buf, "rm -rf '%s'\n", dirName)
-		fmt.Fprintf(buf, "mv '%s.dalec.tmp' '%s'\n", name, name)
-		fmt.Fprintln(buf)
-	}
-
 	if spec.HasGomods() {
 		// Older go versions did not have support for the `GOMODCACHE` var
 		// This is a hack to try and make the build work by linking the go modules

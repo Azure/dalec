@@ -93,7 +93,6 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 	}
 
 	patches := createPatches(spec, sources, worker, dr, opts...)
-	debSources := debSources(worker, sources)
 
 	work := worker.Run(
 		dalec.ShArgs("set -e; ls -lh; dpkg-buildpackage -S -us -uc; mkdir -p /tmp/out; ls -lh; cp -r /work/"+spec.Name+"_"+spec.Version+"* /tmp/out; ls -lh /tmp/out"),
@@ -102,16 +101,27 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 		llb.AddMount("/work/pkg/debian/patches", patches, llb.Readonly),
 		llb.AddEnv("DH_VERBOSE", "1"),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
-			// Mount all the tar+gz'd sources into the build which will get picked p by debbuild
-			for key, src := range debSources {
-				tarName := fmt.Sprintf("%s_%s.orig-%s.tar.gz", spec.Name, spec.Version, sanitizeSourceKey(key))
-				llb.AddMount(filepath.Join("/work", tarName), src, llb.SourcePath("src.tar.gz"), llb.Readonly).SetRunOption(ei)
-			}
+			debSources := TarDebSources(worker, spec, sources, "src.tar.gz", sOpt, opts...)
+			llb.AddMount("/work/"+spec.Name+"_"+spec.Version+".orig.tar.gz", debSources, llb.SourcePath("src.tar.gz")).SetRunOption(ei)
 		}),
 		dalec.WithConstraints(opts...),
 	)
 
 	return work.AddMount("/tmp/out", llb.Scratch()), nil
+}
+
+func BuildDebBinaryOnly(worker llb.State, spec *dalec.Spec, debroot llb.State, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	dirName := filepath.Join("/work", spec.Name+"_"+spec.Version+"-"+spec.Revision)
+	st := worker.
+		Run(
+			dalec.ShArgs("set -e; ls -lh; dpkg-buildpackage -b -uc -us; mkdir -p /tmp/out; cp ../*.deb /tmp/out; ls -lh /tmp/out"),
+			llb.Dir(dirName),
+			llb.AddEnv("DH_VERBOSE", "1"),
+			llb.AddMount(dirName, debroot),
+			dalec.WithConstraints(opts...),
+		).AddMount("/tmp/out", llb.Scratch())
+
+	return dalec.MergeAtPath(llb.Scratch(), []llb.State{st}, "/"), nil
 }
 
 func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -129,13 +139,43 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersio
 	return dalec.MergeAtPath(llb.Scratch(), []llb.State{st, srcPkg}, "/"), nil
 }
 
-func debSources(worker llb.State, sources map[string]llb.State, opts ...llb.ConstraintsOpt) map[string]llb.State {
-	out := make(map[string]llb.State, len(sources))
+func TarDebSources(work llb.State, spec *dalec.Spec, srcStates map[string]llb.State, dest string, sOpts dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
+	outBase := "/tmp/out"
+	out := filepath.Join(outBase, filepath.Dir(dest))
 
-	for key, src := range sources {
-		st := dalec.Tar(worker, src, "src.tar.gz", opts...)
-		out[key] = st
-	}
+	worker := work.Run(
+		llb.AddMount("/src", llb.Scratch()),
+		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			for key, state := range srcStates {
 
-	return out
+				mountOpts := []llb.MountOption{}
+				src, ok := spec.Sources[key]
+
+				// If the source is not explicitly listed in the spec sources, assume it is a directory (e.g., for gomod dependencies)
+				isDir := true
+				if ok {
+					isDir = dalec.SourceIsDir(src)
+				}
+
+				if !isDir {
+					mountOpts = append(mountOpts, llb.SourcePath(filepath.Join("/", key)))
+				}
+
+				// If the tar contains only a single directory, dpkg will extract its contents directly into the root directory.
+				mounthPath := filepath.Join("/src", key)
+				if len(srcStates) == 1 && isDir {
+					mounthPath = filepath.Join("/src", key, key)
+				}
+
+				llb.AddMount(mounthPath, state, mountOpts...).SetRunOption(ei)
+			}
+		}),
+		dalec.ShArgs("tar -C /src -cvzf /tmp/st ."),
+		dalec.WithConstraints(opts...),
+	).Run(
+		llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + out + " && mv /tmp/st " + filepath.Join(out, filepath.Base(dest))}),
+		dalec.WithConstraints(opts...),
+	)
+
+	return worker.AddMount(outBase, llb.Scratch())
 }
