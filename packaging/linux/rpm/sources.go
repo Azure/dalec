@@ -47,7 +47,7 @@ func buildScript(spec *dalec.Spec) string {
 		fmt.Fprintln(b, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 	if spec.HasYarnNodeMods() {
-		fmt.Fprintln(b, "npm install -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheName)
+		fmt.Fprintln(b, "npm install --offline --cache \"$(pwd)/"+yarnCacheName+"/npm-dalec-cache\" -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheName+"/yarn-dalec-cache")
 	}
 
 	envKeys := dalec.SortMapKeys(t.Env)

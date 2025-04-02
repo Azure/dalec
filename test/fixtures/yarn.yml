@@ -22,16 +22,29 @@ dependencies:
     npm: {}
     ca-certificates: {}
     nodejs: {}
+  runtime:
+    npm: {}
+    ca-certificates: {}
+    nodejs: {}
 
 build:
-  network_mode: sandbox
+  # network_mode: sandbox
   steps:
     - command: |
         set -x
-        pwd
+        cpath="$(pwd)"
+        echo "Current path: $cpath"
         ls -lha
-        ls -lha yarn_dalec_cache
+        ls -lha $cpath/yarn_dalec_cache
         cd src
         ls -lha
         yarn install --offline
-        exit 33
+        echo $?
+image:
+  base: mcr.microsoft.com/cbl-mariner/base/core:2.0
+
+artifacts:
+  binaries:
+    src: {}
+    yarn_dalec_cache: {}
+    src/node_modules: {}

@@ -434,7 +434,6 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	}
 
 	fmt.Fprintf(b, "%%build\n")
-	fmt.Fprintf(b, "set -ex; echo here\n")
 	fmt.Fprintf(b, "%%{_sourcedir}/%s\n", buildScriptName)
 	b.WriteString("\n")
 
