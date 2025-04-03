@@ -3,7 +3,9 @@ package frontend
 import (
 	"bytes"
 	"context"
+	stderrors "errors"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/Azure/dalec"
@@ -115,9 +117,33 @@ func BuildWithPlatform(ctx context.Context, client gwclient.Client, f PlatformBu
 	return BuildWithPlatformFromUIClient(ctx, client, dc, f)
 }
 
+func getPanicStack() error {
+	stackBuf := make([]uintptr, 32)
+	n := runtime.Callers(4, stackBuf) // Skip 4 frames to exclude runtime.Callers, the current function, and defer internals
+	stackBuf = stackBuf[:n]
+	frames := runtime.CallersFrames(stackBuf)
+	var stackTrace string
+	for {
+		frame, more := frames.Next()
+		stackTrace += fmt.Sprintf("%s\n\t%s:%d\n", frame.Function, frame.File, frame.Line)
+		if !more {
+			break
+		}
+	}
+	return stderrors.New(stackTrace)
+}
+
 // Like [BuildWithPlatform] but with a pre-initialized dockerui.Client
 func BuildWithPlatformFromUIClient(ctx context.Context, client gwclient.Client, dc *dockerui.Client, f PlatformBuildFunc) (*gwclient.Result, error) {
-	rb, err := dc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (gwclient.Reference, *dalec.DockerImageSpec, *dalec.DockerImageSpec, error) {
+	rb, err := dc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (_ gwclient.Reference, _ *dalec.DockerImageSpec, _ *dalec.DockerImageSpec, retErr error) {
+		defer func() {
+			if r := recover(); r != nil {
+				trace := getPanicStack()
+				recErr := fmt.Errorf("recovered from panic in build: %+v", r)
+				retErr = stderrors.Join(recErr, trace)
+			}
+		}()
+
 		spec, err := LoadSpec(ctx, dc, platform)
 		if err != nil {
 			return nil, nil, nil, err
