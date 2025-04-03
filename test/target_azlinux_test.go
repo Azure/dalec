@@ -214,5 +214,4 @@ func testAzlinuxBaseDeps(ctx context.Context, t *testing.T, cfg targetConfig) {
 		req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Container))
 		solveT(ctx, t, client, req)
 	})
-
 }
