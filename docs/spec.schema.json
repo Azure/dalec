@@ -861,14 +861,26 @@
 			],
 			"description": "GeneratorGomod is used to generate a go module cache from go module sources"
 		},
-		"GeneratorYarnNodeMod": {
+		"GeneratorNodeMod": {
+			"required": [
+				"package_manager"
+			],
+			"properties": {
+				"package_manager": {
+					"type": [
+						"string"
+					],
+					"description": "PackageManager specifies the package manager to use (e.g., \"yarn\" or \"npm\")."
+				}
+			},
 			"additionalProperties": {
 				"not": {}
 			},
 			"type": [
 				"object",
 				"null"
-			]
+			],
+			"description": "GeneratorNodeMod is used to generate a node module cache for Yarn or npm."
 		},
 		"GitAuth": {
 			"properties": {
@@ -1460,7 +1472,7 @@
 			"required": [
 				"gomod",
 				"cargohome",
-				"yarnmod"
+				"nodemod"
 			],
 			"properties": {
 				"cargohome": {
@@ -1471,16 +1483,16 @@
 					"$ref": "#/$defs/GeneratorGomod",
 					"description": "Gomod is the go module generator."
 				},
+				"nodemod": {
+					"$ref": "#/$defs/GeneratorNodeMod",
+					"description": "NodeMod is the generic node module generator for Yarn or npm."
+				},
 				"subpath": {
 					"type": [
 						"string",
 						"null"
 					],
 					"description": "Subpath is the path inside a source to run the generator from."
-				},
-				"yarnmod": {
-					"$ref": "#/$defs/GeneratorYarnNodeMod",
-					"description": "YarnNodeMod is the yarn node module generator."
 				}
 			},
 			"additionalProperties": {
