@@ -46,8 +46,9 @@ func buildScript(spec *dalec.Spec) string {
 		// Set CARGO_HOME to point to our prepared cargo cache
 		fmt.Fprintln(b, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
-	if spec.HasYarnNodeMods() {
-		fmt.Fprintln(b, "npm install --offline --cache \"$(pwd)/"+yarnCacheName+"/npm-dalec-cache\" -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheName+"/yarn-dalec-cache")
+
+	if spec.HasYarnPackageManager() {
+		fmt.Fprintln(b, "npm install --offline --cache \"$(pwd)/"+npmCacheDir+"\" -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheDir)
 	}
 
 	envKeys := dalec.SortMapKeys(t.Env)
@@ -101,13 +102,14 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 	if cargohomeSt != nil {
 		out = append(out, cargohomeSt.With(sourceTar(worker, cargohomeName, withPG("Tar cargohome deps")...)))
 	}
-	st, err := spec.YarnNodeModDeps(sOpt, worker, withPG("Add yarn node module deps")...)
+
+	st, err := spec.NodeModDeps(sOpt, worker, withPG("Add yarn node module deps")...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error adding yarn node module deps")
 	}
 
 	if st != nil {
-		out = append(out, st.With(sourceTar(worker, yarnCacheName, withPG("Tar yarn node module deps")...)))
+		out = append(out, st.With(sourceTar(worker, nodeModsName, withPG("Tar yarn node module deps")...)))
 	}
 
 	scriptSt := buildScriptSourceState(spec)

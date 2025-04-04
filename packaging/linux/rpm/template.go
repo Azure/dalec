@@ -16,8 +16,10 @@ import (
 const (
 	gomodsName      = "__gomods"
 	cargohomeName   = "__cargohome"
+	nodeModsName    = "__nodemods-cache"
+	yarnCacheDir    = nodeModsName + "/yarn-dalec-cache"
+	npmCacheDir     = nodeModsName + "/npm-dalec-cache"
 	buildScriptName = "build.sh"
-	yarnCacheName   = "yarn_dalec_cache"
 )
 
 var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
@@ -373,9 +375,9 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", gomodsName)
 			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
 		}
-		if w.Spec.HasYarnNodeMods() {
-			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", yarnCacheName)
-			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", yarnCacheName, yarnCacheName)
+		if w.Spec.HasNodeMods() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", nodeModsName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", nodeModsName, nodeModsName)
 		}
 		if w.Spec.HasCargohomes() {
 			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", cargohomeName)

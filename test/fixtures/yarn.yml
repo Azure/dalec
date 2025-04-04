@@ -16,7 +16,8 @@ sources:
     includes:
     - "*"
     generate:
-    - yarnmod: {}
+    - nodemod:
+        package_manager: npm
 dependencies:
   build:
     npm: {}
@@ -35,16 +36,28 @@ build:
         cpath="$(pwd)"
         echo "Current path: $cpath"
         ls -lha
-        ls -lha $cpath/yarn_dalec_cache
+        ls -lha $cpath/__nodemods-cache
         cd src
         ls -lha
-        yarn install --offline
+        npm install --offline --cache $cpath/__nodemods-cache/npm-dalec-cache
+        npm run build --cache $cpath/__nodemods-cache/npm-dalec-cache
         echo $?
+    # yarn
+    # - command: |
+    #     set -x
+    #     cpath="$(pwd)"
+    #     echo "Current path: $cpath"
+    #     ls -lha
+    #     ls -lha $cpath/__nodemods-cache
+    #     cd src
+    #     ls -lha
+    #     yarn install --offline
+    #     yarn build
+    #     echo $?
 image:
   base: mcr.microsoft.com/cbl-mariner/base/core:2.0
 
 artifacts:
   binaries:
     src: {}
-    yarn_dalec_cache: {}
-    src/node_modules: {}
+    __nodemods-cache: {}
