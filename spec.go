@@ -322,7 +322,11 @@ type GeneratorGomod struct {
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 }
 
-type GeneratorYarnNodeMod struct{}
+// GeneratorNodeMod is used to generate a node module cache for Yarn or npm.
+type GeneratorNodeMod struct {
+	// PackageManager specifies the package manager to use (e.g., "yarn" or "npm").
+	PackageManager string `yaml:"package_manager" json:"package_manager"`
+}
 
 // SourceGenerator holds the configuration for a source generator.
 // This can be used inside of a [Source] to generate additional sources from the given source.
@@ -332,8 +336,8 @@ type SourceGenerator struct {
 
 	// Gomod is the go module generator.
 	Gomod *GeneratorGomod `yaml:"gomod" json:"gomod"`
-	// YarnNodeMod is the yarn node module generator.
-	YarnNodeMod *GeneratorYarnNodeMod `yaml:"yarnmod" json:"yarnmod"`
+	// NodeMod is the generic node module generator for Yarn or npm.
+	NodeMod *GeneratorNodeMod `yaml:"nodemod" json:"nodemod"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
