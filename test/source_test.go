@@ -768,9 +768,9 @@ index 31b87f1..79a2ef7 100644
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
 							Files: map[string]*dalec.SourceInlineFile{
-								"src/main.rs": {Contents: cargoFixtureMain},
-								"Cargo.toml":  {Contents: cargoFixtureToml},
-								"Cargo.lock":  {Contents: cargoFixtureLock},
+								"main.rs":    {Contents: cargoFixtureMain},
+								"Cargo.toml": {Contents: cargoFixtureToml},
+								"Cargo.lock": {Contents: cargoFixtureLock},
 							},
 						},
 					},
