@@ -220,7 +220,7 @@ func TestSourceValidation(t *testing.T) {
 			},
 		},
 		{
-			title:     "has invalid genator config",
+			title:     "has invalid generator config",
 			expectErr: true,
 			src: Source{
 				Inline: &SourceInline{
@@ -230,13 +230,23 @@ func TestSourceValidation(t *testing.T) {
 			},
 		},
 		{
-			title:     "has valid genator",
+			title:     "has valid gomod generator",
 			expectErr: false,
 			src: Source{
 				Inline: &SourceInline{
 					File: &SourceInlineFile{},
 				},
 				Generate: []*SourceGenerator{{Gomod: &GeneratorGomod{}}},
+			},
+		},
+		{
+			title:     "has valid cargohome generator",
+			expectErr: false,
+			src: Source{
+				Inline: &SourceInline{
+					File: &SourceInlineFile{},
+				},
+				Generate: []*SourceGenerator{{Cargohome: &GeneratorCargohome{}}},
 			},
 		},
 		{

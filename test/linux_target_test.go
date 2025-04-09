@@ -944,6 +944,60 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("cargo home", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-build-with-cargohome",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing container target with Cargo",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Generate: []*dalec.SourceGenerator{
+						{
+							Cargohome: &dalec.GeneratorCargohome{},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"Cargo.toml":  {Contents: cargoFixtureToml},
+								"Cargo.lock":  {Contents: cargoFixtureLock},
+								"src/main.rs": {Contents: cargoFixtureMain},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					testConfig.GetPackage("azcu-rust"): {},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{Command: "[ -d \"${CARGO_HOME}/registry/\" ]"},
+					{Command: "[ -d ./src ]"},
+					{Command: "[ -f ./src/Cargo.toml ]"},
+					{Command: "[ -f ./src/Cargo.lock ]"},
+					{Command: "[ -f ./src/src/main.rs ]"},
+					{Command: "cd ./src && cargo build"},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
+		})
+	})
+
 	t.Run("test directory creation", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)

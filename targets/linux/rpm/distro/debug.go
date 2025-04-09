@@ -27,14 +27,25 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 		return llb.Scratch(), err
 	}
 
+	deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
 	if spec.HasGomods() {
-		deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
-
 		hasGolang := func(s string) bool {
 			return s == "golang" || s == "msft-golang"
 		}
 
 		if !slices.ContainsFunc(deps, hasGolang) {
+			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
+		}
+
+		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey))
+	}
+
+	if spec.HasCargohomes() {
+		hasRust := func(s string) bool {
+			return s == "azcu-rust"
+		}
+
+		if !slices.ContainsFunc(deps, hasRust) {
 			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
 		}
 
