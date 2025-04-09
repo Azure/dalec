@@ -321,7 +321,7 @@ Build sources are considered to be "directory" sources.
 ## Generators
 
 Generators are used to generate a source from another source.
-Currently the only generator supported is `gomod`.
+Currently the only generators supported are `gomod` and `cargohome`.
 
 ### Gomod
 
@@ -373,6 +373,21 @@ sources:
           paths:
             - module1
             - module2
+```
+
+### Cargohome
+
+Similar to that of the `gomod` generator, we can generate `cargohome` dependencies. The syntax is as follows:
+
+```yaml
+sources:
+  md2man:
+    git:
+        url: https://github.com/cpuguy83/go-md2man.git
+        commit: v2.1.0
+    generate:
+        subpath: "" # path inside the source to use as the root for the generator
+        cargohome: {} # Generates a cargo home cache to cache dependencies
 ```
 
 ## Patches

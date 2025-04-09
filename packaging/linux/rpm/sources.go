@@ -42,6 +42,11 @@ func buildScript(spec *dalec.Spec) string {
 		fmt.Fprintln(b, "export GOMODCACHE=\"$(pwd)/"+gomodsName+"\"")
 	}
 
+	if spec.HasCargohomes() {
+		// Set CARGO_HOME to point to our prepared cargo cache
+		fmt.Fprintln(b, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
+	}
+
 	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
 		v := t.Env[k]
@@ -67,9 +72,14 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		return append(opts, dalec.ProgressGroup(s))
 	}
 
-	st, err := spec.GomodDeps(sOpt, worker, withPG("Add gomod sources")...)
+	gomodSt, err := spec.GomodDeps(sOpt, worker, withPG("Add gomod sources")...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error adding gomod sources")
+	}
+
+	cargohomeSt, err := spec.CargohomeDeps(sOpt, worker, withPG("Add cargohome sources")...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
 	sorted := dalec.SortMapKeys(sources)
@@ -81,8 +91,12 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		out = append(out, st)
 	}
 
-	if st != nil {
-		out = append(out, st.With(sourceTar(worker, gomodsName, withPG("Tar gomod deps")...)))
+	if gomodSt != nil {
+		out = append(out, gomodSt.With(sourceTar(worker, gomodsName, withPG("Tar gomod deps")...)))
+	}
+
+	if cargohomeSt != nil {
+		out = append(out, cargohomeSt.With(sourceTar(worker, cargohomeName, withPG("Tar cargohome deps")...)))
 	}
 
 	scriptSt := buildScriptSourceState(spec)

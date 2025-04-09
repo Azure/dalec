@@ -312,12 +312,20 @@ type Source struct {
 	// How a generator operates is dependent on the actual generator.
 	// Generators may also cauuse modifications to the build environment.
 	//
-	// Currently only one generator is supported: "gomod"
+	// Currently only two generators are supported: "gomod" and "cargohome".
+	// The "gomod" generator will generate a go module cache from the source.
+	// The "cargohome" generator will generate a cargo home from the source.
 	Generate []*SourceGenerator `yaml:"generate,omitempty" json:"generate,omitempty"`
 }
 
 // GeneratorGomod is used to generate a go module cache from go module sources
 type GeneratorGomod struct {
+	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
+	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
+}
+
+// GeneratorCargohome is used to generate a cargo home from cargo sources
+type GeneratorCargohome struct {
 	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 }
@@ -330,6 +338,9 @@ type SourceGenerator struct {
 
 	// Gomod is the go module generator.
 	Gomod *GeneratorGomod `yaml:"gomod" json:"gomod"`
+
+	// Cargohome is the cargo home generator.
+	Cargohome *GeneratorCargohome `yaml:"cargohome" json:"cargohome"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).

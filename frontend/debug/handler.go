@@ -29,6 +29,10 @@ func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		Name:        "gomods",
 		Description: "Outputs all the gomodule dependencies for the spec",
 	})
+	r.Add("cargohome", Cargohome, &targets.Target{
+		Name:        "cargohome",
+		Description: "Outputs all the Cargo dependencies for the spec",
+	})
 
 	return r.Handle(ctx, client)
 }
