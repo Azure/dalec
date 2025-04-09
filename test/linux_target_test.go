@@ -967,9 +967,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
 							Files: map[string]*dalec.SourceInlineFile{
-								"Cargo.toml":  {Contents: cargoFixtureToml},
-								"Cargo.lock":  {Contents: cargoFixtureLock},
-								"src/main.rs": {Contents: cargoFixtureMain},
+								"Cargo.toml": {Contents: cargoFixtureToml},
+								"Cargo.lock": {Contents: cargoFixtureLock},
+								"main.rs":    {Contents: cargoFixtureMain},
 							},
 						},
 					},
@@ -986,7 +986,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					{Command: "[ -d ./src ]"},
 					{Command: "[ -f ./src/Cargo.toml ]"},
 					{Command: "[ -f ./src/Cargo.lock ]"},
-					{Command: "[ -f ./src/src/main.rs ]"},
+					{Command: "[ -f ./src/main.rs ]"},
 					{Command: "cd ./src && cargo build"},
 				},
 			},
