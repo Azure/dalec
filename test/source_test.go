@@ -842,13 +842,11 @@ index 31b87f1..79a2ef7 100644
 			File(llb.Mkdir("/dir/module1", 0644)).
 			File(llb.Mkfile("/dir/module1/Cargo.toml", 0644, []byte(cargoFixtureToml))).
 			File(llb.Mkfile("/dir/module1/Cargo.lock", 0644, []byte(cargoFixtureLock))).
-			File(llb.Mkdir("/dir/module1/src", 0644)).
-			File(llb.Mkfile("/dir/module1/src/main.rs", 0644, []byte(cargoFixtureMain))).
+			File(llb.Mkfile("/dir/module1/main.rs", 0644, []byte(cargoFixtureMain))).
 			File(llb.Mkdir("/dir/module2", 0644)).
 			File(llb.Mkfile("/dir/module2/Cargo.toml", 0644, []byte(cargoFixtureToml))).
 			File(llb.Mkfile("/dir/module2/Cargo.lock", 0644, []byte(cargoFixtureLock))).
-			File(llb.Mkdir("/dir/module2/src", 0644)).
-			File(llb.Mkfile("/dir/module2/src/main.rs", 0644, []byte(cargoFixtureMain)))
+			File(llb.Mkfile("/dir/module2/main.rs", 0644, []byte(cargoFixtureMain)))
 
 		const contextName = "multi-cargo-module"
 		spec := &dalec.Spec{
@@ -867,7 +865,7 @@ index 31b87f1..79a2ef7 100644
 			},
 			Dependencies: &dalec.PackageDependencies{
 				Build: map[string]dalec.PackageConstraints{
-					"azcu-rust": {
+					"rust": {
 						Version: []string{},
 					},
 				},
