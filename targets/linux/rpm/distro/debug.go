@@ -42,7 +42,7 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 
 	if spec.HasCargohomes() {
 		hasRust := func(s string) bool {
-			return s == "azcu-rust"
+			return s == "rust"
 		}
 
 		if !slices.ContainsFunc(deps, hasRust) {
