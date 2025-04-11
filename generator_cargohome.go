@@ -93,7 +93,9 @@ func (s *Spec) CargohomeDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Cons
 		opts := append(opts, ProgressGroup("Fetch Cargo dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
-				in = in.With(withCargohome(gen, patched[key], worker, opts...))
+				if gen.Cargohome != nil {
+					in = in.With(withCargohome(gen, patched[key], worker, opts...))
+				}
 			}
 			return in
 		})
