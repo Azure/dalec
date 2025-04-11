@@ -19,6 +19,7 @@ sources:
 dependencies:
   build:
     golang:
+    rust:
 
 build:
   env:
