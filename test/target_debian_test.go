@@ -17,5 +17,5 @@ func TestBullseye(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(debian.BullseyeDefaultTargetKey, debian.BullseyeConfig, withPackageOverride("golang", "golang-1.19"), withPackageOverride("rust", "rust-all")))
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(debian.BullseyeDefaultTargetKey, debian.BullseyeConfig, withPackageOverride("golang", "golang-1.19"), withPackageOverride("rust", "cargo-mozilla")))
 }
