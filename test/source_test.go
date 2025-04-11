@@ -621,7 +621,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = "1.0.152"
+once_cell = "1.18.0"  # Small crate with no dependencies
 
 [lib]
 path = "main.rs"
@@ -635,68 +635,22 @@ version = 3
 name = "cargo-test"
 version = "0.1.0"
 dependencies = [
- "serde",
+ "once_cell",
 ]
 
 [[package]]
-name = "proc-macro2"
-version = "1.0.51"
+name = "once_cell"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d727cae5b39d21da60fa540906919ad737832fe0b1c165da3a34d6548c849d6"
-dependencies = [
- "unicode-ident",
-]
-
-[[package]]
-name = "quote"
-version = "1.0.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8856d8364d252a14d474036ea1358d63c9e6965c8e5c1885c18f73d70bff9c7b"
-dependencies = [
- "proc-macro2",
-]
-
-[[package]]
-name = "serde"
-version = "1.0.152"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
-dependencies = [
- "serde_derive",
-]
-
-[[package]]
-name = "serde_derive"
-version = "1.0.152"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af487d118eecd09402d70a5d72551860e788df87b464af30e5ea6a38c75c541e"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "syn"
-version = "1.0.109"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-ident",
-]
-
-[[package]]
-name = "unicode-ident"
-version = "1.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84a22b9f218b40614adcb3f4ff08b703773ad44fa9423e4e0d346d5db86e4ebc"
+checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 `
 
 	cargoFixtureMain = `
 fn main() {
-    println!("Hello from Rust with Cargo!");
+    use once_cell::sync::Lazy;
+    
+    static GREETING: Lazy<String> = Lazy::new(|| "Hello from Rust with Cargo!".to_string());
+    println!("{}", *GREETING);
 }
 `
 )
@@ -704,33 +658,30 @@ fn main() {
 func TestSourceWithCargohome(t *testing.T) {
 	t.Parallel()
 
-	const upgradePatch = `diff --git a/Cargo.toml b/Cargo.toml
-index 9e27534..2c15ab3 100644
---- a/Cargo.toml
-+++ b/Cargo.toml
-@@ -5,4 +5,4 @@ edition = "2021"
- version = "0.1.0"
-
- [dependencies]
--serde = "1.0.152"
-+serde = "1.0.160"
-diff --git a/Cargo.lock b/Cargo.lock
-index 31b87f1..79a2ef7 100644
---- a/Cargo.lock
-+++ b/Cargo.lock
-@@ -27,9 +27,9 @@ dependencies = [
-
- [[package]]
- name = "serde"
--version = "1.0.152"
-+version = "1.0.160"
- source = "registry+https://github.com/rust-lang/crates.io-index"
--checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
-+checksum = "872db9e4ef10eff4cb7ee1019c7cec1a7d1e3b0ffd61c94988a4959d8d9ec752"
- dependencies = [
-  "serde_derive",
- ]
-`
+	const downgradePatch = `diff --git a/Cargo.toml b/Cargo.toml
+	index 9e27534..2c15ab3 100644
+	--- a/Cargo.toml
+	+++ b/Cargo.toml
+	@@ -5,4 +5,4 @@ edition = "2021"
+	 version = "0.1.0"
+	
+	 [dependencies]
+	-once_cell = "1.18.0"
+	+once_cell = "1.17.0"
+	diff --git a/Cargo.lock b/Cargo.lock
+	index 31b87f1..79a2ef7 100644
+	--- a/Cargo.lock
+	+++ b/Cargo.lock
+	@@ -7,9 +7,9 @@ dependencies = [
+	 
+	 [[package]]
+	 name = "once_cell"
+	-version = "1.18.0"
+	+version = "1.17.0"
+	 source = "registry+https://github.com/rust-lang/crates.io-index"
+	-checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
+	+checksum = "6a1d3d7e6325527d620cf1fe3b8f95e9c814e35c897ae4040207bfd936dbe9f6"
+	`
 
 	// Helper function to check if a specific Cargo registry directory exists
 	checkCargoRegistry := func(ctx context.Context, gwc gwclient.Client, registryPath string, spec *dalec.Spec) {
@@ -800,7 +751,7 @@ index 31b87f1..79a2ef7 100644
 				spec.Sources[patchName] = dalec.Source{
 					Inline: &dalec.SourceInline{
 						File: &dalec.SourceInlineFile{
-							Contents: upgradePatch,
+							Contents: downgradePatch,
 						},
 					},
 				}
@@ -822,7 +773,7 @@ index 31b87f1..79a2ef7 100644
 					Inline: &dalec.SourceInline{
 						Dir: &dalec.SourceInlineDir{
 							Files: map[string]*dalec.SourceInlineFile{
-								"patch-file": {Contents: upgradePatch},
+								"patch-file": {Contents: downgradePatch},
 							},
 						},
 					},
