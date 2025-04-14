@@ -659,30 +659,12 @@ func TestSourceWithCargohome(t *testing.T) {
 	t.Parallel()
 
 	const downgradePatch = `diff --git a/Cargo.toml b/Cargo.toml
-	index 9e27534..2c15ab3 100644
-	--- a/Cargo.toml
-	+++ b/Cargo.toml
-	@@ -5,4 +5,4 @@ edition = "2021"
-	 version = "0.1.0"
-	
-	 [dependencies]
-	-once_cell = "1.18.0"
-	+once_cell = "1.17.0"
-	diff --git a/Cargo.lock b/Cargo.lock
-	index 31b87f1..79a2ef7 100644
-	--- a/Cargo.lock
-	+++ b/Cargo.lock
-	@@ -7,9 +7,9 @@ dependencies = [
-	 
-	 [[package]]
-	 name = "once_cell"
-	-version = "1.18.0"
-	+version = "1.17.0"
-	 source = "registry+https://github.com/rust-lang/crates.io-index"
-	-checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
-	+checksum = "6a1d3d7e6325527d620cf1fe3b8f95e9c814e35c897ae4040207bfd936dbe9f6"
-	`
-
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -7,1 +7,1 @@
+-once_cell = "1.18.0"  # Small crate with no dependencies
++once_cell = "1.17.0"  # Small crate with no dependencies
+`
 	// Helper function to check if a specific Cargo registry directory exists
 	checkCargoRegistry := func(ctx context.Context, gwc gwclient.Client, registryPath string, spec *dalec.Spec) {
 		t.Helper()
