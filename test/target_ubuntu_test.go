@@ -155,7 +155,7 @@ func TestNoble(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.NobleDefaultTargetKey, ubuntu.NobleConfig, withPackageOverride("rust", "cargo-1.74")))
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.NobleDefaultTargetKey, ubuntu.NobleConfig, withPackageOverride("rust", "rustup")))
 }
 
 func TestFocal(t *testing.T) {
