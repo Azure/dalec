@@ -22,7 +22,7 @@ For all source types, you can specify the following top-level configuration:
 - `path`: The path to extract from the source type
 - `includes`: A list of glob patterns to include from the source
 - `excludes`: A list of glob patterns to exclude from the source
-- `generate`: See [Generators](#Generators)
+- `generate`: See [Generators](#generators)
 
 The below example uses a [`context`](#build-context) source type.
 The root of the source is the `path/in/source` directory.
