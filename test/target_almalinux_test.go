@@ -20,6 +20,9 @@ func TestAlmalinux9(t *testing.T) {
 				return v
 			},
 			ListExpectedSignFiles: azlinuxListSignFiles("el9"),
+			PackageOverrides: map[string]string{
+				"rust": "rust cargo",
+			},
 		},
 		LicenseDir: "/usr/share/licenses",
 		SystemdDir: struct {
@@ -62,6 +65,9 @@ func TestAlmalinux8(t *testing.T) {
 				return v
 			},
 			ListExpectedSignFiles: azlinuxListSignFiles("el8"),
+			PackageOverrides: map[string]string{
+				"rust": "rust cargo",
+			},
 		},
 		LicenseDir: "/usr/share/licenses",
 		SystemdDir: struct {

@@ -14,6 +14,9 @@ const (
 	// Unique name that would not normally be in the spec
 	// This will get used to create the source tar for go module deps
 	gomodsName = "xxxdalecGomodsInternal"
+	// Unique name that would not normally be in the spec
+	// This will get used to create the source tar for cargo deps
+	cargohomeName = "xxxdalecCargoHomeInternal"
 )
 
 func mountSources(sources map[string]llb.State, dir string, mod func(string) string) llb.RunOption {
@@ -88,8 +91,17 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 		return llb.Scratch(), errors.Wrap(err, "error preparing gomod deps")
 	}
 
+	cargohomeSt, err := spec.CargohomeDeps(sOpt, worker, opts...)
+	if err != nil {
+		return llb.Scratch(), errors.Wrap(err, "error preparing cargohome deps")
+	}
+
 	if gomodSt != nil {
 		sources[gomodsName] = *gomodSt
+	}
+
+	if cargohomeSt != nil {
+		sources[cargohomeName] = *cargohomeSt
 	}
 
 	patches := createPatches(spec, sources, worker, dr, opts...)

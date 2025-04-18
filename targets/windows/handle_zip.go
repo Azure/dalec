@@ -57,7 +57,10 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 	})
 }
 
-const gomodsName = "__gomods"
+const (
+	gomodsName    = "__gomods"
+	cargohomeName = "__cargohome"
+)
 
 func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
 	out, err := dalec.Sources(spec, sOpt, opts...)
@@ -66,13 +69,22 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 	}
 
 	opts = append(opts, dalec.ProgressGroup("Add gomod sources"))
-	st, err := spec.GomodDeps(sOpt, worker, opts...)
+	gomodSt, err := spec.GomodDeps(sOpt, worker, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error adding gomod sources")
 	}
 
-	if st != nil {
-		out[gomodsName] = *st
+	cargohomeSt, err := spec.CargohomeDeps(sOpt, worker, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding cargohome sources")
+	}
+
+	if gomodSt != nil {
+		out[gomodsName] = *gomodSt
+	}
+
+	if cargohomeSt != nil {
+		out[cargohomeName] = *cargohomeSt
 	}
 
 	return out, nil
@@ -173,6 +185,10 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 
 	if spec.HasGomods() {
 		fmt.Fprintln(buf, "export GOMODCACHE=\"$(pwd)/"+gomodsName+"\"")
+	}
+
+	if spec.HasCargohomes() {
+		fmt.Fprintln(buf, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 
 	for i, step := range spec.Build.Steps {

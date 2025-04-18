@@ -93,7 +93,9 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 		opts := append(opts, ProgressGroup("Fetch go module dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
-				in = in.With(withGomod(gen, patched[key], worker, opts...))
+				if gen.Gomod != nil {
+					in = in.With(withGomod(gen, patched[key], worker, opts...))
+				}
 			}
 			return in
 		})

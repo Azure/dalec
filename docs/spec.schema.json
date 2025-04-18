@@ -723,6 +723,29 @@
 			],
 			"description": "Frontend encapsulates the configuration for a frontend to forward a build target to."
 		},
+		"GeneratorCargohome": {
+			"properties": {
+				"paths": {
+					"items": {
+						"type": [
+							"string"
+						]
+					},
+					"type": [
+						"array"
+					],
+					"description": "Paths is the list of paths to run the generator on. Used to generate multi-module in a single source."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			],
+			"description": "GeneratorCargohome is used to generate a cargo home from cargo sources"
+		},
 		"GeneratorGomod": {
 			"properties": {
 				"paths": {
@@ -1180,7 +1203,7 @@
 					"type": [
 						"array"
 					],
-					"description": "Generate is the list generators to run on the source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `gomod` generator can be used to generate a go module cache from a go source.\nHow a generator operates is dependent on the actual generator.\nGenerators may also cauuse modifications to the build environment.\n\nCurrently only one generator is supported: \"gomod\""
+					"description": "Generate is the list generators to run on the source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `gomod` generator can be used to generate a go module cache from a go source.\nHow a generator operates is dependent on the actual generator.\nGenerators may also cauuse modifications to the build environment.\n\nCurrently only two generators are supported: \"gomod\" and \"cargohome\".\nThe \"gomod\" generator will generate a go module cache from the source.\nThe \"cargohome\" generator will generate a cargo home from the source."
 				},
 				"git": {
 					"$ref": "#/$defs/SourceGit"
@@ -1309,9 +1332,14 @@
 		},
 		"SourceGenerator": {
 			"required": [
-				"gomod"
+				"gomod",
+				"cargohome"
 			],
 			"properties": {
+				"cargohome": {
+					"$ref": "#/$defs/GeneratorCargohome",
+					"description": "Cargohome is the cargo home generator."
+				},
 				"gomod": {
 					"$ref": "#/$defs/GeneratorGomod",
 					"description": "Gomod is the go module generator."

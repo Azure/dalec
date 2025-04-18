@@ -14,8 +14,11 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-const gomodsName = "__gomods"
-const buildScriptName = "build.sh"
+const (
+	gomodsName      = "__gomods"
+	cargohomeName   = "__cargohome"
+	buildScriptName = "build.sh"
+)
 
 var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
 {{.DisableStrip}}
@@ -282,6 +285,11 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 		sourceIdx += 1
 	}
 
+	if w.Spec.HasCargohomes() {
+		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", sourceIdx, cargohomeName)
+		sourceIdx += 1
+	}
+
 	if len(w.Spec.Build.Steps) > 0 {
 		fmt.Fprintf(b, "Source%d: %s\n", sourceIdx, buildScriptName)
 	}
@@ -326,6 +334,14 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
 	})
 
+	prepareCargohomes := sync.OnceFunc(func() {
+		if !w.Spec.HasCargohomes() {
+			return
+		}
+		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", cargohomeName)
+		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", cargohomeName, cargohomeName)
+	})
+
 	// Extract all the sources from the rpm source dir
 	for _, key := range keys {
 		if !dalec.SourceIsDir(w.Spec.Sources[key]) {
@@ -339,6 +355,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", key, key)
 	}
 	prepareGomods()
+	prepareCargohomes()
 
 	// Apply patches to all sources.
 	// Note: These are applied based on the key sorting algorithm (lexicographic).

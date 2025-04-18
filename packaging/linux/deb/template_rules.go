@@ -58,6 +58,10 @@ func (w *rulesWrapper) Envs() fmt.Stringer {
 		fmt.Fprintf(b, "export %s := $(PWD)/%s\n", "GOMODCACHE", gomodsName)
 	}
 
+	if w.Spec.HasCargohomes() {
+		fmt.Fprintf(b, "export %s := $(PWD)/%s\n", "CARGO_HOME", cargohomeName)
+	}
+
 	return b
 }
 

@@ -114,13 +114,38 @@ func TestTemplateSources(t *testing.T) {
 			}
 			s2 := out2.String()
 			// trim last newline from the first output since that has shifted
-			s = s[:len(s)-1]
-			if !strings.HasPrefix(s2, s) {
+			s3 := s[:len(s)-1]
+			if !strings.HasPrefix(s2, s3) {
+				t.Fatalf("expected output to start with %q, got %q", s3, out2.String())
+			}
+
+			s2 = strings.TrimPrefix(out2.String(), s3)
+			expected := "Source1: " + gomodsName + ".tar.gz\n\n"
+			if s2 != expected {
+				t.Fatalf("unexpected sources: expected %q, got: %q", expected, s2)
+			}
+		})
+
+		t.Run("with cargohome", func(t *testing.T) {
+			src := w.Spec.Sources["src1"]
+			src.Generate = []*dalec.SourceGenerator{
+				{Cargohome: &dalec.GeneratorCargohome{}},
+			}
+			w.Spec.Sources["src1"] = src
+
+			out2, err := w.Sources()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			s2 := out2.String()
+			// trim last newline from the first output since that has shifted
+			s3 := s[:len(s)-1]
+			if !strings.HasPrefix(s2, s3) {
 				t.Fatalf("expected output to start with %q, got %q", s, out2.String())
 			}
 
-			s2 = strings.TrimPrefix(out2.String(), s)
-			expected := "Source1: " + gomodsName + ".tar.gz\n\n"
+			s2 = strings.TrimPrefix(out2.String(), s3)
+			expected := "Source1: " + cargohomeName + ".tar.gz\n\n"
 			if s2 != expected {
 				t.Fatalf("unexpected sources: expected %q, got: %q", expected, s2)
 			}
@@ -161,6 +186,14 @@ func TestTemplateSources(t *testing.T) {
 						{Gomod: &dalec.GeneratorGomod{}},
 					},
 				},
+				"src6": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{},
+					},
+					Generate: []*dalec.SourceGenerator{
+						{Cargohome: &dalec.GeneratorCargohome{}},
+					},
+				},
 			},
 		}}
 
@@ -199,7 +232,7 @@ func TestTemplateSources(t *testing.T) {
 		// Now we should have one more entry for gomods.
 		// Note there are 2 gomod sources but they should be combined into one entry.
 
-		expected := "Source5: " + gomodsName + ".tar.gz\n\n"
+		expected := "Source6: " + gomodsName + ".tar.gz\nSource7: " + cargohomeName + ".tar.gz\n\n"
 		if s != expected {
 			t.Fatalf("gomod: unexpected sources: expected %q, got: %q", expected, s)
 		}

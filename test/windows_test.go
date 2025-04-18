@@ -535,6 +535,60 @@ echo "$BAR" > bar.txt
 		})
 	})
 
+	t.Run("cargo home", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-build-with-cargohome",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing container target",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Generate: []*dalec.SourceGenerator{
+						{
+							Cargohome: &dalec.GeneratorCargohome{},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"Cargo.toml": {Contents: cargoFixtureToml},
+								"Cargo.lock": {Contents: cargoFixtureLock},
+								"main.rs":    {Contents: cargoFixtureMain},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					"rust-all": {},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{Command: "[ -d \"${CARGO_HOME}/registry/\" ]"},
+					{Command: "[ -d ./src ]"},
+					{Command: "[ -f ./src/Cargo.toml ]"},
+					{Command: "[ -f ./src/Cargo.lock ]"},
+					{Command: "[ -f ./src/main.rs ]"},
+					{Command: "cd ./src && cargo build"},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(tcfg.Container), withSpec(ctx, t, spec), withWindowsAmd64)
+			solveT(ctx, t, client, req)
+		})
+	})
+
 	t.Run("test image configs", func(t *testing.T) {
 		t.Parallel()
 

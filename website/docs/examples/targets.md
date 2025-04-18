@@ -19,6 +19,7 @@ bullseye/dsc                     Builds a Debian source package.
 bullseye/testing/container       Builds a container image for testing purposes only.
 bullseye/worker                  Builds the worker image.
 debug/gomods                     Outputs all the gomodule dependencies for the spec
+debug/cargohome                  Outputs all the cargohome dependencies for the spec
 debug/resolve                    Outputs the resolved dalec spec file with build args applied.
 debug/sources                    Outputs all sources from a dalec spec file.
 focal/deb (default)              Builds a deb package.
