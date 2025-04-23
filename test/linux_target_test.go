@@ -977,7 +977,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 			Dependencies: &dalec.PackageDependencies{
 				Build: map[string]dalec.PackageConstraints{
-					testConfig.GetPackage("rust"): {},
+					testConfig.GetPackage("rust-all"): {},
 				},
 			},
 			Build: dalec.ArtifactBuild{
