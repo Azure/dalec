@@ -14,7 +14,14 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-const gomodsName = "__gomods"
+const (
+	gomodsName   = "__gomods"
+	nodeModsName = "__nodemods-cache"
+	yarnCacheDir = nodeModsName + "/yarn-dalec-cache"
+	npmCacheDir  = nodeModsName + "/npm-dalec-cache"
+)
+
+// const npmCacheName = "npm_dalec_cache"
 const buildScriptName = "build.sh"
 
 var specTmpl = template.Must(template.New("spec").Funcs(tmplFuncs).Parse(strings.TrimSpace(`
@@ -318,12 +325,15 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	// Sort keys for consistent output
 	keys := dalec.SortMapKeys(w.Spec.Sources)
 
-	prepareGomods := sync.OnceFunc(func() {
-		if !w.Spec.HasGomods() {
-			return
+	prepareGenerators := sync.OnceFunc(func() {
+		if w.Spec.HasGomods() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", gomodsName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
 		}
-		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", gomodsName)
-		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
+		if w.Spec.HasNodeMods() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", nodeModsName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", nodeModsName, nodeModsName)
+		}
 	})
 
 	// Extract all the sources from the rpm source dir
@@ -338,7 +348,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", key)
 		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", key, key)
 	}
-	prepareGomods()
+	prepareGenerators()
 
 	// Apply patches to all sources.
 	// Note: These are applied based on the key sorting algorithm (lexicographic).

@@ -1,0 +1,63 @@
+# syntax=ghcr.io/azure/dalec/frontend:latest
+
+name: dalec-test-fixture-yarn-stuff
+description: A test fixture for checking local context sources
+website: https://www.github.com/Azure/dalec
+version: 0.0.1
+revision: 1
+vendor: Microsoft
+
+packager: Microsoft <support@microsoft.com>
+license: Apache 2.0
+sources:
+  src:
+    context: {}
+    path: "./website"
+    includes:
+    - "*"
+    generate:
+    - nodemod:
+        package_manager: npm
+dependencies:
+  build:
+    npm: {}
+    ca-certificates: {}
+    nodejs: {}
+  runtime:
+    npm: {}
+    ca-certificates: {}
+    nodejs: {}
+
+build:
+  # network_mode: sandbox
+  steps:
+    - command: |
+        set -x
+        cpath="$(pwd)"
+        echo "Current path: $cpath"
+        ls -lha
+        ls -lha $cpath/__nodemods-cache
+        cd src
+        ls -lha
+        npm install --offline --cache $cpath/__nodemods-cache/npm-dalec-cache
+        npm run build --cache $cpath/__nodemods-cache/npm-dalec-cache
+        echo $?
+    # yarn
+    # - command: |
+    #     set -x
+    #     cpath="$(pwd)"
+    #     echo "Current path: $cpath"
+    #     ls -lha
+    #     ls -lha $cpath/__nodemods-cache
+    #     cd src
+    #     ls -lha
+    #     yarn install --offline
+    #     yarn build
+    #     echo $?
+image:
+  base: mcr.microsoft.com/cbl-mariner/base/core:2.0
+
+artifacts:
+  binaries:
+    src: {}
+    __nodemods-cache: {}
