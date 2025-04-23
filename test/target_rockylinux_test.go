@@ -21,7 +21,7 @@ func TestRockylinux9(t *testing.T) {
 			},
 			ListExpectedSignFiles: azlinuxListSignFiles("el9"),
 			PackageOverrides: map[string]string{
-				"rust-all": "rust cargo",
+				"rust": "rust cargo",
 			},
 		},
 		LicenseDir: "/usr/share/licenses",
@@ -66,7 +66,7 @@ func TestRockylinux8(t *testing.T) {
 			},
 			ListExpectedSignFiles: azlinuxListSignFiles("el8"),
 			PackageOverrides: map[string]string{
-				"rust-all": "rust cargo",
+				"rust": "rust cargo",
 			},
 		},
 		LicenseDir: "/usr/share/licenses",
