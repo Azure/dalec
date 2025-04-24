@@ -948,22 +948,6 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 
-		cargoFixturePatch := `diff --git a/targets/linux/deb/distro/install.go b/targets/linux/deb/distro/install.go
-index cca4cda..d3076d5 100644
---- a/targets/linux/deb/distro/install.go
-+++ b/targets/linux/deb/distro/install.go
-@@ -80,6 +80,10 @@ apt autoclean -y
-rm -rf /var/lib/apt/lists/partial/*
-apt update
-+if apt install -y ${1}; then
-+	exit 0
-+fi
-+
-if ! command -v aptitude > /dev/null; then
-	needs_cleanup=1
-	apt install -y aptitude
-`
-
 		spec := &dalec.Spec{
 			Name:        "test-build-with-cargohome",
 			Version:     "0.0.1",
@@ -989,18 +973,6 @@ if ! command -v aptitude > /dev/null; then
 							},
 						},
 					},
-				},
-				"patch": {
-					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents: cargoFixturePatch,
-						},
-					},
-				},
-			},
-			Patches: map[string][]dalec.PatchSpec{
-				"src": {
-					{Source: "patch"},
 				},
 			},
 			Dependencies: &dalec.PackageDependencies{
