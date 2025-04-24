@@ -197,7 +197,7 @@ func (r *TestResult) Close() {
 //
 // Calling [TestResult.Close] will close the underlying file, any readers created before or
 // after will be invalid after that and should return an [io.EOF] error on read.
-func (r *TestResult) Reader() io.Reader {
+func (r *TestResult) Reader() *io.SectionReader {
 	return io.NewSectionReader(r.output, 0, math.MaxInt64)
 }
 

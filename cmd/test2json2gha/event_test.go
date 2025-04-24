@@ -26,6 +26,7 @@ const (
 {"Time":"2025-03-31T09:46:20.327706-07:00","Action":"run","Package":"some_package","Test":"TestGenFail"}
 {"Time":"2025-03-31T09:46:20.327713-07:00","Action":"output","Package":"some_package","Test":"TestGenFail","Output":"=== RUN   TestGenFail\n"}
 {"Time":"2025-03-31T09:46:20.327757-07:00","Action":"output","Package":"some_package","Test":"TestGenFail","Output":"    foo_test.go:42: some error\n"}
+{"Time":"2025-03-31T09:46:20.327758-07:00","Action":"output","Package":"some_package","Test":"TestGenFail","Output":"    build.go.go:42: some build message\n"}
 {"Time":"2025-03-31T09:46:20.327773-07:00","Action":"output","Package":"some_package","Test":"TestGenFail","Output":"    foo_test.go:43: some fatal error\n"}
 {"Time":"2025-03-31T09:46:20.327918-07:00","Action":"output","Package":"some_package","Test":"TestGenFail","Output":"--- FAIL: TestGenFail (0.00s)\n"}
 {"Time":"2025-03-31T09:46:20.327934-07:00","Action":"fail","Package":"some_package","Test":"TestGenFail","Elapsed":0}
@@ -40,9 +41,12 @@ const (
 `
 
 	testEventPassOutput    = "=== RUN   TestGenPass\n    foo_test.go:38: some log\n--- PASS: TestGenPass (0.00s)\n"
-	testEventFailOutput    = "=== RUN   TestGenFail\n    foo_test.go:42: some error\n    foo_test.go:43: some fatal error\n--- FAIL: TestGenFail (0.00s)\n"
+	testEventFailOutput    = "=== RUN   TestGenFail\n    foo_test.go:42: some error\n    build.go.go:42: some build message\n    foo_test.go:43: some fatal error\n--- FAIL: TestGenFail (0.00s)\n"
 	testEventSkipOutput    = "=== RUN   TestGenSkip\n    foo_test.go:47: some skip reason\n--- SKIP: TestGenSkip (0.00s)\n"
 	testEventPackageOutput = "FAIL\nFAIL\tsome_package\t0.249s\n"
+
+	// This is for the error annotations handler which skips build logs so as not to overflow the github annotation.
+	testLogsAnnotation = "    foo_test.go:42: some error\n    foo_test.go:43: some fatal error\n"
 
 	testPackageName = "some_package"
 )

@@ -19,7 +19,7 @@ func TestDo(t *testing.T) {
 	passGroup := "::group::some_package.TestGenPass\n" + testEventPassOutput + "::endgroup::\n"
 	failGroup := "::group::some_package.TestGenFail\n" + testEventFailOutput + "::endgroup::\n"
 	skipGroup := "::group::some_package.TestGenSkip\n" + testEventSkipOutput + "::endgroup::\n"
-	annotation := "::error file=foo_test.go,line=43::" + strings.ReplaceAll(testEventFailOutput, "\n", "%0A") + "\n"
+	annotation := "::error file=foo_test.go,line=43::" + strings.ReplaceAll(testLogsAnnotation, "\n", "%0A") + "\n"
 
 	t.Run("verbose=false", func(t *testing.T) {
 		input := strings.NewReader(testEventJSON)

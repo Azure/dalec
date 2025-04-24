@@ -7,6 +7,7 @@ import (
 	"io"
 	"iter"
 	"log/slog"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -44,7 +45,7 @@ func (c *consoleFormatter) FormatResults(results iter.Seq[*TestResult], out io.W
 		pkg = strings.TrimPrefix(pkg, "/")
 
 		group := pkg
-		if group != "" && tr.name != "" {
+		if group != "" {
 			group += "."
 		}
 		group += tr.name
@@ -106,11 +107,53 @@ func (a *errorAnnotationReader) Read(p []byte) (n int, err error) {
 		footer := strings.NewReader("\n")
 
 		// Setup the underlying reader
-		rdr := bufio.NewReader(a.tr.Reader())
+		rdr := bufio.NewReader(filterBuildLogs(a.tr.Reader()))
 		a.rdr = io.MultiReader(hdr, &urlEncodeNewlineReader{rdr}, footer)
 	}
 
 	return a.rdr.Read(p)
+}
+
+type nullReader struct{}
+
+func (n *nullReader) Read(p []byte) (int, error) {
+	return 0, io.EOF
+}
+
+func newSectionReader(rdr io.ReaderAt) *io.SectionReader {
+	if sr, ok := rdr.(*io.SectionReader); ok {
+		return io.NewSectionReader(sr, 0, sr.Size())
+	}
+	return io.NewSectionReader(rdr, 0, math.MaxInt64)
+}
+
+func filterBuildLogs(rdr io.ReaderAt) io.Reader {
+	var out io.Reader = &nullReader{}
+
+	// Create a temporary reader to scan through the content
+	scanner := bufio.NewScanner(newSectionReader(rdr))
+
+	var (
+		pos int64
+	)
+	for scanner.Scan() {
+		line := scanner.Text()
+		lineLength := int64(len(line)) + 1 // +1 for the newline character
+		pos += lineLength
+
+		file, _, ok := getTestOutputLoc(line)
+		if !ok {
+			continue
+		}
+
+		if !strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+
+		out = io.MultiReader(out, io.NewSectionReader(rdr, pos-lineLength, lineLength))
+	}
+
+	return out
 }
 
 // urlEncodeNewlineReader is a reader that replaces newlines with %0A
@@ -185,6 +228,10 @@ func getLastFileLine(rdr io.Reader) (file string, line int, retErr error) {
 			continue
 		}
 
+		if !strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+
 		file = f
 
 		ll, err := strconv.Atoi(l)
@@ -197,17 +244,24 @@ func getLastFileLine(rdr io.Reader) (file string, line int, retErr error) {
 	return file, line, scanner.Err()
 }
 
-func getTestOutputLoc(s string) (string, string, bool) {
-	file, other, ok := strings.Cut(s, ":")
-	if !ok {
-		return "", "", false
-	}
-	line, _, ok := strings.Cut(other, ":")
+func getTestOutputLoc(s string) (file string, line string, match bool) {
+	file, extra, ok := strings.Cut(s, ":")
 	if !ok {
 		return "", "", false
 	}
 
-	return strings.TrimSpace(file), line, true
+	if !strings.HasPrefix(file, "    ") {
+		// There should be whitespace before the file name
+		return "", "", false
+	}
+
+	file = strings.TrimSpace(file)
+
+	line, _, ok = strings.Cut(extra, ":")
+	if !ok {
+		return "", "", false
+	}
+	return file, line, true
 }
 
 func getSummaryFile() io.WriteCloser {
