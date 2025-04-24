@@ -21,6 +21,7 @@ Dalec spec YAMLs are composed of the following sections:
 - [Build section](#build-section)
 - [Artifacts section](#artifacts-section)
 - [Tests section](#tests-section)
+- [ Changelog section](#changelog-section)
 
 ## Args section
 
@@ -266,3 +267,19 @@ tests:
 ```
 
 For more information, please see [Testing](testing.md).
+
+## Changelog section
+
+Changelog section is used to define the changelog for the spec. This changelog can be used to define the changes made to the package which may include patches,
+updating versions, triggering rebuilds for dependencies, or basically any change to the spec that will trigger a new revision of the package.
+
+The channgelog is stored in the package metadata, where supported, and as such can be viewed by the package manager tooling.
+
+```yaml
+changelog:
+  - author: John Doe <john.doe@example.com>
+    date: 2025-04-24
+    changes:
+      - "Update build dependency on libfoo to version 2.0"
+      - Update upstream source to version 1.1.0
+```
