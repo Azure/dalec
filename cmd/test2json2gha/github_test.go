@@ -42,22 +42,22 @@ func TestErrorAnnotationFormatter_FormatResults(t *testing.T) {
 	err := formatter.FormatResults(handler.Results(), &output)
 	assert.NilError(t, err)
 
-	expected := "::error file=foo_test.go,line=43::" + strings.ReplaceAll(testEventFailOutput, "\n", "%0A") + "\n"
+	expected := "::error file=foo_test.go,line=43::" + strings.ReplaceAll(testLogsAnnotation, "\n", "%0A") + "\n"
 	assert.Equal(t, output.String(), expected)
 }
 
 func TestGetLastFileLine(t *testing.T) {
-	input := "file1.go:10: some error\nfile2.go:20: another error\n"
+	input := "    file1_test.go:10: some error\n    file2_test.go:20: another error\n"
 	rdr := strings.NewReader(input)
 	file, line, err := getLastFileLine(rdr)
 	assert.NilError(t, err)
-	assert.Equal(t, file, "file2.go")
+	assert.Equal(t, file, "file2_test.go")
 	assert.Equal(t, line, 20)
 }
 
 func TestGetTestOutputLoc(t *testing.T) {
 	t.Run("ValidInput", func(t *testing.T) {
-		file, line, ok := getTestOutputLoc("file.go:123: some output")
+		file, line, ok := getTestOutputLoc("    file.go:123: some output")
 		assert.Assert(t, ok)
 		assert.Equal(t, file, "file.go")
 		assert.Equal(t, line, "123")
