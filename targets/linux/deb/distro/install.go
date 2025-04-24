@@ -80,6 +80,10 @@ apt autoclean -y
 rm -rf /var/lib/apt/lists/partial/*
 apt update
 
+if apt install -y ${1}; then
+	exit 0
+fi
+
 if ! command -v aptitude > /dev/null; then
 	needs_cleanup=1
 	apt install -y aptitude
