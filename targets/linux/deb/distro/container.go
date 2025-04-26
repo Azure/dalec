@@ -58,7 +58,7 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 			// passes (as it is looking at these files).
 			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
 		}),
-		InstallLocalPkg(debSt, opts...),
+		InstallLocalPkg(debSt, true, opts...),
 	).Root().
 		With(c.createSymlinks(worker, spec, targetKey, opts...)), nil
 }
