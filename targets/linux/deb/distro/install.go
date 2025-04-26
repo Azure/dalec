@@ -3,6 +3,7 @@ package distro
 import (
 	"context"
 	"path/filepath"
+	"strconv"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/packaging/linux/deb"
@@ -54,7 +55,7 @@ apt install -y "$@"
 // This returns an [llb.RunOption] but it does create some things internally,
 // This is what the constraints opts are used for.
 // The constraints are applied after any constraint set on the [llb.ExecInfo]
-func InstallLocalPkg(pkg llb.State, opts ...llb.ConstraintsOpt) llb.RunOption {
+func InstallLocalPkg(pkg llb.State, upgrade bool, opts ...llb.ConstraintsOpt) llb.RunOption {
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 		// The apt solver always tries to select the latest package version even
 		// when constraints specify that an older version should be installed and
@@ -79,6 +80,10 @@ apt autoclean -y
 # Remove any previously failed attempts to get repo data
 rm -rf /var/lib/apt/lists/partial/*
 apt update
+
+if [ "${DALEC_UPGRADE}" = "true" ]; then
+		apt dist-upgrade -y
+fi
 
 if apt install -y ${1}; then
 	exit 0
@@ -115,6 +120,7 @@ aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject ${pkg_name}
 		llb.AddMount(p, script, llb.SourcePath("install.sh")).SetRunOption(ei)
 		llb.AddMount(debPath, pkg, llb.Readonly).SetRunOption(ei)
 		llb.AddEnv("DEBIAN_FRONTEND", "noninteractive").SetRunOption(ei)
+		llb.AddEnv("DALEC_UPGRADE", strconv.FormatBool(upgrade)).SetRunOption(ei)
 
 		args := []string{p, filepath.Join(debPath, "*.deb")}
 		llb.Args(args).SetRunOption(ei)
@@ -164,7 +170,7 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 			return in.Run(
 				dalec.WithConstraints(opts...),
 				customRepos,
-				InstallLocalPkg(pkg, opts...),
+				InstallLocalPkg(pkg, false, opts...),
 				dalec.WithMountedAptCache(d.AptCachePrefix),
 			).Root(), nil
 		})
