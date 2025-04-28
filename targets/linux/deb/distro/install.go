@@ -82,7 +82,7 @@ rm -rf /var/lib/apt/lists/partial/*
 apt update
 
 if [ "${DALEC_UPGRADE}" = "true" ]; then
-		apt dist-upgrade -y
+	apt dist-upgrade -y
 fi
 
 if apt install -y ${1}; then
