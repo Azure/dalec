@@ -436,11 +436,8 @@
 					"description": "Changes is the list of changes in the changelog entry."
 				},
 				"date": {
-					"type": [
-						"string"
-					],
-					"description": "Date is the date of the changelog entry.",
-					"format": "date-time"
+					"$ref": "#/$defs/Date",
+					"description": "Date is the date of the changelog entry.\nDates are formatted as YYYY-MM-DD"
 				}
 			},
 			"additionalProperties": {
@@ -615,6 +612,15 @@
 				"null"
 			],
 			"description": "CreateArtifactDirectories describes various directories that should be created on install."
+		},
+		"Date": {
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			]
 		},
 		"FileCheckOutput": {
 			"properties": {

@@ -49,7 +49,7 @@ type changelogWrapper struct {
 }
 
 var dummyChangelogEntry = dalec.ChangelogEntry{
-	Date:   time.Unix(0, 0),
+	Date:   dalec.Date{Time: time.Unix(0, 0)},
 	Author: "Dalec Dummy Changelog <>",
 	Changes: []string{
 		"Dummy changelog entry",
