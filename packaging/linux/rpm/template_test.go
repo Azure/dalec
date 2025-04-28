@@ -857,3 +857,43 @@ func TestTemplate_DisableStrip(t *testing.T) {
 	got = w.DisableStrip()
 	assert.Equal(t, got, want)
 }
+
+func TestTemplate_Provides(t *testing.T) {
+	spec := &dalec.Spec{
+		Provides: map[string]dalec.PackageConstraints{
+			"test-provides": {},
+		},
+	}
+
+	w := &specWrapper{Spec: spec}
+	got := w.Provides().String()
+	want := "Provides: test-provides\n\n"
+	assert.Equal(t, got, want)
+
+	w.Spec.Provides["test-provides"] = dalec.PackageConstraints{
+		Version: []string{"= 2.0.0"},
+	}
+	got = w.Provides().String()
+	want = "Provides: test-provides = 2.0.0\n\n"
+	assert.Equal(t, got, want)
+}
+
+func TestTemplate_Replaces(t *testing.T) {
+	spec := &dalec.Spec{
+		Replaces: map[string]dalec.PackageConstraints{
+			"test-replaces": {},
+		},
+	}
+
+	w := &specWrapper{Spec: spec}
+	got := w.Replaces().String()
+	want := "Obsoletes: test-replaces\n"
+	assert.Equal(t, got, want)
+
+	w.Spec.Replaces["test-replaces"] = dalec.PackageConstraints{
+		Version: []string{"< 2.0.0"},
+	}
+	got = w.Replaces().String()
+	want = "Obsoletes: test-replaces < 2.0.0\n"
+	assert.Equal(t, got, want)
+}

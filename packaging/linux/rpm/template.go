@@ -93,7 +93,7 @@ func (w *specWrapper) Provides() fmt.Stringer {
 	slices.Sort(ls)
 
 	for _, name := range ls {
-		writeDep(b, "Provides", name, w.Spec.Replaces[name])
+		writeDep(b, "Provides", name, w.Spec.Provides[name])
 	}
 	b.WriteString("\n")
 	return b
@@ -104,7 +104,7 @@ func (w *specWrapper) Replaces() fmt.Stringer {
 
 	keys := dalec.SortMapKeys(w.Spec.Replaces)
 	for _, name := range keys {
-		writeDep(b, "Replaces", name, w.Spec.Replaces[name])
+		writeDep(b, "Obsoletes", name, w.Spec.Replaces[name])
 	}
 	return b
 }
