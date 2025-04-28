@@ -191,6 +191,10 @@ type SymlinkTarget struct {
 	Path string `yaml:"path" json:"path" jsonschema:"oneof_required=path"`
 	// Path is a list of `newpath`s that will all point to the same `oldpath`.
 	Paths []string `yaml:"paths" json:"paths" jsonschema:"oneof_required=paths"`
+	// UID is the user ID that should own the symlink
+	UID int `yaml:"uid,omitempty" json:"uid,omitempty"`
+	// GID is the group ID that should own the symlink
+	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
 }
 
 type SourceDockerImage struct {

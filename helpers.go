@@ -345,6 +345,7 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 			for _, newpath := range newpaths {
 				fmt.Fprintf(buf, "mkdir -p %q\n", filepath.Join(rootfsPath, filepath.Dir(newpath)))
 				fmt.Fprintf(buf, "ln -s %q %q\n", oldpath, filepath.Join(rootfsPath, newpath))
+				fmt.Fprintf(buf, "chown -h %d:%d %q\n", post.Symlinks[oldpath].UID, post.Symlinks[oldpath].GID, filepath.Join(rootfsPath, newpath))
 			}
 		}
 
