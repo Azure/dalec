@@ -689,6 +689,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 	for _, l := range artifacts.Links {
 		fmt.Fprintln(b, "mkdir -p", filepath.Dir(filepath.Join("%{buildroot}", l.Dest)))
 		fmt.Fprintln(b, "ln -sf", l.Source, "%{buildroot}/"+l.Dest)
+		fmt.Fprintln(b, "chown -h", l.UID, ":", l.GID, "%{buildroot}/"+l.Dest)
 	}
 
 	headersKeys := dalec.SortMapKeys(artifacts.Headers)
