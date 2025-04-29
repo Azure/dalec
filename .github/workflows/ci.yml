@@ -15,6 +15,8 @@ on:
       - '*.md'
       - 'CODEOWNERS'
       - 'LICENSE'
+      - '.github/workflows/retag.yml'
+      - '.github/workflows/retag/images.yml'
 
   push:
     branches:
@@ -26,6 +28,8 @@ on:
       - '*.md'
       - 'CODEOWNERS'
       - 'LICENSE'
+      - '.github/workflows/retag.yml'
+      - '.github/workflows/retag/images.yml'
 
 permissions:
   contents: read

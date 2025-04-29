@@ -1,0 +1,46 @@
+name: Retag Images
+
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Every Sunday at midnight
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ./.github/workflows/retag/images.yml
+      - ./.github/workflows/retag.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        name: Checkout
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        name: Login to GHCR
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Retag images
+        run: |
+          repo="ghcr.io/${{ github.repository }}"
+          repo="$(tr '[:upper:]' '[:lower:]' <<<"$repo")"
+
+          yq eval '.[] | [.source, .dest ] | @tsv' ./.github/workflows/retag/images.yml | while IFS=$'\t' read -r source dest; do
+            dest="${repo}/$dest"
+            echo "Retagging $source to $dest"
+            docker pull "$source"
+            docker tag "$source" "$dest"
+
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "Skipping push for pull request"
+              continue
+            fi
+
+            docker push "$dest"
+          done
