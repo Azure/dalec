@@ -402,6 +402,12 @@ echo "$BAR" > bar.txt
 					Symlinks: map[string]dalec.SymlinkTarget{
 						"/usr/bin/src1": {Path: "/src1"},
 						"/usr/bin/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
+						// Add a symlink with ownership
+						"/usr/bin/bash": {
+							Paths: []string{"/owned-image-link"},
+							UID:   1234,
+							GID:   5678,
+						},
 					},
 				},
 			},
@@ -416,6 +422,21 @@ echo "$BAR" > bar.txt
 					"foo0.txt": {},
 					"foo1.txt": {},
 					"bar.txt":  {},
+				},
+				// Add these user and group definitions
+				Users: []dalec.AddUserConfig{
+					{Name: "symlink-testuser", UID: 1234},
+				},
+				Groups: []dalec.AddGroupConfig{
+					{Name: "symlink-testgroup", GID: 5678},
+				},
+				Links: []dalec.ArtifactSymlinkConfig{
+					{
+						Source: "/bin/bash",
+						Dest:   "/bin/owned-link",
+						UID:    1234,
+						GID:    5678,
+					},
 				},
 			},
 
@@ -548,6 +569,24 @@ echo "$BAR" > bar.txt
 								},
 							},
 						},
+					},
+				},
+				{
+					Name: "Symlinks should have correct ownership",
+					Steps: []dalec.TestStep{
+						// Test artifact symlink ownership
+						{
+							Command: "stat -c '%u:%g' /bin/owned-link",
+							Stdout:  dalec.CheckOutput{Equals: "1234:5678"},
+						},
+						// Test image post-install symlink ownership
+						{
+							Command: "stat -c '%u:%g' /owned-image-link",
+							Stdout:  dalec.CheckOutput{Equals: "1234:5678"},
+						},
+						// Verify they're still actual symlinks
+						{Command: "test -L /bin/owned-link"},
+						{Command: "test -L /owned-image-link"},
 					},
 				},
 			},
