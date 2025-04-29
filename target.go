@@ -74,7 +74,7 @@ func (t *Target) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 		errs = append(errs, errors.Wrap(err, "package config"))
 	}
 
-	if err := t.Dependencies.processBuildArgs(args, allowArg); err != nil {
+	if err := t.Dependencies.processBuildArgs(lex, args, allowArg); err != nil {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
 	}
 

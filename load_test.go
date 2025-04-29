@@ -602,6 +602,42 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 		},
 	}
 
+	spec.Dependencies = &PackageDependencies{
+		Build: map[string]PackageConstraints{
+			"p1": {
+				Version: []string{
+					"1.0",
+					"$FOO",
+				},
+			},
+		},
+		Runtime: map[string]PackageConstraints{
+			"p1": {
+				Version: []string{
+					"1.0",
+					"$FOO",
+				},
+			},
+		},
+	}
+
+	spec.Provides = map[string]PackageConstraints{
+		"p1": {
+			Version: []string{
+				"1.0",
+				"$FOO",
+			},
+		},
+	}
+	spec.Replaces = map[string]PackageConstraints{
+		"p1": {
+			Version: []string{
+				"1.0",
+				"$FOO",
+			},
+		},
+	}
+
 	env["BAR"] = bar
 
 	spec.Args["BAR"] = ""
@@ -621,6 +657,15 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["WHATEVER"], argWithDefault))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].PackageConfig.Signer.Args["REGULAR"], plainOleValue))
 	assert.Check(t, cmp.Equal(spec.Targets["t2"].Image.Labels["foo"], foo))
+
+	assert.Check(t, cmp.Equal(spec.Dependencies.Build["p1"].Version[0], "1.0"))
+	assert.Check(t, cmp.Equal(spec.Dependencies.Build["p1"].Version[1], "foo"))
+	assert.Check(t, cmp.Equal(spec.Dependencies.Runtime["p1"].Version[0], "1.0"))
+	assert.Check(t, cmp.Equal(spec.Dependencies.Runtime["p1"].Version[1], "foo"))
+	assert.Check(t, cmp.Equal(spec.Provides["p1"].Version[0], "1.0"))
+	assert.Check(t, cmp.Equal(spec.Provides["p1"].Version[1], "foo"))
+	assert.Check(t, cmp.Equal(spec.Replaces["p1"].Version[0], "1.0"))
+	assert.Check(t, cmp.Equal(spec.Replaces["p1"].Version[1], "foo"))
 }
 
 func TestCustomRepoFillDefaults(t *testing.T) {

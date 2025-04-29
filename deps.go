@@ -4,6 +4,7 @@ import (
 	goerrors "errors"
 	"slices"
 
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
 )
 
@@ -68,14 +69,36 @@ type PackageRepositoryConfig struct {
 	Envs []string `yaml:"envs" json:"envs" jsonschema:"enum=build,enum=test,enum=install"`
 }
 
-func (d *PackageDependencies) processBuildArgs(args map[string]string, allowArg func(string) bool) error {
+func (d *PackageDependencies) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	if d == nil {
 		return nil
 	}
 
+	for k, v := range d.Build {
+		for i, ver := range v.Version {
+			updated, err := expandArgs(lex, ver, args, allowArg)
+			if err != nil {
+				return errors.Wrapf(err, "build version %s", ver)
+			}
+			v.Version[i] = updated
+		}
+		d.Build[k] = v
+	}
+
+	for k, v := range d.Runtime {
+		for i, ver := range v.Version {
+			updated, err := expandArgs(lex, ver, args, allowArg)
+			if err != nil {
+				return errors.Wrapf(err, "runtime version %s", ver)
+			}
+			v.Version[i] = updated
+		}
+		d.Runtime[k] = v
+	}
+
 	var errs []error
 	for i, repo := range d.ExtraRepos {
-		if err := repo.processBuildArgs(args, allowArg); err != nil {
+		if err := repo.processBuildArgs(lex, args, allowArg); err != nil {
 			errs = append(errs, errors.Wrapf(err, "extra repos index %d", i))
 		}
 		d.ExtraRepos[i] = repo
@@ -83,7 +106,7 @@ func (d *PackageDependencies) processBuildArgs(args map[string]string, allowArg 
 	return goerrors.Join(errs...)
 }
 
-func (r *PackageRepositoryConfig) processBuildArgs(args map[string]string, allowArg func(string) bool) error {
+func (r *PackageRepositoryConfig) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	if r == nil {
 		return nil
 	}
@@ -92,7 +115,7 @@ func (r *PackageRepositoryConfig) processBuildArgs(args map[string]string, allow
 
 	for k := range r.Config {
 		src := r.Config[k]
-		if err := src.processBuildArgs(args, allowArg); err != nil {
+		if err := src.processBuildArgs(lex, args, allowArg); err != nil {
 			errs = append(errs, errors.Wrapf(err, "config %s", k))
 			continue
 		}
@@ -101,7 +124,7 @@ func (r *PackageRepositoryConfig) processBuildArgs(args map[string]string, allow
 
 	for k := range r.Keys {
 		src := r.Keys[k]
-		if err := src.processBuildArgs(args, allowArg); err != nil {
+		if err := src.processBuildArgs(lex, args, allowArg); err != nil {
 			errs = append(errs, errors.Wrapf(err, "key %s", k))
 			continue
 		}
@@ -110,7 +133,7 @@ func (r *PackageRepositoryConfig) processBuildArgs(args map[string]string, allow
 
 	for i := range r.Data {
 		d := r.Data[i]
-		if err := d.processBuildArgs(args, allowArg); err != nil {
+		if err := d.processBuildArgs(lex, args, allowArg); err != nil {
 			errs = append(errs, errors.Wrapf(err, "data index %d", i))
 			continue
 		}

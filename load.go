@@ -155,7 +155,7 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 	}
 
 	for name, src := range s.Sources {
-		if err := src.processBuildArgs(args, cfg.AllowArg); err != nil {
+		if err := src.processBuildArgs(lex, args, cfg.AllowArg); err != nil {
 			appendErr(errors.Wrapf(err, "source %q", name))
 		}
 		s.Sources[name] = src
@@ -216,8 +216,28 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 		appendErr(errors.Wrap(err, "package config"))
 	}
 
-	if err := s.Dependencies.processBuildArgs(args, cfg.AllowArg); err != nil {
+	if err := s.Dependencies.processBuildArgs(lex, args, cfg.AllowArg); err != nil {
 		appendErr(errors.Wrap(err, "dependencies"))
+	}
+
+	for k, v := range s.Provides {
+		for i, ver := range v.Version {
+			updated, err := expandArgs(lex, ver, args, cfg.AllowArg)
+			if err != nil {
+				appendErr(errors.Wrapf(err, "provides %s version %d", k, i))
+			}
+			s.Provides[k].Version[i] = updated
+		}
+	}
+
+	for k, v := range s.Replaces {
+		for i, ver := range v.Version {
+			updated, err := expandArgs(lex, ver, args, cfg.AllowArg)
+			if err != nil {
+				appendErr(errors.Wrapf(err, "replaces %s version %d", k, i))
+			}
+			s.Replaces[k].Version[i] = updated
+		}
 	}
 
 	return goerrors.Join(errs...)
@@ -415,7 +435,7 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, allow
 	}
 
 	for i, s := range c.Mounts {
-		if err := s.processBuildArgs(args, allowArg); err != nil {
+		if err := s.processBuildArgs(lex, args, allowArg); err != nil {
 			appendErr(err)
 			continue
 		}

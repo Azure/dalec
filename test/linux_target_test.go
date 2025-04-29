@@ -1,7 +1,10 @@
 package test
 
 import (
+	"bufio"
 	_ "embed"
+	"io"
+	"io/fs"
 
 	"context"
 	"encoding/json"
@@ -13,17 +16,22 @@ import (
 	"time"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/cavaliergopher/rpm"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
+	"github.com/moby/go-archive/compression"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	pkgerrors "github.com/pkg/errors"
 	"golang.org/x/exp/maps"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 	"gotest.tools/v3/skip"
+	"pault.ag/go/debian/deb"
 )
 
 type workerConfig struct {
@@ -1611,6 +1619,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		testTargetPlatform(ctx, t, testConfig)
 	})
+
+	t.Run("package provides", func(t *testing.T) {
+		t.Parallel()
+		testPackageProvidesReplaces(ctx, t, testConfig)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -1806,6 +1819,7 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			ctx := startTestSpan(ctx, t)
 
 			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 				worker := getWorker(ctx, t, gwc)
@@ -2545,5 +2559,188 @@ func testTargetPlatform(ctx context.Context, t *testing.T, cfg testLinuxConfig) 
 		err = json.Unmarshal(dt, &img)
 		assert.NilError(t, err)
 		assert.Assert(t, platforms.OnlyStrict(tp).Match(img.Platform), "platform mismatch, expected %v, got %v", tp, img.Platform)
+	})
+}
+
+func extractDebControlFile(t *testing.T, f io.ReaderAt) io.ReadCloser {
+	t.Helper()
+
+	ar, err := deb.LoadAr(f)
+	assert.NilError(t, err)
+
+	for {
+		entry, err := ar.Next()
+		if err == io.EOF {
+			break
+		}
+		assert.NilError(t, err)
+
+		if entry == nil {
+			break
+		}
+
+		if !strings.HasPrefix(entry.Name, "control.") {
+			continue
+		}
+
+		rdr, err := compression.DecompressStream(entry.Data)
+		assert.NilError(t, err)
+		return rdr
+	}
+	return nil
+}
+
+type mapEnvGetter map[string]string
+
+func (m mapEnvGetter) Get(key string) (string, bool) {
+	v, ok := m[key]
+	return v, ok
+}
+
+func (m mapEnvGetter) Keys() []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func testPackageProvidesReplaces(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	ctx = startTestSpan(ctx, t)
+
+	spec := newSimpleSpec()
+	spec.Args = map[string]string{
+		"SOME_VER": "1.0.0",
+	}
+	spec.Provides = map[string]dalec.PackageConstraints{
+		"other-package1": {},
+		"other-package2": {
+			Version: []string{"= ${SOME_VER}"},
+		},
+	}
+
+	spec.Replaces = map[string]dalec.PackageConstraints{
+		"other-package1": {},
+		"other-package2": {
+			Version: []string{"= ${SOME_VER}"},
+		},
+	}
+
+	envGetter := mapEnvGetter(spec.Args)
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
+		res := solveT(ctx, t, client, sr)
+
+		ref, err := res.SingleRef()
+		assert.NilError(t, err)
+
+		pkgfs := bkfs.FromRef(ctx, ref)
+
+		checkRPM := func(path string) {
+			// Check that the package provides are in the rpm
+			f, err := pkgfs.Open(path)
+			assert.NilError(t, err)
+			defer f.Close()
+
+			pkg, err := rpm.Read(f)
+			if err != nil {
+				assert.NilError(t, err)
+			}
+
+			var found int
+			lex := shell.NewLex('\\')
+			for _, p := range pkg.Provides() {
+				if p.Name() == spec.Name || strings.HasPrefix(p.Name(), spec.Name+"(") {
+					continue
+				}
+
+				compare, ok := spec.Provides[p.Name()]
+				assert.Assert(t, ok, p.Name())
+				found++
+
+				if len(compare.Version) > 0 {
+					v := strings.TrimPrefix(compare.Version[0], "= ")
+					res, err := lex.ProcessWordWithMatches(v, envGetter)
+					assert.NilError(t, err)
+					assert.Equal(t, p.Version(), res.Result, "version mismatch for %s", p.Name())
+				}
+			}
+
+			found = 0
+			for _, r := range pkg.Obsoletes() {
+				compare, ok := spec.Provides[r.Name()]
+				assert.Assert(t, ok, r.Name())
+				found++
+
+				if len(compare.Version) > 0 {
+					v := strings.TrimPrefix(compare.Version[0], "= ")
+					res, err := lex.ProcessWordWithMatches(v, envGetter)
+					assert.NilError(t, err)
+					assert.Equal(t, r.Version(), res.Result, "version mismatch for %s", r.Name())
+				}
+			}
+			assert.Equal(t, found, len(spec.Provides), "not all provides found in rpm")
+		}
+
+		checkDeb := func(path string) {
+			f, err := pkgfs.Open(path)
+			assert.NilError(t, err)
+			defer f.Close()
+
+			cf := extractDebControlFile(t, f.(io.ReaderAt))
+			assert.Assert(t, cf != nil, "control file not found in deb")
+			defer cf.Close()
+
+			scanner := bufio.NewScanner(cf)
+
+			expect := "other-package1, other-package2 (= 1.0.0)"
+
+			var found int
+			for scanner.Scan() {
+				txt := scanner.Text()
+
+				key, value, ok := strings.Cut(txt, ": ")
+				if !ok {
+					continue
+				}
+
+				switch key {
+				case "Replaces", "Provides":
+					found++
+					assert.Equal(t, value, expect, key+" mismatch")
+				default:
+				}
+
+				if found == 2 {
+					break
+				}
+			}
+			assert.NilError(t, err)
+			assert.Equal(t, found, 2, "missing either provides or replaces in deb")
+		}
+
+		var found bool
+		err = fs.WalkDir(pkgfs, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+
+			if strings.HasSuffix(path, ".rpm") && !strings.HasSuffix(path, ".src.rpm") {
+				checkRPM(path)
+				found = true
+				return nil
+			}
+			if strings.HasSuffix(path, ".deb") {
+				found = true
+				checkDeb(path)
+			}
+			return nil
+		})
+		assert.NilError(t, err)
+		assert.Assert(t, found, "no rpm or deb found in package")
 	})
 }
