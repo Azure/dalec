@@ -283,8 +283,8 @@ func (m *SourceMount) validate(root string) error {
 	return m.Spec.validate()
 }
 
-func (m *SourceMount) processBuildArgs(args map[string]string, allowArg func(string) bool) error {
-	if err := m.Spec.processBuildArgs(args, allowArg); err != nil {
+func (m *SourceMount) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
+	if err := m.Spec.processBuildArgs(lex, args, allowArg); err != nil {
 		return errors.Wrapf(err, "mount dest: %s", m.Dest)
 	}
 	return nil
@@ -716,8 +716,7 @@ func fillDefaults(s *Source) {
 	}
 }
 
-func (s *Source) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
-	lex := shell.NewLex('\\')
+func (s *Source) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
 	// force the shell lexer to skip unresolved env vars so they aren't
 	// replaced with ""
 	lex.SkipUnsetEnv = true
@@ -765,7 +764,7 @@ func (s *Source) processBuildArgs(args map[string]string, allowArg func(key stri
 			appendErr(err)
 		}
 	case s.Build != nil:
-		err := s.Build.Source.processBuildArgs(args, allowArg)
+		err := s.Build.Source.processBuildArgs(lex, args, allowArg)
 		if err != nil {
 			appendErr(err)
 		}

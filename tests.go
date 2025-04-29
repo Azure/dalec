@@ -199,7 +199,7 @@ func (c *TestSpec) processBuildArgs(lex *shell.Lex, args map[string]string, allo
 	}
 
 	for i, s := range c.Mounts {
-		if err := s.processBuildArgs(args, allowArg); err != nil {
+		if err := s.processBuildArgs(lex, args, allowArg); err != nil {
 			appendErr(err)
 			continue
 		}
