@@ -1,0 +1,29 @@
+name: 'Setup BuildKit Source Policy'
+description: 'Sets up BUILDKIT_SOURCE_POLICY environment variable with processed policy.json'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Format repository name
+      id: format-repo
+      uses: ./.github/actions/format-repo
+    
+    - name: Process policy file
+      id: process-policy
+      shell: bash
+      run: |
+        # Get the formatted repo from the previous step
+        FORMATTED_REPO="${{ steps.format-repo.outputs.oci-name }}"
+        
+        # Set REPO_PREFIX for envsubst
+        export REPO_PREFIX="ghcr.io/${FORMATTED_REPO}"
+        
+        # Get the full path to policy.json
+        POLICY_PATH="${GITHUB_WORKSPACE}/.github/actions/setup-source-policy/policy.json"
+        
+        # Process the policy file with envsubst and save to a temporary file
+        TEMP_POLICY_PATH="${RUNNER_TEMP}/processed_policy.json"
+        envsubst < "${POLICY_PATH}" > "${TEMP_POLICY_PATH}"
+        
+        # Set BUILDKIT_SOURCE_POLICY as a global environment variable
+        echo "BUILDKIT_SOURCE_POLICY=${TEMP_POLICY_PATH}" >> $GITHUB_ENV

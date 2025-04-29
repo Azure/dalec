@@ -1,0 +1,20 @@
+name: 'Format Repository for OCI'
+description: 'Formats a GitHub repository name into an OCI compliant reference for ghcr.io'
+
+outputs:
+  result:
+    description: 'The OCI compliant repository name (lowercase)'
+    value: ${{ steps.format.outputs.result }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Format repository name
+      id: format
+      shell: bash
+      run: |
+        # Get the repository from GitHub context
+        REPO="${GITHUB_REPOSITORY}"
+        # Convert to lowercase
+        OCI_NAME=$(echo "${REPO}" | tr '[:upper:]' '[:lower:]')
+        echo "result=${OCI_NAME}" >> $GITHUB_OUTPUT

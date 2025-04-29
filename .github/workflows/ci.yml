@@ -101,6 +101,7 @@ jobs:
           go-version: '1.23'
           cache: false
 
+
       - name: Configure dockerd
         run: |
           set -ex -o pipefail
@@ -119,6 +120,7 @@ jobs:
           sudo systemctl restart docker
       - name: checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
       - name: Setup jaeger
         run: |
           set -e
@@ -144,6 +146,8 @@ jobs:
         run: go mod download
       - name: Setup QEMU
         run: docker run --rm --privileged tonistiigi/binfmt:latest --install all
+      - name: Setup source policy
+        uses: ./.github/actions/setup-source-policy
       - name: Run integration tests
         run: |
           set -ex
@@ -217,13 +221,17 @@ jobs:
         with:
           # We need to fetch all commits so that we can diff against the base branch
           fetch-depth: 0
+
       - name: Expose GitHub tokens for caching
         uses: crazy-max/ghaction-github-runtime@b3a9207c0e1ef41f4cf215303c976869d0c2c1c4 # v3.0.0
+      - name: Setup source policy
+        uses: ./.github/actions/setup-source-policy
       - name: Setup builder
         run: |
           # Sometimes the builder runs out of space... so cleanup anything we can first.
           docker image prune -a -f
 
+          # TODO: Add the registry image to mirror list and replace here.
           docker run -d --net=host registry
 
           # If diff/merge are enabled we need to use a buildx builder to make sure the feature is supported.
