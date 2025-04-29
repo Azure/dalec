@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,7 +19,10 @@ import (
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
+	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	pkgerrors "github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"gotest.tools/v3/assert"
 )
 
 type BuildxEnv struct {
@@ -292,6 +296,9 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	withProjectRoot(t, &so)
 	withResolveLocal(&so)
 
+	err = withSourcePolicy(&so)
+	assert.NilError(t, err)
+
 	_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		gwc = &clientForceDalecWithInput{gwc}
 
@@ -357,4 +364,28 @@ func (c *gwClientInputInject) Solve(ctx context.Context, req gwclient.SolveReque
 		return nil, err
 	}
 	return c.Client.Solve(ctx, req)
+}
+
+func withSourcePolicy(so *client.SolveOpt) error {
+	p := os.Getenv("EXPERIMENTAL_BUILDKIT_SOURCE_POLICY")
+	if p == "" {
+		return nil
+	}
+
+	dt, err := os.ReadFile(p)
+	if err != nil {
+		return fmt.Errorf("could not read source policy file: %w", err)
+	}
+
+	var pol spb.Policy
+	if err := json.Unmarshal(dt, &pol); err != nil {
+		// maybe it's in protobuf format?
+		e2 := proto.Unmarshal(dt, &pol)
+		if e2 != nil {
+			return pkgerrors.Wrap(err, "failed to parse source policy")
+		}
+	}
+
+	so.SourcePolicy = &pol
+	return nil
 }

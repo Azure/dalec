@@ -1,0 +1,13 @@
+{
+    "rules": [
+        {
+            "action": "CONVERT",
+            "selector": {
+                "identifier": "docker-image://docker.io/*"
+            },
+            "updates": {
+                "identifier": "docker-image://${REPO_PREFIX}/dockerhub/mirror/$1"
+            }
+        }
+    ]
+}
