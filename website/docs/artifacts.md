@@ -247,16 +247,19 @@ though behavior may differ between different OS's/distros.
 Links are a list of symlinks to be included with the package.
 Unlike most other artifact typtes, links do not reference any specific build
 artifact but rather a literal source-to-target mapping for the symlink.
+Symlink ownership can also be set (UID and GID). Note that this sets ownership of the symlink itself, not the target file.
 
 Example:
 
-This creates a symlink at /usr/bin/go pointing to /usr/lib/golang/go.
+This creates a symlink at /usr/bin/go pointing to /usr/lib/golang/go with UID and GID.
 
 ```yaml
 artifacts:
   links:
     - source: /usr/lib/golang/go
       dest: /usr/bin/go
+      uid: 1000
+      gid: 1000
 ```
 
 ### Headers
