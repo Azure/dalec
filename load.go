@@ -161,6 +161,16 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 		s.Sources[name] = src
 	}
 
+	for src, patchList := range s.Patches {
+		for i, patch := range patchList {
+			updated, err := expandArgs(lex, patch.Path, args, cfg.AllowArg)
+			if err != nil {
+				appendErr(errors.Wrapf(err, "patch %s path %d", src, i))
+			}
+			s.Patches[src][i].Path = updated
+		}
+	}
+
 	updated, err := expandArgs(lex, s.Version, args, cfg.AllowArg)
 	if err != nil {
 		appendErr(errors.Wrap(err, "version"))
