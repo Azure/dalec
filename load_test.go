@@ -588,6 +588,20 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 		"WHATEVER": "$VAR_WITH_DEFAULT",
 		"REGULAR":  plainOleValue,
 	}
+
+	spec.Sources = map[string]Source{}
+	spec.Sources["patch"] = Source{
+		Path:     "foo/${BAR}",
+		Includes: []string{"foo/${BAR}"},
+		Excludes: []string{"foo/${BAR}"},
+	}
+
+	spec.Patches = map[string][]PatchSpec{
+		"src": {
+			{Path: "$FOO"},
+		},
+	}
+
 	spec.PackageConfig = &PackageConfig{
 		Signer: &PackageSigner{
 			Args: maps.Clone(pairs),
@@ -654,6 +668,11 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	spec.Args["VAR_WITH_DEFAULT"] = argWithDefault
 
 	assert.NilError(t, spec.SubstituteArgs(env))
+
+	assert.Check(t, cmp.Equal(spec.Sources["patch"].Path, "foo/"+bar))
+	assert.Check(t, cmp.Equal(spec.Sources["patch"].Includes[0], "foo/"+bar))
+	assert.Check(t, cmp.Equal(spec.Sources["patch"].Excludes[0], "foo/"+bar))
+	assert.Check(t, cmp.Equal(spec.Patches["src"][0].Path, foo))
 
 	// Base package config
 	assert.Check(t, cmp.Equal(spec.PackageConfig.Signer.Args["FOO"], foo))

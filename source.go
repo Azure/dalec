@@ -725,6 +725,33 @@ func (s *Source) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 		errs = append(errs, err)
 	}
 
+	if s.Path != "" {
+		updated, err := expandArgs(lex, s.Path, args, allowArg)
+		if err != nil {
+			appendErr(err)
+		} else {
+			s.Path = updated
+		}
+	}
+
+	for i, g := range s.Includes {
+		updated, err := expandArgs(lex, g, args, allowArg)
+		if err != nil {
+			appendErr(err)
+			continue
+		}
+		s.Includes[i] = updated
+	}
+
+	for i, g := range s.Excludes {
+		updated, err := expandArgs(lex, g, args, allowArg)
+		if err != nil {
+			appendErr(err)
+			continue
+		}
+		s.Excludes[i] = updated
+	}
+
 	switch {
 	case s.DockerImage != nil:
 		updated, err := expandArgs(lex, s.DockerImage.Ref, args, allowArg)
