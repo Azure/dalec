@@ -690,7 +690,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		fmt.Fprintln(b, "mkdir -p", filepath.Dir(filepath.Join("%{buildroot}", l.Dest)))
 		fmt.Fprintln(b, "ln -sf", l.Source, "%{buildroot}/"+l.Dest)
 		if l.UID != 0 || l.GID != 0 {
-			fmt.Fprintln(b, "chown -h", l.UID, ":", l.GID, "%{buildroot}/"+l.Dest)
+			fmt.Fprintf(b, "chown -h %d:%d %q\n", l.UID, l.GID, "%{buildroot}/"+l.Dest)
 		}
 	}
 
