@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -209,6 +210,34 @@ func (w *specWrapper) Recommends() fmt.Stringer {
 	return b
 }
 
+// NOTE: This is very basic and does not handle things like grouped constraints
+// Given this is just trying to shim things to allow either the rpm format or the deb format
+// in its basic form, this is sufficient for now.
+func formatVersionConstraint(v string) string {
+	prefix, suffix, ok := strings.Cut(v, " ")
+	if !ok {
+		if len(prefix) >= 1 {
+			_, err := strconv.Atoi(prefix[:1])
+			if err == nil {
+				// This is just a version number, assume it should use the equal symbol
+				return "== " + v
+			}
+		}
+		return v
+	}
+
+	switch prefix {
+	case "<<":
+		return "< " + suffix
+	case ">>":
+		return "> " + suffix
+	case "=":
+		return "== " + suffix
+	default:
+		return v
+	}
+}
+
 func writeDep(b *strings.Builder, kind, name string, constraints dalec.PackageConstraints) {
 	do := func() {
 		if len(constraints.Version) == 0 {
@@ -217,7 +246,7 @@ func writeDep(b *strings.Builder, kind, name string, constraints dalec.PackageCo
 		}
 
 		for _, c := range constraints.Version {
-			fmt.Fprintf(b, "%s: %s %s\n", kind, name, c)
+			fmt.Fprintf(b, "%s: %s %s\n", kind, name, formatVersionConstraint(c))
 		}
 	}
 

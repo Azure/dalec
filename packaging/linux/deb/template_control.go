@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -28,6 +29,34 @@ func (w *controlWrapper) Architecture() string {
 	return "linux-any"
 }
 
+// NOTE: This is very basic and does not handle things like grouped constraints
+// Given this is just trying to shim things to allow either the rpm format or the deb format
+// in its basic form, this is sufficient for now.
+func formatVersionConstraint(v string) string {
+	prefix, suffix, ok := strings.Cut(v, " ")
+	if !ok {
+		if len(prefix) >= 1 {
+			_, err := strconv.Atoi(prefix[:1])
+			if err == nil {
+				// This is just a version number, assume it should use the equal symbol
+				return "= " + v
+			}
+		}
+		return v
+	}
+
+	switch prefix {
+	case "<":
+		return "<< " + suffix
+	case ">":
+		return ">> " + suffix
+	case "==":
+		return "= " + suffix
+	default:
+		return v
+	}
+}
+
 // appendConstraints takes an input list of packages and returns a new list of
 // packages with the constraints appended for use in a debian/control file.
 // The output list is sorted lexicographically.
@@ -45,7 +74,7 @@ func appendConstraints(deps map[string]dalec.PackageConstraints) []string {
 			ls := constraints.Version
 			slices.Sort(ls)
 			for _, v := range ls {
-				versionConstraints = append(versionConstraints, fmt.Sprintf("%s (%s)", dep, v))
+				versionConstraints = append(versionConstraints, fmt.Sprintf("%s (%s)", dep, formatVersionConstraint(v)))
 			}
 		} else {
 			versionConstraints = append(versionConstraints, dep)

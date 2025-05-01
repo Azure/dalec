@@ -60,13 +60,6 @@ func TestWindows(t *testing.T) {
 		SignRepo:       signRepoUbuntu,
 		TestRepoConfig: ubuntuTestRepoConfig,
 		Platform:       &windowsAmd64,
-		Constraints: constraintsSymbols{
-			Equal:              "=",
-			GreaterThan:        ">>",
-			GreaterThanOrEqual: ">=",
-			LessThan:           "<<",
-			LessThanOrEqual:    "<=",
-		},
 		CreateRepo: func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
 			return func(in llb.State) llb.State {
 				repoFile := []byte(`

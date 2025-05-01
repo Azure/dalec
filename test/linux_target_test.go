@@ -44,18 +44,7 @@ type workerConfig struct {
 	// to see if a custom worker is provided in a context
 	ContextName    string
 	TestRepoConfig func(string) map[string]dalec.Source
-	Constraints    constraintsSymbols
 	Platform       *ocispecs.Platform
-}
-
-type constraintsSymbols struct {
-	Equal string
-
-	GreaterThan        string
-	GreaterThanOrEqual string
-
-	LessThan        string
-	LessThanOrEqual string
 }
 
 type targetConfig struct {
@@ -1781,19 +1770,19 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 	}{
 		{
 			name:        "exact dep available",
-			constraints: cfg.Worker.Constraints.Equal + " " + formatEqualForDistro("1.1.1", "1"),
+			constraints: "== " + formatEqualForDistro("1.1.1", "1"),
 			want:        "1.1.1",
 		},
 
 		{
 			name:        "lt dep available",
-			constraints: cfg.Worker.Constraints.LessThan + " 1.3.0",
+			constraints: "< 1.3.0",
 			want:        "1.2.0",
 		},
 
 		{
 			name:        "gt dep available",
-			constraints: cfg.Worker.Constraints.GreaterThan + " 1.2.0",
+			constraints: "> 1.2.0",
 			want:        "1.3.0",
 		},
 	}

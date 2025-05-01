@@ -13,14 +13,6 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-var azlinuxConstraints = constraintsSymbols{
-	Equal:              "==",
-	GreaterThan:        ">",
-	GreaterThanOrEqual: ">=",
-	LessThan:           "<",
-	LessThanOrEqual:    "<=",
-}
-
 var azlinuxTestRepoConfig = func(keyPath string) map[string]dalec.Source {
 	return map[string]dalec.Source{
 		"local.repo": {
@@ -67,7 +59,6 @@ func TestMariner2(t *testing.T) {
 			CreateRepo:     createYumRepo(azlinux.Mariner2Config),
 			SignRepo:       signRepoAzLinux,
 			TestRepoConfig: azlinuxTestRepoConfig,
-			Constraints:    azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "mariner",
@@ -108,7 +99,6 @@ func TestAzlinux3(t *testing.T) {
 			CreateRepo:     createYumRepo(azlinux.Azlinux3Config),
 			SignRepo:       signRepoAzLinux,
 			TestRepoConfig: azlinuxTestRepoConfig,
-			Constraints:    azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "azurelinux",
