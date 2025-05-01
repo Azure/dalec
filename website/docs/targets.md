@@ -175,3 +175,70 @@ targets:
 ```
 
 For more details on how Artifacts are structured and configured, see the [Artifacts](artifacts.md) documentation.
+
+## Special considerations
+
+### Windows
+
+When using the `windowscross` target you will need to make sure that binaries use the `.exe` extension.
+
+```yaml
+build:
+  steps:
+    - command: |
+        go build -o _output/bin/dalec_example.exe
+```
+
+You can use the built-in `TARGETOS` build-arg to determine if the build is targeting Windows or not.
+Alternatively you can use the built-in `DALEC_TARGET` build-arg to determine the target being built.
+
+```yaml
+build:
+  env:
+    TARGETOS: ${TARGETOS}
+  steps:
+    - command: |
+        if [ "$TARGETOS" = "windows" ]; then
+          go build -o _output/bin/dalec_example.exe
+        else
+          go build -o _output/bin/dalec_example
+        fi
+```
+
+```yaml
+build:
+  env:
+    DALEC_TARGET: ${DALEC_TARGET}
+  steps:
+    - command: |
+        if [ "$DALEC_TARGET" = "windowscross" ]; then
+          go build -o _output/bin/dalec_example.exe
+        else
+          go build -o _output/bin/dalec_example
+        fi
+```
+
+Since `windowscross` is intended for cross-compilation, the environment has the
+following env vars set by default:
+
+- `GOOS=windows` - ensures that by default `go build` produces a Windows binary
+
+This can be overridden in your spec by either setting them in the `env` section
+or in the actual build step script, which may be neccessary if you need to
+build tooling or other things first.
+
+```yaml
+build:
+  env:
+    GOOS: linux
+  steps:
+    - command: |
+        go build -o _output/bin/dalec_example
+```
+
+```yaml
+build:
+  steps:
+    - command: |
+        GOOS=linux go build -o _output/bin/dalec_example
+```
