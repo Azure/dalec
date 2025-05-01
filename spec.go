@@ -270,9 +270,6 @@ type Command struct {
 	// Mounts is the list of sources to mount into the build steps.
 	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
 
-	// List of CacheDirs which will be used across all Steps
-	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
-
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 
@@ -355,6 +352,10 @@ type ArtifactBuild struct {
 	// Accepted values: none, sandbox
 	// Default: none
 	NetworkMode string `yaml:"network_mode,omitempty" json:"network_mode,omitempty" jsonschema:"enum=none,enum=sandbox"`
+
+	// Caches is the list of caches to use for the build.
+	// These apply to all steps.
+	Caches []CacheConfig `yaml:"caches,omitempty" json:"caches,omitempty"`
 }
 
 // BuildStep is used to execute a command to build the artifact(s).
@@ -372,30 +373,6 @@ type SourceMount struct {
 	Dest string `yaml:"dest" json:"dest" jsonschema:"required"`
 	// Spec specifies the source to mount
 	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
-}
-
-// CacheDirConfig configures a persistent cache to be used across builds.
-type CacheDirConfig struct {
-	// Mode is the locking mode to set on the cache directory
-	// values: shared, private, locked
-	// default: shared
-	Mode string `yaml:"mode,omitempty" json:"mode,omitempty" jsonschema:"enum=shared,enum=private,enum=locked"`
-	// Key is the cache key to use to cache the directory
-	// default: Value of `Path`
-	Key string `yaml:"key,omitempty" json:"key,omitempty"`
-	// IncludeDistroKey is used to include the distro key as part of the cache key
-	// What this key is depends on the frontend implementation
-	// Example for Debian Buster may be "buster"
-	//
-	// An example use for this is with a Go(lang) build cache when CGO is included.
-	// Go is unable to invalidate cgo and re-using the same cache across different distros may cause issues.
-	IncludeDistroKey bool `yaml:"include_distro_key,omitempty" json:"include_distro_key,omitempty"`
-	// IncludeArchKey is used to include the architecture key as part of the cache key
-	// What this key is depends on the frontend implementation
-	// Frontends SHOULD use the buildkit platform arch
-	//
-	// As with [IncludeDistroKey], this is useful for Go(lang) builds with CGO.
-	IncludeArchKey bool `yaml:"include_arch_key,omitempty" json:"include_arch_key,omitempty"`
 }
 
 // Frontend encapsulates the configuration for a frontend to forward a build target to.

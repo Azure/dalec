@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -234,34 +233,6 @@ func localIncludeExcludeMerge(includes []string, excludes []string) localOptionF
 			llb.IncludePatterns(includes).SetLocalOption(li)
 		}
 	}
-}
-
-// CacheDirsToRunOpt converts the given cache directories into a RunOption.
-func CacheDirsToRunOpt(mounts map[string]CacheDirConfig, distroKey, archKey string) llb.RunOption {
-	var opts []llb.RunOption
-
-	for p, cfg := range mounts {
-		mode, err := sharingMode(cfg.Mode)
-		if err != nil {
-			panic(err)
-		}
-		key := cfg.Key
-		if cfg.IncludeDistroKey {
-			key = path.Join(distroKey, key)
-		}
-
-		if cfg.IncludeArchKey {
-			key = path.Join(archKey, key)
-		}
-
-		opts = append(opts, llb.AddMount(p, llb.Scratch(), llb.AsPersistentCacheDir(key, mode)))
-	}
-
-	return RunOptFunc(func(ei *llb.ExecInfo) {
-		for _, opt := range opts {
-			opt.SetRunOption(ei)
-		}
-	})
 }
 
 type RunOptFunc func(*llb.ExecInfo)

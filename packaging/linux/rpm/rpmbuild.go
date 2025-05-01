@@ -8,6 +8,11 @@ import (
 	"github.com/moby/buildkit/client/llb"
 )
 
+type CacheInfo struct {
+	TargetKey string
+	Caches    []dalec.CacheConfig
+}
+
 // Builds an RPM and source RPM from a spec
 //
 // `topDir` is the rpmbuild top directory which should contain the SOURCES and SPECS directories along with any other necessary files
@@ -16,7 +21,7 @@ import (
 // It is expected to have rpmbuild and any other necessary build dependencies installed
 //
 // `specPath` is the path to the spec file to build relative to `topDir`
-func Build(topDir, workerImg llb.State, specPath string, opts ...llb.ConstraintsOpt) llb.State {
+func Build(topDir, workerImg llb.State, specPath string, caches CacheInfo, opts ...llb.ConstraintsOpt) llb.State {
 	opts = append(opts, dalec.ProgressGroup("Build RPM"))
 	return workerImg.Run(
 		// some notes on these args:
@@ -34,6 +39,14 @@ func Build(topDir, workerImg llb.State, specPath string, opts ...llb.Constraints
 		llb.AddMount("/build/tmp", llb.Scratch(), llb.Tmpfs()),
 		llb.Dir("/build/top"),
 		dalec.WithConstraints(opts...),
+		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			opts := []dalec.CacheConfigOption{
+				dalec.WithCacheDirConstraints(opts...),
+			}
+			for _, cache := range caches.Caches {
+				cache.ToRunOption(caches.TargetKey, opts...).SetRunOption(ei)
+			}
+		}),
 	).
 		AddMount("/build/out", llb.Scratch())
 }

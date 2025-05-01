@@ -518,14 +518,6 @@ func (s Spec) Validate() error {
 		if err := src.validate(); err != nil {
 			errs = append(errs, &InvalidSourceError{Name: name, Err: fmt.Errorf("error validating source ref %q: %w", name, err)})
 		}
-
-		if src.DockerImage != nil && src.DockerImage.Cmd != nil {
-			for p, cfg := range src.DockerImage.Cmd.CacheDirs {
-				if _, err := sharingMode(cfg.Mode); err != nil {
-					errs = append(errs, &InvalidSourceError{Name: name, Err: errors.Wrapf(err, "invalid sharing mode for source %q with cache mount at path %q", name, p)})
-				}
-			}
-		}
 	}
 
 	for _, t := range s.Tests {
@@ -548,12 +540,6 @@ func (s Spec) Validate() error {
 		}
 	}
 
-	switch s.Build.NetworkMode {
-	case "", netModeNone, netModeSandbox:
-	default:
-		errs = append(errs, fmt.Errorf("invalid network mode: %q: valid values %s", s.Build.NetworkMode, []string{netModeNone, netModeSandbox}))
-	}
-
 	if err := s.Dependencies.validate(); err != nil {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
 	}
@@ -570,6 +556,10 @@ func (s Spec) Validate() error {
 
 	if err := s.Image.validate(); err != nil {
 		errs = append(errs, errors.Wrap(err, "image"))
+	}
+
+	if err := s.Build.validate(); err != nil {
+		errs = append(errs, errors.Wrap(err, "build"))
 	}
 
 	return goerrors.Join(errs...)
@@ -734,4 +724,49 @@ func (img *ImageConfig) processBuildArgs(lex *shell.Lex, args map[string]string,
 	}
 
 	return errs
+}
+
+func (b ArtifactBuild) validate() error {
+	var errs []error
+
+	if len(b.Steps) == 0 {
+		// If there are no steps but other fields are set, that is likely uninentional.
+		if len(b.Caches) > 0 || len(b.Env) > 0 || len(b.NetworkMode) > 0 {
+			errs = append(errs, fmt.Errorf("artifact build must have at least one step"))
+		}
+	}
+
+	for i, step := range b.Steps {
+		if err := step.validate(); err != nil {
+			errs = append(errs, errors.Wrapf(err, "step %d", i))
+		}
+	}
+
+	switch b.NetworkMode {
+	case "", netModeNone, netModeSandbox:
+	default:
+		errs = append(errs, fmt.Errorf("invalid network mode: %q: valid values %s", b.NetworkMode, []string{netModeNone, netModeSandbox}))
+	}
+
+	for i, cache := range b.Caches {
+		if err := cache.validate(); err != nil {
+			errs = append(errs, errors.Wrapf(err, "cache %d", i))
+		}
+	}
+
+	return goerrors.Join(errs...)
+}
+
+func (step *BuildStep) validate() error {
+	var errs []error
+
+	if step.Command == "" {
+		errs = append(errs, fmt.Errorf("step must have a command"))
+	}
+
+	if len(errs) > 0 {
+		return goerrors.Join(errs...)
+	}
+
+	return nil
 }

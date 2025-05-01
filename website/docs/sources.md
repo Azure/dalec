@@ -227,14 +227,6 @@ sources:
       ref: docker.io/library/alpine:3.14
       cmd:
         dir: / # Default path that command steps are executed in
-        cache_dirs: null # Map of cache mounts. Default value: `null`
-          /foo: {
-            mode: shared # The other options are `locked` or `private`
-            key: myCacheKey
-            include_distro_key: false # Add the target key from the target being built into the cache key
-            include_arch_key: false # add the architecture of the image to run the command in into the cache key
-          }
-
         steps:
           - command: echo ${FOO} ${BAR}
             env: # Environment variables to set for the step

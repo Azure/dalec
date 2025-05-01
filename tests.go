@@ -23,9 +23,6 @@ type TestSpec struct {
 	// Mounts is the list of sources to mount into the build steps.
 	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
 
-	// List of CacheDirs which will be used across all Steps
-	CacheDirs map[string]CacheDirConfig `yaml:"cache_dirs,omitempty" json:"cache_dirs,omitempty"`
-
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 
@@ -107,13 +104,6 @@ func (t *TestSpec) validate() error {
 			errs = append(errs, errors.Wrapf(err, "mount %s", m.Dest))
 		}
 	}
-
-	for p, cfg := range t.CacheDirs {
-		if _, err := sharingMode(cfg.Mode); err != nil {
-			errs = append(errs, errors.Wrapf(err, "invalid sharing mode for test %q with cache mount at path %q", t.Name, p))
-		}
-	}
-
 	return goerrors.Join(errs...)
 }
 

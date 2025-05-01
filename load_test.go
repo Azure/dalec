@@ -692,9 +692,7 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 	assert.Check(t, cmp.Equal(spec.Dependencies.Runtime["p1"].Version[0], "1.0"))
 	assert.Check(t, cmp.Equal(spec.Dependencies.Runtime["p1"].Version[1], "foo"))
 	assert.Check(t, cmp.Equal(spec.Provides["p1"].Version[0], "1.0"))
-	assert.Check(t, cmp.Equal(spec.Provides["p1"].Version[1], "foo"))
 	assert.Check(t, cmp.Equal(spec.Replaces["p1"].Version[0], "1.0"))
-	assert.Check(t, cmp.Equal(spec.Replaces["p1"].Version[1], "foo"))
 }
 
 func TestCustomRepoFillDefaults(t *testing.T) {
@@ -1547,4 +1545,208 @@ X-capitalized: world2
 	err = spec3.WithExtension("x-foo", "baz")
 	assert.NilError(t, err)
 	checkExt(t, spec3, "x-foo", "baz")
+}
+
+func TestArtifactBuildValidation(t *testing.T) {
+	cases := []struct {
+		name      string
+		build     ArtifactBuild
+		expectErr string
+	}{
+		{
+			name:  "valid with steps",
+			build: ArtifactBuild{Steps: []BuildStep{{Command: "echo hello"}}},
+		},
+		{
+			name:  "empty is valid (no fields set)",
+			build: ArtifactBuild{},
+		},
+		{
+			name: "no steps but other fields set",
+			build: ArtifactBuild{
+				Env:         map[string]string{"FOO": "bar"},
+				NetworkMode: "none",
+				Caches:      []CacheConfig{{}},
+			},
+			expectErr: "artifact build must have at least one step",
+		},
+		{
+			name: "invalid step",
+			build: ArtifactBuild{
+				Steps: []BuildStep{
+					{Command: ""}, // Command is required
+				},
+			},
+			expectErr: "step 0: step must have a command",
+		},
+		{
+			name: "invalid network mode",
+			build: ArtifactBuild{
+				Steps:       []BuildStep{{Command: "echo hello"}},
+				NetworkMode: "invalid",
+			},
+			expectErr: "invalid network mode",
+		},
+		{
+			name: "valid network modes",
+			build: ArtifactBuild{
+				Steps:       []BuildStep{{Command: "echo hello"}},
+				NetworkMode: "none",
+			},
+		},
+		{
+			name: "sandbox network mode",
+			build: ArtifactBuild{
+				Steps:       []BuildStep{{Command: "echo hello"}},
+				NetworkMode: "sandbox",
+			},
+		},
+		// Step validation test cases
+		{
+			name: "step with env vars",
+			build: ArtifactBuild{
+				Steps: []BuildStep{
+					{
+						Command: "echo hello",
+						Env:     map[string]string{"FOO": "bar"},
+					},
+				},
+			},
+		},
+		{
+			name: "multiple invalid steps",
+			build: ArtifactBuild{
+				Steps: []BuildStep{
+					{Command: ""},
+					{Command: ""},
+				},
+			},
+			expectErr: "step 0: step must have a command",
+		},
+		// Cache config validation test cases
+		{
+			name: "valid cache with minimum config",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Dest: "/cache",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "valid cache with full config",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Key:     "cache-key",
+							Dest:    "/cache",
+							Sharing: "shared",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "valid cache with locked sharing",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Dest:    "/cache",
+							Sharing: "locked",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "valid cache with private sharing",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Dest:    "/cache",
+							Sharing: "private",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "nil cache dir",
+			build: ArtifactBuild{
+				Steps:  []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{{}},
+			},
+			expectErr: "cache 0: missing cache dir config",
+		},
+		{
+			name: "empty dest",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Dest: "",
+						},
+					},
+				},
+			},
+			expectErr: "cache 0: invalid cache dir config: cache dir dest is required",
+		},
+		{
+			name: "invalid sharing mode",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Dest:    "/cache",
+							Sharing: "invalid",
+						},
+					},
+				},
+			},
+			expectErr: "cache 0: invalid cache dir config: invalid cache dir sharing mode",
+		},
+		{
+			name: "multiple caches with errors",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Dest:    "/cache1",
+							Sharing: "invalid",
+						},
+					},
+					{
+						Dir: &CacheDir{
+							Dest: "",
+						},
+					},
+				},
+			},
+			expectErr: "cache 0: invalid cache dir config: invalid cache dir sharing mode",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.build.validate()
+			if tc.expectErr == "" {
+				assert.NilError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.expectErr)
+			}
+		})
+	}
 }

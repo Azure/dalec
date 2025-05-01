@@ -90,8 +90,6 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		}
 
 		var opts []llb.RunOption
-		opts = append(opts, dalec.CacheDirsToRunOpt(test.CacheDirs, "", ""))
-
 		pg := llb.ProgressGroup(identity.NewID(), "Test: "+path.Join(target, test.Name), false)
 
 		for _, sm := range test.Mounts {
