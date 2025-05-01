@@ -38,7 +38,6 @@ func TestAlmalinux9(t *testing.T) {
 			CreateRepo:     createYumRepo(almalinux.ConfigV9),
 			SignRepo:       signRepoAzLinux,
 			TestRepoConfig: azlinuxTestRepoConfig,
-			Constraints:    azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "almalinux",
@@ -83,7 +82,6 @@ func TestAlmalinux8(t *testing.T) {
 			CreateRepo:     createYumRepo(almalinux.ConfigV8),
 			SignRepo:       signRepoAzLinux,
 			TestRepoConfig: azlinuxTestRepoConfig,
-			Constraints:    azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "almalinux",

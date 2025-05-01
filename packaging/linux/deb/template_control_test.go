@@ -33,9 +33,9 @@ func TestAppendConstraints(t *testing.T) {
 		{
 			name: "single dependency with version constraints",
 			deps: map[string]dalec.PackageConstraints{
-				"packageA": {Version: []string{">= 1.0", "< 2.0"}},
+				"packageA": {Version: []string{">= 1.0", "<< 2.0"}},
 			},
-			want: []string{"packageA (< 2.0) | packageA (>= 1.0)"},
+			want: []string{"packageA (<< 2.0) | packageA (>= 1.0)"},
 		},
 		{
 			name: "single dependency with architecture constraints",
@@ -47,9 +47,9 @@ func TestAppendConstraints(t *testing.T) {
 		{
 			name: "single dependency with version and architecture constraints",
 			deps: map[string]dalec.PackageConstraints{
-				"packageA": {Version: []string{">= 1.0", "< 2.0"}, Arch: []string{"amd64", "arm64"}},
+				"packageA": {Version: []string{">= 1.0", "<< 2.0"}, Arch: []string{"amd64", "arm64"}},
 			},
-			want: []string{"packageA (< 2.0) [amd64 arm64] | packageA (>= 1.0) [amd64 arm64]"},
+			want: []string{"packageA (<< 2.0) [amd64 arm64] | packageA (>= 1.0) [amd64 arm64]"},
 		},
 		{
 			name: "multiple dependencies with constraints",
