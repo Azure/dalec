@@ -35,7 +35,6 @@ func TestRockylinux9(t *testing.T) {
 			CreateRepo:     createYumRepo(rockylinux.ConfigV9),
 			SignRepo:       signRepoAzLinux,
 			TestRepoConfig: azlinuxTestRepoConfig,
-			Constraints:    azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "rocky",
@@ -77,7 +76,6 @@ func TestRockylinux8(t *testing.T) {
 			CreateRepo:     createYumRepo(rockylinux.ConfigV8),
 			SignRepo:       signRepoAzLinux,
 			TestRepoConfig: azlinuxTestRepoConfig,
-			Constraints:    azlinuxConstraints,
 		},
 		Release: OSRelease{
 			ID:        "rocky",

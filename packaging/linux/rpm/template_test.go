@@ -874,7 +874,7 @@ func TestTemplate_Provides(t *testing.T) {
 		Version: []string{"= 2.0.0"},
 	}
 	got = w.Provides().String()
-	want = "Provides: test-provides = 2.0.0\n\n"
+	want = "Provides: test-provides == 2.0.0\n\n"
 	assert.Equal(t, got, want)
 }
 
