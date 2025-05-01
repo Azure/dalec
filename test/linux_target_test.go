@@ -1678,6 +1678,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		testPackageProvidesReplaces(ctx, t, testConfig)
 	})
+
+	t.Run("artifact build cache dir", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testArtifactBuildCacheDir(ctx, t, testConfig.Target)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {

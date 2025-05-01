@@ -54,6 +54,15 @@
 				"steps"
 			],
 			"properties": {
+				"caches": {
+					"items": {
+						"$ref": "#/$defs/CacheConfig"
+					},
+					"type": [
+						"array"
+					],
+					"description": "Caches is the list of caches to use for the build.\nThese apply to all steps."
+				},
 				"env": {
 					"additionalProperties": {
 						"type": [
@@ -368,38 +377,11 @@
 			],
 			"description": "BuildStep is used to execute a command to build the artifact(s)."
 		},
-		"CacheDirConfig": {
+		"CacheConfig": {
 			"properties": {
-				"include_arch_key": {
-					"type": [
-						"boolean"
-					],
-					"description": "IncludeArchKey is used to include the architecture key as part of the cache key\nWhat this key is depends on the frontend implementation\nFrontends SHOULD use the buildkit platform arch\n\nAs with [IncludeDistroKey], this is useful for Go(lang) builds with CGO."
-				},
-				"include_distro_key": {
-					"type": [
-						"boolean"
-					],
-					"description": "IncludeDistroKey is used to include the distro key as part of the cache key\nWhat this key is depends on the frontend implementation\nExample for Debian Buster may be \"buster\"\n\nAn example use for this is with a Go(lang) build cache when CGO is included.\nGo is unable to invalidate cgo and re-using the same cache across different distros may cause issues."
-				},
-				"key": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Key is the cache key to use to cache the directory\ndefault: Value of `Path`"
-				},
-				"mode": {
-					"enum": [
-						"shared",
-						"private",
-						"locked"
-					],
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Mode is the locking mode to set on the cache directory\nvalues: shared, private, locked\ndefault: shared"
+				"dir": {
+					"$ref": "#/$defs/CacheDir",
+					"description": "Dir specifies a generic cache directory configuration."
 				}
 			},
 			"additionalProperties": {
@@ -409,7 +391,62 @@
 				"object",
 				"null"
 			],
-			"description": "CacheDirConfig configures a persistent cache to be used across builds."
+			"oneOf": [
+				{
+					"required": [
+						"dir"
+					],
+					"title": "dir"
+				}
+			],
+			"description": "CacheConfig configures a cache to use for a build."
+		},
+		"CacheDir": {
+			"required": [
+				"key",
+				"dest",
+				"sharing",
+				"no_auto_namespace"
+			],
+			"properties": {
+				"dest": {
+					"type": [
+						"string"
+					],
+					"description": "Dest is the directory to mount the cache to."
+				},
+				"key": {
+					"type": [
+						"string"
+					],
+					"description": "Key is the cache key to use.\nIf not set then the dest will be used."
+				},
+				"no_auto_namespace": {
+					"type": [
+						"boolean"
+					],
+					"description": "NoAutoNamespace disables the automatic prefixing of the cache key with the\ntarget specific information such as distro and CPU architecture, which may\nbe auto-injected to prevent common issues that would cause an invalid cache."
+				},
+				"sharing": {
+					"enum": [
+						"shared",
+						"locked",
+						"private"
+					],
+					"type": [
+						"string"
+					],
+					"description": "Sharing is the sharing mode of the cache.\nIt can be one of the following:\n- shared: multiple jobs can use the cache at the same time.\n- locked: exclusive access to the cache is required.\n- private: changes to the cache are not shared with other jobs and are discarded\n  after the job is finished."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			],
+			"description": "CacheDir is a generic cache directory configuration."
 		},
 		"ChangelogEntry": {
 			"required": [
@@ -526,16 +563,6 @@
 				"steps"
 			],
 			"properties": {
-				"cache_dirs": {
-					"additionalProperties": {
-						"$ref": "#/$defs/CacheDirConfig"
-					},
-					"type": [
-						"object",
-						"null"
-					],
-					"description": "List of CacheDirs which will be used across all Steps"
-				},
 				"dir": {
 					"type": [
 						"string",
@@ -1931,16 +1958,6 @@
 				"name"
 			],
 			"properties": {
-				"cache_dirs": {
-					"additionalProperties": {
-						"$ref": "#/$defs/CacheDirConfig"
-					},
-					"type": [
-						"object",
-						"null"
-					],
-					"description": "List of CacheDirs which will be used across all Steps"
-				},
 				"dir": {
 					"type": [
 						"string",
