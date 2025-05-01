@@ -127,6 +127,12 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 		withSourcesMounted("/build", patched, spec.Sources),
 		llb.AddMount("/tmp/scripts", buildScript),
 		dalec.WithConstraints(opts...),
+		// We could check if we even need the var (ie there are gomods) but this
+		// is a fine default since we are expecting windows binaries. This
+		// means if someone eneds to build non-windows tooling as part of the
+		// build then they will need to set GOOS=linux manually.
+		// As such, this must come before the env vars from the spec are set.
+		llb.AddEnv("GOOS", "windows"),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 			for k, v := range spec.Build.Env {
 				ei.State = ei.State.With(llb.AddEnv(k, v))
