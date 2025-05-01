@@ -11,16 +11,6 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-var (
-	debConstraintsSymbols = constraintsSymbols{
-		Equal:              "=",
-		GreaterThan:        ">>",
-		GreaterThanOrEqual: ">=",
-		LessThan:           "<<",
-		LessThanOrEqual:    "<=",
-	}
-)
-
 func withPackageOverride(oldPkg, newPkg string) func(cfg *testLinuxConfig) {
 	return func(cfg *testLinuxConfig) {
 		if cfg.Target.PackageOverrides == nil {
@@ -56,7 +46,6 @@ func debLinuxTestConfigFor(targetKey string, cfg *distro.Config, opts ...func(*t
 			CreateRepo:     ubuntuCreateRepo(cfg),
 			SignRepo:       signRepoUbuntu,
 			TestRepoConfig: ubuntuTestRepoConfig,
-			Constraints:    debConstraintsSymbols,
 		},
 
 		Platforms: []ocispecs.Platform{
