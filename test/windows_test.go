@@ -544,6 +544,11 @@ echo "$BAR" > bar.txt
 	t.Run("test dalec target arg is set", func(t *testing.T) {
 		testDalecTargetArg(ctx, t, tcfg)
 	})
+
+	t.Run("GOOS", func(t *testing.T) {
+		t.Parallel()
+		testWindowsGOOS(ctx, t, tcfg)
+	})
 }
 
 func prepareWindowsSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {
@@ -705,5 +710,43 @@ func testWindowsZipFilename(ctx context.Context, t *testing.T) {
 		assert.NilError(t, err)
 		assert.Assert(t, stat != nil)
 		assert.Equal(t, stat.Path, filepath.Base(filename))
+	})
+}
+
+func testWindowsGOOS(ctx context.Context, t *testing.T, tcfg targetConfig) {
+	ctx = startTestSpan(ctx, t)
+
+	t.Run("default", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		spec := newSimpleSpec()
+
+		spec.Build.Steps = append(spec.Build.Steps, dalec.BuildStep{
+			Command: `[ "${GOOS}" = "windows" ]`,
+		})
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(tcfg.Package), withWindowsAmd64)
+			solveT(ctx, t, gwc, sr)
+		})
+	})
+
+	t.Run("with override", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		spec := newSimpleSpec()
+
+		spec.Build.Env = map[string]string{
+			"GOOS": "linux",
+		}
+		spec.Build.Steps = append(spec.Build.Steps, dalec.BuildStep{
+			Command: `[ "${GOOS}" = "linux" ]`,
+		})
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(tcfg.Package), withWindowsAmd64)
+			solveT(ctx, t, gwc, sr)
+		})
 	})
 }
