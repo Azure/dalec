@@ -10,14 +10,14 @@ const (
 	JammyWorkerContextName = "dalec-jammy-worker"
 
 	jammyRef       = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
-	jammyVersionID = "ubuntu22.04"
+	JammyVersionID = "ubuntu22.04"
 )
 
 var (
 	JammyConfig = &distro.Config{
 		ImageRef:           jammyRef,
 		AptCachePrefix:     JammyAptCachePrefix,
-		VersionID:          jammyVersionID,
+		VersionID:          JammyVersionID,
 		ContextRef:         JammyWorkerContextName,
 		DefaultOutputImage: jammyRef,
 		BuilderPackages:    basePackages,

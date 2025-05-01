@@ -603,6 +603,11 @@ echo "$BAR" > bar.txt
 		t.Parallel()
 		testWindowsGOOS(ctx, t, tcfg)
 	})
+	t.Run("artifact build cache dir", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testArtifactBuildCacheDir(ctx, t, tcfg)
+	})
 }
 
 func prepareWindowsSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {

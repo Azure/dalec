@@ -131,7 +131,7 @@ func TestPassthroughVars(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			runTest(t, func(ctx context.Context, gwc gwclient.Client) {
-				spec := &dalec.Spec{Args: tt.optInArgs, Build: dalec.ArtifactBuild{Env: tt.env}}
+				spec := &dalec.Spec{Args: tt.optInArgs, Build: dalec.ArtifactBuild{Env: tt.env, Steps: []dalec.BuildStep{{Command: "echo hello"}}}}
 				req := newSolveRequest(withBuildTarget("debug/resolve"), withSpec(ctx, t, spec), withPlatform(tt.targetPlatform))
 
 				res := solveT(ctx, t, gwc, req)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/targets/linux/deb/ubuntu"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -19,6 +20,7 @@ const (
 	outputDir       = "/tmp/output"
 	buildScriptName = "_build.sh"
 	aptCachePrefix  = "jammy-windowscross"
+	distroVersionID = ubuntu.JammyVersionID
 )
 
 func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -145,6 +147,11 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 		// build then they will need to set GOOS=linux manually.
 		// As such, this must come before the env vars from the spec are set.
 		llb.AddEnv("GOOS", "windows"),
+		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			for _, c := range spec.Build.Caches {
+				c.ToRunOption(distroVersionID, dalec.WithCacheDirConstraints(opts...)).SetRunOption(ei)
+			}
+		}),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 			for k, v := range spec.Build.Env {
 				ei.State = ei.State.With(llb.AddEnv(k, v))

@@ -35,7 +35,8 @@ func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 
 	builder := worker.With(dalec.SetBuildNetworkMode(spec))
-	st := rpm.Build(br, builder, specPath, opts...)
+	cacheInfo := rpm.CacheInfo{TargetKey: targetKey, Caches: spec.Build.Caches}
+	st := rpm.Build(br, builder, specPath, cacheInfo, opts...)
 
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt, opts...)
 }

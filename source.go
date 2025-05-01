@@ -317,7 +317,7 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 		st = st.Dir(cmd.Dir)
 	}
 
-	baseRunOpts := []llb.RunOption{CacheDirsToRunOpt(cmd.CacheDirs, "", "")}
+	baseRunOpts := []llb.RunOption{}
 
 	for _, src := range cmd.Mounts {
 		if err := src.validate(subPath); err != nil {
@@ -399,19 +399,6 @@ func filterState(extract string, includes, excludes []string, opts ...llb.Constr
 		)
 
 		return filtered
-	}
-}
-
-func sharingMode(mode string) (llb.CacheMountSharingMode, error) {
-	switch mode {
-	case "shared", "":
-		return llb.CacheMountShared, nil
-	case "private":
-		return llb.CacheMountPrivate, nil
-	case "locked":
-		return llb.CacheMountLocked, nil
-	default:
-		return 0, fmt.Errorf("invalid sharing mode: %s", mode)
 	}
 }
 
