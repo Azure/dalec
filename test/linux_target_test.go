@@ -577,12 +577,12 @@ echo "$BAR" > bar.txt
 						// Test artifact symlink ownership
 						{
 							Command: "stat -c '%u:%g' /bin/owned-link",
-							Stdout:  dalec.CheckOutput{Equals: "1234:5678"},
+							Stdout:  dalec.CheckOutput{Equals: "1234:5678\n"},
 						},
 						// Test image post-install symlink ownership
 						{
 							Command: "stat -c '%u:%g' /owned-image-link",
-							Stdout:  dalec.CheckOutput{Equals: "1234:5678"},
+							Stdout:  dalec.CheckOutput{Equals: "1234:5678\n"},
 						},
 						// Verify they're still actual symlinks
 						{Command: "test -L /bin/owned-link"},

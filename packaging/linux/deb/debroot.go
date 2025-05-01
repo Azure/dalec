@@ -191,20 +191,16 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 			src := strings.TrimPrefix(l.Source, "/")
 			dst := strings.TrimPrefix(l.Dest, "/")
 
-			// Always write to the standard symlinks file
 			fmt.Fprintf(allLinksBuf, "%s %s\n", src, dst)
 
-			// Only track ownership when needed
 			if l.UID != 0 || l.GID != 0 {
 				hasOwnership = true
 				fmt.Fprintf(buf, "%s %s %d %d\n", src, dst, l.UID, l.GID)
 			}
 		}
 
-		// Create the symlinks file used for installation
 		states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, spec.Name+".symlinks"), 0o644, allLinksBuf.Bytes()), opts...))
 
-		// Only create the links file and postinst script if there are links with ownership
 		if hasOwnership {
 			states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, spec.Name+".links"), 0o644, buf.Bytes()), opts...))
 
@@ -216,7 +212,6 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 			fmt.Fprintf(linkPostinstBuf, "  chown -h \"${uid}:${gid}\" \"/${dst}\"\n")
 			fmt.Fprintf(linkPostinstBuf, "done < /usr/share/doc/%s/%s.links\n", spec.Name, spec.Name)
 
-			// Either create a new postinst or append to an existing one
 			if postinst.Len() > 0 {
 				postinst.Write(linkPostinstBuf.Bytes())
 			} else {
