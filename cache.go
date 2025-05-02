@@ -19,22 +19,21 @@ const (
 
 // CacheConfig configures a cache to use for a build.
 //
-// dir is the only supported cache type for now.
-// It is a generic cache directory configuration that can be used to mount
-// a persistent cache at the given destination path.
-//
-// Other, less-generic cache types may be added in the future, such as:
-// - go build cache
+// Other, cache types may be added in the future, such as:
 // - rust compiler cache
 // - bazel cache
 // ...
 type CacheConfig struct {
 	// Dir specifies a generic cache directory configuration.
 	Dir *CacheDir `json:"dir,omitempty" yaml:"dir,omitempty" jsonschema:"oneof_required=dir"`
+	// GoBuild specifies a cache for Go's incremental build artifacts.
+	// This should speed up repeated builds of Go projects.
+	GoBuild *GoBuildCache `json:"gobuild,omitempty" yaml:"gobuild,omitempty" jsonschema:"oneof_required=gobuild"`
 }
 
 type CacheInfo struct {
 	DirInfo CacheDirInfo
+	GoBuild GoBuildCacheInfo
 }
 
 type CacheDirInfo struct {
@@ -74,16 +73,28 @@ func WithCacheDirConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
 }
 
 func (c *CacheConfig) ToRunOption(distroKey string, opts ...CacheConfigOption) llb.RunOption {
-	if c.Dir == nil {
-		return nil
+	if c.Dir != nil {
+		return c.Dir.ToRunOption(distroKey, CacheDirOptionFunc(func(info *CacheDirInfo) {
+			var cacheInfo CacheInfo
+			for _, opt := range opts {
+				opt.SetCacheConfigOption(&cacheInfo)
+			}
+			*info = cacheInfo.DirInfo
+		}))
 	}
-	return c.Dir.ToRunOption(distroKey, CacheDirOptionFunc(func(info *CacheDirInfo) {
-		var cacheInfo CacheInfo
-		for _, opt := range opts {
-			opt.SetCacheConfigOption(&cacheInfo)
-		}
-		*info = cacheInfo.DirInfo
-	}))
+
+	if c.GoBuild != nil {
+		return c.GoBuild.ToRunOption(distroKey, GoBuildCacheOptionFunc(func(info *GoBuildCacheInfo) {
+			var cacheInfo CacheInfo
+			for _, opt := range opts {
+				opt.SetCacheConfigOption(&cacheInfo)
+			}
+			*info = cacheInfo.GoBuild
+		}))
+	}
+
+	// Should not reach this point
+	panic("invalid cache config")
 }
 
 func (c *CacheConfig) validate() error {
@@ -91,11 +102,24 @@ func (c *CacheConfig) validate() error {
 		return nil
 	}
 
-	if c.Dir == nil {
-		return fmt.Errorf("missing cache dir config")
+	if (c.Dir == nil && c.GoBuild == nil) || (c.Dir != nil && c.GoBuild != nil) {
+		return fmt.Errorf("invalid cache config: one of (and only one of) dir or gobuild must be set")
 	}
-	if err := c.Dir.validate(); err != nil {
-		return fmt.Errorf("invalid cache dir config: %w", err)
+
+	var errs []error
+	if c.Dir != nil {
+		if err := c.Dir.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("invalid cache dir config: %w", err))
+		}
+	}
+	if c.GoBuild != nil {
+		if err := c.GoBuild.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("invalid go build cache config: %w", err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 	return nil
 }
@@ -187,4 +211,70 @@ func (c *CacheDir) validate() error {
 		return errors.Join(errs...)
 	}
 	return nil
+}
+
+// GoBuildCache is a cache for Go build artifacts.
+// It is used to speed up Go builds by caching the incremental builds.
+type GoBuildCache struct {
+	// Scope adds extra information to the cache key.
+	// This is useful to differentiate between different build contexts if required.
+	//
+	// This is mainly intended for internal testing purposes.
+	Scope string `json:"scope" yaml:"scope"`
+}
+
+func (c *GoBuildCache) validate() error {
+	return nil
+}
+
+type GoBuildCacheInfo struct {
+	Platform *ocispecs.Platform
+}
+
+type GoBuildCacheOption interface {
+	SetGoBuildCacheOption(*GoBuildCacheInfo)
+}
+
+type GoBuildCacheOptionFunc func(*GoBuildCacheInfo)
+
+func (f GoBuildCacheOptionFunc) SetGoBuildCacheOption(info *GoBuildCacheInfo) {
+	f(info)
+}
+
+func WithGoCacheConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
+	return CacheConfigOptionFunc(func(info *CacheInfo) {
+		var c llb.Constraints
+		for _, opt := range opts {
+			opt.SetConstraintsOption(&c)
+		}
+		info.GoBuild.Platform = c.Platform
+	})
+}
+
+const goBuildCacheDir = "/tmp/dalec/gobuild-cache"
+
+func (c *GoBuildCache) ToRunOption(distroKey string, opts ...GoBuildCacheOption) llb.RunOption {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
+		var info GoBuildCacheInfo
+		for _, opt := range opts {
+			opt.SetGoBuildCacheOption(&info)
+		}
+
+		platform := ei.Platform
+
+		if platform == nil {
+			platform = info.Platform
+		}
+		if platform == nil {
+			p := platforms.DefaultSpec()
+			platform = &p
+		}
+
+		key := fmt.Sprintf("%s-%s-dalec-gobuildcache", distroKey, platforms.Format(*platform))
+		if c.Scope != "" {
+			key = fmt.Sprintf("%s-%s", key, c.Scope)
+		}
+		llb.AddMount(goBuildCacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
+		llb.AddEnv("GOCACHE", goBuildCacheDir).SetRunOption(ei)
+	})
 }

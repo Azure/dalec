@@ -1686,7 +1686,7 @@ func TestArtifactBuildValidation(t *testing.T) {
 				Steps:  []BuildStep{{Command: "echo hello"}},
 				Caches: []CacheConfig{{}},
 			},
-			expectErr: "cache 0: missing cache dir config",
+			expectErr: "cache 0: invalid cache config: one of (and only one of) dir or gobuild must be set",
 		},
 		{
 			name: "empty dest",
@@ -1736,6 +1736,83 @@ func TestArtifactBuildValidation(t *testing.T) {
 				},
 			},
 			expectErr: "cache 0: invalid cache dir config: invalid cache dir sharing mode",
+		},
+		// Go build cache test cases
+		{
+			name: "valid go build cache with no scope",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						GoBuild: &GoBuildCache{},
+					},
+				},
+			},
+		},
+		{
+			name: "valid go build cache with scope",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						GoBuild: &GoBuildCache{
+							Scope: "test-scope",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid cache config with both dir and gobuild set",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Dest: "/cache",
+						},
+						GoBuild: &GoBuildCache{},
+					},
+				},
+			},
+			expectErr: "cache 0: invalid cache config: one of (and only one of) dir or gobuild must be set",
+		},
+		{
+			name: "multiple go build caches",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						GoBuild: &GoBuildCache{
+							Scope: "scope1",
+						},
+					},
+					{
+						GoBuild: &GoBuildCache{
+							Scope: "scope2",
+						},
+					},
+				},
+			},
+			expectErr: "only one gobuild cache is allowed",
+		},
+		{
+			name: "mix of dir and go build caches",
+			build: ArtifactBuild{
+				Steps: []BuildStep{{Command: "echo hello"}},
+				Caches: []CacheConfig{
+					{
+						Dir: &CacheDir{
+							Dest: "/cache1",
+						},
+					},
+					{
+						GoBuild: &GoBuildCache{
+							Scope: "test-scope",
+						},
+					},
+				},
+			},
 		},
 	}
 
