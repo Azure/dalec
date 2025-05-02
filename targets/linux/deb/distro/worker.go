@@ -26,12 +26,13 @@ func (cfg *Config) HandleWorker(ctx context.Context, client gwclient.Client) (*g
 		}
 		pc := llb.Platform(p)
 
-		st, err := cfg.Worker(sOpt, pc)
+		ignoreCache := frontend.IgnoreCache(client, cfg.ImageRef, cfg.ContextRef)
+		st, err := cfg.Worker(sOpt, pc, ignoreCache)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		def, err := st.Marshal(ctx, pc)
+		def, err := st.Marshal(ctx, pc, ignoreCache)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -1,8 +1,10 @@
 package frontend
 
 import (
+	"bufio"
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/goccy/go-yaml"
@@ -301,4 +303,42 @@ func forwardToSigner(ctx context.Context, client gwclient.Client, cfg *dalec.Pac
 	}
 
 	return ref.ToState()
+}
+
+// Returns a ConstraintsOpt that ignores the cache if the client
+// is configured to ignore the cache for any of the given refs OR
+// if the global no-cache option is set.
+func IgnoreCache(client gwclient.Client, refs ...string) llb.ConstraintsOpt {
+	const keyNoCache = "no-cache"
+
+	opts := client.BuildOpts().Opts
+	v, ok := opts[keyNoCache]
+	if !ok {
+		// no-cache not set
+		return dalec.ConstraintsOptFunc(func(c *llb.Constraints) {})
+	}
+
+	if v == "" {
+		// global no-cache, ignore regardless of refs
+		return llb.IgnoreCache
+	}
+
+	rdr := bufio.NewReader(strings.NewReader(v))
+	idx := make(map[string]struct{}, len(refs))
+
+	for _, ref := range refs {
+		idx[ref] = struct{}{}
+	}
+
+	for {
+		ref, err := rdr.ReadString(',')
+		if err != nil {
+			// The only error here should be io.EOF, meaning we got to the end of the string.
+			return dalec.ConstraintsOptFunc(func(c *llb.Constraints) {})
+		}
+
+		if _, ok := idx[ref]; ok {
+			return llb.IgnoreCache
+		}
+	}
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/targets"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
@@ -14,6 +16,8 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 	if err != nil {
 		return llb.Scratch(), err
 	}
+
+	opts = append(opts, frontend.IgnoreCache(client))
 
 	var baseImg llb.State
 	if bi != nil {
@@ -59,6 +63,7 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
 		}),
 		InstallLocalPkg(debSt, true, opts...),
+		frontend.IgnoreCache(client, targets.IgnoreCacheKeyContainer),
 	).Root().
 		With(c.createSymlinks(worker, spec, targetKey, opts...)), nil
 }

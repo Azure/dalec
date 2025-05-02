@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/targets"
 	"github.com/Azure/dalec/targets/linux/deb/ubuntu"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -123,6 +124,7 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 }
 
 func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	opts = append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))
 	worker = worker.With(distroConfig.InstallBuildDeps(sOpt, spec, targetKey, opts...))
 
 	sources, err := specToSourcesLLB(worker, spec, sOpt, opts...)
