@@ -213,6 +213,11 @@ build:
     GOPROXY: direct
     CGO_ENABLED: "0"
     GOOS: ${TARGETOS}
+  caches:
+    - gobuild:
+    - dir:
+      key: my_key
+      dest: /my/cache/dir
   steps:
     - command: |
         go build -ldflags "-s -w -X github.com/foo/bar/version.Version=${TAG}" -o /out/my-binary ./cmd/my-binary
@@ -221,6 +226,7 @@ build:
 - `env`: The environment variables for the build.
 - `steps`: The build steps for the package.
 - `network_mode`: Set the network mode to use for build steps (accepts: empty, `none`, `sandbox`)
+- `cache`: Configure caches which persist between builds. See [caches](caches.md) for more details.
 
 :::tip
 TARGETOS is a built-in argument that Dalec will substitute with the target OS value. For more information, please see [Args section](#args-section).
