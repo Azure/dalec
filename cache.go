@@ -221,6 +221,11 @@ type GoBuildCache struct {
 	//
 	// This is mainly intended for internal testing purposes.
 	Scope string `json:"scope" yaml:"scope"`
+
+	// The gobuild cache may be automatically injected into a build of
+	// go is detected.
+	// Disabled explicitly turns this off.
+	Disabled bool `json:"disabled" yaml:"disabled"`
 }
 
 func (c *GoBuildCache) validate() error {
@@ -255,6 +260,10 @@ const goBuildCacheDir = "/tmp/dalec/gobuild-cache"
 
 func (c *GoBuildCache) ToRunOption(distroKey string, opts ...GoBuildCacheOption) llb.RunOption {
 	return RunOptFunc(func(ei *llb.ExecInfo) {
+		if c.Disabled {
+			return
+		}
+
 		var info GoBuildCacheInfo
 		for _, opt := range opts {
 			opt.SetGoBuildCacheOption(&info)

@@ -840,9 +840,16 @@
 		},
 		"GoBuildCache": {
 			"required": [
-				"scope"
+				"scope",
+				"disabled"
 			],
 			"properties": {
+				"disabled": {
+					"type": [
+						"boolean"
+					],
+					"description": "The gobuild cache may be automatically injected into a build of\ngo is detected.\nDisabled explicitly turns this off."
+				},
 				"scope": {
 					"type": [
 						"string"

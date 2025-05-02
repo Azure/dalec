@@ -76,6 +76,23 @@ func noOpStateOpt(in llb.State) llb.State {
 }
 
 func prepareGo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePkgConfig, worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	if !dalec.HasGolang(spec, targetKey) && !spec.HasGomods() {
+		return noOpStateOpt, nil
+	}
+
+	addGoCache := true
+	for _, c := range spec.Build.Caches {
+		if c.GoBuild != nil {
+			addGoCache = false
+		}
+	}
+
+	if addGoCache {
+		spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
+			GoBuild: &dalec.GoBuildCache{},
+		})
+	}
+
 	goBin, err := searchForAltGolang(ctx, client, spec, targetKey, worker, opts...)
 	if err != nil {
 		return noOpStateOpt, errors.Wrap(err, "error while looking for alternate go bin path")
