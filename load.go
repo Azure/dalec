@@ -748,7 +748,14 @@ func (b ArtifactBuild) validate() error {
 		errs = append(errs, fmt.Errorf("invalid network mode: %q: valid values %s", b.NetworkMode, []string{netModeNone, netModeSandbox}))
 	}
 
+	haveGo := false
 	for i, cache := range b.Caches {
+		if cache.GoBuild != nil {
+			if haveGo {
+				errs = append(errs, fmt.Errorf("only one gobuild cache is allowed"))
+			}
+			haveGo = true
+		}
 		if err := cache.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "cache %d", i))
 		}

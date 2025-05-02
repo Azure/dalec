@@ -47,6 +47,11 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 				NoAutoNamespace: true,
 			},
 		},
+		{
+			GoBuild: &dalec.GoBuildCache{
+				Scope: randKey,
+			},
+		},
 	}
 
 	specWithCommand := func(cmd string) *dalec.Spec {
@@ -65,8 +70,19 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 		buf := bytes.NewBuffer(nil)
 		buf.WriteString("set -ex;\n")
 
+		getDir := func(c dalec.CacheConfig) string {
+			if c.Dir != nil {
+				return c.Dir.Dest
+			}
+			if c.GoBuild != nil {
+				return "${GOCACHE}"
+			}
+			t.Fatalf("invalid cache config or maybe the test needs to be updated for a new cache type?")
+			return ""
+		}
+
 		for i, c := range caches {
-			fmt.Fprintf(buf, "echo %s %d > %s\n", distro, i, filepath.Join(c.Dir.Dest, "hello"))
+			fmt.Fprintf(buf, "echo %s %d > \"%s/hello\"\n", distro, i, getDir(c))
 		}
 
 		spec := specWithCommand(buf.String())
@@ -79,7 +95,7 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 
 		for i, c := range caches {
 			check := fmt.Sprintf("%s %d", distro, i)
-			fmt.Fprintf(buf, "grep %q %s\n", check, filepath.Join(c.Dir.Dest, "hello"))
+			fmt.Fprintf(buf, "grep %q %s/hello\n", check, getDir(c))
 		}
 
 		spec = specWithCommand(buf.String())
@@ -98,16 +114,21 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 		buf.Reset()
 		buf.WriteString("set -ex;\n")
 
-		fmt.Fprintln(buf, "cat \"$0\"")
-
 		for i, c := range caches {
-			if !c.Dir.NoAutoNamespace {
-				fmt.Fprintf(buf, "[ -d %s ]; [ ! -f %s ]\n", c.Dir.Dest, filepath.Join(c.Dir.Dest, "hello"))
+			dir := getDir(c)
+
+			if c.Dir != nil && !c.Dir.NoAutoNamespace {
+				fmt.Fprintf(buf, "[ -d %s ]; [ ! -f %s ]\n", dir, filepath.Join(dir, "hello"))
 				continue
 			}
 
 			check := fmt.Sprintf("%s %d", distro, i)
-			fmt.Fprintf(buf, "grep %q %s\n", check, filepath.Join(c.Dir.Dest, "hello"))
+
+			// We can't really test the GoBuild cache here reliably due to caching.
+			// We can't invalidate the cache for it like we can for dirs.
+			if c.GoBuild == nil {
+				fmt.Fprintf(buf, "grep %q %s\n", check, filepath.Join(dir, "hello"))
+			}
 		}
 
 		spec = specWithCommand(buf.String())

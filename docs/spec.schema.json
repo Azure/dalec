@@ -382,6 +382,10 @@
 				"dir": {
 					"$ref": "#/$defs/CacheDir",
 					"description": "Dir specifies a generic cache directory configuration."
+				},
+				"gobuild": {
+					"$ref": "#/$defs/GoBuildCache",
+					"description": "GoBuild specifies a cache for Go's incremental build artifacts.\nThis should speed up repeated builds of Go projects."
 				}
 			},
 			"additionalProperties": {
@@ -397,6 +401,12 @@
 						"dir"
 					],
 					"title": "dir"
+				},
+				{
+					"required": [
+						"gobuild"
+					],
+					"title": "gobuild"
 				}
 			],
 			"description": "CacheConfig configures a cache to use for a build."
@@ -827,6 +837,27 @@
 				"object",
 				"null"
 			]
+		},
+		"GoBuildCache": {
+			"required": [
+				"scope"
+			],
+			"properties": {
+				"scope": {
+					"type": [
+						"string"
+					],
+					"description": "Scope adds extra information to the cache key.\nThis is useful to differentiate between different build contexts if required.\n\nThis is mainly intended for internal testing purposes."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			],
+			"description": "GoBuildCache is a cache for Go build artifacts."
 		},
 		"ImageConfig": {
 			"properties": {
