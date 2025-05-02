@@ -62,3 +62,13 @@ caches:
   - gobuild:
       scope: my_scope
 ```
+
+Finally, when go is detected in the build environment dalec will automatically
+create a gobuild cache for you. This can be disabled by setting the `disabled`
+option to `true` in the cache definition.
+
+```yaml
+caches:
+  - gobuild:
+      disabled: true
+```
