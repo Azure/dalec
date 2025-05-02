@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/targets"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"gotest.tools/v3/assert"
 )
@@ -86,7 +87,9 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 		}
 
 		spec := specWithCommand(buf.String())
-		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		// Ignore the pkg buildkit cache for the pkg build to ensure our commands always run
+		// Otherwise we can wind up in a case where this request is fully cached but there is nothing in the cache dirs.
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
 		solveT(ctx, t, client, sr)
 
 		// Now make sure the cache is persistent
@@ -122,12 +125,13 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 				continue
 			}
 
-			check := fmt.Sprintf("%s %d", distro, i)
-
-			// We can't really test the GoBuild cache here reliably due to caching.
-			// We can't invalidate the cache for it like we can for dirs.
+			// We can't test gobuild here because it will have a different cache key due to using a different distro
 			if c.GoBuild == nil {
+				check := fmt.Sprintf("%s %d", distro, i)
 				fmt.Fprintf(buf, "grep %q %s\n", check, filepath.Join(dir, "hello"))
+			} else {
+				// This should not exist because the gobuild cache is not shared between distros
+				fmt.Fprintf(buf, "[ ! -f %q ]\n", filepath.Join(dir, "hello"))
 			}
 		}
 
@@ -136,5 +140,54 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 		res := solveT(ctx, t, client, sr)
 		_, err := res.SingleRef()
 		assert.NilError(t, err)
+	})
+}
+
+func testAutoGobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {
+	ctx = startTestSpan(ctx, t)
+
+	specWithCommand := func(cmd string) *dalec.Spec {
+		spec := newSimpleSpec()
+		spec.Dependencies = &dalec.PackageDependencies{}
+		spec.Dependencies.Build = map[string]dalec.PackageConstraints{
+			cfg.GetPackage("golang"): {},
+		}
+		spec.Build.Steps = append(spec.Build.Steps, dalec.BuildStep{
+			Command: cmd,
+		})
+		return spec
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		buf := bytes.NewBuffer(nil)
+		buf.WriteString("set -ex;\n")
+		buf.WriteString("[ -d \"$GOCACHE\" ]; echo hello > ${GOCACHE}/hello\n")
+
+		spec := specWithCommand(buf.String())
+		// Set ignore cache to make sure we always run the command so the cache is guaranteed to be populated
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
+		solveT(ctx, t, client, sr)
+
+		buf.Reset()
+		buf.WriteString("set -ex;\n")
+		buf.WriteString("[ -d \"$GOCACHE\" ]; grep hello ${GOCACHE}/hello\n")
+		spec = specWithCommand(buf.String())
+
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
+
+		// Now disable the auto gobuild cache
+		spec = specWithCommand("[ -z \"${GOCACHE}\" ]")
+		spec.Build.Caches = []dalec.CacheConfig{
+			{GoBuild: &dalec.GoBuildCache{Disabled: true}},
+		}
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
+
+		// Also make sure there is no autocache when there is no golang dependency
+		spec = specWithCommand("[ -z \"${GOCACHE}\" ]")
+		spec.Dependencies = nil
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
 	})
 }

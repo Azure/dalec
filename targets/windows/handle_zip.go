@@ -123,6 +123,27 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 	return dalec.WithRunOptions(ordered...)
 }
 
+func addGoCache(spec *dalec.Spec, targetKey string) {
+	if !spec.HasGomods() && !dalec.HasGolang(spec, targetKey) {
+		return
+	}
+
+	addCache := true
+	for _, c := range spec.Build.Caches {
+		if c.GoBuild != nil {
+			addCache = false
+			break
+		}
+	}
+	if !addCache {
+		return
+	}
+
+	spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
+		GoBuild: &dalec.GoBuildCache{},
+	})
+}
+
 func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))
 	worker = worker.With(distroConfig.InstallBuildDeps(sOpt, spec, targetKey, opts...))
@@ -131,6 +152,8 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "could not generate sources")
 	}
+
+	addGoCache(spec, targetKey)
 
 	patched := dalec.PatchSources(worker, spec, sources, opts...)
 	buildScript := createBuildScript(spec, opts...)

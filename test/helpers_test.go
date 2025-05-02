@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -241,6 +242,20 @@ func withBuildTarget(target string) srOpt {
 			cfg.req.FrontendOpt = make(map[string]string)
 		}
 		cfg.req.FrontendOpt["target"] = target
+	}
+}
+
+func withIgnoreCache(refs ...string) srOpt {
+	return func(cfg *newSolveRequestConfig) {
+		if cfg.req.FrontendOpt == nil {
+			cfg.req.FrontendOpt = make(map[string]string)
+		}
+		v := cfg.req.FrontendOpt["no-cache"]
+		if v != "" {
+			v += ","
+		}
+		cfg.req.FrontendOpt["no-cache"] = v + strings.Join(refs, ",")
+
 	}
 }
 

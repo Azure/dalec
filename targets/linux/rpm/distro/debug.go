@@ -29,11 +29,7 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 
 	deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
 	if spec.HasGomods() {
-		hasGolang := func(s string) bool {
-			return s == "golang" || s == "msft-golang"
-		}
-
-		if !slices.ContainsFunc(deps, hasGolang) {
+		if !dalec.HasGolang(spec, targetKey) {
 			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
 		}
 
