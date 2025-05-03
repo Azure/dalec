@@ -576,12 +576,12 @@ echo "$BAR" > bar.txt
 					Steps: []dalec.TestStep{
 						// Test artifact symlink ownership
 						{
-							Command: "stat -c '%u:%g' /bin/owned-link",
+							Command: "ls -ln /bin/owned-link | awk 'NR==1 {print $3\":\"$4}'",
 							Stdout:  dalec.CheckOutput{Equals: "1234:5678\n"},
 						},
 						// Test image post-install symlink ownership
 						{
-							Command: "stat -c '%u:%g' /owned-image-link",
+							Command: "ls -ln /owned-image-link | awk 'NR==1 {print $3\":\"$4}'",
 							Stdout:  dalec.CheckOutput{Equals: "1234:5678\n"},
 						},
 						// Verify they're still actual symlinks
