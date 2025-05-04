@@ -403,7 +403,7 @@ echo "$BAR" > bar.txt
 						"/usr/bin/src1": {Path: "/src1"},
 						"/usr/bin/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
 						// Add a symlink with ownership
-						"/usr/bin/bash": {
+						"/usr/bin/sh": {
 							Paths: []string{"/owned-image-link"},
 							UID:   1234,
 							GID:   5678,
@@ -432,7 +432,7 @@ echo "$BAR" > bar.txt
 				},
 				Links: []dalec.ArtifactSymlinkConfig{
 					{
-						Source: "/bin/bash",
+						Source: "/bin/sh",
 						Dest:   "/bin/owned-link",
 						UID:    1234,
 						GID:    5678,
@@ -574,19 +574,21 @@ echo "$BAR" > bar.txt
 				{
 					Name: "Symlinks should have correct ownership",
 					Steps: []dalec.TestStep{
-						// Test artifact symlink ownership
-						{
-							Command: "ls -ln /bin/owned-link | awk 'NR==1 {print $3\":\"$4}'",
-							Stdout:  dalec.CheckOutput{Equals: "1234:5678\n"},
+						// Test if symlinks exist first
+						{Command: "/bin/bash -c 'test -L /bin/owned-link || (echo \"Symlink does not exist\" && ls -la /bin && exit 1)'"},
+						{Command: "/bin/bash -c 'test -L /owned-image-link || (echo \"Symlink does not exist\" && ls -la / && exit 1)'"},
+
+						// Test artifact symlink ownership using stat
+						{Command: "/bin/bash -c 'stat -c \"%u:%g\" /bin/owned-link'",
+							Stdout: dalec.CheckOutput{Equals: "1234:5678\n"},
 						},
 						// Test image post-install symlink ownership
-						{
-							Command: "ls -ln /owned-image-link | awk 'NR==1 {print $3\":\"$4}'",
-							Stdout:  dalec.CheckOutput{Equals: "1234:5678\n"},
+						{Command: "/bin/bash -c 'stat -c \"%u:%g\" /owned-image-link'",
+							Stdout: dalec.CheckOutput{Equals: "1234:5678\n"},
 						},
-						// Verify they're still actual symlinks
-						{Command: "test -L /bin/owned-link"},
-						{Command: "test -L /owned-image-link"},
+						// Verify symlinks point to the correct destinations
+						{Command: "/bin/bash -c 'readlink /bin/owned-link | grep -q \"/bin/sh\"'"},
+						{Command: "/bin/bash -c 'readlink /owned-image-link | grep -q \"/bin/sh\"'"},
 					},
 				},
 			},
