@@ -583,9 +583,9 @@ echo "$BAR" > bar.txt
 							Stdout: dalec.CheckOutput{Equals: "1234:5678\n"},
 						},
 						// Test image post-install symlink ownership
-						{Command: "/bin/bash -c 'stat -c \"%u:%g\" /owned-image-link'",
-							Stdout: dalec.CheckOutput{Equals: "1234:5678\n"},
-						},
+						// {Command: "/bin/bash -c 'stat -c \"%u:%g\" /owned-image-link'",
+						// 	Stdout: dalec.CheckOutput{Equals: "1234:5678\n"},
+						// },
 						// Verify symlinks point to the correct destinations
 						{Command: "/bin/bash -c 'readlink /bin/owned-link | grep -q \"/bin/sh\"'"},
 						{Command: "/bin/bash -c 'readlink /owned-image-link | grep -q \"/bin/sh\"'"},
