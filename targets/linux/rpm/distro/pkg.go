@@ -24,6 +24,22 @@ func (c *Config) Validate(spec *dalec.Spec) error {
 	return nil
 }
 
+func addGoCache(spec *dalec.Spec, targetKey string, info *rpm.CacheInfo) {
+	if !spec.HasGomods() && !dalec.HasGolang(spec, targetKey) {
+		return
+	}
+
+	for _, c := range spec.Build.Caches {
+		if c.GoBuild != nil {
+			return
+		}
+	}
+
+	info.Caches = append(info.Caches, dalec.CacheConfig{
+		GoBuild: &dalec.GoBuildCache{},
+	})
+}
+
 func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, opts...))
 
@@ -35,7 +51,10 @@ func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 	specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 
 	builder := worker.With(dalec.SetBuildNetworkMode(spec))
-	st := rpm.Build(br, builder, specPath, opts...)
+	cacheInfo := rpm.CacheInfo{TargetKey: targetKey, Caches: spec.Build.Caches}
+	addGoCache(spec, targetKey, &cacheInfo)
+
+	st := rpm.Build(br, builder, specPath, cacheInfo, opts...)
 
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt, opts...)
 }

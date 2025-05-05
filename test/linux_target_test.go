@@ -69,6 +69,14 @@ type targetConfig struct {
 	PackageOverrides map[string]string
 }
 
+func (cfg *targetConfig) GetPackage(name string) string {
+	updated := cfg.PackageOverrides[name]
+	if updated != "" {
+		return updated
+	}
+	return name
+}
+
 type testLinuxConfig struct {
 	Target     targetConfig
 	LicenseDir string
@@ -92,11 +100,7 @@ type OSRelease struct {
 }
 
 func (cfg *testLinuxConfig) GetPackage(name string) string {
-	updated := cfg.Target.PackageOverrides[name]
-	if updated != "" {
-		return updated
-	}
-	return name
+	return cfg.Target.GetPackage(name)
 }
 
 func rpmTargetOutputPath(id string) func(spec *dalec.Spec, platform ocispecs.Platform) string {
@@ -1666,6 +1670,18 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 	t.Run("package provides", func(t *testing.T) {
 		t.Parallel()
 		testPackageProvidesReplaces(ctx, t, testConfig)
+	})
+
+	t.Run("artifact build cache dir", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testArtifactBuildCacheDir(ctx, t, testConfig.Target)
+	})
+
+	t.Run("auto gobuild cache", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testAutoGobuildCache(ctx, t, testConfig.Target)
 	})
 }
 

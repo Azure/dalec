@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/targets"
+	"github.com/Azure/dalec/targets/linux/deb/ubuntu"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -19,6 +22,7 @@ const (
 	outputDir       = "/tmp/output"
 	buildScriptName = "_build.sh"
 	aptCachePrefix  = "jammy-windowscross"
+	distroVersionID = ubuntu.JammyVersionID
 )
 
 func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
@@ -119,13 +123,37 @@ func withSourcesMounted(dst string, states map[string]llb.State, sources map[str
 	return dalec.WithRunOptions(ordered...)
 }
 
+func addGoCache(spec *dalec.Spec, targetKey string) {
+	if !spec.HasGomods() && !dalec.HasGolang(spec, targetKey) {
+		return
+	}
+
+	addCache := true
+	for _, c := range spec.Build.Caches {
+		if c.GoBuild != nil {
+			addCache = false
+			break
+		}
+	}
+	if !addCache {
+		return
+	}
+
+	spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
+		GoBuild: &dalec.GoBuildCache{},
+	})
+}
+
 func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	opts = append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))
 	worker = worker.With(distroConfig.InstallBuildDeps(sOpt, spec, targetKey, opts...))
 
 	sources, err := specToSourcesLLB(worker, spec, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "could not generate sources")
 	}
+
+	addGoCache(spec, targetKey)
 
 	patched := dalec.PatchSources(worker, spec, sources, opts...)
 	buildScript := createBuildScript(spec, opts...)
@@ -145,6 +173,11 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 		// build then they will need to set GOOS=linux manually.
 		// As such, this must come before the env vars from the spec are set.
 		llb.AddEnv("GOOS", "windows"),
+		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+			for _, c := range spec.Build.Caches {
+				c.ToRunOption(path.Join(distroVersionID, targetKey), dalec.WithCacheDirConstraints(opts...)).SetRunOption(ei)
+			}
+		}),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 			for k, v := range spec.Build.Env {
 				ei.State = ei.State.With(llb.AddEnv(k, v))

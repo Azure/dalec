@@ -137,15 +137,23 @@ func BuildDebBinaryOnly(worker llb.State, spec *dalec.Spec, debroot llb.State, d
 }
 
 func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-
 	dirName := filepath.Join("/work", spec.Name+"_"+spec.Version+"-"+spec.Revision)
+	buildRootRel := spec.Name + "-" + spec.Version
 	st := worker.
 		Run(
-			dalec.ShArgs("set -e; ls -lh; dpkg-source -x ./*.dsc; ls -lh; cd "+spec.Name+"-"+spec.Version+"; ls -lh *; dpkg-buildpackage -b -uc -us; mkdir -p /tmp/out; cp ../*.deb /tmp/out; ls -lh /tmp/out"),
+			dalec.ShArgs("set -e; ls -lh; dpkg-source -x ./*.dsc; ls -lh; cd "+buildRootRel+"; ls -lh *; dpkg-buildpackage -b -uc -us; mkdir -p /tmp/out; cp ../*.deb /tmp/out; ls -lh /tmp/out"),
 			llb.Dir(dirName),
 			llb.AddEnv("DH_VERBOSE", "1"),
 			llb.AddMount(dirName, srcPkg),
 			dalec.WithConstraints(opts...),
+			dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+				opts := []dalec.CacheConfigOption{
+					dalec.WithCacheDirConstraints(opts...),
+				}
+				for _, cache := range spec.Build.Caches {
+					cache.ToRunOption(distroVersionID, opts...).SetRunOption(ei)
+				}
+			}),
 		).AddMount("/tmp/out", llb.Scratch())
 
 	return dalec.MergeAtPath(llb.Scratch(), []llb.State{st, srcPkg}, "/"), nil

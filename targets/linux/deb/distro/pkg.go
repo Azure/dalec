@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/Azure/dalec/packaging/linux/deb"
+	"github.com/Azure/dalec/targets"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -32,7 +33,7 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		}
 	}
 
-	worker = worker.With(d.InstallBuildDeps(sOpt, spec, targetKey))
+	worker = worker.With(d.InstallBuildDeps(sOpt, spec, targetKey, append(opts, frontend.IgnoreCache(client))...))
 
 	var cfg deb.SourcePkgConfig
 	extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, opts...)
@@ -40,14 +41,14 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		return worker, err
 	}
 
-	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, opts...)
+	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))...)
 	if err != nil {
 		return worker, err
 	}
 
 	builder := worker.With(dalec.SetBuildNetworkMode(spec))
 
-	st, err := deb.BuildDeb(builder, spec, srcPkg, versionID, opts...)
+	st, err := deb.BuildDeb(builder, spec, srcPkg, versionID, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -59,7 +60,7 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		),
 	)
 
-	signed, err := frontend.MaybeSign(ctx, client, filtered, spec, targetKey, sOpt)
+	signed, err := frontend.MaybeSign(ctx, client, filtered, spec, targetKey, sOpt, opts...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -75,6 +76,23 @@ func noOpStateOpt(in llb.State) llb.State {
 }
 
 func prepareGo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePkgConfig, worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	if !dalec.HasGolang(spec, targetKey) && !spec.HasGomods() {
+		return noOpStateOpt, nil
+	}
+
+	addGoCache := true
+	for _, c := range spec.Build.Caches {
+		if c.GoBuild != nil {
+			addGoCache = false
+		}
+	}
+
+	if addGoCache {
+		spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
+			GoBuild: &dalec.GoBuildCache{},
+		})
+	}
+
 	goBin, err := searchForAltGolang(ctx, client, spec, targetKey, worker, opts...)
 	if err != nil {
 		return noOpStateOpt, errors.Wrap(err, "error while looking for alternate go bin path")
@@ -169,6 +187,7 @@ func (cfg *Config) RunTests(ctx context.Context, client gwclient.Client, _ llb.S
 		return nil, err
 	}
 
+	opts = append(opts, frontend.IgnoreCache(client))
 	withTestDeps := cfg.InstallTestDeps(sOpt, targetKey, spec, opts...)
 	err = frontend.RunTests(ctx, client, spec, ref, withTestDeps, targetKey, sOpt.TargetPlatform)
 	return ref, err
@@ -184,7 +203,7 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 		pg := dalec.ProgressGroup(spec.Name)
 		pc := dalec.Platform(platform)
 
-		worker, err := cfg.Worker(sOpt, pg, pc)
+		worker, err := cfg.Worker(sOpt, pg, pc, frontend.IgnoreCache(client, cfg.ImageRef, cfg.ContextRef))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -194,20 +213,20 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 			return nil, nil, err
 		}
 
-		worker = worker.With(cfg.InstallBuildDeps(sOpt, spec, targetKey, pg))
+		worker = worker.With(cfg.InstallBuildDeps(sOpt, spec, targetKey, pg, frontend.IgnoreCache(client)))
 
 		var cfg deb.SourcePkgConfig
-		extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, pg)
+		extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, pg, frontend.IgnoreCache(client))
 		if err != nil {
 			return nil, nil, err
 		}
 
-		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg, pc)
+		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg, pc, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building source package")
 		}
 
-		def, err := st.Marshal(ctx)
+		def, err := st.Marshal(ctx, frontend.IgnoreCache(client))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error marshalling source package state")
 		}
