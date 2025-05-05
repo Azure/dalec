@@ -185,11 +185,12 @@ func (w *controlWrapper) AllRuntimeDeps() fmt.Stringer {
 
 func (w *controlWrapper) Replaces() fmt.Stringer {
 	b := &strings.Builder{}
-	if len(w.Spec.Replaces) == 0 {
+	replaces := w.Spec.GetReplaces(w.Target)
+	if len(replaces) == 0 {
 		return b
 	}
 
-	ls := appendConstraints(w.Spec.Replaces)
+	ls := appendConstraints(replaces)
 
 	fmt.Fprintln(b, multiline("Replaces", ls))
 	return b
@@ -197,22 +198,24 @@ func (w *controlWrapper) Replaces() fmt.Stringer {
 
 func (w *controlWrapper) Conflicts() fmt.Stringer {
 	b := &strings.Builder{}
-	if len(w.Spec.Conflicts) == 0 {
+	conflicts := w.Spec.GetConflicts(w.Target)
+	if len(conflicts) == 0 {
 		return b
 	}
 
-	ls := appendConstraints(w.Spec.Conflicts)
+	ls := appendConstraints(conflicts)
 	fmt.Fprintln(b, multiline("Conflicts", ls))
 	return b
 }
 
 func (w *controlWrapper) Provides() fmt.Stringer {
 	b := &strings.Builder{}
-	if len(w.Spec.Provides) == 0 {
+	provides := w.Spec.GetProvides(w.Target)
+	if len(provides) == 0 {
 		return b
 	}
 
-	ls := appendConstraints(w.Spec.Provides)
+	ls := appendConstraints(provides)
 	fmt.Fprintln(b, multiline("Provides", ls))
 	return b
 }
