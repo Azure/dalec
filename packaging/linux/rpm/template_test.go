@@ -9,6 +9,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 func TestTemplateSources(t *testing.T) {
@@ -753,8 +754,6 @@ Version: 0.0.1
 Release: 1%{?dist}
 License: MIT
 Summary: A helpful tool
-
-
 %description
 A helpful tool
 
@@ -779,8 +778,6 @@ Release: 1%{?dist}
 License: MIT
 Summary: A helpful tool
 Packager: Awesome Packager
-
-
 %description
 A helpful tool
 
@@ -929,4 +926,105 @@ func TestTemplate_Replaces(t *testing.T) {
 	got = w.Replaces().String()
 	want = "Obsoletes: test-replaces < 2.0.0\n"
 	assert.Equal(t, got, want)
+}
+
+func TestTemplate_TargetSpecificOverrides(t *testing.T) {
+	// Create a spec with both root-level and target-specific values
+	spec := &dalec.Spec{
+		Name:    "test-pkg",
+		Version: "1.0.0",
+		// Root-level definitions
+		Replaces: map[string]dalec.PackageConstraints{
+			"root-pkg-r": {Version: []string{">= 1.0.0"}},
+			"common-pkg": {Version: []string{">= 2.0.0"}}, // Will be overridden in target1
+		},
+		Conflicts: map[string]dalec.PackageConstraints{
+			"root-pkg-c": {Version: []string{"<= 3.0.0"}},
+			"common-pkg": {Version: []string{"<= 4.0.0"}}, // Will be overridden in target1
+		},
+		Provides: map[string]dalec.PackageConstraints{
+			"root-pkg-p": {Version: []string{"= 5.0.0"}},
+			"common-pkg": {Version: []string{"= 6.0.0"}}, // Will be overridden in target1
+		},
+		Targets: map[string]dalec.Target{
+			// target1 overrides values
+			"target1": {
+				Replaces: map[string]dalec.PackageConstraints{
+					"target-pkg-r": {Version: []string{">= 1.1.0"}},
+					"common-pkg":   {Version: []string{">= 2.1.0"}}, // Overrides root
+				},
+				Conflicts: map[string]dalec.PackageConstraints{
+					"target-pkg-c": {Version: []string{"<= 3.1.0"}},
+					"common-pkg":   {Version: []string{"<= 4.1.0"}}, // Overrides root
+				},
+				Provides: map[string]dalec.PackageConstraints{
+					"target-pkg-p": {Version: []string{"= 5.1.0"}},
+					"common-pkg":   {Version: []string{"= 6.1.0"}}, // Overrides root
+				},
+			},
+			// target2 has explicit empty maps to override the root values
+			"target2": {
+				Replaces:  map[string]dalec.PackageConstraints{},
+				Conflicts: map[string]dalec.PackageConstraints{},
+				Provides:  map[string]dalec.PackageConstraints{},
+			},
+		},
+	}
+
+	t.Run("target1 should override root values", func(t *testing.T) {
+		w := &specWrapper{Spec: spec, Target: "target1"}
+
+		// Test Replaces - should contain target-specific values and not root values for common-pkg
+		replaces := w.Replaces().String()
+		assert.Assert(t, cmp.Contains(replaces, "Obsoletes: common-pkg >= 2.1.0"))
+		assert.Assert(t, cmp.Contains(replaces, "Obsoletes: target-pkg-r >= 1.1.0"))
+		assert.Assert(t, !strings.Contains(replaces, "root-pkg-r"))
+		assert.Assert(t, !strings.Contains(replaces, ">= 2.0.0")) // common-pkg old version
+
+		// Test Conflicts - should contain target-specific values and not root values for common-pkg
+		conflicts := w.Conflicts().String()
+		assert.Assert(t, cmp.Contains(conflicts, "Conflicts: common-pkg <= 4.1.0"))
+		assert.Assert(t, cmp.Contains(conflicts, "Conflicts: target-pkg-c <= 3.1.0"))
+		assert.Assert(t, !strings.Contains(conflicts, "root-pkg-c"))
+		assert.Assert(t, !strings.Contains(conflicts, "<= 4.0.0")) // common-pkg old version
+
+		// Test Provides - should contain target-specific values and not root values for common-pkg
+		provides := w.Provides().String()
+		assert.Assert(t, cmp.Contains(provides, "Provides: common-pkg == 6.1.0"))
+		assert.Assert(t, cmp.Contains(provides, "Provides: target-pkg-p == 5.1.0"))
+		assert.Assert(t, !strings.Contains(provides, "root-pkg-p"))
+		assert.Assert(t, !strings.Contains(provides, "= 6.0.0")) // common-pkg old version
+	})
+
+	t.Run("target2 should use empty maps", func(t *testing.T) {
+		w := &specWrapper{Spec: spec, Target: "target2"}
+
+		// Test Replaces - should be empty
+		assert.Equal(t, w.Replaces().String(), "")
+
+		// Test Conflicts - should be empty
+		assert.Equal(t, w.Conflicts().String(), "")
+
+		// Test Provides - should be empty
+		assert.Equal(t, w.Provides().String(), "")
+	})
+
+	t.Run("non-existent target should use root values", func(t *testing.T) {
+		w := &specWrapper{Spec: spec, Target: "non-existent-target"}
+
+		// Test Replaces - should contain root values
+		replaces := w.Replaces().String()
+		assert.Assert(t, cmp.Contains(replaces, "Obsoletes: common-pkg >= 2.0.0"))
+		assert.Assert(t, cmp.Contains(replaces, "Obsoletes: root-pkg-r >= 1.0.0"))
+
+		// Test Conflicts - should contain root values
+		conflicts := w.Conflicts().String()
+		assert.Assert(t, cmp.Contains(conflicts, "Conflicts: common-pkg <= 4.0.0"))
+		assert.Assert(t, cmp.Contains(conflicts, "Conflicts: root-pkg-c <= 3.0.0"))
+
+		// Test Provides - should contain root values
+		provides := w.Provides().String()
+		assert.Assert(t, cmp.Contains(provides, "Provides: common-pkg == 6.0.0"))
+		assert.Assert(t, cmp.Contains(provides, "Provides: root-pkg-p == 5.0.0"))
+	})
 }

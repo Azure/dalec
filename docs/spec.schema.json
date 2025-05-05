@@ -1962,6 +1962,16 @@
 					"$ref": "#/$defs/Artifacts",
 					"description": "Artifacts describes all of the artifact configurations to include for this specific target."
 				},
+				"conflicts": {
+					"additionalProperties": {
+						"$ref": "#/$defs/PackageConstraints"
+					},
+					"type": [
+						"object",
+						"null"
+					],
+					"description": "Conflicts is the list of packages that this target conflicts with."
+				},
 				"dependencies": {
 					"$ref": "#/$defs/PackageDependencies",
 					"description": "Dependencies are the different dependencies that need to be specified in the package."
@@ -1977,6 +1987,26 @@
 				"package_config": {
 					"$ref": "#/$defs/PackageConfig",
 					"description": "PackageConfig is the configuration to use for artifact targets, such as\nrpms, debs, or zip files containing Windows binaries"
+				},
+				"provides": {
+					"additionalProperties": {
+						"$ref": "#/$defs/PackageConstraints"
+					},
+					"type": [
+						"object",
+						"null"
+					],
+					"description": "Provides is the list of packages that this target provides."
+				},
+				"replaces": {
+					"additionalProperties": {
+						"$ref": "#/$defs/PackageConstraints"
+					},
+					"type": [
+						"object",
+						"null"
+					],
+					"description": "Replaces is the list of packages that this target replaces/obsoletes."
 				},
 				"tests": {
 					"items": {

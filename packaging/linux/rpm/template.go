@@ -11,8 +11,6 @@ import (
 	"text/template"
 
 	"github.com/Azure/dalec"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -93,11 +91,15 @@ func (w *specWrapper) Changelog() (fmt.Stringer, error) {
 func (w *specWrapper) Provides() fmt.Stringer {
 	b := &strings.Builder{}
 
-	ls := maps.Keys(w.Spec.Provides)
-	slices.Sort(ls)
+	provides := w.Spec.GetProvides(w.Target)
+	if len(provides) == 0 {
+		return b
+	}
+
+	ls := dalec.SortMapKeys(provides)
 
 	for _, name := range ls {
-		writeDep(b, "Provides", name, w.Spec.Provides[name])
+		writeDep(b, "Provides", name, provides[name])
 	}
 	b.WriteString("\n")
 	return b
@@ -106,10 +108,31 @@ func (w *specWrapper) Provides() fmt.Stringer {
 func (w *specWrapper) Replaces() fmt.Stringer {
 	b := &strings.Builder{}
 
-	keys := dalec.SortMapKeys(w.Spec.Replaces)
-	for _, name := range keys {
-		writeDep(b, "Obsoletes", name, w.Spec.Replaces[name])
+	replaces := w.Spec.GetReplaces(w.Target)
+	if len(replaces) == 0 {
+		return b
 	}
+
+	keys := dalec.SortMapKeys(replaces)
+	for _, name := range keys {
+		writeDep(b, "Obsoletes", name, replaces[name])
+	}
+	return b
+}
+
+func (w *specWrapper) Conflicts() fmt.Stringer {
+	b := &strings.Builder{}
+
+	conflicts := w.Spec.GetConflicts(w.Target)
+	if len(conflicts) == 0 {
+		return b
+	}
+
+	keys := dalec.SortMapKeys(conflicts)
+	for _, name := range keys {
+		writeDep(b, "Conflicts", name, conflicts[name])
+	}
+	b.WriteString("\n")
 	return b
 }
 
@@ -263,18 +286,6 @@ func writeDep(b *strings.Builder, kind, name string, constraints dalec.PackageCo
 		do()
 		fmt.Fprintf(b, "%%endif\n")
 	}
-}
-
-func (w *specWrapper) Conflicts() string {
-	b := &strings.Builder{}
-
-	keys := dalec.SortMapKeys(w.Spec.Conflicts)
-	for _, name := range keys {
-		constraints := w.Spec.Conflicts[name]
-		writeDep(b, "Conflicts", name, constraints)
-	}
-	b.WriteString("\n")
-	return b.String()
 }
 
 func (w *specWrapper) Sources() (fmt.Stringer, error) {

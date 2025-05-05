@@ -628,3 +628,24 @@ func HasGolang(spec *Spec, targetKey string) bool {
 	}
 	return false
 }
+
+func (s *Spec) GetProvides(targetKey string) map[string]PackageConstraints {
+	if p := s.Targets[targetKey].Provides; p != nil {
+		return p
+	}
+	return s.Provides
+}
+
+func (s *Spec) GetReplaces(targetKey string) map[string]PackageConstraints {
+	if r := s.Targets[targetKey].Replaces; r != nil {
+		return r
+	}
+	return s.Replaces
+}
+
+func (s *Spec) GetConflicts(targetKey string) map[string]PackageConstraints {
+	if c := s.Targets[targetKey].Conflicts; c != nil {
+		return c
+	}
+	return s.Conflicts
+}

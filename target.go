@@ -31,6 +31,15 @@ type Target struct {
 
 	// Artifacts describes all of the artifact configurations to include for this specific target.
 	Artifacts *Artifacts `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
+
+	// Provides is the list of packages that this target provides.
+	Provides map[string]PackageConstraints `yaml:"provides,omitempty" json:"provides,omitempty"`
+
+	// Replaces is the list of packages that this target replaces/obsoletes.
+	Replaces map[string]PackageConstraints `yaml:"replaces,omitempty" json:"replaces,omitempty"`
+
+	// Conflicts is the list of packages that this target conflicts with.
+	Conflicts map[string]PackageConstraints `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
 }
 
 func (t *Target) validate() error {
@@ -76,6 +85,39 @@ func (t *Target) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 
 	if err := t.Dependencies.processBuildArgs(lex, args, allowArg); err != nil {
 		errs = append(errs, errors.Wrap(err, "dependencies"))
+	}
+
+	for k, v := range t.Provides {
+		for i, ver := range v.Version {
+			updated, err := expandArgs(lex, ver, args, allowArg)
+			if err != nil {
+				errs = append(errs, errors.Wrapf(err, "provides %s version %d", k, i))
+				continue
+			}
+			t.Provides[k].Version[i] = updated
+		}
+	}
+
+	for k, v := range t.Replaces {
+		for i, ver := range v.Version {
+			updated, err := expandArgs(lex, ver, args, allowArg)
+			if err != nil {
+				errs = append(errs, errors.Wrapf(err, "replaces %s version %d", k, i))
+				continue
+			}
+			t.Replaces[k].Version[i] = updated
+		}
+	}
+
+	for k, v := range t.Conflicts {
+		for i, ver := range v.Version {
+			updated, err := expandArgs(lex, ver, args, allowArg)
+			if err != nil {
+				errs = append(errs, errors.Wrapf(err, "conflicts %s version %d", k, i))
+				continue
+			}
+			t.Conflicts[k].Version[i] = updated
+		}
 	}
 
 	return goerrors.Join(errs...)
