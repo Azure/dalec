@@ -9,6 +9,9 @@ import (
 
 const (
 	gomodCacheDir = "/go/pkg/mod"
+	// GoModCacheKey is the key used to identify the go module cache in the buildkit cache.
+	// It is exported only for testing purposes.
+	GomodCacheKey = "dalec-gomod-proxy-cache"
 )
 
 func (s *Source) isGomod() bool {
@@ -41,12 +44,20 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constrai
 			paths = []string{"."}
 		}
 
+		const proxyPath = "/tmp/dalec/gomod-proxy-cache"
 		for _, path := range paths {
 			in = worker.Run(
-				ShArgs("go mod download"),
+				// First download the go module deps to our persistent cache
+				// Then set the GOPROXY to the cache dir so that we can extract just the deps we need
+				// This allows us to persist the module cache across builds and avoid downloading
+				// the same deps over and over again.
+				ShArgs(`set -e; GOMODCACHE="${TMP_GOMODCACHE}" go mod download; GOPROXY="file://${TMP_GOMODCACHE}/cache/download" go mod download`),
+				llb.IgnoreCache,
 				llb.AddEnv("GOPATH", "/go"),
+				llb.AddEnv("TMP_GOMODCACHE", proxyPath),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
+				llb.AddMount(proxyPath, llb.Scratch(), llb.AsPersistentCacheDir(GomodCacheKey, llb.CacheMountShared)),
 				WithConstraints(opts...),
 			).AddMount(gomodCacheDir, in)
 		}
