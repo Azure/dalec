@@ -421,13 +421,6 @@ echo "$BAR" > bar.txt
 					"foo1.txt": {},
 					"bar.txt":  {},
 				},
-				// Add these user and group definitions
-				Users: []dalec.AddUserConfig{
-					{Name: "symlink-testuser", UID: 1234},
-				},
-				Groups: []dalec.AddGroupConfig{
-					{Name: "symlink-testgroup", GID: 5678},
-				},
 				Links: []dalec.ArtifactSymlinkConfig{
 					{
 						Source: "/usr/bin/src3",
