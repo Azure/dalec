@@ -9,16 +9,9 @@
 	"$defs": {
 		"AddGroupConfig": {
 			"required": [
-				"name",
-				"gid"
+				"name"
 			],
 			"properties": {
-				"gid": {
-					"type": [
-						"integer"
-					],
-					"description": "GID is the group ID to assign to the group."
-				},
 				"name": {
 					"type": [
 						"string"
@@ -37,8 +30,7 @@
 		},
 		"AddUserConfig": {
 			"required": [
-				"name",
-				"uid"
+				"name"
 			],
 			"properties": {
 				"name": {
@@ -46,12 +38,6 @@
 						"string"
 					],
 					"description": "Name is the name of the user to add to the system."
-				},
-				"uid": {
-					"type": [
-						"integer"
-					],
-					"description": "UID is the user ID to assign to the user."
 				}
 			},
 			"additionalProperties": {
