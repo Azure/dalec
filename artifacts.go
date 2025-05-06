@@ -123,16 +123,12 @@ func (a *ArtifactConfig) ResolveName(path string) string {
 type AddUserConfig struct {
 	// Name is the name of the user to add to the system.
 	Name string `yaml:"name" json:"name"`
-	// UID is the user ID to assign to the user.
-	UID int `yaml:"uid" json:"uid"`
 }
 
 // AddGroupConfig is the configuration for adding a group to the system.
 type AddGroupConfig struct {
 	// Name is the name of the group to add to the system.
 	Name string `yaml:"name" json:"name"`
-	// GID is the group ID to assign to the group.
-	GID int `yaml:"gid" json:"gid"`
 }
 
 // IsEmpty is used to determine if there are any artifacts to include in the package.
