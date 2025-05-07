@@ -552,7 +552,6 @@ func (w *specWrapper) postSymlinks() string {
 		return ""
 	}
 
-	// Check if any symlinks have custom ownership
 	hasCustomOwnership := false
 	for _, link := range artifacts.Links {
 		if link.UID != 0 || link.GID != 0 {
