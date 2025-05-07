@@ -470,6 +470,7 @@ func (w *specWrapper) Post() fmt.Stringer {
 	systemd := w.postSystemd()
 	users := w.postUsers()
 	groups := w.postGroups()
+	symlinks := w.postSymlinks()
 
 	if systemd == "" && users == "" && groups == "" {
 		return b
@@ -484,6 +485,9 @@ func (w *specWrapper) Post() fmt.Stringer {
 	}
 	if groups != "" {
 		b.WriteString(groups)
+	}
+	if symlinks != "" {
+		b.WriteString(symlinks)
 	}
 
 	b.WriteString("\n")
@@ -537,6 +541,36 @@ func (w *specWrapper) postSystemd() string {
 		b.WriteString(
 			systemdPostScript(artifact.ResolveName(servicePath), unitConf),
 		)
+	}
+
+	return b.String()
+}
+
+func (w *specWrapper) postSymlinks() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if len(artifacts.Links) == 0 {
+		return ""
+	}
+
+	// Check if any symlinks have custom ownership
+	hasCustomOwnership := false
+	for _, link := range artifacts.Links {
+		if link.UID != 0 || link.GID != 0 {
+			hasCustomOwnership = true
+			break
+		}
+	}
+
+	if !hasCustomOwnership {
+		return ""
+	}
+
+	b := &strings.Builder{}
+	fmt.Fprintf(b, "# Ensure symlink ownership\n")
+	for _, link := range artifacts.Links {
+		if link.UID != 0 || link.GID != 0 {
+			fmt.Fprintf(b, "chown -h %d:%d %s\n", link.UID, link.GID, link.Dest)
+		}
 	}
 
 	return b.String()
@@ -832,7 +866,13 @@ func (w *specWrapper) Files() fmt.Stringer {
 	}
 
 	for _, l := range artifacts.Links {
-		fmt.Fprintln(b, l.Dest)
+		if l.UID != 0 || l.GID != 0 {
+			// Use %attr to specify ownership, with "-" for mode to preserve symlink's mode
+			fmt.Fprintf(b, "%%attr(-, %d, %d) %s\n", l.UID, l.GID, l.Dest)
+		} else {
+			// For symlinks without custom ownership, keep the current behavior
+			fmt.Fprintln(b, l.Dest)
+		}
 	}
 
 	if len(artifacts.Headers) > 0 {

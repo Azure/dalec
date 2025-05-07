@@ -279,10 +279,11 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 	}
 
 	if len(artifacts.Links) > 0 {
+		fmt.Fprintf(buf, "# Set ownership for artifact symlinks\n")
 		for _, link := range artifacts.Links {
 			if link.UID != 0 || link.GID != 0 {
-				fmt.Fprintf(buf, "# Set ownership on symlink %s\n", link.Dest)
-				fmt.Fprintf(buf, "chown -h %d:%d %q\n", link.UID, link.GID, filepath.Join(basePath, link.Dest))
+				// The -h flag is crucial - it modifies the symlink itself, not its target
+				fmt.Fprintf(buf, "chown -h %d:%d \"$DESTDIR%s\"\n", link.UID, link.GID, link.Dest)
 			}
 		}
 	}
@@ -293,7 +294,7 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 			if target.UID != 0 || target.GID != 0 {
 				for _, newpath := range target.Paths {
 					fmt.Fprintf(buf, "# Set ownership on post-install symlink %s\n", newpath)
-					fmt.Fprintf(buf, "chown -h %d:%d %q\n", target.UID, target.GID, filepath.Join(basePath, newpath))
+					fmt.Fprintf(buf, "chown -h %d:%d \"$DESTDIR%s\"\n", target.UID, target.GID, newpath)
 				}
 			}
 		}
