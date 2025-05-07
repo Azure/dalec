@@ -184,12 +184,11 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 
 	if len(artifacts.Links) > 0 {
 		buf := bytes.NewBuffer(nil)
-		allLinksBuf := bytes.NewBuffer(nil)
 
 		for _, l := range artifacts.Links {
 			src := strings.TrimPrefix(l.Source, "/")
 			dst := strings.TrimPrefix(l.Dest, "/")
-			fmt.Fprintf(allLinksBuf, "%s %s\n", src, dst)
+			fmt.Fprintln(buf, src, dst)
 		}
 
 		states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, spec.Name+".links"), 0o644, buf.Bytes()), opts...))
@@ -282,13 +281,11 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 		fmt.Fprintf(buf, "# Set ownership for artifact symlinks\n")
 		for _, link := range artifacts.Links {
 			if link.UID != 0 || link.GID != 0 {
-				// The -h flag is crucial - it modifies the symlink itself, not its target
 				fmt.Fprintf(buf, "chown -h %d:%d \"$DESTDIR%s\"\n", link.UID, link.GID, link.Dest)
 			}
 		}
 	}
 
-	// Also check for any symlinks from ImageConfig.Post.Symlinks
 	if spec.Image != nil && spec.Image.Post != nil {
 		for _, target := range spec.Image.Post.Symlinks {
 			if target.UID != 0 || target.GID != 0 {
