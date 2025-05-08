@@ -1844,12 +1844,6 @@
 				"paths"
 			],
 			"properties": {
-				"gid": {
-					"type": [
-						"integer"
-					],
-					"description": "GID is the group ID that should own the symlink"
-				},
 				"path": {
 					"type": [
 						"string"
@@ -1866,12 +1860,6 @@
 						"array"
 					],
 					"description": "Path is a list of `newpath`s that will all point to the same `oldpath`."
-				},
-				"uid": {
-					"type": [
-						"integer"
-					],
-					"description": "UID is the user ID that should own the symlink"
 				}
 			},
 			"additionalProperties": {
