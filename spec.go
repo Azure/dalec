@@ -2,6 +2,7 @@
 package dalec
 
 import (
+	"encoding/json"
 	"io/fs"
 	"strings"
 	"time"
@@ -121,11 +122,58 @@ type PatchSpec struct {
 // This is used to generate the changelog for the package.
 type ChangelogEntry struct {
 	// Date is the date of the changelog entry.
-	Date time.Time `yaml:"date" json:"date" jsonschema:"oneof_required=date"`
+	// Dates are formatted as YYYY-MM-DD
+	Date Date `yaml:"date" json:"date" jsonschema:"oneof_required=date"`
 	// Author is the author of the changelog entry. e.g. `John Smith <john.smith@example.com>`
 	Author string `yaml:"author" json:"author"`
 	// Changes is the list of changes in the changelog entry.
 	Changes []string `yaml:"changes" json:"changes"`
+}
+
+type Date struct {
+	time.Time
+}
+
+func (d Date) Compare(other Date) int {
+	return d.Time.Compare(other.Time)
+}
+
+func (d Date) MarshalYAML() ([]byte, error) {
+	return yaml.Marshal(d.String())
+}
+
+func (d *Date) UnmarshalYAML(dt []byte) error {
+	var s string
+	if err := yaml.Unmarshal(dt, &s); err != nil {
+		return errors.Wrap(err, "error unmarshalling date to string")
+	}
+	parsedTime, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		return err
+	}
+	d.Time = parsedTime
+	return nil
+}
+
+func (d Date) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
+}
+
+func (d *Date) UnmarshalJSON(dt []byte) error {
+	var s string
+	if err := json.Unmarshal(dt, &s); err != nil {
+		return err
+	}
+	parsedTime, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		return err
+	}
+	d.Time = parsedTime
+	return nil
+}
+
+func (d Date) String() string {
+	return d.Format(time.DateOnly)
 }
 
 // PostInstall is the post install configuration for the image.
