@@ -168,7 +168,8 @@
 				},
 				"gid": {
 					"type": [
-						"integer"
+						"string",
+						"null"
 					],
 					"description": "GID is the group ID that should own the symlink"
 				},
@@ -181,7 +182,8 @@
 				},
 				"uid": {
 					"type": [
-						"integer"
+						"string",
+						"null"
 					],
 					"description": "UID is the user ID that should own the symlink"
 				}

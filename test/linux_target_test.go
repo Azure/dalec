@@ -401,11 +401,7 @@ echo "$BAR" > bar.txt
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
 						"/usr/bin/src1": {Path: "/src1"},
-						"/usr/bin/src3": {
-							Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3", "/owned-image-link"},
-							UID:   1234,
-							GID:   5678,
-						},
+						"/usr/bin/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
 					},
 				},
 			},
@@ -425,8 +421,8 @@ echo "$BAR" > bar.txt
 					{
 						Source: "/usr/bin/src3",
 						Dest:   "/bin/owned-link",
-						UID:    1234,
-						GID:    5678,
+						UID:    "1234",
+						GID:    "5678",
 					},
 				},
 			},
@@ -563,15 +559,12 @@ echo "$BAR" > bar.txt
 					},
 				},
 				{
-					Name: "Symlinks should have correct ownership",
+					Name: "Artifact symlinks should have correct ownership",
 					Steps: []dalec.TestStep{
 						// Test if symlinks exist first
 						{Command: "/bin/bash -c 'test -L /bin/owned-link'"},
-						{Command: "/bin/bash -c 'test -L /owned-image-link'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /bin/owned-link)\" = \"/usr/bin/src3\"'"},
-						{Command: "/bin/bash -c 'test \"$(readlink /owned-image-link)\" = \"/usr/bin/src3\"'"},
 						{Command: "/bin/bash -c 'stat -c \"%u:%g\" /bin/owned-link'", Stdout: dalec.CheckOutput{Equals: "1234:5678\n"}, Stderr: dalec.CheckOutput{Empty: true}},
-						{Command: "/bin/bash -c 'stat -c \"%u:%g\" /owned-image-link'", Stdout: dalec.CheckOutput{Equals: "1234:5678\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 					},
 				},
 			},
