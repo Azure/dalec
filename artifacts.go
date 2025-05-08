@@ -60,6 +60,10 @@ type ArtifactSymlinkConfig struct {
 	Source string `yaml:"source,omitempty" json:"source,omitempty"`
 	// Dest is the path where the symlink will be installed
 	Dest string `yaml:"dest,omitempty" json:"dest,omitempty"`
+	// UID is the user ID that should own the symlink
+	UID string `yaml:"uid,omitempty" json:"uid,omitempty"`
+	// GID is the group ID that should own the symlink
+	GID string `yaml:"gid,omitempty" json:"gid,omitempty"`
 }
 
 // CreateArtifactDirectories describes various directories that should be created on install.

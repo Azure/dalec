@@ -829,7 +829,13 @@ func (w *specWrapper) Files() fmt.Stringer {
 	}
 
 	for _, l := range artifacts.Links {
-		fmt.Fprintln(b, l.Dest)
+		if l.UID != "" || l.GID != "" {
+			// Use %attr to specify ownership, with "-" for mode to preserve symlink's mode
+			fmt.Fprintf(b, "%%attr(-, %s, %s) %s\n", l.UID, l.GID, l.Dest)
+		} else {
+			// For symlinks without custom ownership, keep the current behavior
+			fmt.Fprintln(b, l.Dest)
+		}
 	}
 
 	if len(artifacts.Headers) > 0 {

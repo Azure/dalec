@@ -185,6 +185,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 
 	if len(artifacts.Links) > 0 {
 		buf := bytes.NewBuffer(nil)
+
 		for _, l := range artifacts.Links {
 			src := strings.TrimPrefix(l.Source, "/")
 			dst := strings.TrimPrefix(l.Dest, "/")
@@ -273,6 +274,15 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 			if cfg.Mode.Perm() != 0 {
 				p := filepath.Join(basePath, "/var/lib", name)
 				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Mode.Perm(), p)
+			}
+		}
+	}
+
+	if len(artifacts.Links) > 0 {
+		fmt.Fprintf(buf, "# Set ownership for artifact symlinks\n")
+		for _, link := range artifacts.Links {
+			if link.UID != "" || link.GID != "" {
+				fmt.Fprintf(buf, "chown -h %s:%s \"$DESTDIR%s\"\n", link.UID, link.GID, link.Dest)
 			}
 		}
 	}

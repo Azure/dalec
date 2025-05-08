@@ -413,6 +413,14 @@ echo "$BAR" > bar.txt
 					"foo1.txt": {},
 					"bar.txt":  {},
 				},
+				Links: []dalec.ArtifactSymlinkConfig{
+					{
+						Source: "/usr/bin/src3",
+						Dest:   "/bin/owned-link",
+						UID:    "1234",
+						GID:    "5678",
+					},
+				},
 			},
 
 			Tests: []*dalec.TestSpec{
@@ -544,6 +552,15 @@ echo "$BAR" > bar.txt
 								},
 							},
 						},
+					},
+				},
+				{
+					Name: "Artifact symlinks should have correct ownership",
+					Steps: []dalec.TestStep{
+						// Test if symlinks exist first
+						{Command: "/bin/bash -c 'test -L /bin/owned-link'"},
+						{Command: "/bin/bash -c 'test \"$(readlink /bin/owned-link)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -c 'stat -c \"%u:%g\" /bin/owned-link'", Stdout: dalec.CheckOutput{Equals: "1234:5678\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 					},
 				},
 			},
