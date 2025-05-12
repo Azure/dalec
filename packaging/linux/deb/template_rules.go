@@ -118,7 +118,7 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 		// our extra script.
 		b.WriteString("override_dh_fixperms:\n")
 		b.WriteString("\tdh_fixperms\n")
-		b.WriteString("\tdebian/dalec/fix_perms.sh\n\n")
+		b.WriteString("\tDESTDIR=debian/$(shell dh_listpackages) debian/dalec/fix_perms.sh\n\n")
 	}
 
 	return b
