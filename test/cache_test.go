@@ -14,7 +14,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/targets"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"gotest.tools/v3/assert"
 )
 
 func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConfig) {
@@ -55,91 +54,104 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 		},
 	}
 
-	specWithCommand := func(cmd string) *dalec.Spec {
+	specWithCommand := func(cmds ...string) *dalec.Spec {
+		cmds = append([]string{"set -ex;"}, cmds...)
 		spec := newSimpleSpec()
 		spec.Build.Caches = caches
 		spec.Build.Steps = append(spec.Build.Steps, dalec.BuildStep{
-			Command: cmd,
+			Command: strings.Join(cmds, "\n"),
 		})
 		return spec
 	}
 
+	getDir := func(t *testing.T, c dalec.CacheConfig) string {
+		if c.Dir != nil {
+			return c.Dir.Dest
+		}
+		if c.GoBuild != nil {
+			return "${GOCACHE}"
+		}
+		t.Fatalf("invalid cache config or maybe the test needs to be updated for a new cache type?")
+		return ""
+	}
+
 	distro, _, _ := strings.Cut(cfg.Package, "/")
 
-	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-		// Make sure the cache is populated
-		buf := bytes.NewBuffer(nil)
-		buf.WriteString("set -ex;\n")
+	cmds := make([]string, 0, len(caches))
 
-		getDir := func(c dalec.CacheConfig) string {
-			if c.Dir != nil {
-				return c.Dir.Dest
-			}
-			if c.GoBuild != nil {
-				return "${GOCACHE}"
-			}
-			t.Fatalf("invalid cache config or maybe the test needs to be updated for a new cache type?")
-			return ""
-		}
-
+	// Makes sure the cache is populated with some data.
+	populateCache := func(ctx context.Context, t *testing.T, client gwclient.Client) {
 		for i, c := range caches {
-			fmt.Fprintf(buf, "echo %s %d > \"%s/hello\"\n", distro, i, getDir(c))
+			cmds = append(cmds, fmt.Sprintf("echo %s %d > \"%s/hello\"", distro, i, getDir(t, c)))
 		}
 
-		spec := specWithCommand(buf.String())
+		spec := specWithCommand(cmds...)
 		// Ignore the pkg buildkit cache for the pkg build to ensure our commands always run
 		// Otherwise we can wind up in a case where this request is fully cached but there is nothing in the cache dirs.
 		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
 		solveT(ctx, t, client, sr)
+	}
 
-		// Now make sure the cache is persistent
-		buf.Reset()
-		buf.WriteString("set -ex;\n")
-
+	// Checks that a cache is pre-populated from anothwer build.
+	checkCacheContents := func(ctx context.Context, t *testing.T, client gwclient.Client) {
 		for i, c := range caches {
 			check := fmt.Sprintf("%s %d", distro, i)
-			fmt.Fprintf(buf, "grep %q %s/hello\n", check, getDir(c))
+			cmds = append(cmds, fmt.Sprintf("grep %q %s/hello\n", check, getDir(t, c)))
 		}
 
-		spec = specWithCommand(buf.String())
-		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		spec := specWithCommand(cmds...)
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)
+	}
 
-		// This makes sure that that the 1st and 2nd cache are not shared with another distro, but the 3rd one is.
+	// Used to validate that caches with namespaced dirs are not shared between distros and that
+	// caches with no namespace are shared between distros.
+	checkDistro := func(ctx context.Context, t *testing.T, client gwclient.Client) {
 		distro2 := "noble"
 		if distro == distro2 {
 			distro2 = "jammy"
 		}
-		t.Log("using distro2", distro2)
+
+		t.Log("using distro", distro2)
 		target := path.Join(distro2, "deb")
 
 		// Note: cache3/hello3 should have the content written by the first test
-		buf.Reset()
-		buf.WriteString("set -ex;\n")
-
 		for i, c := range caches {
-			dir := getDir(c)
+			dir := getDir(t, c)
 
 			if c.Dir != nil && !c.Dir.NoAutoNamespace {
-				fmt.Fprintf(buf, "[ -d %s ]; [ ! -f %s ]\n", dir, filepath.Join(dir, "hello"))
+				cmds = append(cmds, fmt.Sprintf("[ -d %s ]; [ ! -f %s ]", dir, filepath.Join(dir, "hello")))
 				continue
 			}
 
 			// We can't test gobuild here because it will have a different cache key due to using a different distro
 			if c.GoBuild == nil {
+				// Use the *original* distro name here since that is what wrote the file
 				check := fmt.Sprintf("%s %d", distro, i)
-				fmt.Fprintf(buf, "grep %q %s\n", check, filepath.Join(dir, "hello"))
+				cmds = append(cmds, fmt.Sprintf("grep %q %s", check, filepath.Join(dir, "hello")))
 			} else {
 				// This should not exist because the gobuild cache is not shared between distros
-				fmt.Fprintf(buf, "[ ! -f %q ]\n", filepath.Join(dir, "hello"))
+				cmds = append(cmds, fmt.Sprintf("[ ! -f %q ]", filepath.Join(dir, "hello")))
 			}
 		}
 
-		spec = specWithCommand(buf.String())
-		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(target))
-		res := solveT(ctx, t, client, sr)
-		_, err := res.SingleRef()
-		assert.NilError(t, err)
+		spec := specWithCommand(cmds...)
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(target))
+		solveT(ctx, t, client, sr)
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		// Make sure the cache is populated
+		populateCache(ctx, t, client)
+
+		// Now make sure the cache is persistent by running another build and checking the cache contents
+		cmds = cmds[:0]
+		checkCacheContents(ctx, t, client)
+
+		// Now make sure the cache is not shared with another distro
+		// This makes sure that that the 1st and 2nd cache are not shared with another distro, but the 3rd one is.
+		cmds = cmds[:0]
+		checkDistro(ctx, t, client)
 	})
 }
 
