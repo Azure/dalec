@@ -107,11 +107,10 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 	patches := createPatches(spec, sources, worker, dr, opts...)
 
 	work := worker.Run(
-		dalec.ShArgs("set -e; ls -lh; dpkg-buildpackage -S -us -uc; mkdir -p /tmp/out; ls -lh; cp -r /work/"+spec.Name+"_"+spec.Version+"* /tmp/out; ls -lh /tmp/out"),
+		dalec.ShArgs("set -e; dpkg-buildpackage -S -us -uc; mkdir -p /tmp/out; cp -r /work/"+spec.Name+"_"+spec.Version+"* /tmp/out"),
 		llb.Dir("/work/pkg"),
 		llb.AddMount("/work/pkg/debian", dr, llb.SourcePath("debian")), // This cannot be readonly because the debian directory gets modified by dpkg-buildpackage
 		llb.AddMount("/work/pkg/debian/patches", patches, llb.Readonly),
-		llb.AddEnv("DH_VERBOSE", "1"),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 			debSources := TarDebSources(worker, spec, sources, "src.tar.gz", sOpt, opts...)
 			llb.AddMount("/work/"+spec.Name+"_"+spec.Version+".orig.tar.gz", debSources, llb.SourcePath("src.tar.gz")).SetRunOption(ei)
@@ -126,9 +125,8 @@ func BuildDebBinaryOnly(worker llb.State, spec *dalec.Spec, debroot llb.State, d
 	dirName := filepath.Join("/work", spec.Name+"_"+spec.Version+"-"+spec.Revision)
 	st := worker.
 		Run(
-			dalec.ShArgs("set -e; ls -lh; dpkg-buildpackage -b -uc -us; mkdir -p /tmp/out; cp ../*.deb /tmp/out; ls -lh /tmp/out"),
+			dalec.ShArgs("set -e; dpkg-buildpackage -b -uc -us; mkdir -p /tmp/out; cp ../*.deb /tmp/out"),
 			llb.Dir(dirName),
-			llb.AddEnv("DH_VERBOSE", "1"),
 			llb.AddMount(dirName, debroot),
 			dalec.WithConstraints(opts...),
 		).AddMount("/tmp/out", llb.Scratch())
@@ -141,9 +139,8 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersio
 	buildRootRel := spec.Name + "-" + spec.Version
 	st := worker.
 		Run(
-			dalec.ShArgs("set -e; ls -lh; dpkg-source -x ./*.dsc; ls -lh; cd "+buildRootRel+"; ls -lh *; dpkg-buildpackage -b -uc -us; mkdir -p /tmp/out; cp ../*.deb /tmp/out; ls -lh /tmp/out"),
+			dalec.ShArgs("set -e; dpkg-source -x ./*.dsc; cd "+buildRootRel+"; dpkg-buildpackage -b -uc -us; mkdir -p /tmp/out; cp ../*.deb /tmp/out"),
 			llb.Dir(dirName),
-			llb.AddEnv("DH_VERBOSE", "1"),
 			llb.AddMount(dirName, srcPkg),
 			dalec.WithConstraints(opts...),
 			dalec.RunOptFunc(func(ei *llb.ExecInfo) {
