@@ -579,7 +579,7 @@ echo "$BAR" > bar.txt
 					Steps: []dalec.TestStep{
 						{Command: "/bin/bash -c 'test -L /bin/owned-link'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /bin/owned-link)\" = \"/usr/bin/src3\"'"},
-						{Command: "/bin/bash -c 'test \"$(stat -c \"%u:%g\" /bin/owned-link)\" = \"need:coffee\"'"},
+						{Command: "/bin/bash -c 'NEED_UID=$(getent passwd need | cut -d: -f3); COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
 						{Command: "/bin/bash -c 'echo \"Symlink ownership: $(stat -c \"%u:%g\" /bin/owned-link)\"'"},
 					},
 				},
