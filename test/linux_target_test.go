@@ -421,8 +421,8 @@ echo "$BAR" > bar.txt
 					{
 						Source: "/usr/bin/src3",
 						Dest:   "/bin/owned-link",
-						UID:    "need",
-						GID:    "coffee",
+						UID:    "nobody",
+						GID:    "nobody",
 					},
 				},
 			},
@@ -563,7 +563,7 @@ echo "$BAR" > bar.txt
 					Steps: []dalec.TestStep{
 						{Command: "/bin/bash -c 'test -L /bin/owned-link'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /bin/owned-link)\" = \"/usr/bin/src3\"'"},
-						{Command: "/bin/bash -c 'uid_gid=$(stat -c \"%u:%g\" /bin/owned-link); test \"$uid_gid\" != \"0:0\"'"},
+						{Command: "/bin/bash -c 'stat -c \"%u:%g\" /bin/owned-link'", Stdout: dalec.CheckOutput{NotEquals: "0:0\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 						{Command: "/bin/bash -c 'echo \"Symlink ownership: $(stat -c \"%u:%g\" /bin/owned-link)\"'"},
 					},
 				},

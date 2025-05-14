@@ -562,6 +562,13 @@
 					],
 					"description": "Matches is the list of regular expressions to match the output against."
 				},
+				"not_equals": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "NotEquals is the string to check if the output does not equal."
+				},
 				"starts_with": {
 					"type": [
 						"string",
@@ -722,6 +729,13 @@
 						"array"
 					],
 					"description": "Matches is the list of regular expressions to match the output against."
+				},
+				"not_equals": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "NotEquals is the string to check if the output does not equal."
 				},
 				"not_exist": {
 					"type": [
