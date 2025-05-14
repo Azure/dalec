@@ -72,3 +72,29 @@ caches:
   - gobuild:
       disabled: true
 ```
+
+## Bazel Cache
+
+The bazel cache is a special type of cache that is used to cache the results of
+the `bazel build` command.
+
+```yaml
+caches:
+  - bazel:
+```
+
+Bazel caches are always in `shared` mode and are always namespaced with the OS and CPU architecture.
+This relies on setting the `--disk_cache` flag on `bazel build` by adding it to the *system* bazelrc file
+when dalec sets up the build environment.
+Dalec does not check if this is overwritten in the user or project bazelrc files.
+If this conflicts with your project, you may need to manually manage the bazel cache with a [cache dir](#dir-cache).
+
+An optional `scope` can be provided which is added to the generated cache key.
+This is intended for internal testing purposes, however may be useful for other
+use-cases as well.
+
+```yaml
+caches:
+  - bazel:
+      scope: my_scope
+```
