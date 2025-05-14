@@ -418,7 +418,7 @@ echo "$BAR" > bar.txt
 						Source: "/usr/bin/src3",
 						Dest:   "/bin/owned-link",
 						UID:    "nobody",
-						GID:    "nobody",
+						GID:    "nogroup",
 					},
 				},
 			},
