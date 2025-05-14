@@ -281,7 +281,8 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 		fmt.Fprintf(buf, "# Set ownership for artifact symlinks\n")
 		for _, link := range artifacts.Links {
 			if link.UID != "" || link.GID != "" {
-				fmt.Fprintf(buf, "chown -h %s:%s \"$DESTDIR%s\"\n", link.UID, link.GID, link.Dest)
+				p := filepath.Join(basePath, strings.TrimPrefix(link.Dest, "/"))
+				fmt.Fprintf(buf, "chown -h %s:%s %q\n", link.UID, link.GID, p)
 			}
 		}
 	}
