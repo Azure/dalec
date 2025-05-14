@@ -401,7 +401,11 @@ echo "$BAR" > bar.txt
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
 						"/usr/bin/src1": {Path: "/src1"},
-						"/usr/bin/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
+						"/usr/bin/src3": {
+							Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"},
+							UID:   "need",
+							GID:   "coffee",
+						},
 					},
 				},
 			},
@@ -421,8 +425,18 @@ echo "$BAR" > bar.txt
 					{
 						Source: "/usr/bin/src3",
 						Dest:   "/bin/owned-link",
-						UID:    "nobody",
-						GID:    "nogroup",
+						UID:    "need",
+						GID:    "coffee",
+					},
+				},
+				Users: []dalec.AddUserConfig{
+					{
+						Name: "need",
+					},
+				},
+				Groups: []dalec.AddGroupConfig{
+					{
+						Name: "coffee",
 					},
 				},
 			},
@@ -523,7 +537,7 @@ echo "$BAR" > bar.txt
 					},
 				},
 				{
-					Name: "Post-install symlinks should be created",
+					Name: "Post-install symlinks should be created and have correct ownership",
 					Files: map[string]dalec.FileCheckOutput{
 						"/src1":                  {},
 						"/non/existing/dir/src3": {},
@@ -535,6 +549,8 @@ echo "$BAR" > bar.txt
 						{Command: "/bin/bash -c 'test \"$(readlink /non/existing/dir/src3)\" = \"/usr/bin/src3\"'"},
 						{Command: "/bin/bash -c 'test -L /non/existing/dir2/src3'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /non/existing/dir2/src3)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -c 'test \"$(stat -c \"%u:%g\" /non/existing/dir/src3)\" = \"need:coffee\"'"},
+						{Command: "/bin/bash -c 'test \"$(stat -c \"%u:%g\" /non/existing/dir2/src3)\" = \"need:coffee\"'"},
 						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 						{Command: "/non/existing/dir/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 						{Command: "/non/existing/dir2/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
@@ -563,7 +579,7 @@ echo "$BAR" > bar.txt
 					Steps: []dalec.TestStep{
 						{Command: "/bin/bash -c 'test -L /bin/owned-link'"},
 						{Command: "/bin/bash -c 'test \"$(readlink /bin/owned-link)\" = \"/usr/bin/src3\"'"},
-						{Command: "/bin/bash -c 'stat -c \"%u:%g\" /bin/owned-link'", Stdout: dalec.CheckOutput{NotEquals: "0:0\n"}, Stderr: dalec.CheckOutput{Empty: true}},
+						{Command: "/bin/bash -c 'test \"$(stat -c \"%u:%g\" /bin/owned-link)\" = \"need:coffee\"'"},
 						{Command: "/bin/bash -c 'echo \"Symlink ownership: $(stat -c \"%u:%g\" /bin/owned-link)\"'"},
 					},
 				},

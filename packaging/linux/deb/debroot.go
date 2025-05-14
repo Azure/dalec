@@ -286,6 +286,17 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 		}
 	}
 
+	if spec.Image != nil && spec.Image.Post != nil {
+		fmt.Fprintf(buf, "# Set ownership for post-install symlinks\n")
+		for _, config := range spec.Image.Post.Symlinks {
+			if config.UID != "" || config.GID != "" {
+				for _, path := range config.Paths {
+					fmt.Fprintf(buf, "chown -h %s:%s \"$DESTDIR%s\"\n", config.UID, config.GID, path)
+				}
+			}
+		}
+	}
+
 	return buf.Bytes()
 }
 

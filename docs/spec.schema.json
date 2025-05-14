@@ -562,13 +562,6 @@
 					],
 					"description": "Matches is the list of regular expressions to match the output against."
 				},
-				"not_equals": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "NotEquals is the string to check if the output does not equal."
-				},
 				"starts_with": {
 					"type": [
 						"string",
@@ -729,13 +722,6 @@
 						"array"
 					],
 					"description": "Matches is the list of regular expressions to match the output against."
-				},
-				"not_equals": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "NotEquals is the string to check if the output does not equal."
 				},
 				"not_exist": {
 					"type": [
@@ -1858,6 +1844,13 @@
 				"paths"
 			],
 			"properties": {
+				"gid": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "GID is the group ID to set on the symlink."
+				},
 				"path": {
 					"type": [
 						"string"
@@ -1874,6 +1867,13 @@
 						"array"
 					],
 					"description": "Path is a list of `newpath`s that will all point to the same `oldpath`."
+				},
+				"uid": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "UID is the user ID to set on the symlink."
 				}
 			},
 			"additionalProperties": {

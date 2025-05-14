@@ -53,8 +53,6 @@ type TestStep struct {
 type CheckOutput struct {
 	// Equals is the exact string to compare the output to.
 	Equals string `yaml:"equals,omitempty" json:"equals,omitempty"`
-	// NotEquals is the string to check if the output does not equal.
-	NotEquals string `yaml:"not_equals,omitempty" json:"not_equals,omitempty"`
 	// Contains is the list of strings to check if they are contained in the output.
 	Contains []string `yaml:"contains,omitempty" json:"contains,omitempty"`
 	// Matches is the list of regular expressions to match the output against.
@@ -95,7 +93,7 @@ func (c *CheckOutputError) Error() string {
 
 // IsEmpty is used to determine if there are any checks to perform.
 func (c CheckOutput) IsEmpty() bool {
-	return c.Equals == "" && c.NotEquals == "" && len(c.Contains) == 0 && len(c.Matches) == 0 && c.StartsWith == "" && c.EndsWith == "" && !c.Empty
+	return c.Equals == "" && len(c.Contains) == 0 && len(c.Matches) == 0 && c.StartsWith == "" && c.EndsWith == "" && !c.Empty
 }
 
 func (t *TestSpec) validate() error {
@@ -137,12 +135,6 @@ func (c *CheckOutput) processBuildArgs(lex *shell.Lex, args map[string]string, a
 		return fmt.Errorf("%w: equals", err)
 	}
 	c.Equals = updated
-
-	updated, err = expandArgs(lex, c.NotEquals, args, allowArg)
-	if err != nil {
-		return fmt.Errorf("%w: notEquals", err)
-	}
-	c.NotEquals = updated
 
 	updated, err = expandArgs(lex, c.StartsWith, args, allowArg)
 	if err != nil {
@@ -253,10 +245,6 @@ func (c CheckOutput) Check(dt string, p string) (retErr error) {
 
 	if c.Equals != "" && c.Equals != dt {
 		return &CheckOutputError{Expected: c.Equals, Actual: dt, Path: p}
-	}
-
-	if c.NotEquals != "" && c.NotEquals == dt {
-		return &CheckOutputError{Expected: c.NotEquals, Actual: dt, Path: p}
 	}
 
 	for _, contains := range c.Contains {
