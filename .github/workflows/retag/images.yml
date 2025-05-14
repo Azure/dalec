@@ -2,3 +2,5 @@
   dest: dockerhub/mirror/library/busybox:latest
 - source: "golang:1.23"
   dest: dockerhub/mirror/library/golang:1.23
+- source: "registry:latest"
+  dest: dockerhub/mirror/library/registry:latest
