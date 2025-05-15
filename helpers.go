@@ -339,12 +339,18 @@ func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
 
 		sortedKeys := SortMapKeys(post.Symlinks)
 		for _, oldpath := range sortedKeys {
-			newpaths := post.Symlinks[oldpath].Paths
+			cfg := post.Symlinks[oldpath]
+			newpaths := cfg.Paths
 			sort.Strings(newpaths)
 
 			for _, newpath := range newpaths {
 				fmt.Fprintf(buf, "mkdir -p %q\n", filepath.Join(rootfsPath, filepath.Dir(newpath)))
 				fmt.Fprintf(buf, "ln -s %q %q\n", oldpath, filepath.Join(rootfsPath, newpath))
+				if cfg.UID != "" || cfg.GID != "" {
+					llb.AddMount("/etc/passwd", ei.State, llb.SourcePath(filepath.Join(rootfsPath, "/etc/passwd"))).SetRunOption(ei)
+					llb.AddMount("/etc/group", ei.State, llb.SourcePath(filepath.Join(rootfsPath, "/etc/group"))).SetRunOption(ei)
+					fmt.Fprintf(buf, "chown -h %s:%s %q\n", cfg.UID, cfg.GID, filepath.Join(rootfsPath, newpath))
+				}
 			}
 		}
 

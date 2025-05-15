@@ -164,7 +164,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	artifacts := spec.GetArtifacts(target)
 	writeUsersPostInst(postinst, artifacts.Users)
 	writeGroupsPostInst(postinst, artifacts.Groups)
-	setSymlinkOwnershipPostInst(postinst, spec)
+	setSymlinkOwnershipPostInst(postinst, spec, target)
 
 	if postinst.Len() > 0 {
 		dt := []byte("#!/usr/bin/env sh\nset -e\n")
@@ -274,15 +274,6 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 			if cfg.Mode.Perm() != 0 {
 				p := filepath.Join(basePath, "/var/lib", name)
 				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Mode.Perm(), p)
-			}
-		}
-	}
-
-	if len(artifacts.Links) > 0 {
-		fmt.Fprintf(buf, "# Set ownership for artifact symlinks\n")
-		for _, link := range artifacts.Links {
-			if link.UID != "" || link.GID != "" {
-				fmt.Fprintf(buf, "chown -h %s:%s \"$DESTDIR%s\"\n", link.UID, link.GID, link.Dest)
 			}
 		}
 	}
@@ -656,15 +647,14 @@ func writeGroupsPostInst(w *bytes.Buffer, groups []dalec.AddGroupConfig) {
 	}
 }
 
-func setSymlinkOwnershipPostInst(w io.Writer, spec *dalec.Spec) {
-	if spec.Image == nil || spec.Image.Post == nil {
-		return
-	}
+func setSymlinkOwnershipPostInst(w io.Writer, spec *dalec.Spec, target string) {
+	artifacts := spec.GetArtifacts(target)
 
-	for _, config := range spec.Image.Post.Symlinks {
-		if config.UID != "" || config.GID != "" {
-			for _, path := range config.Paths {
-				fmt.Fprintf(w, "chown -h %s:%s \"$DESTDIR%s\"\n", config.UID, config.GID, path)
+	if len(artifacts.Links) > 0 {
+		fmt.Fprintf(w, "# Set ownership for artifact symlinks\n")
+		for _, link := range artifacts.Links {
+			if link.UID != "" || link.GID != "" {
+				fmt.Fprintf(w, "chown -h %s:%s \"$DESTDIR%s\"\n", link.UID, link.GID, link.Dest)
 			}
 		}
 	}
