@@ -470,8 +470,9 @@ func (w *specWrapper) Post() fmt.Stringer {
 	systemd := w.postSystemd()
 	users := w.postUsers()
 	groups := w.postGroups()
+	symlinkOwnership := w.getSymlinkOwnership()
 
-	if systemd == "" && users == "" && groups == "" {
+	if systemd == "" && users == "" && groups == "" && symlinkOwnership == "" {
 		return b
 	}
 
@@ -484,6 +485,9 @@ func (w *specWrapper) Post() fmt.Stringer {
 	}
 	if groups != "" {
 		b.WriteString(groups)
+	}
+	if symlinkOwnership != "" {
+		b.WriteString(symlinkOwnership)
 	}
 
 	b.WriteString("\n")
@@ -512,6 +516,33 @@ func (w *specWrapper) postGroups() string {
 	b := &strings.Builder{}
 	for _, group := range artifacts.Groups {
 		fmt.Fprintf(b, "getent group %s >/dev/null || groupadd --system %s\n", group.Name, group.Name)
+	}
+	return b.String()
+}
+
+func (w *specWrapper) getSymlinkOwnership() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if len(artifacts.Links) == 0 {
+		return ""
+	}
+	b := &strings.Builder{}
+
+	users := make(map[string]struct{}, len(artifacts.Users))
+	groups := make(map[string]struct{}, len(artifacts.Groups))
+	for _, user := range artifacts.Users {
+		users[user.Name] = struct{}{}
+	}
+	for _, group := range artifacts.Groups {
+		groups[group.Name] = struct{}{}
+	}
+
+	for _, link := range artifacts.Links {
+		if _, ok := users[link.User]; ok {
+			fmt.Fprintf(b, "chown -h %s %s\n", link.User, link.Dest)
+		}
+		if _, ok := groups[link.Group]; ok {
+			fmt.Fprintf(b, "chgrp -h %s %s\n", link.Group, link.Dest)
+		}
 	}
 	return b.String()
 }
@@ -829,11 +860,17 @@ func (w *specWrapper) Files() fmt.Stringer {
 	}
 
 	for _, l := range artifacts.Links {
-		if l.UID != "" || l.GID != "" {
-			// Use %attr to specify ownership, with "-" for mode to preserve symlink's mode
-			fmt.Fprintf(b, "%%attr(-, %s, %s) %s\n", l.UID, l.GID, l.Dest)
+		user := l.User
+		group := l.Group
+		if user != "" || group != "" {
+			if user == "" {
+				user = "root"
+			}
+			if group == "" {
+				group = "root"
+			}
+			fmt.Fprintf(b, "%%attr(-, %s, %s) %s\n", user, group, l.Dest)
 		} else {
-			// For symlinks without custom ownership, keep the current behavior
 			fmt.Fprintln(b, l.Dest)
 		}
 	}
