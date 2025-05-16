@@ -182,7 +182,7 @@ func (b *BuildxEnv) bootstrap(ctx context.Context) (retErr error) {
 			}
 		})
 		if b.supportedErr != nil {
-			b.client.Close()
+			b.client.Close() //nolint:errcheck
 			b.client = nil
 			retErr = b.supportedErr
 		}

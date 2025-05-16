@@ -48,7 +48,7 @@ func main() {
 	// and wind up in our dir.
 	os.Setenv("TMPDIR", tmp)
 
-	cleanup := func() { os.RemoveAll(tmp) }
+	cleanup := func() { os.RemoveAll(tmp) } //nolint:errcheck
 
 	anyFail, err := do(os.Stdin, os.Stdout, cfg)
 	cleanup()

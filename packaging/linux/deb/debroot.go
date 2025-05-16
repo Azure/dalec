@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
@@ -308,7 +307,7 @@ func setupPathVar(pre, post []string) string {
 	return strings.Join(full, ":")
 }
 
-func writeScriptHeader(buf io.Writer, cfg *SourcePkgConfig) {
+func writeScriptHeader(buf *bytes.Buffer, cfg *SourcePkgConfig) {
 	fmt.Fprintln(buf, "#!/usr/bin/env sh")
 	fmt.Fprintln(buf)
 
@@ -634,13 +633,13 @@ func unquote(v string) string {
 	return v
 }
 
-func writeUsersPostInst(w io.Writer, users []dalec.AddUserConfig) {
+func writeUsersPostInst(w *bytes.Buffer, users []dalec.AddUserConfig) {
 	for _, u := range users {
 		fmt.Fprintf(w, "getent passwd %s >/dev/null || useradd %s\n", u.Name, u.Name)
 	}
 }
 
-func writeGroupsPostInst(w io.Writer, groups []dalec.AddGroupConfig) {
+func writeGroupsPostInst(w *bytes.Buffer, groups []dalec.AddGroupConfig) {
 	for _, g := range groups {
 		fmt.Fprintf(w, "getent group %s >/dev/null || groupadd --system %s\n", g.Name, g.Name)
 	}
