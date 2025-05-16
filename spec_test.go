@@ -16,7 +16,6 @@ func TestDate(t *testing.T) {
 	assert.NilError(t, err)
 
 	d := Date{Time: expectTime}
-	assert.NilError(t, err)
 	assert.Check(t, cmp.Equal(d.Format(time.DateOnly), expect))
 
 	dtJSON, err := json.Marshal(d)
