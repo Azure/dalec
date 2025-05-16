@@ -189,10 +189,6 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 	return errs.Join()
 }
 
-type frontendClient interface {
-	CurrentFrontend() (*llb.State, error)
-}
-
 func runTest(ctx context.Context, t *dalec.TestSpec, st llb.State, ios map[int]llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) error {
 	def, err := st.Marshal(ctx, opts...)
 	if err != nil {
