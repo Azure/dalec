@@ -166,12 +166,12 @@
 					],
 					"description": "Dest is the path where the symlink will be installed"
 				},
-				"gid": {
+				"group": {
 					"type": [
 						"string",
 						"null"
 					],
-					"description": "GID is the group ID that should own the symlink"
+					"description": "Group is the group name that should own the symlink"
 				},
 				"source": {
 					"type": [
@@ -180,12 +180,12 @@
 					],
 					"description": "Source is the path that is being linked to\nExample:\n  If you want a symlink in /usr/bin/foo that is linking to /usr/bin/foo/foo\n  then the `Source` is `/usr/bin/foo/foo`"
 				},
-				"uid": {
+				"user": {
 					"type": [
 						"string",
 						"null"
 					],
-					"description": "UID is the user ID that should own the symlink"
+					"description": "User is the user name that should own the symlink"
 				}
 			},
 			"additionalProperties": {
@@ -1844,12 +1844,12 @@
 				"paths"
 			],
 			"properties": {
-				"gid": {
+				"group": {
 					"type": [
 						"string",
 						"null"
 					],
-					"description": "GID is the group ID to set on the symlink."
+					"description": "Group is the group name to set on the symlink."
 				},
 				"path": {
 					"type": [
@@ -1868,12 +1868,12 @@
 					],
 					"description": "Path is a list of `newpath`s that will all point to the same `oldpath`."
 				},
-				"uid": {
+				"user": {
 					"type": [
 						"string",
 						"null"
 					],
-					"description": "UID is the user ID to set on the symlink."
+					"description": "User is the user name to set on the symlink."
 				}
 			},
 			"additionalProperties": {

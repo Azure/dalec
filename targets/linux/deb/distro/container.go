@@ -65,23 +65,5 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 		InstallLocalPkg(debSt, true, opts...),
 		frontend.IgnoreCache(client, targets.IgnoreCacheKeyContainer),
 	).Root().
-		With(c.createSymlinks(worker, spec, targetKey, opts...)), nil
-}
-
-func (c *Config) createSymlinks(worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return func(in llb.State) llb.State {
-		post := spec.GetImagePost(targetKey)
-		if post == nil {
-			return in
-		}
-
-		if len(post.Symlinks) == 0 {
-			return in
-		}
-
-		const workPath = "/tmp/rootfs"
-		return worker.
-			Run(dalec.WithConstraints(opts...), dalec.InstallPostSymlinks(post, workPath)).
-			AddMount(workPath, in)
-	}
+		With(dalec.InstallPostSymlinks(spec.GetImagePost(targetKey), worker, opts...)), nil
 }

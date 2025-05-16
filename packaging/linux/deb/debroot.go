@@ -653,8 +653,11 @@ func setSymlinkOwnershipPostInst(w io.Writer, spec *dalec.Spec, target string) {
 	if len(artifacts.Links) > 0 {
 		fmt.Fprintf(w, "# Set ownership for artifact symlinks\n")
 		for _, link := range artifacts.Links {
-			if link.UID != "" || link.GID != "" {
-				fmt.Fprintf(w, "chown -h %s:%s \"$DESTDIR%s\"\n", link.UID, link.GID, link.Dest)
+			if link.User != "" {
+				fmt.Fprintf(w, "chown -h %s \"$DESTDIR%s\"\n", link.User, link.Dest)
+			}
+			if link.Group != "" {
+				fmt.Fprintf(w, "chgrp -h %s \"$DESTDIR%s\"\n", link.Group, link.Dest)
 			}
 		}
 	}

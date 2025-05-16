@@ -91,7 +91,7 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 
 	checkSymlinkOwnership := func(links []dalec.ArtifactSymlinkConfig) bool {
 		for _, link := range links {
-			if link.UID != "" || link.GID != "" {
+			if link.User != "" || link.Group != "" {
 				return true
 			}
 		}
