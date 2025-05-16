@@ -226,13 +226,14 @@ jobs:
         uses: crazy-max/ghaction-github-runtime@b3a9207c0e1ef41f4cf215303c976869d0c2c1c4 # v3.0.0
       - name: Setup source policy
         uses: ./.github/actions/setup-source-policy
+      - uses: ./.github/actions/format-repo
+        id: format-repo
       - name: Setup builder
         run: |
           # Sometimes the builder runs out of space... so cleanup anything we can first.
           docker image prune -a -f
 
-          # TODO: Add the registry image to mirror list and replace here.
-          docker run -d --net=host registry
+          docker run -d --net=host ghcr.io/${{ steps.format-repo.outputs.result }}/dockerhub/mirror/library/registry:latest
 
           # If diff/merge are enabled we need to use a buildx builder to make sure the feature is supported.
           # Otherwise we can just use the default docker builder.
