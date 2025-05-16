@@ -1,7 +1,6 @@
 package deb
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
@@ -116,7 +115,7 @@ func TestRules_OverrideSystemd(t *testing.T) {
 func TestDepends(t *testing.T) {
 	control := &controlWrapper{}
 
-	buf := bytes.NewBuffer(nil)
+	buf := &strings.Builder{}
 	control.depends(buf, nil)
 
 	expect := `

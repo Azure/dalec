@@ -94,7 +94,7 @@ func appendConstraints(deps map[string]dalec.PackageConstraints) []string {
 	return out
 }
 
-func (w *controlWrapper) depends(buf io.Writer, depsSpec *dalec.PackageDependencies) {
+func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDependencies) {
 	var (
 		needsClone bool
 		rtDeps     map[string]dalec.PackageConstraints
@@ -143,7 +143,7 @@ func multiline(field string, values []string) string {
 	return fmt.Sprintf("%s: %s", field, strings.Join(values, ",\n"+strings.Repeat(" ", len(field)+2)))
 }
 
-func (w *controlWrapper) recommends(buf io.Writer, depsSpec *dalec.PackageDependencies) {
+func (w *controlWrapper) recommends(buf *strings.Builder, depsSpec *dalec.PackageDependencies) {
 	if len(depsSpec.Recommends) == 0 {
 		return
 	}

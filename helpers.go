@@ -513,7 +513,7 @@ func repoConfigAsMount(config PackageRepositoryConfig, platformCfg *RepoPlatform
 			return nil, err
 		}
 
-		var normalized string = name
+		normalized := name
 		if filepath.Ext(normalized) != platformCfg.ConfigExt {
 			normalized += platformCfg.ConfigExt
 		}

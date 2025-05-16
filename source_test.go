@@ -1143,7 +1143,7 @@ func Test_pathHasPrefix(t *testing.T) {
 
 	// Replace / char which is special for go tests with something less special.
 	forTestName := func(s string) string {
-		return strings.Replace(s, "/", "__", -1)
+		return strings.ReplaceAll(s, "/", "__")
 	}
 
 	for _, tc := range cases {

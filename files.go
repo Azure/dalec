@@ -126,13 +126,16 @@ func (s *SourceInline) Doc(w io.Writer, name string) {
 
 }
 
+// Doc writes the information about the file to the writer.
+//
+//nolint:errcheck // ignore error check for simplicity, don't pass in a writer that can error on write.
 func (s *SourceInlineFile) Doc(w io.Writer, name string) {
 	fmt.Fprintln(w, `	cat << EOF > `+name+`
 `+s.Contents+`
 	EOF`)
 
 	if s.UID != 0 {
-		fmt.Fprintln(w, `	chown `+strconv.Itoa(s.UID)+" "+name)
+		fmt.Fprintln(w, `	chown `+strconv.Itoa(s.UID)+" "+name) //nolint:errcheck
 	}
 	if s.GID != 0 {
 		fmt.Fprintln(w, `	chgrp `+strconv.Itoa(s.GID)+" "+name)
@@ -145,6 +148,9 @@ func (s *SourceInlineFile) Doc(w io.Writer, name string) {
 	fmt.Fprintf(w, "	chmod %o %s\n", perms.Perm(), name)
 }
 
+// Doc writes the information about the directory to the writer.
+//
+//nolint:errcheck // ignore error check for simplicity, don't pass in a writer that can error on write.
 func (s *SourceInlineDir) Doc(w io.Writer, name string) {
 	fmt.Fprintln(w, `	mkdir -p `+name)
 

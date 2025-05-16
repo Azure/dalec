@@ -1,0 +1,21 @@
+version: "2"
+
+linters:
+  exclusions:
+    rules:
+      - linters:
+          - staticcheck
+        text: QF1008 # Omit embedded fields from selector expression. https://staticcheck.dev/docs/checks/#QF1008
+  settings:
+    errcheck:
+      exclude-functions:
+        - os.Setenv
+        - os.Unsetenv
+        - (*os.File).Close
+        - (net.Conn).Close
+        - (net.Listener).Close
+        - (io.WriteCloser).Close
+        - (io/fs.File).Close
+        - (io.ReadCloser).Close
+        - (*io.PipeReader).Close
+        - (*io.PipeWriter).Close

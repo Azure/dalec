@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"iter"
@@ -43,20 +44,23 @@ func (f *summaryFormatter) FormatResults(results iter.Seq[*TestResult], out io.W
 		}
 
 		if result.elapsed > f.slowThreshold.Seconds() {
-			slowBuf.WriteString(fmt.Sprintf("%s: %.3fs\n", path.Join(result.pkg, result.name), result.elapsed))
+			fmt.Fprintf(slowBuf, "%s: %.3fs\n", path.Join(result.pkg, result.name), result.elapsed)
 		}
 	}
 
-	fmt.Fprintln(out, "## Test metrics")
+	buf := bytes.NewBuffer(nil)
+	fmt.Fprintln(buf, "## Test metrics")
 	separator := strings.Repeat("&nbsp;", 4)
-	fmt.Fprintln(out, mdBold("Skipped:"), skipped, separator, mdBold("Failed:"), failed, separator, mdBold("Total:"), totalResults, separator, mdBold("Elapsed:"), fmt.Sprintf("%.3fs", totalTime))
+	fmt.Fprintln(buf, mdBold("Skipped:"), skipped, separator, mdBold("Failed:"), failed, separator, mdBold("Total:"), totalResults, separator, mdBold("Elapsed:"), fmt.Sprintf("%.3fs", totalTime))
 
-	fmt.Fprintln(out, mdPreformat(hist.String()))
+	fmt.Fprintln(buf, mdPreformat(hist.String()))
 
 	if slowBuf.Len() > 0 {
-		fmt.Fprintln(out, "## Slow tests")
-		fmt.Fprintln(out, mdPreformat(slowBuf.String()))
+		fmt.Fprintln(buf, "## Slow tests")
+		fmt.Fprintln(buf, mdPreformat(slowBuf.String()))
 	}
 
-	return nil
+	_, err := io.Copy(out, buf)
+
+	return err
 }
