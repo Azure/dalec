@@ -70,8 +70,8 @@ type targetConfig struct {
 }
 
 func (cfg *targetConfig) GetPackage(name string) string {
-	updated := cfg.PackageOverrides[name]
-	if updated != "" {
+	updated, ok := cfg.PackageOverrides[name]
+	if ok {
 		return updated
 	}
 	return name
@@ -1682,6 +1682,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 		testAutoGobuildCache(ctx, t, testConfig.Target)
+	})
+
+	t.Run("bazel remote cache", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testBazelCache(ctx, t, testConfig.Target)
 	})
 }
 

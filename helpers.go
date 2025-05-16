@@ -152,6 +152,9 @@ func WithConstraints(ls ...llb.ConstraintsOpt) llb.ConstraintsOpt {
 
 func WithConstraint(in *llb.Constraints) llb.ConstraintsOpt {
 	return ConstraintsOptFunc(func(c *llb.Constraints) {
+		if in == nil {
+			return
+		}
 		*c = *in
 	})
 }
