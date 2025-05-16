@@ -6,7 +6,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/gateway/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -14,7 +13,7 @@ import (
 const keyCargohomeWorker = "context:cargohome-worker"
 
 // Cargohome outputs all the Cargo dependencies for the spec
-func Cargohome(ctx context.Context, client gwclient.Client) (*client.Result, error) {
+func Cargohome(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
 		if err != nil {
