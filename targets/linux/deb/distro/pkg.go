@@ -33,7 +33,7 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		}
 	}
 
-	worker = worker.With(d.InstallBuildDeps(sOpt, spec, targetKey, append(opts, frontend.IgnoreCache(client))...))
+	worker = worker.With(d.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, append(opts, frontend.IgnoreCache(client))...))
 
 	var cfg deb.SourcePkgConfig
 	extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, opts...)
@@ -213,7 +213,7 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 			return nil, nil, err
 		}
 
-		worker = worker.With(cfg.InstallBuildDeps(sOpt, spec, targetKey, pg, frontend.IgnoreCache(client)))
+		worker = worker.With(cfg.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, pg, frontend.IgnoreCache(client)))
 
 		var cfg deb.SourcePkgConfig
 		extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, pg, frontend.IgnoreCache(client))

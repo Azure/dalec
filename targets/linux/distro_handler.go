@@ -43,6 +43,9 @@ type DistroConfig interface {
 	// Some distros may need to pass in a separate worker before mounting the target container.
 	RunTests(ctx context.Context, client gwclient.Client, worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, ctr llb.State,
 		targetKey string, opts ...llb.ConstraintsOpt) (gwclient.Reference, error)
+
+	// InstallBuildDeps installs the build dependencies for a given spec.
+	InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption
 }
 
 func BuildImageConfig(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
@@ -90,17 +93,35 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			pg := dalec.ProgressGroup(spec.Name)
-			pc := dalec.Platform(platform)
+			var opts []llb.ConstraintsOpt
+			opts = append(opts, dalec.ProgressGroup(spec.Name))
+			opts = append(opts, dalec.Platform(platform))
 
-			worker, err := c.Worker(sOpt, pg, pc)
+			worker, err := c.Worker(sOpt, opts...)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			deb, err := c.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, pg, pc)
+			// We need to get the build context from the client.
+			inputs, err := client.Inputs(ctx)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, fmt.Errorf("error getting llb state from client with provided build context: %w", err)
+			}
+
+			// If we have a build context named after the target, then we should use that pre-built
+			// package when building the container.
+			var pkgSt llb.State
+			if input, ok := inputs[targetKey]; ok {
+				pkgSt = input
+				opts = append(opts, dalec.ProgressGroup(fmt.Sprintf("Using pre-built package from %s context", targetKey)))
+				// ensure that worker state has the correct dependencies installed
+				worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, opts...))
+			} else {
+				var err error
+				pkgSt, err = c.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, opts...)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 
 			img, err := BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
@@ -108,12 +129,12 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			ctr, err := c.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, deb, pg, pc)
+			ctr, err := c.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, pkgSt, opts...)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			ref, err := c.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, pg, pc)
+			ref, err := c.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, opts...)
 			return ref, img, err
 		})
 	}

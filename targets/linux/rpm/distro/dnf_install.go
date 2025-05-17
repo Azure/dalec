@@ -229,6 +229,10 @@ func (cfg *Config) installBuildDepsPackage(worker llb.State, target string, pack
 }
 
 func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return cfg.installBuildDeps(ctx, client, spec, sOpt, targetKey, opts...)
+}
+
+func (cfg *Config) installBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	deps := spec.GetBuildDeps(targetKey)
 	if len(deps) == 0 {
 		return func(in llb.State) llb.State { return in }

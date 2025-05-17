@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/packaging/linux/deb"
 	"github.com/moby/buildkit/client/llb"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/pkg/errors"
 )
 
@@ -127,7 +128,11 @@ aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject ${pkg_name}
 	})
 }
 
-func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+func (d *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return d.installBuildDeps(sOpt, spec, targetKey, opts...)
+}
+
+func (d *Config) installBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		buildDeps := spec.GetBuildDeps(targetKey)
 		if len(buildDeps) == 0 {
