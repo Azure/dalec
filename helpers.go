@@ -322,39 +322,51 @@ func ShArgsf(format string, args ...interface{}) llb.RunOption {
 }
 
 // InstallPostSymlinks returns a RunOption that adds symlinks defined in the [PostInstall] underneath the provided rootfs path.
-func InstallPostSymlinks(post *PostInstall, rootfsPath string) llb.RunOption {
-	return runOptionFunc(func(ei *llb.ExecInfo) {
+func InstallPostSymlinks(post *PostInstall, worker llb.State, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(in llb.State) llb.State {
+		const rootfsPath = "/tmp/rootfs"
+
 		if post == nil {
-			return
+			return in
 		}
 
 		if len(post.Symlinks) == 0 {
-			return
+			return in
 		}
-
-		llb.Dir(rootfsPath).SetRunOption(ei)
 
 		buf := bytes.NewBuffer(nil)
 		buf.WriteString("set -ex\n")
 
 		sortedKeys := SortMapKeys(post.Symlinks)
 		for _, oldpath := range sortedKeys {
-			newpaths := post.Symlinks[oldpath].Paths
+			cfg := post.Symlinks[oldpath]
+			newpaths := cfg.Paths
 			sort.Strings(newpaths)
 
 			for _, newpath := range newpaths {
 				fmt.Fprintf(buf, "mkdir -p %q\n", filepath.Join(rootfsPath, filepath.Dir(newpath)))
 				fmt.Fprintf(buf, "ln -s %q %q\n", oldpath, filepath.Join(rootfsPath, newpath))
+				if cfg.User != "" {
+					fmt.Fprintf(buf, "chown -h %s %q\n", cfg.User, filepath.Join(rootfsPath, newpath))
+				}
+				if cfg.Group != "" {
+					fmt.Fprintf(buf, "chgrp -h %s %q\n", cfg.Group, filepath.Join(rootfsPath, newpath))
+				}
 			}
 		}
 
 		const name = "tmp.dalec.symlink.sh"
-		script := llb.Scratch().File(llb.Mkfile(name, 0o400, buf.Bytes()))
+		script := llb.Scratch().File(llb.Mkfile(name, 0o700, buf.Bytes()))
 
-		llb.AddMount(name, script, llb.SourcePath(name)).SetRunOption(ei)
-		llb.Args([]string{"/bin/sh", name}).SetRunOption(ei)
-		ProgressGroup("Add post-install symlinks").SetRunOption(ei)
-	})
+		return worker.Run(
+			ShArgs("/tmp/add_symlink.sh"),
+			llb.AddMount("/tmp/add_symlink.sh", script, llb.SourcePath(name)),
+			llb.AddMount("/etc/group", in, llb.SourcePath("/etc/group")),
+			llb.AddMount("/etc/passwd", in, llb.SourcePath("/etc/passwd")),
+			withConstraints(opts),
+			ProgressGroup("Add post-install symlinks"),
+		).AddMount(rootfsPath, in)
+	}
 }
 
 func (s *Spec) GetSigner(targetKey string) (*PackageSigner, bool) {
