@@ -250,6 +250,16 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 		}
 	}
 
+	for k, v := range s.Conflicts {
+		for i, ver := range v.Version {
+			updated, err := expandArgs(lex, ver, args, cfg.AllowArg)
+			if err != nil {
+				appendErr(errors.Wrapf(err, "replaces %s version %d", k, i))
+			}
+			s.Conflicts[k].Version[i] = updated
+		}
+	}
+
 	return goerrors.Join(errs...)
 }
 
