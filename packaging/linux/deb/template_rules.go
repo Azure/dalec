@@ -89,15 +89,6 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 		return false
 	}
 
-	checkSymlinkOwnership := func(links []dalec.ArtifactSymlinkConfig) bool {
-		for _, link := range links {
-			if link.User != "" || link.Group != "" {
-				return true
-			}
-		}
-		return false
-	}
-
 	fixPerms = checkPerms(artifacts.Binaries) ||
 		checkPerms(artifacts.ConfigFiles) ||
 		checkPerms(artifacts.Manpages) ||
@@ -108,8 +99,7 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 		checkPerms(artifacts.Libexec) ||
 		checkPerms(artifacts.DataDirs) ||
 		checkDirPerms(artifacts.Directories.GetConfig()) ||
-		checkDirPerms(artifacts.Directories.GetState()) ||
-		checkSymlinkOwnership(artifacts.Links)
+		checkDirPerms(artifacts.Directories.GetState())
 
 	if fixPerms {
 		// Normally this should be `execute_after_dh_fixperms`, however this doesn't
