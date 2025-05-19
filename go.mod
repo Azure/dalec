@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.2
 
 require (
+	github.com/AaronO/go-git-http v0.0.0-20161214145340-1d9485b3a98f
 	github.com/atombender/go-jsonschema v0.17.0
 	github.com/cavaliergopher/rpm v1.3.0
 	github.com/containerd/platforms v1.0.0-rc.1
@@ -12,6 +13,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/invopop/jsonschema v0.12.0
+	github.com/mitchellh/go-ps v1.0.0
 	github.com/moby/buildkit v0.20.1
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/moby/go-archive v0.1.0
