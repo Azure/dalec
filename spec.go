@@ -191,6 +191,10 @@ type SymlinkTarget struct {
 	Path string `yaml:"path" json:"path" jsonschema:"oneof_required=path"`
 	// Path is a list of `newpath`s that will all point to the same `oldpath`.
 	Paths []string `yaml:"paths" json:"paths" jsonschema:"oneof_required=paths"`
+	// User is the user name to set on the symlink.
+	User string `yaml:"user,omitempty" json:"user,omitempty"`
+	// Group is the group name to set on the symlink.
+	Group string `yaml:"group,omitempty" json:"group,omitempty"`
 }
 
 type SourceDockerImage struct {

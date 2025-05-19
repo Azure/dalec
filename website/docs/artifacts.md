@@ -247,16 +247,24 @@ though behavior may differ between different OS's/distros.
 Links are a list of symlinks to be included with the package.
 Unlike most other artifact typtes, links do not reference any specific build
 artifact but rather a literal source-to-target mapping for the symlink.
+Symlink ownership can also be set (user and group). Note that this sets
+ownership of the symlink itself, not the target file.
+
+User and group SHOULD be specified as names and not as UID/GID numbers.
+The user/group must exist on the target system OR be created as part of the
+package installation via the [users](#Users) and/or [groups](#Groups) section(s).
 
 Example:
 
-This creates a symlink at /usr/bin/go pointing to /usr/lib/golang/go.
+This creates a symlink at /usr/bin/go pointing to /usr/lib/golang/go with the user and group.
 
 ```yaml
 artifacts:
   links:
     - source: /usr/lib/golang/go
       dest: /usr/bin/go
+      user: someuser
+      group: somegroup
 ```
 
 ### Headers

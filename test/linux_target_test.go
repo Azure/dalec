@@ -400,8 +400,19 @@ echo "$BAR" > bar.txt
 			Image: &dalec.ImageConfig{
 				Post: &dalec.PostInstall{
 					Symlinks: map[string]dalec.SymlinkTarget{
-						"/usr/bin/src1": {Path: "/src1"},
-						"/usr/bin/src3": {Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"}},
+						"/usr/bin/src1": {
+							Path: "/src1",
+							User: "need",
+						},
+						"/usr/bin/src2": {
+							Paths: []string{"/non/existing/dir/src2"},
+							Group: "coffee",
+						},
+						"/usr/bin/src3": {
+							Paths: []string{"/non/existing/dir/src3", "/non/existing/dir2/src3"},
+							User:  "need",
+							Group: "coffee",
+						},
 					},
 				},
 			},
@@ -416,6 +427,39 @@ echo "$BAR" > bar.txt
 					"foo0.txt": {},
 					"foo1.txt": {},
 					"bar.txt":  {},
+				},
+				Links: []dalec.ArtifactSymlinkConfig{
+					{
+						Source: "/usr/bin/src3",
+						Dest:   "/bin/owned-link",
+						User:   "need",
+						Group:  "coffee",
+					},
+					{
+						Source: "/usr/bin/src2/file2",
+						Dest:   "/bin/owned-link2",
+						User:   "need",
+					},
+					{
+						Source: "/usr/bin/src1",
+						Dest:   "/bin/owned-link3",
+						Group:  "coffee",
+					},
+					{
+						Source: "/usr/bin/src1",
+						Dest:   "/bin/owned-link4",
+						User:   "nobody",
+					},
+				},
+				Users: []dalec.AddUserConfig{
+					{
+						Name: "need",
+					},
+				},
+				Groups: []dalec.AddGroupConfig{
+					{
+						Name: "coffee",
+					},
 				},
 			},
 
@@ -515,18 +559,24 @@ echo "$BAR" > bar.txt
 					},
 				},
 				{
-					Name: "Post-install symlinks should be created",
+					Name: "Post-install symlinks should be created and have correct ownership",
 					Files: map[string]dalec.FileCheckOutput{
 						"/src1":                  {},
 						"/non/existing/dir/src3": {},
 					},
 					Steps: []dalec.TestStep{
-						{Command: "/bin/bash -c 'test -L /src1'"},
-						{Command: "/bin/bash -c 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
-						{Command: "/bin/bash -c 'test -L /non/existing/dir/src3'"},
-						{Command: "/bin/bash -c 'test \"$(readlink /non/existing/dir/src3)\" = \"/usr/bin/src3\"'"},
-						{Command: "/bin/bash -c 'test -L /non/existing/dir2/src3'"},
-						{Command: "/bin/bash -c 'test \"$(readlink /non/existing/dir2/src3)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -exc 'test -L /src1'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /src1)\" = \"/usr/bin/src1\"'"},
+						{Command: "/bin/bash -exc 'test -L /non/existing/dir/src2'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /non/existing/dir/src2)\" = \"/usr/bin/src2\"'"},
+						{Command: "/bin/bash -exc 'test -L /non/existing/dir/src3'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /non/existing/dir/src3)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -exc 'test -L /non/existing/dir2/src3'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /non/existing/dir2/src3)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd need | cut -d: -f3); COFFEE_GID=0; LINK_OWNER=$(stat -c \"%u:%g\" /src1); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'NEED_UID=0; COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /non/existing/dir/src2); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd need | cut -d: -f3); COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /non/existing/dir/src3); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd need | cut -d: -f3); COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /non/existing/dir2/src3); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
 						{Command: "/src1", Stdout: dalec.CheckOutput{Equals: "hello world\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 						{Command: "/non/existing/dir/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
 						{Command: "/non/existing/dir2/src3", Stdout: dalec.CheckOutput{Equals: "goodbye\n"}, Stderr: dalec.CheckOutput{Empty: true}},
@@ -548,6 +598,23 @@ echo "$BAR" > bar.txt
 								},
 							},
 						},
+					},
+				},
+				{
+					Name: "Artifact symlinks should have correct ownership",
+					Steps: []dalec.TestStep{
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd need | cut -d: -f3); COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link2'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link2)\" = \"/usr/bin/src2/file2\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd need | cut -d: -f3); COFFEE_GID=0; LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link2); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link3'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link3)\" = \"/usr/bin/src1\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=0; COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link3); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link4'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link4)\" = \"/usr/bin/src1\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd nobody | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link4); [ \"$LINK_OWNER\" = \"$NEED_UID:0\" ]'"},
 					},
 				},
 			},

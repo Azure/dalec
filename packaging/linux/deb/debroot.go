@@ -164,6 +164,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	artifacts := spec.GetArtifacts(target)
 	writeUsersPostInst(postinst, artifacts.Users)
 	writeGroupsPostInst(postinst, artifacts.Groups)
+	setSymlinkOwnershipPostInst(postinst, spec, target)
 
 	if postinst.Len() > 0 {
 		dt := []byte("#!/usr/bin/env sh\nset -e\n")
@@ -184,6 +185,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 
 	if len(artifacts.Links) > 0 {
 		buf := bytes.NewBuffer(nil)
+
 		for _, l := range artifacts.Links {
 			src := strings.TrimPrefix(l.Source, "/")
 			dst := strings.TrimPrefix(l.Dest, "/")
@@ -642,5 +644,21 @@ func writeUsersPostInst(w *bytes.Buffer, users []dalec.AddUserConfig) {
 func writeGroupsPostInst(w *bytes.Buffer, groups []dalec.AddGroupConfig) {
 	for _, g := range groups {
 		fmt.Fprintf(w, "getent group %s >/dev/null || groupadd --system %s\n", g.Name, g.Name)
+	}
+}
+
+func setSymlinkOwnershipPostInst(w *bytes.Buffer, spec *dalec.Spec, target string) {
+	artifacts := spec.GetArtifacts(target)
+
+	if len(artifacts.Links) > 0 {
+		fmt.Fprintf(w, "# Set ownership for artifact symlinks\n")
+		for _, link := range artifacts.Links {
+			if link.User != "" {
+				fmt.Fprintf(w, "chown -h %s \"$DESTDIR%s\"\n", link.User, link.Dest)
+			}
+			if link.Group != "" {
+				fmt.Fprintf(w, "chgrp -h %s \"$DESTDIR%s\"\n", link.Group, link.Dest)
+			}
+		}
 	}
 }

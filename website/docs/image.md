@@ -83,7 +83,7 @@ The `post` field is used to specify post processing for the image.
 
 The following fields are supported:
 
-- `symlinks`: A list of symlinks to create in the image.
+- `symlinks`: A list of symlinks to create in the image. The user and group can be set for each symlink as well.
 
 Example:
 
@@ -94,6 +94,8 @@ image:
       /usr/bin/my-binary: # Where the symlink points to
         paths: # a list of symlinks that will point to /usr/bin/my-binary
          - /my-binary
+        user: someuser
+        group: somegroup
 ```
 
 ### Labels
