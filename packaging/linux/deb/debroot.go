@@ -647,7 +647,7 @@ func writeGroupsPostInst(w *bytes.Buffer, groups []dalec.AddGroupConfig) {
 	}
 }
 
-func setSymlinkOwnershipPostInst(w io.Writer, spec *dalec.Spec, target string) {
+func setSymlinkOwnershipPostInst(w *bytes.Buffer, spec *dalec.Spec, target string) {
 	artifacts := spec.GetArtifacts(target)
 
 	if len(artifacts.Links) > 0 {
