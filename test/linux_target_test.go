@@ -445,6 +445,11 @@ echo "$BAR" > bar.txt
 						Dest:   "/bin/owned-link3",
 						Group:  "coffee",
 					},
+					{
+						Source: "/usr/bin/src1",
+						Dest:   "/bin/owned-link4",
+						User:   "nobody",
+					},
 				},
 				Users: []dalec.AddUserConfig{
 					{
@@ -607,6 +612,9 @@ echo "$BAR" > bar.txt
 						{Command: "/bin/bash -exc 'test -L /bin/owned-link3'"},
 						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link3)\" = \"/usr/bin/src1\"'"},
 						{Command: "/bin/bash -exc 'NEED_UID=0; COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link3); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link4'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link4)\" = \"/usr/bin/src1\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd nobody | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link4); [ \"$LINK_OWNER\" = \"$NEED_UID:0\" ]'"},
 					},
 				},
 			},
