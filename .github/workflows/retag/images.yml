@@ -4,3 +4,42 @@
   dest: dockerhub/mirror/library/golang:1.23
 - source: "registry:latest"
   dest: dockerhub/mirror/library/registry:latest
+- source: "debian:bullseye"
+
+  dest: dockerhub/mirror/library/debian:bullseye
+- source: "debian:bookworm"
+  dest: dockerhub/mirror/library/debian:bookworm
+
+- source: "ubuntu:bionic"
+  dest: dockerhub/mirror/library/ubuntu:bionic
+- source: "ubuntu:focal"
+  dest: dockerhub/mirror/library/ubuntu:focal
+- source: "ubuntu:jammy"
+  dest: dockerhub/mirror/library/ubuntu:jammy
+- source: "ubuntu:noble"
+  dest: dockerhub/mirror/library/ubuntu:noble
+
+- source: "almalinux:9"
+  dest: dockerhub/mirror/library/almalinux:9
+- source: "almalinux:8"
+  dest: dockerhub/mirror/library/almalinux:8
+
+- source: "rockylinux:9"
+  dest: dockerhub/mirror/library/rockylinux:9
+- source: "rockylinux:8"
+  dest: dockerhub/mirror/library/rockylinux:8
+
+- source: "mcr.microsoft.com/windows/nanoserver:ltsc2022"
+  dest: mcr/mirror/windows/nanoserver:ltsc2022
+- source: "mcr.microsoft.com/windows/nanoserver:ltsc2022-amd64"
+  dest: mcr/mirror/windows/nanoserver:ltsc2022-amd64
+- source: "mcr.microsoft.com/windows/nanoserver:1809"
+  dest: mcr/mirror/windows/nanoserver:1809
+
+- source: "mcr.microsoft.com/azurelinux/base/core:3.0"
+  dest: mcr/mirror/azurelinux/base/core:3.0
+- source: "mcr.microsoft.com/azurelinux/distroless/base:3.0"
+  dest: mcr/mirror/azurelinux/distroless/base:3.0
+
+- source: "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+  dest: mcr/mirror/cbl-mariner/base/core:2.0
