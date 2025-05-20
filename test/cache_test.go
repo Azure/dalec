@@ -178,7 +178,7 @@ func testBazelCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 	ctx = startTestSpan(ctx, t)
 
 	bzlPkg := cfg.GetPackage("bazel")
-	if bzlPkg == "" {
+	if bzlPkg == noPackageAvailable {
 		t.Skip("bazel not available in this distro")
 	}
 

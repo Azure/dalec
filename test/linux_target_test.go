@@ -77,6 +77,8 @@ func (cfg *targetConfig) GetPackage(name string) string {
 	return name
 }
 
+const noPackageAvailable = ""
+
 type testLinuxConfig struct {
 	Target     targetConfig
 	LicenseDir string

@@ -22,6 +22,6 @@ func TestBullseye(t *testing.T) {
 		debian.BullseyeConfig,
 		withPackageOverride("golang", "golang-1.19"),
 		withPackageOverride("rust", "cargo-web"),
-		withPackageOverride("bazel", ""),
+		withPackageOverride("bazel", noPackageAvailable),
 	))
 }

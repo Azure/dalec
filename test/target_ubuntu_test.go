@@ -139,7 +139,7 @@ func TestJammy(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.JammyDefaultTargetKey, ubuntu.JammyConfig,
 		withPackageOverride("rust", "rust-all"),
-		withPackageOverride("bazel", ""),
+		withPackageOverride("bazel", noPackageAvailable),
 	))
 }
 
@@ -160,7 +160,7 @@ func TestFocal(t *testing.T) {
 	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.FocalDefaultTargetKey, ubuntu.FocalConfig,
 		withPackageOverride("golang", "golang-1.22"),
 		withPackageOverride("rust", "rust-all"),
-		withPackageOverride("bazel", ""),
+		withPackageOverride("bazel", noPackageAvailable),
 	))
 }
 
@@ -171,6 +171,6 @@ func TestBionic(t *testing.T) {
 	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.BionicDefaultTargetKey, ubuntu.BionicConfig,
 		withPackageOverride("golang", "golang-1.18"),
 		withPackageOverride("rust", "rust-all"),
-		withPackageOverride("bazel", ""),
+		withPackageOverride("bazel", noPackageAvailable),
 	))
 }
