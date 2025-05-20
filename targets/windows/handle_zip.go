@@ -175,7 +175,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 		llb.AddEnv("GOOS", "windows"),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
 			for _, c := range spec.Build.Caches {
-				c.ToRunOption(path.Join(distroVersionID, targetKey), dalec.WithCacheDirConstraints(opts...)).SetRunOption(ei)
+				c.ToRunOption(worker, path.Join(distroVersionID, targetKey), dalec.WithCacheDirConstraints(opts...)).SetRunOption(ei)
 			}
 		}),
 		dalec.RunOptFunc(func(ei *llb.ExecInfo) {

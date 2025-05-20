@@ -6,14 +6,23 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"log"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/sessionutil/socketprovider"
 	"github.com/Azure/dalec/targets"
+	"github.com/Azure/dalec/test/testenv"
+	diskcache "github.com/buchgr/bazel-remote/v2/cache/disk"
+	bazelremote "github.com/buchgr/bazel-remote/v2/server"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"google.golang.org/grpc"
+	"gotest.tools/v3/assert"
 )
 
 func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConfig) {
@@ -236,21 +245,77 @@ genrule(
 		return spec
 	}
 
-	dirCmd := "dir=$(grep disk_cache /etc/bazel.bazelrc | awk -F'=' '{ print $2 }')"
+	t.Run("dir", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
 
-	// Write to the bazel cache using bazel itself
-	spec := newSpec(`[ ! -d "${dir}/ac" ]`, `[ ! -d "${dir}/cas" ]`, "cd src; bazel build --announce_rc //:hello")
-	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
-		solveT(ctx, t, client, sr)
+		dirCmd := "dir=$(grep disk_cache /etc/bazel.bazelrc | awk -F'=' '{ print $2 }')"
+
+		// Write to the bazel cache using bazel itself
+		spec := newSpec(`[ ! -d "${dir}/ac" ]`, `[ ! -d "${dir}/cas" ]`, "cd src; bazel build --announce_rc //:hello")
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
+			solveT(ctx, t, client, sr)
+		})
+
+		// Now validate that bazel wrote to the cache
+		spec = newSpec(dirCmd, `[ -d "${dir}/ac" ]`, `[ -d "${dir}/cas" ]`)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+			solveT(ctx, t, client, sr)
+		})
 	})
 
-	// Now validate that bazel wrote to the cache
-	spec = newSpec(dirCmd, `[ -d "${dir}/ac" ]`, `[ -d "${dir}/cas" ]`)
-	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
-		solveT(ctx, t, client, sr)
+	t.Run("socket", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		dir := t.TempDir()
+		sock := filepath.Join(dir, "sock")
+
+		// bazel-remote-cache does some `log.Printf` calls, this sends those to the "special round file" because
+		// we don't want to see them.
+		log.SetOutput(io.Discard)
+		t.Cleanup(func() {
+			log.SetOutput(os.Stderr)
+		})
+
+		logger := &bazelRemoteLoggerT{t: t}
+		cacheDir := t.TempDir()
+		diskCache, err := diskcache.New(cacheDir, 1024*1024, diskcache.WithAccessLogger(log.New(io.Discard, "", 0)))
+		assert.NilError(t, err)
+
+		srv := grpc.NewServer()
+		go bazelremote.ListenAndServeGRPC(srv, "unix", sock, false, false, false, diskCache, logger, logger)
+		defer srv.Stop()
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sockCmd := "sock=$(grep remote_cache /etc/bazel.bazelrc | awk -F':' '{ print $2 }'); [ -n \"${sock}\" ]; [ -S \"${sock}\" ]"
+			spec := newSpec(sockCmd, "cd src; bazel build --announce_rc //:hello")
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+			solveT(ctx, t, client, sr)
+		}, testenv.WithSocketProxy(socketprovider.SocketProxyConfig{ID: "bazel-remote", Path: sock}))
+
+		_, err = os.Stat(filepath.Join(cacheDir, "ac.v2"))
+		assert.NilError(t, err, "bazel remote cache not found")
+		_, err = os.Stat(filepath.Join(cacheDir, "cas.v2"))
+		assert.NilError(t, err, "bazel remote cache not found")
 	})
+}
+
+type bazelRemoteLoggerT struct {
+	t *testing.T
+}
+
+func (b *bazelRemoteLoggerT) Printf(format string, v ...interface{}) {
+	b.t.Helper()
+	b.t.Logf("bazel-remote: "+format, v...)
+}
+
+func (b *bazelRemoteLoggerT) Write(p []byte) (n int, err error) {
+	b.t.Helper()
+	b.t.Logf("bazel-remote: %s", string(p))
+	return len(p), nil
 }
 
 func testAutoGobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {

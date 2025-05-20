@@ -80,10 +80,18 @@ func (h *SocketProxyHandler) ForwardAgent(stream sshforward.SSH_ForwardAgentServ
 	defer conn.Close()
 
 	s1, s2 := net.Pipe()
+	defer s1.Close()
+	defer s2.Close()
+
 	eg, ctx := errgroup.WithContext(stream.Context())
 
 	eg.Go(func() error {
 		_, err := io.Copy(conn, s1)
+		return err
+	})
+
+	eg.Go(func() error {
+		_, err := io.Copy(s1, conn)
 		return err
 	})
 

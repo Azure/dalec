@@ -44,7 +44,7 @@ func Build(topDir, workerImg llb.State, specPath string, caches CacheInfo, opts 
 				dalec.WithCacheDirConstraints(opts...),
 			}
 			for _, cache := range caches.Caches {
-				cache.ToRunOption(caches.TargetKey, opts...).SetRunOption(ei)
+				cache.ToRunOption(workerImg, caches.TargetKey, opts...).SetRunOption(ei)
 			}
 		}),
 	).

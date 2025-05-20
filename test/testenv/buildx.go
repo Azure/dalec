@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Azure/dalec/sessionutil/socketprovider"
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
@@ -245,9 +246,17 @@ type TestRunnerConfig struct {
 	// SolveStatusFn replaces the builtin status logger with a custom implementation.
 	// This is useful particularly if you need to inspect the solve statuses.
 	SolveStatusFn func(*client.SolveStatus)
+
+	Sockets []socketprovider.SocketProxyConfig
 }
 
 type TestRunnerOpt func(*TestRunnerConfig)
+
+func WithSocketProxy(spCfg socketprovider.SocketProxyConfig) func(*TestRunnerConfig) {
+	return func(cfg *TestRunnerConfig) {
+		cfg.Sockets = append(cfg.Sockets, spCfg)
+	}
+}
 
 // SolveStatus is convenience wrapper for [client.SolveStatus] to help disambiguate
 // imports of the [client] package.
@@ -295,6 +304,7 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	var so client.SolveOpt
 	withProjectRoot(t, &so)
 	withResolveLocal(&so)
+	withSockets(t, cfg.Sockets)(&so)
 
 	err = withSourcePolicy(&so)
 	assert.NilError(t, err)
@@ -317,6 +327,18 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func withSockets(t *testing.T, sockets []socketprovider.SocketProxyConfig) func(*client.SolveOpt) {
+	return func(so *client.SolveOpt) {
+		if len(sockets) == 0 {
+			return
+		}
+
+		p, err := socketprovider.NewSocketProxyHandler(sockets)
+		assert.NilError(t, err)
+		so.Session = append(so.Session, p)
 	}
 }
 
