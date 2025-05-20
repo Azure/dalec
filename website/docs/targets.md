@@ -81,7 +81,6 @@ targets:
         - golang
 ```
 
-
 ## Extensibility
 
 Dalec can’t feasibly support every Linux distribution. Instead, it gives you the flexibility to specify a custom builder image for any target, directing the build process to that specified image.
@@ -175,6 +174,24 @@ targets:
 ```
 
 For more details on how Artifacts are structured and configured, see the [Artifacts](artifacts.md) documentation.
+
+### Target defined package metdata
+
+`conflicts`, `replaces`, and `provides` can be defined at the target level in addition to the [globalspec level](spec.md#additional-metadata).
+This allows you to define package metadata that is specific to a target.
+
+```yaml
+targets:
+  mariner2:
+    package:
+      conflicts:
+        - "foo"
+        - "bar"
+      replaces:
+        - foo"
+      provides:
+        - "qux"
+```
 
 ## Special considerations
 
