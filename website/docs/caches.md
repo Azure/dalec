@@ -4,6 +4,22 @@ In addition to the standard step-level caching that buildkit provides, you can
 also configure incremental caching that persists across builds.
 This is similar to Dockerfiles `--mount=type=cache`.
 
+You can provide multiple cache configurations:
+
+```yaml
+caches:
+  - dir:
+      key: my_key
+      dest: /my/cache/dir
+      sharing: shared
+  - dir:
+      key: my_other_key
+      dest: /my/other/cache/dir
+      sharing: private
+  - gobuild:
+  - bazel:
+```
+
 ## Dir Cache
 
 Dir caches are just generic directories where you choose the cache key and sharing mode.
