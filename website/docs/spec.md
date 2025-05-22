@@ -81,6 +81,54 @@ website: https://github.com/foo/bar
 Any field at the top-level that begins with `x-` will be ignored by Dalec. This allows for custom fields to be added to the spec. For example, `x-foo: bar`. Any other field that is not recognized by Dalec will result in a validation error.
 :::
 
+### Additional metadata
+
+#### conflics
+
+The `conflicts` field is used to define the packages that conflict with this package. This is an optional field.
+This is required when this package provides one or more files that are provided by another package.
+This helps the package manager know when two packages cannot be installed at the same time.
+
+```yaml
+conflicts:
+  foo:
+  bar:
+    # Add version constraints to the conflicting package
+    version:
+      - ">=1.0.0"
+      - "<2.0.0"
+```
+
+#### provides
+
+The `provides` field is used to define the packages that are provided by this package. This is an optional field.
+This is useful when the package name may not align with a more common name for the package or when the package is a
+replacement for another package.
+
+```yaml
+  provides:
+    foo:
+    bar:
+      # With version constraints
+      version:
+        - = 1.0.0
+```
+
+#### replaces
+
+The `replaces` field is used to define the packages that are replaced by this package. This is an optional field.
+This is useful when this package should be chosen over another package with a different name and can be combined with
+`conflicts` to ensure that the other package is removed when this package is installed.
+
+```yaml
+  replaces:
+    foo:
+    bar:
+      # With version constraints
+      version:
+        - < 1.0.0
+```
+
 ## Targets section
 
 Targets section is used to define configuration per target. Each target can have its own configuration.
