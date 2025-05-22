@@ -101,7 +101,7 @@ conflicts:
 
 #### provides
 
-The `provides` field is used to define the packages that are provided by this package package. This is an optional field.
+The `provides` field is used to define the packages that are provided by this package. This is an optional field.
 This is useful when the package name may not align with a more common name for the package or when the package is a
 replacement for another package.
 
