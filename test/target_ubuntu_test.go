@@ -137,26 +137,40 @@ func TestJammy(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.JammyDefaultTargetKey, ubuntu.JammyConfig, withPackageOverride("rust", "rust-all")))
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.JammyDefaultTargetKey, ubuntu.JammyConfig,
+		withPackageOverride("rust", "rust-all"),
+		withPackageOverride("bazel", noPackageAvailable),
+	))
 }
 
 func TestNoble(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.NobleDefaultTargetKey, ubuntu.NobleConfig, withPackageOverride("rust", "rust-all")))
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.NobleDefaultTargetKey, ubuntu.NobleConfig,
+		withPackageOverride("rust", "rust-all"),
+		withPackageOverride("bazel", "bazel-bootstrap"),
+	))
 }
 
 func TestFocal(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.FocalDefaultTargetKey, ubuntu.FocalConfig, withPackageOverride("golang", "golang-1.22"), withPackageOverride("rust", "rust-all")))
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.FocalDefaultTargetKey, ubuntu.FocalConfig,
+		withPackageOverride("golang", "golang-1.22"),
+		withPackageOverride("rust", "rust-all"),
+		withPackageOverride("bazel", noPackageAvailable),
+	))
 }
 
 func TestBionic(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.BionicDefaultTargetKey, ubuntu.BionicConfig, withPackageOverride("golang", "golang-1.18"), withPackageOverride("rust", "rust-all")))
+	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.BionicDefaultTargetKey, ubuntu.BionicConfig,
+		withPackageOverride("golang", "golang-1.18"),
+		withPackageOverride("rust", "rust-all"),
+		withPackageOverride("bazel", noPackageAvailable),
+	))
 }

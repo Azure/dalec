@@ -29,11 +29,14 @@ type CacheConfig struct {
 	// GoBuild specifies a cache for Go's incremental build artifacts.
 	// This should speed up repeated builds of Go projects.
 	GoBuild *GoBuildCache `json:"gobuild,omitempty" yaml:"gobuild,omitempty" jsonschema:"oneof_required=gobuild"`
+	// Bazel specifies a cache for bazel builds.
+	Bazel *BazelCache `json:"bazel,omitempty" yaml:"bazel,omitempty" jsonschema:"oneof_required=bazel-local"`
 }
 
 type CacheInfo struct {
 	DirInfo CacheDirInfo
 	GoBuild GoBuildCacheInfo
+	Bazel   BazelCacheInfo
 }
 
 type CacheDirInfo struct {
@@ -93,6 +96,16 @@ func (c *CacheConfig) ToRunOption(distroKey string, opts ...CacheConfigOption) l
 		}))
 	}
 
+	if c.Bazel != nil {
+		return c.Bazel.ToRunOption(distroKey, BazelCacheOptionFunc(func(info *BazelCacheInfo) {
+			var cacheInfo CacheInfo
+			for _, opt := range opts {
+				opt.SetCacheConfigOption(&cacheInfo)
+			}
+			*info = cacheInfo.Bazel
+		}))
+	}
+
 	// Should not reach this point
 	panic("invalid cache config")
 }
@@ -102,8 +115,19 @@ func (c *CacheConfig) validate() error {
 		return nil
 	}
 
-	if (c.Dir == nil && c.GoBuild == nil) || (c.Dir != nil && c.GoBuild != nil) {
-		return fmt.Errorf("invalid cache config: one of (and only one of) dir or gobuild must be set")
+	var count int
+	if c.Dir != nil {
+		count++
+	}
+	if c.GoBuild != nil {
+		count++
+	}
+	if c.Bazel != nil {
+		count++
+	}
+
+	if count != 1 {
+		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, bazel) must be set")
 	}
 
 	var errs []error
@@ -115,6 +139,11 @@ func (c *CacheConfig) validate() error {
 	if c.GoBuild != nil {
 		if err := c.GoBuild.validate(); err != nil {
 			errs = append(errs, fmt.Errorf("invalid go build cache config: %w", err))
+		}
+	}
+	if c.Bazel != nil {
+		if err := c.Bazel.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("invalid bazel cache config: %w", err))
 		}
 	}
 
@@ -220,12 +249,12 @@ type GoBuildCache struct {
 	// This is useful to differentiate between different build contexts if required.
 	//
 	// This is mainly intended for internal testing purposes.
-	Scope string `json:"scope" yaml:"scope"`
+	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
 
-	// The gobuild cache may be automatically injected into a build of
+	// The gobuild cache may be automatically injected into a build if
 	// go is detected.
 	// Disabled explicitly turns this off.
-	Disabled bool `json:"disabled" yaml:"disabled"`
+	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 }
 
 func (c *GoBuildCache) validate() error {
@@ -285,5 +314,92 @@ func (c *GoBuildCache) ToRunOption(distroKey string, opts ...GoBuildCacheOption)
 		}
 		llb.AddMount(goBuildCacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
 		llb.AddEnv("GOCACHE", goBuildCacheDir).SetRunOption(ei)
+	})
+}
+
+// BazelCache sets up a cache for bazel builds.
+//
+// Currently this only supports setting up a *local* bazel cache.
+//
+// BazelCache relies on the *system* bazelrc file to configure the default cache location.
+// If the project being built includes its own bazelrc it may override the one configured by BazelCache.
+//
+// An alternative to BazelCache would be a [CacheDir] and use `--disk_cache` to set the cache location
+// when executing bazel commands.
+type BazelCache struct {
+	// Scope adds extra information to the cache key.
+	// This is useful to differentiate between different build contexts if required.
+	//
+	// This is mainly intended for internal testing purposes.
+	Scope string `json:"scope,omitempty" yaml:"scope,omitepty"`
+}
+
+func (c *BazelCache) validate() error {
+	return nil
+}
+
+type BazelCacheInfo struct {
+	Platform    *ocispecs.Platform
+	constraints *llb.Constraints
+}
+
+func WithBazelCacheConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
+	return CacheConfigOptionFunc(func(info *CacheInfo) {
+		var c llb.Constraints
+		for _, opt := range opts {
+			opt.SetConstraintsOption(&c)
+		}
+		info.Bazel.Platform = c.Platform
+		info.Bazel.constraints = &c
+	})
+}
+
+type BazelCacheOptionFunc func(*BazelCacheInfo)
+
+func (f BazelCacheOptionFunc) SetBazelCacheOption(info *BazelCacheInfo) {
+	f(info)
+}
+
+type BazelCacheOption interface {
+	SetBazelCacheOption(*BazelCacheInfo)
+}
+
+func (c *BazelCache) ToRunOption(distroKey string, opts ...BazelCacheOption) llb.RunOption {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
+		var info BazelCacheInfo
+
+		for _, opt := range opts {
+			opt.SetBazelCacheOption(&info)
+		}
+
+		platform := ei.Platform
+
+		if platform == nil {
+			platform = info.Platform
+		}
+		if platform == nil {
+			p := platforms.DefaultSpec()
+			platform = &p
+		}
+
+		key := fmt.Sprintf("%s-%s-dalec-bazelcache", distroKey, platforms.Format(*platform))
+		if c.Scope != "" {
+			key = fmt.Sprintf("%s-%s", key, c.Scope)
+		}
+
+		// See bazelrc https://bazel.build/run/bazelrc for more information on the bazelrc file
+
+		const (
+			cacheDir = "/tmp/dalec/bazel-local-cache"
+		)
+
+		rcFileContent := "build --disk_cache=" + cacheDir + "\n"
+		rcFile := llb.Scratch().File(
+			llb.Mkfile("bazelrc", 0o644, []byte(rcFileContent)),
+			WithConstraint(info.constraints),
+		)
+
+		llb.AddMount("/etc/bazel.bazelrc", rcFile, llb.SourcePath("bazelrc")).SetRunOption(ei)
+		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
 	})
 }

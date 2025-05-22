@@ -1686,7 +1686,7 @@ func TestArtifactBuildValidation(t *testing.T) {
 				Steps:  []BuildStep{{Command: "echo hello"}},
 				Caches: []CacheConfig{{}},
 			},
-			expectErr: "cache 0: invalid cache config: one of (and only one of) dir or gobuild must be set",
+			expectErr: "cache 0: invalid cache config: exactly one of (dir, gobuild, bazel) must be set",
 		},
 		{
 			name: "empty dest",
@@ -1775,7 +1775,7 @@ func TestArtifactBuildValidation(t *testing.T) {
 					},
 				},
 			},
-			expectErr: "cache 0: invalid cache config: one of (and only one of) dir or gobuild must be set",
+			expectErr: "cache 0: invalid cache config: exactly one of (dir, gobuild, bazel) must be set",
 		},
 		{
 			name: "multiple go build caches",
