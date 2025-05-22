@@ -334,6 +334,11 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 		sourceIdx += 1
 	}
 
+	if w.Spec.HasNodeMods() {
+		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", sourceIdx, nodeModsName)
+		sourceIdx += 1
+	}
+
 	if len(w.Spec.Build.Steps) > 0 {
 		fmt.Fprintf(b, "Source%d: %s\n", sourceIdx, buildScriptName)
 	}
