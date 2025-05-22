@@ -232,6 +232,12 @@
 					],
 					"description": "DataDirs is a list of read-only architecture-independent data files, to be placed in /usr/share/"
 				},
+				"disable_auto_requires": {
+					"type": [
+						"boolean"
+					],
+					"description": "DisableAutoRequires is used to disable automatic dependency discovery for\nthe produced package.\n\nSome tooling, such as `rpmbuild`, will look at all artifacts and\nautomatically inject missing dependencies into the package metadata.\nFor instance, if you include a `.sh` script, rpmbuild with automatically\nadd `bash` as a dependency for the package.\nIt also does this for libraries being linked against.\n\nThis is useful if you want to have more control over the dependencies\nthat are included in the package.\nHowever, you must be careful to manually include all dependencies that are required."
+				},
 				"disable_strip": {
 					"type": [
 						"boolean"

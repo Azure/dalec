@@ -113,7 +113,9 @@ func TestRules_OverrideSystemd(t *testing.T) {
 }
 
 func TestDepends(t *testing.T) {
-	control := &controlWrapper{}
+	control := &controlWrapper{
+		Spec: &dalec.Spec{},
+	}
 
 	buf := &strings.Builder{}
 	control.depends(buf, nil)

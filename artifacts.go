@@ -50,6 +50,20 @@ type Artifacts struct {
 
 	// DisableStrip is used to disable stripping of artifacts.
 	DisableStrip bool `yaml:"disable_strip,omitempty" json:"disable_strip,omitempty"`
+
+	// DisableAutoRequires is used to disable automatic dependency discovery for
+	// the produced package.
+	//
+	// Some tooling, such as `rpmbuild`, will look at all artifacts and
+	// automatically inject missing dependencies into the package metadata.
+	// For instance, if you include a `.sh` script, rpmbuild with automatically
+	// add `bash` as a dependency for the package.
+	// It also does this for libraries being linked against.
+	//
+	// This is useful if you want to have more control over the dependencies
+	// that are included in the package.
+	// However, you must be careful to manually include all dependencies that are required.
+	DisableAutoRequires bool `yaml:"disable_auto_requires,omitempty" json:"disable_auto_requires,omitempty"`
 }
 
 type ArtifactSymlinkConfig struct {

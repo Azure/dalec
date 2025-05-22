@@ -26,6 +26,7 @@ Version: {{.Version}}
 Release: {{.Release}}%{?dist}
 License: {{ .License }}
 Summary: {{ .Description }}
+{{ .DisableAutoReq }}
 {{ optionalField "URL" .Website -}}
 {{ optionalField "Vendor" .Vendor -}}
 {{ optionalField "Packager" .Packager -}}
@@ -902,6 +903,13 @@ func (w *specWrapper) DisableStrip() string {
 	artifacts := w.Spec.GetArtifacts(w.Target)
 	if artifacts.DisableStrip {
 		return "%global __strip /bin/true"
+	}
+	return ""
+}
+
+func (w *specWrapper) DisableAutoReq() string {
+	if w.Spec.Artifacts.DisableAutoRequires {
+		return "AutoReq: no"
 	}
 	return ""
 }
