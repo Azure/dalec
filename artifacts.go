@@ -57,8 +57,8 @@ type Artifacts struct {
 	// Some tooling, such as `rpmbuild`, will look at all artifacts and
 	// automatically inject missing dependencies into the package metadata.
 	// For instance, if you include a `.sh` script, rpmbuild with automatically
-	// add `bash` as a depdendency for the package.
-	// It also does this for librabries being linked against.
+	// add `bash` as a dependency for the package.
+	// It also does this for libraries being linked against.
 	//
 	// This is useful if you want to have more control over the dependencies
 	// that are included in the package.

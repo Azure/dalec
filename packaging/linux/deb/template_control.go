@@ -133,7 +133,7 @@ func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDe
 		}
 	}
 
-	// We _must_ add miscDeps regardless of `DisableAutoRequires` because
+	// We must add miscDeps regardless of `DisableAutoRequires` because
 	// debhelper programs that are to be invoked in a post-install script
 	// will not be able to function without it.
 	if _, exists := rtDeps[miscDeps]; !exists {

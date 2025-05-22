@@ -338,8 +338,8 @@ strip them in the build phase.
 Some package tooling, such as `rpmbuild` or `debbuild` both used in core DALEC,
 will attempt to automatically resolve runtime dependencies for you based on
 the artifacts you have specified.
-This can be linked libraries or even detecting you've included a shell script
-and adding a dependency on the shell.
+This can include detecting binaries with linked libraries or even that
+a shell script is included in the artifacts.
 
 You can disable this behavior by setting `disable_auto_requires: true`
 
