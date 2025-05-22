@@ -8,6 +8,15 @@
             "updates": {
                 "identifier": "docker-image://${REPO_PREFIX}/dockerhub/mirror/$1"
             }
+        },
+        {
+            "action": "CONVERT",
+            "selector": {
+                "identifier": "docker-image://mcr.microsoft.com/*"
+            },
+            "updates": {
+                "identifier": "docker-image://${REPO_PREFIX}/mcr/mirror/$1"
+            }
         }
     ]
 }
