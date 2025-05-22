@@ -113,19 +113,29 @@ func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDe
 	// If these aren't actually needed they'll resolve to nothing and don't cause
 	// any changes.
 	const (
+		// shlibs:Depends is a special variable that is replaced by the package
+		// manager with the list of shared libraries that the package depends on.
 		shlibsDeps = "${shlibs:Depends}"
-		miscDeps   = "${misc:Depends}"
+		// misc:Depends is a special variable that is replaced by the package
+		// manager with the list of miscellaneous dependencies that the package
+		// depends on from debhelper programs that are to be invoked in a post-install script.
+		miscDeps = "${misc:Depends}"
 	)
 
-	if _, exists := rtDeps[shlibsDeps]; !exists {
-		if needsClone {
-			rtDeps = maps.Clone(rtDeps)
-			needsClone = false
-		}
+	if !w.Spec.Artifacts.DisableAutoRequires {
+		if _, exists := rtDeps[shlibsDeps]; !exists {
+			if needsClone {
+				rtDeps = maps.Clone(rtDeps)
+				needsClone = false
+			}
 
-		rtDeps[shlibsDeps] = dalec.PackageConstraints{}
+			rtDeps[shlibsDeps] = dalec.PackageConstraints{}
+		}
 	}
 
+	// We _must_ add miscDeps regardless of `DisableAutoRequires` because
+	// debhelper programs that are to be invoked in a post-install script
+	// will not be able to function without it.
 	if _, exists := rtDeps[miscDeps]; !exists {
 		if needsClone {
 			rtDeps = maps.Clone(rtDeps)

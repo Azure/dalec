@@ -754,6 +754,7 @@ Version: 0.0.1
 Release: 1%{?dist}
 License: MIT
 Summary: A helpful tool
+
 %description
 A helpful tool
 
@@ -777,6 +778,7 @@ Version: 0.0.1
 Release: 1%{?dist}
 License: MIT
 Summary: A helpful tool
+
 Packager: Awesome Packager
 %description
 A helpful tool

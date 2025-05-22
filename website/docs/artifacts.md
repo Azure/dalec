@@ -332,3 +332,28 @@ This is a global setting that applies to all artifacts only.
 
 If you want some binaries stripped and others not, you will need to manually
 strip them in the build phase.
+
+## Automatic Dependency Resolution
+
+Some package tooling, such as `rpmbuild` or `debbuild` both used in core DALEC,
+will attempt to automatically resolve runtime dependencies for you based on
+the artifacts you have specified.
+This can be linked libraries or even detecting you've included a shell script
+and adding a dependency on the shell.
+
+You can disable this behavior by setting `disable_auto_requires: true`
+
+```
+artifacts:
+  disable_auto_requires: true
+```
+
+You must be careful when using this as it will now be up to you to ensure
+that all runtime dependencies are specified in the spec rather than
+relying on the tooling to do it for you.
+
+How this works under the hood is dependent on the build tooling.
+For rpmbuild setting this to true will set `AutoReq: no` in the resulting rpm
+spec file.
+For debbuild, DALEC will not include `${shlibs:Depends}` in the control file,
+which DALEC normally includes by default.

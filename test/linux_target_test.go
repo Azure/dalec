@@ -2,6 +2,7 @@ package test
 
 import (
 	"bufio"
+	"bytes"
 	_ "embed"
 	"io"
 	"io/fs"
@@ -1758,6 +1759,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		ctx := startTestSpan(baseCtx, t)
 		testBazelCache(ctx, t, testConfig.Target)
 	})
+
+	t.Run("disable auto require", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testDisableAutoRequire(ctx, t, testConfig.Target)
+	})
 }
 
 func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetConfig, workerCfg workerConfig) {
@@ -2876,5 +2883,211 @@ func testPackageProvidesReplaces(ctx context.Context, t *testing.T, cfg testLinu
 		})
 		assert.NilError(t, err)
 		assert.Assert(t, found, "no rpm or deb found in package")
+	})
+}
+
+func testDisableAutoRequire(ctx context.Context, t *testing.T, cfg targetConfig) {
+	var zlibDep string
+	switch {
+	case strings.HasSuffix(cfg.Package, "rpm"):
+		zlibDep = "zlib-devel"
+	case strings.HasSuffix(cfg.Package, "deb"):
+		zlibDep = "zlib1g-dev"
+	default:
+		t.Fatalf("unsupported package type: %s", cfg.Package)
+	}
+
+	newSpec := func() *dalec.Spec {
+		spec := newSimpleSpec()
+		spec.Artifacts = dalec.Artifacts{
+			Binaries: map[string]dalec.ArtifactConfig{
+				"test": {},
+			},
+		}
+
+		spec.Dependencies = &dalec.PackageDependencies{
+			Build: map[string]dalec.PackageConstraints{
+				"gcc":   {},
+				zlibDep: {},
+			},
+		}
+
+		spec.Build.Steps = []dalec.BuildStep{
+			{
+				Command: "gcc -o test main.c -lz",
+			},
+		}
+
+		spec.Sources = map[string]dalec.Source{
+			"main.c": {
+				Inline: &dalec.SourceInline{
+					File: &dalec.SourceInlineFile{
+						Contents: `
+#include <zlib.h>
+#include <stdio.h>
+
+int main() {
+    printf("zlib version: %s\n", zlibVersion());
+    return 0;
+}
+`,
+						Permissions: 0o755,
+					},
+				},
+			},
+		}
+		return spec
+	}
+
+	checkRPM := func(ctx context.Context, t *testing.T, spec *dalec.Spec) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+			res := solveT(ctx, t, client, sr)
+
+			ref, err := res.SingleRef()
+			assert.NilError(t, err)
+
+			pkgfs := bkfs.FromRef(ctx, ref)
+
+			var found bool
+			err = fs.WalkDir(pkgfs, ".", func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.IsDir() {
+					return nil
+				}
+
+				if !strings.HasSuffix(path, ".rpm") {
+					return nil
+				}
+
+				if strings.HasSuffix(path, ".src.rpm") {
+					return nil
+				}
+
+				found = true
+				f, err := pkgfs.Open(path)
+				assert.NilError(t, err)
+				defer f.Close()
+
+				pkg, err := rpm.Read(f)
+				assert.NilError(t, err)
+
+				var found bool
+				for _, r := range pkg.Requires() {
+					if strings.Contains(r.Name(), "zlib") || strings.Contains(r.Name(), "libz") {
+						found = true
+						break
+					}
+				}
+
+				if spec.Artifacts.DisableAutoRequires {
+					assert.Check(t, !found, "auto-requires found %v", pkg.Requires())
+				} else {
+					assert.Check(t, found, "auto-requires not found %v", pkg.Requires())
+				}
+
+				return fs.SkipAll
+			})
+			assert.NilError(t, err)
+			assert.Assert(t, found)
+		})
+	}
+
+	checkDeb := func(ctx context.Context, t *testing.T, spec *dalec.Spec) {
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+			res := solveT(ctx, t, client, sr)
+			ref, err := res.SingleRef()
+			assert.NilError(t, err)
+
+			pkgfs := bkfs.FromRef(ctx, ref)
+
+			var found bool
+			err = fs.WalkDir(pkgfs, ".", func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.IsDir() {
+					return nil
+				}
+
+				if !strings.HasSuffix(path, ".deb") {
+					return nil
+				}
+				if strings.Contains(path, "dbg") {
+					// skip debug packages
+					return nil
+				}
+
+				found = true
+				f, err := pkgfs.Open(path)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+
+				cf := extractDebControlFile(t, f.(io.ReaderAt))
+				defer cf.Close()
+
+				buf := bytes.NewBuffer(nil)
+				scanner := bufio.NewScanner(io.TeeReader(cf, buf))
+				var found bool
+				for scanner.Scan() {
+					txt := scanner.Text()
+					key, value, ok := strings.Cut(txt, ": ")
+					if !ok {
+						continue
+					}
+					if key != "Depends" {
+						continue
+					}
+
+					if strings.Contains(value, "zlib") {
+						found = true
+						break
+					}
+				}
+
+				if spec.Artifacts.DisableAutoRequires {
+					assert.Check(t, !found, "auto-requires found: %s\n%s", path, buf)
+				} else {
+					assert.Check(t, found, "auto-requires not found: %s \n%s", path, buf)
+				}
+				return fs.SkipAll
+			})
+
+			assert.NilError(t, err)
+			assert.Assert(t, found, "no deb found in package")
+		})
+	}
+
+	check := func(ctx context.Context, t *testing.T, spec *dalec.Spec) {
+		switch {
+		case strings.HasSuffix(cfg.Package, "rpm"):
+			checkRPM(ctx, t, spec)
+		case strings.HasSuffix(cfg.Package, "deb"):
+			checkDeb(ctx, t, spec)
+		default:
+			t.Fatalf("unsupported package type: %s", cfg.Package)
+		}
+	}
+
+	// Test makes sure that when `DisableAutoRequires` is set to false that those requirements are added
+	// This ensures that that the actual test where `DisableAutoRequires` is set to true is valid.
+	t.Run("disable-auto-requires=false", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		check(ctx, t, newSpec())
+	})
+
+	t.Run("disable-auto-requires=true", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		spec := newSpec()
+		spec.Artifacts.DisableAutoRequires = true
+		check(ctx, t, spec)
 	})
 }
