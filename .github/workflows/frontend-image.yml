@@ -40,6 +40,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ./.github/actions/setup-source-policy
+        name: Setup Source Policy
       - run: |
           set -eux -o pipefail
 
