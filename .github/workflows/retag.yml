@@ -5,10 +5,6 @@ on:
   schedule:
     - cron: '0 0 * * 0' # Every Sunday at midnight
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ./.github/workflows/retag/images.yml
-      - ./.github/workflows/retag.yml
 
 permissions:
   contents: read
@@ -34,6 +30,7 @@ jobs:
           yq eval '.[] | [.source, .dest ] | @tsv' ./.github/workflows/retag/images.yml | while IFS=$'\t' read -r source dest; do
             dest="${repo}/$dest"
             echo "Retagging $source to $dest"
+
             docker pull "$source"
             docker tag "$source" "$dest"
 

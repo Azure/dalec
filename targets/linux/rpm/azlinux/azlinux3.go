@@ -13,7 +13,6 @@ const (
 	AzLinux3FullName = "Azure Linux 3"
 	// Azlinux3WorkerContextName is the build context name that can be used to lookup
 	Azlinux3WorkerContextName = "dalec-azlinux3-worker"
-	azlinux3DistrolessRef     = "mcr.microsoft.com/azurelinux/distroless/base:3.0"
 )
 
 var Azlinux3Config = &distro.Config{

@@ -1,6 +1,56 @@
 - source: "busybox:latest"
-  dest: dockerhub/mirror/library/busybox:latest
+  dest: mirror/dockerhub/library/busybox:latest
+
 - source: "golang:1.23"
-  dest: dockerhub/mirror/library/golang:1.23
+  dest: mirror/dockerhub/library/golang:1.23
+
 - source: "registry:latest"
-  dest: dockerhub/mirror/library/registry:latest
+  dest: mirror/dockerhub/library/registry:latest
+
+- source: "debian:bullseye"
+  dest: mirror/dockerhub/library/debian:bullseye
+
+- source: "debian:bookworm"
+  dest: mirror/dockerhub/library/debian:bookworm
+
+- source: "ubuntu:bionic"
+  dest: mirror/dockerhub/library/ubuntu:bionic
+
+- source: "ubuntu:focal"
+  dest: mirror/dockerhub/library/ubuntu:focal
+
+- source: "ubuntu:jammy"
+  dest: mirror/dockerhub/library/ubuntu:jammy
+
+- source: "ubuntu:noble"
+  dest: mirror/dockerhub/library/ubuntu:noble
+
+- source: "almalinux:9"
+  dest: mirror/dockerhub/library/almalinux:9
+
+- source: "almalinux:8"
+  dest: mirror/dockerhub/library/almalinux:8
+
+- source: "rockylinux:9"
+  dest: mirror/dockerhub/library/rockylinux:9
+
+- source: "rockylinux:8"
+  dest: mirror/dockerhub/library/rockylinux:8
+
+- source: "mcr.microsoft.com/windows/nanoserver:ltsc2022"
+  dest: mirror/mcr/windows/nanoserver:ltsc2022
+
+- source: "mcr.microsoft.com/windows/nanoserver:ltsc2022-amd64"
+  dest: mirror/mcr/windows/nanoserver:ltsc2022-amd64
+
+- source: "mcr.microsoft.com/windows/nanoserver:1809"
+  dest: mirror/mcr/windows/nanoserver:1809
+
+- source: "mcr.microsoft.com/azurelinux/base/core:3.0"
+  dest: mirror/mcr/azurelinux/base/core:3.0
+
+- source: "mcr.microsoft.com/azurelinux/distroless/base:3.0"
+  dest: mirror/mcr/azurelinux/distroless/base:3.0
+
+- source: "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+  dest: mirror/mcr/cbl-mariner/base/core:2.0
