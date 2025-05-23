@@ -548,6 +548,24 @@ sources:
 			t.Fatal("expected error, but received none")
 		}
 	})
+
+	t.Run("can be unmarshalled with unknown fields", func(t *testing.T) {
+		dt := []byte(`
+sources:
+  test:
+    noSuchField: "some value"
+`)
+		var spec Spec
+
+		if err := yaml.Unmarshal(dt, &spec); err != nil {
+			t.Fatal(err)
+		}
+
+		spec.decodeOpts = []yaml.DecodeOption{yaml.Strict()}
+		if err := yaml.Unmarshal(dt, &spec); err == nil {
+			t.Fatal("expected error due to strict unmarshalling, but received none")
+		}
+	})
 }
 
 func TestSpec_SubstituteBuildArgs(t *testing.T) {
