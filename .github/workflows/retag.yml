@@ -5,6 +5,13 @@ on:
   schedule:
     - cron: '0 0 * * 0' # Every Sunday at midnight
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/retag/images.yml'
+      - '.github/workflows/retag.yml'
+
 
 permissions:
   contents: read
@@ -22,22 +29,45 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Retag images
+      - name: Setup containerd snapshotter
         run: |
+          sudo mkdir -p /etc/docker
+          test ! -f /etc/docker/daemon.json && echo '{}' | sudo tee /etc/docker/daemon.json
+
+          tmp="$(mktemp)"
+          jq '.features["containerd-snapshotter"] = true' /etc/docker/daemon.json | tee "${tmp}"
+          sudo cp "${tmp}" /etc/docker/daemon.json
+          rm "${tmp}"
+
+          sudo systemctl restart docker
+      - if: ${{ github.event_name == 'pull_request' }}
+        name: Setup local registry
+        run: |
+          set -ex -o pipefail
+          docker run -d --rm --name registry -p 5000:5000 ghcr.io/azure/dalec/mirror/dockerhub/library/registry:latest
+          echo "RETAG_REGISTRY=localhost:5000" >> $GITHUB_ENV
+      - if: ${{ github.event_name != 'pull_request' }}
+        name: Setup local registry
+        run: |
+          set -ex -o pipefail
           repo="ghcr.io/${{ github.repository }}"
           repo="$(tr '[:upper:]' '[:lower:]' <<<"$repo")"
+          echo "RETAG_REGISTRY=${repo}" >> $GITHUB_ENV
+      - name: Retag images
+        run: |
 
           yq eval '.[] | [.source, .dest ] | @tsv' ./.github/workflows/retag/images.yml | while IFS=$'\t' read -r source dest; do
-            dest="${repo}/$dest"
+            dest="${RETAG_REGISTRY}/$dest"
             echo "Retagging $source to $dest"
 
-            docker pull "$source"
-            docker tag "$source" "$dest"
+            platform=""
 
-            if [ "${{ github.event_name }}" = "pull_request" ]; then
-              echo "Skipping push for pull request"
-              continue
+            if [[ "$source" == *"windows"* ]]; then
+              platform="--platform windows/amd64"
             fi
 
-            docker push "$dest"
+            docker pull ${platform} "$source"
+            docker tag "$source" "$dest"
+
+            docker push ${platform} "$dest"
           done
