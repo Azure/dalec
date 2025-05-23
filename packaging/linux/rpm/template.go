@@ -908,7 +908,8 @@ func (w *specWrapper) DisableStrip() string {
 }
 
 func (w *specWrapper) DisableAutoReq() string {
-	if w.Spec.Artifacts.DisableAutoRequires {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if artifacts.DisableAutoRequires {
 		return "AutoReq: no"
 	}
 	return ""

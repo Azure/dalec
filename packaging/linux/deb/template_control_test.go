@@ -235,6 +235,9 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 						"target-pkg-p": {Version: []string{"= 5.1.0"}},
 						"common-pkg":   {Version: []string{"= 6.1.0"}}, // Overrides root
 					},
+					Artifacts: &dalec.Artifacts{
+						DisableAutoRequires: true,
+					},
 				},
 				// target2 has explicit empty maps to override the root values
 				"target2": {
@@ -269,6 +272,9 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 		require.NotContains(t, provides, "root-pkg-p")
 		require.NotContains(t, provides, "(= 6.0.0)") // common-pkg old version
 
+		deps := wrapper1.AllRuntimeDeps()
+		require.NotContains(t, deps.String(), "${shlibs:Depends}")
+
 		// Test with non-existent target to get root values
 		// Current implementation only falls back to root if target doesn't exist
 		wrapperNonExistent := &controlWrapper{spec, "non-existent-target"}
@@ -293,5 +299,8 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 		require.Equal(t, "", wrapper2.Replaces().String())
 		require.Equal(t, "", wrapper2.Conflicts().String())
 		require.Equal(t, "", wrapper2.Provides().String())
+
+		deps = wrapper2.AllRuntimeDeps()
+		require.Contains(t, deps.String(), "${shlibs:Depends}")
 	})
 }
