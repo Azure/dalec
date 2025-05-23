@@ -22,6 +22,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup containerd snapshotter
+        run: |
+          sudo mkdir -p /etc/docker
+          test ! -f /etc/docker/daemon.json && echo '{}' | sudo tee /etc/docker/daemon.json
+
+          tmp="$(mktemp)"
+          jq '.features["containerd-snapshotter"] = true' /etc/docker/daemon.json | tee "${tmp}"
+          sudo cp "${tmp}" /etc/docker/daemon.json
+          rm "${tmp}"
+
+          sudo systemctl restart docker
       - name: Retag images
         run: |
           repo="ghcr.io/${{ github.repository }}"
@@ -31,7 +42,13 @@ jobs:
             dest="${repo}/$dest"
             echo "Retagging $source to $dest"
 
-            docker pull "$source"
+            platform=""
+
+            if [[ "$source" == *"windows"* ]]; then
+              platform="--platform windows/amd64"
+            fi
+
+            docker pull ${platform} "$source"
             docker tag "$source" "$dest"
 
             if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -39,5 +56,5 @@ jobs:
               continue
             fi
 
-            docker push "$dest"
+            docker push ${platform} "$dest"
           done
