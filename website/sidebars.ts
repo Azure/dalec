@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
         'testing',
         'artifacts',
         'repositories',
+        'caches'
       ],
     },
     {
