@@ -230,6 +230,7 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 		fmt.Fprintln(buf, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 
+	// add node_modules if they exist?
 	for i, step := range spec.Build.Steps {
 		fmt.Fprintln(buf, "(")
 

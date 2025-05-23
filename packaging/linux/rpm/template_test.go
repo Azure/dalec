@@ -151,6 +151,31 @@ func TestTemplateSources(t *testing.T) {
 				t.Fatalf("unexpected sources: expected %q, got: %q", expected, s2)
 			}
 		})
+
+		t.Run("with NodeMod", func(t *testing.T) {
+			src := w.Spec.Sources["src1"]
+			src.Generate = []*dalec.SourceGenerator{
+				{NodeMod: &dalec.GeneratorNodeMod{}},
+			}
+			w.Spec.Sources["src1"] = src
+
+			out2, err := w.Sources()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			s2 := out2.String()
+			// trim last newline from the first output since that has shifted
+			s3 := s[:len(s)-1]
+			if !strings.HasPrefix(s2, s3) {
+				t.Fatalf("expected output to start with %q, got %q", s3, out2.String())
+			}
+
+			s2 = strings.TrimPrefix(out2.String(), s3)
+			expected := "Source1: " + nodeModsName + ".tar.gz\n\n"
+			if s2 != expected {
+				t.Fatalf("unexpected sources: expected %q, got: %q", expected, s2)
+			}
+		})
 	})
 
 	t.Run("multiple sources", func(t *testing.T) {

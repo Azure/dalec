@@ -108,6 +108,9 @@ func (s *Spec) NodeModDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constr
 
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
+				if gen.NodeMod == nil {
+					continue
+				}
 				in = in.With(withNodeMod(gen, patched[key], worker, opts...))
 			}
 			return in

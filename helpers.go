@@ -664,3 +664,12 @@ func (s *Spec) GetConflicts(targetKey string) map[string]PackageConstraints {
 	}
 	return s.Conflicts
 }
+func HasNpm(spec *Spec, targetKey string) bool {
+	for dep := range spec.GetBuildDeps(targetKey) {
+		switch dep {
+		case "npm":
+			return true
+		}
+	}
+	return false
+}
