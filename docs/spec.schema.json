@@ -405,6 +405,15 @@
 						"null"
 					],
 					"description": "Env is the list of environment variables to set for the command."
+				},
+				"mounts": {
+					"items": {
+						"$ref": "#/$defs/SourceMount"
+					},
+					"type": [
+						"array"
+					],
+					"description": "Mounts is the list of sources to mount into the build step."
 				}
 			},
 			"additionalProperties": {
