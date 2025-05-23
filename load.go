@@ -599,6 +599,12 @@ func (g *SourceGenerator) Validate() error {
 		// Gomod, Cargohome and NodeMod are the only valid generator types
 		return fmt.Errorf("no generator type specified")
 	}
+	if g.NodeMod != nil {
+		pm := g.NodeMod.PackageManager
+		if pm != "npm" && pm != "yarn" {
+			return fmt.Errorf("invalid node package manager %q, only npm and yarn are supported", pm)
+		}
+	}
 	return nil
 }
 

@@ -1069,6 +1069,61 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("node npm generator", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-build-with-nodenpm-generator",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing container target with node npm generator",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Generate: []*dalec.SourceGenerator{
+						{
+							NodeMod: &dalec.GeneratorNodeMod{
+								PackageManager: "npm",
+							},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"package.json": {Contents: npmPackageJson},
+								"npm.lock":     {Contents: npmPackageLockJson},
+								"index.js":     {Contents: npmIndexJS},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					testConfig.GetPackage("npm"): {},
+					// testConfig.GetPackage("node"): {},
+
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{Command: "[ -f ./src/package.json ]"},
+					{Command: "[ -f ./src/npm.lock ]"},
+					{Command: "[ -f ./src/index.js ]"},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
+		})
+	})
+
 	t.Run("test directory creation", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
