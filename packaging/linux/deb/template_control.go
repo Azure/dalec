@@ -122,7 +122,8 @@ func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDe
 		miscDeps = "${misc:Depends}"
 	)
 
-	if !w.Spec.Artifacts.DisableAutoRequires {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if !artifacts.DisableAutoRequires {
 		if _, exists := rtDeps[shlibsDeps]; !exists {
 			if needsClone {
 				rtDeps = maps.Clone(rtDeps)
@@ -154,7 +155,7 @@ func multiline(field string, values []string) string {
 }
 
 func (w *controlWrapper) recommends(buf *strings.Builder, depsSpec *dalec.PackageDependencies) {
-	if len(depsSpec.Recommends) == 0 {
+	if depsSpec == nil || len(depsSpec.Recommends) == 0 {
 		return
 	}
 
@@ -182,11 +183,6 @@ func (w *controlWrapper) AllRuntimeDeps() fmt.Stringer {
 	b := &strings.Builder{}
 
 	deps := w.Spec.GetPackageDeps(w.Target)
-
-	if deps == nil {
-		return b
-	}
-
 	w.depends(b, deps)
 	w.recommends(b, deps)
 
