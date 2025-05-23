@@ -101,6 +101,8 @@ type Spec struct {
 	Tests []*TestSpec `yaml:"tests,omitempty" json:"tests,omitempty"`
 
 	extensions extensionFields `yaml:"-" json:"-"`
+
+	decodeOpts []yaml.DecodeOption `yaml:"-" json:"-"`
 }
 
 type extensionFields map[string]rawYAML

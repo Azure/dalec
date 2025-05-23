@@ -267,7 +267,8 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 func LoadSpec(dt []byte) (*Spec, error) {
 	var spec Spec
 
-	if err := yaml.UnmarshalWithOptions(dt, &spec, yaml.Strict()); err != nil {
+	spec.decodeOpts = append(spec.decodeOpts, yaml.Strict())
+	if err := yaml.Unmarshal(dt, &spec); err != nil {
 		return nil, errors.Wrap(err, "error unmarshalling spec")
 	}
 
@@ -370,7 +371,7 @@ func (s *Spec) UnmarshalYAML(dt []byte) error {
 	type internalSpec Spec
 	var s2 internalSpec
 
-	dec := yaml.NewDecoder(parsed, yaml.Strict())
+	dec := yaml.NewDecoder(parsed, s.decodeOpts...)
 	if err := dec.Decode(&s2); err != nil {
 		return fmt.Errorf("%w:\n\n%s", errors.Wrap(err, "error unmarshalling parsed document"), parsed.String())
 	}
