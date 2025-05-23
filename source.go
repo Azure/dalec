@@ -354,6 +354,31 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 			rOpts = append(rOpts, llb.AddEnv(k, v))
 		}
 
+		for _, m := range step.Mounts {
+			if err := m.validate(subPath); err != nil {
+				return llb.Scratch(), err
+			}
+
+			srcSt, err := m.Spec.AsMount(internalMountSourceName, sOpts, opts...)
+			if err != nil {
+				return llb.Scratch(), err
+			}
+
+			var mountOpt []llb.MountOption
+			// This handles the case where we are mounting a source with a target extract path and
+			// no includes and excludes. In this case, we can extract the path here as a source mount
+			// if the source does not handle its own path extraction. This saves an extra llb.Copy operation
+			if m.Spec.Path != "" && len(m.Spec.Includes) == 0 && len(m.Spec.Excludes) == 0 &&
+				!m.Spec.handlesOwnPath() {
+				mountOpt = append(mountOpt, llb.SourcePath(m.Spec.Path))
+			}
+
+			if !SourceIsDir(m.Spec) {
+				mountOpt = append(mountOpt, llb.SourcePath(internalMountSourceName))
+			}
+			rOpts = append(rOpts, llb.AddMount(m.Dest, srcSt, mountOpt...))
+		}
+
 		rOpts = append(rOpts, withConstraints(opts))
 		cmdSt := st.Run(rOpts...)
 

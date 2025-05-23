@@ -146,6 +146,38 @@ func TestSourceCmd(t *testing.T) {
 				checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("foo bar"))
 			})
 		})
+		t.Run("per-step mount", func(t *testing.T) {
+			t.Parallel()
+			ctx := startTestSpan(ctx, t)
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := testSpec()
+				spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
+					{
+						Command: `mkdir -p /output; cp /tmp/foo /output/foo`,
+						Mounts: []dalec.SourceMount{
+							{
+								Dest: "/tmp/foo",
+								Spec: dalec.Source{
+									Inline: &dalec.SourceInline{
+										File: &dalec.SourceInlineFile{
+											Contents: "per-step mount says hello",
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Command: `[ ! -f /tmp/foo ]`,
+					},
+				}
+
+				req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+				res := solveT(ctx, t, gwc, req)
+
+				checkFile(ctx, t, filepath.Join(sourceName, "foo"), res, []byte("per-step mount says hello"))
+			})
+		})
 	})
 
 	t.Run("with mounted dir", func(t *testing.T) {
@@ -219,7 +251,42 @@ func TestSourceCmd(t *testing.T) {
 				checkFile(ctx, t, filepath.Join(sourceName, "foo/bar"), res, []byte("foo bar"))
 			})
 		})
+		t.Run("per-step mount", func(t *testing.T) {
+			t.Parallel()
+			ctx := startTestSpan(ctx, t)
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				spec := testSpec()
+				spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
+					{
+						Command: `mkdir -p /output; cp /tmp/foo/bar /output/bar`,
+						Mounts: []dalec.SourceMount{
+							{
+								Dest: "/tmp/foo",
+								Spec: dalec.Source{
+									Inline: &dalec.SourceInline{
+										Dir: &dalec.SourceInlineDir{
+											Files: map[string]*dalec.SourceInlineFile{
+												"bar": {
+													Contents: "per-step mount says hello",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Command: `[ ! -f /tmp/foo/bar ]`,
+					},
+				}
 
+				req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+				res := solveT(ctx, t, gwc, req)
+
+				checkFile(ctx, t, filepath.Join(sourceName, "bar"), res, []byte("per-step mount says hello"))
+			})
+		})
 	})
 }
 
