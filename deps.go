@@ -210,7 +210,7 @@ func (r *PackageRepositoryConfig) validate() error {
 		}
 	}
 	for _, mnt := range r.Data {
-		if err := mnt.validate("/"); err != nil {
+		if err := mnt.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "data mount path %s", mnt.Dest))
 		}
 	}
