@@ -797,17 +797,3 @@ func (b ArtifactBuild) validate() error {
 
 	return goerrors.Join(errs...)
 }
-
-func (step *BuildStep) validate() error {
-	var errs []error
-
-	if step.Command == "" {
-		errs = append(errs, fmt.Errorf("step must have a command"))
-	}
-
-	if len(errs) > 0 {
-		return goerrors.Join(errs...)
-	}
-
-	return nil
-}

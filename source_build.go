@@ -1,9 +1,9 @@
 package dalec
 
 import (
+	"context"
 	goerrors "errors"
 	"fmt"
-	"strings"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
@@ -27,22 +27,20 @@ type SourceBuild struct {
 	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
 }
 
-func (s *SourceBuild) validate(failContext ...string) (retErr error) {
-	defer func() {
-		if retErr != nil && failContext != nil {
-			retErr = errors.Wrap(retErr, strings.Join(failContext, " "))
-		}
-	}()
-
+func (s *SourceBuild) validate(fetchOptions) error {
+	var errs []error
 	if s.Source.Build != nil {
-		return goerrors.Join(retErr, fmt.Errorf("build sources cannot be recursive"))
+		errs = append(errs, fmt.Errorf("build sources cannot be recursive"))
 	}
 
-	if err := s.Source.validate("build subsource"); err != nil {
-		retErr = goerrors.Join(retErr, err)
+	if err := s.Source.validate(); err != nil {
+		errs = append(errs, fmt.Errorf("build source: %w", err))
 	}
 
-	return
+	if len(errs) == 0 {
+		return nil
+	}
+	return goerrors.Join(errs...)
 }
 
 func (src *SourceBuild) AsState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -67,4 +65,36 @@ func (src *SourceBuild) AsState(name string, sOpt SourceOpts, opts ...llb.Constr
 	}
 
 	return st, nil
+}
+
+func (src *SourceBuild) baseState(opts fetchOptions) llb.State {
+	name := opts.Rename
+	if src.Source.Inline != nil && src.Source.Inline.File != nil {
+		name = src.DockerfilePath
+		if name == "" {
+			name = dockerui.DefaultDockerfileName
+		}
+	}
+
+	st := src.Source.ToState(name, opts.Constraints...)
+
+	return st.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
+		// prepend the constraints passed into the async call to the ones from the source
+		cOpts := []llb.ConstraintsOpt{WithConstraint(c)}
+		cOpts = append(cOpts, opts.Constraints...)
+		return opts.SourceOpt.Forward(in, src, cOpts...)
+	})
+}
+
+func (src *SourceBuild) IsDir() bool {
+	return true
+}
+
+func (src *SourceBuild) toState(opts fetchOptions) llb.State {
+	return src.baseState(opts).With(sourceFilters(opts))
+}
+
+func (src *SourceBuild) toMount(to string, opts fetchOptions, mountOpts ...llb.MountOption) llb.RunOption {
+	st := src.baseState(opts).With(mountFilters(opts))
+	return llb.AddMount(to, st, mountOpts...)
 }
