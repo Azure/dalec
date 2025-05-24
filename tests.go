@@ -100,7 +100,7 @@ func (t *TestSpec) validate() error {
 	var errs []error
 
 	for _, m := range t.Mounts {
-		if err := m.validate("/"); err != nil {
+		if err := m.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "mount %s", m.Dest))
 		}
 	}

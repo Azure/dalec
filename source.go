@@ -80,13 +80,6 @@ func getSource(src Source, name string, sOpt SourceOpts, opts ...llb.Constraints
 	return
 }
 
-func (src *SourceInline) AsState(name string) (llb.State, error) {
-	if src.File != nil {
-		return llb.Scratch().With(src.File.PopulateAt(name)), nil
-	}
-	return llb.Scratch().With(src.Dir.PopulateAt("/")), nil
-}
-
 // withFollowPath similar to using [llb.IncludePatterns] except that it will
 // follow symlinks at the provided path.
 func withFollowPath(p string) localOptionFunc {
@@ -107,86 +100,11 @@ func withFollowPath(p string) localOptionFunc {
 	}
 }
 
-func (src *SourceContext) AsState(path string, includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	if !isRoot(path) {
-		excludes = append(excludeAllButPath(path), excludes...)
-	}
-
-	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(includes, excludes), withFollowPath(path), withConstraints(opts))
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	if st == nil {
-		return llb.Scratch(), fmt.Errorf("context %q not found", src.Name)
-	}
-
-	return *st, nil
-}
-
 func excludeAllButPath(p string) []string {
 	return []string{
 		"*",
 		"!" + filepath.ToSlash(filepath.Clean(p)),
 	}
-}
-
-func (src *SourceGit) AsState(opts ...llb.ConstraintsOpt) (llb.State, error) {
-	ref, err := gitutil.ParseGitRef(src.URL)
-	if err != nil {
-		return llb.Scratch(), fmt.Errorf("could not parse git ref: %w", err)
-	}
-
-	var gOpts []llb.GitOption
-	if src.KeepGitDir {
-		gOpts = append(gOpts, llb.KeepGitDir())
-	}
-	gOpts = append(gOpts, withConstraints(opts))
-	gOpts = append(gOpts, src.Auth.LLBOpt())
-
-	st := llb.Git(ref.Remote, src.Commit, gOpts...)
-	return st, nil
-}
-
-func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st := llb.Image(src.Ref, llb.WithMetaResolver(sOpt.Resolver), withConstraints(opts))
-	if src.Cmd == nil {
-		return st, nil
-	}
-
-	st, err := generateSourceFromImage(st, src.Cmd, sOpt, path, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return st, nil
-}
-
-func (src *SourceHTTP) AsState(name string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	httpOpts := []llb.HTTPOption{withConstraints(opts)}
-	httpOpts = append(httpOpts, llb.Filename(name))
-	if src.Digest != "" {
-		httpOpts = append(httpOpts, llb.Checksum(src.Digest))
-	}
-
-	if src.Permissions != 0 {
-		httpOpts = append(httpOpts, llb.Chmod(src.Permissions))
-	}
-
-	st := llb.HTTP(src.URL, httpOpts...)
-	return st, nil
-}
-
-func (src *SourceHTTP) validate() error {
-	if src.URL == "" {
-		return goerrors.New("http source must have a URL")
-	}
-	if src.Digest != "" {
-		if err := src.Digest.Validate(); err != nil {
-			return errors.WithStack(err)
-		}
-	}
-	return nil
 }
 
 // InvalidSourceError is an error type returned when a source is invalid.
@@ -272,133 +190,6 @@ func pathHasPrefix(s string, prefix string) bool {
 		return true
 	}
 	return false
-}
-
-func (m *SourceMount) validate(root string) error {
-	if m.Dest == "/" {
-		return errors.Wrap(errInvalidMountConfig, "mount destination must not be \"/\"")
-	}
-	if root != "/" && pathHasPrefix(m.Dest, root) {
-		// We cannot support this as the base mount for subPath will shadow the mount being done here.
-		return errors.Wrapf(errInvalidMountConfig, "mount destination (%s) must not be a descendent of the target source path (%s)", m.Dest, root)
-	}
-	return m.Spec.validate()
-}
-
-func (m *SourceMount) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
-	if err := m.Spec.processBuildArgs(lex, args, allowArg); err != nil {
-		return errors.Wrapf(err, "mount dest: %s", m.Dest)
-	}
-	return nil
-}
-
-func (m *SourceMount) fillDefaults() {
-	src := m.Spec
-	fillDefaults(&src)
-	m.Spec = src
-}
-
-// must not be called with a nil cmd pointer
-// subPath must be a valid non-empty path
-func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	if len(cmd.Steps) == 0 {
-		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
-	}
-
-	if subPath == "" {
-		// TODO: We should log a warning here since extracting an entire image while also running a command is
-		// probably not what the user really wanted to do here.
-		// The buildkit client provides functionality to do this we just need to wire it in.
-		subPath = "/"
-	}
-
-	for k, v := range cmd.Env {
-		st = st.AddEnv(k, v)
-	}
-	if cmd.Dir != "" {
-		st = st.Dir(cmd.Dir)
-	}
-
-	baseRunOpts := []llb.RunOption{}
-
-	for _, src := range cmd.Mounts {
-		if err := src.validate(subPath); err != nil {
-			return llb.Scratch(), err
-		}
-
-		srcSt, err := src.Spec.AsMount(internalMountSourceName, sOpts, opts...)
-		if err != nil {
-			return llb.Scratch(), err
-		}
-		var mountOpt []llb.MountOption
-
-		// This handles the case where we are mounting a source with a target extract path and
-		// no includes and excludes. In this case, we can extract the path here as a source mount
-		// if the source does not handle its own path extraction. This saves an extra llb.Copy operation
-		if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 &&
-			!src.Spec.handlesOwnPath() {
-			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
-		}
-
-		if !SourceIsDir(src.Spec) {
-			mountOpt = append(mountOpt, llb.SourcePath(internalMountSourceName))
-		}
-		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
-	}
-
-	out := llb.Scratch()
-	for i, step := range cmd.Steps {
-		rOpts := []llb.RunOption{llb.Args([]string{"/bin/sh", "-c", step.Command})}
-
-		rOpts = append(rOpts, baseRunOpts...)
-
-		for k, v := range step.Env {
-			rOpts = append(rOpts, llb.AddEnv(k, v))
-		}
-
-		for _, m := range step.Mounts {
-			if err := m.validate(subPath); err != nil {
-				return llb.Scratch(), err
-			}
-
-			srcSt, err := m.Spec.AsMount(internalMountSourceName, sOpts, opts...)
-			if err != nil {
-				return llb.Scratch(), err
-			}
-
-			var mountOpt []llb.MountOption
-			// This handles the case where we are mounting a source with a target extract path and
-			// no includes and excludes. In this case, we can extract the path here as a source mount
-			// if the source does not handle its own path extraction. This saves an extra llb.Copy operation
-			if m.Spec.Path != "" && len(m.Spec.Includes) == 0 && len(m.Spec.Excludes) == 0 &&
-				!m.Spec.handlesOwnPath() {
-				mountOpt = append(mountOpt, llb.SourcePath(m.Spec.Path))
-			}
-
-			if !SourceIsDir(m.Spec) {
-				mountOpt = append(mountOpt, llb.SourcePath(internalMountSourceName))
-			}
-			rOpts = append(rOpts, llb.AddMount(m.Dest, srcSt, mountOpt...))
-		}
-
-		rOpts = append(rOpts, withConstraints(opts))
-		cmdSt := st.Run(rOpts...)
-
-		// on first iteration with a root subpath
-		// do not use AddMount, as this will overwrite / with a
-		// scratch fs
-		if i == 0 && subPath == "/" {
-			out = cmdSt.Root()
-		} else {
-			out = cmdSt.AddMount(subPath, out)
-		}
-
-		// Update the base state so that changes to the rootfs propagate between
-		// steps.
-		st = cmdSt.Root()
-	}
-
-	return out, nil
 }
 
 func isRoot(extract string) bool {
@@ -956,12 +747,9 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 				retErr = goerrors.Join(retErr, errors.Errorf("source path cannot be empty"))
 			}
 
-			for _, mnt := range s.DockerImage.Cmd.Mounts {
-				if err := mnt.validate(s.Path); err != nil {
-					retErr = goerrors.Join(retErr, err)
-				}
-				if err := mnt.Spec.validate("docker image source with ref", "'"+s.DockerImage.Ref+"'"); err != nil {
-					retErr = goerrors.Join(retErr, err)
+			for i, mnt := range s.DockerImage.Cmd.Mounts {
+				if err := mnt.validateInRoot(s.Path); err != nil {
+					retErr = goerrors.Join(retErr, fmt.Errorf("docker image source mount %d at dest %s: %w", i, mnt.Dest, err))
 				}
 			}
 		}
@@ -973,27 +761,16 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 		count++
 	}
 	if s.HTTP != nil {
-		if err := s.HTTP.validate(); err != nil {
-			retErr = goerrors.Join(retErr, err)
-		}
 		count++
 	}
 	if s.Context != nil {
 		count++
 	}
 	if s.Build != nil {
-		c := s.Build.DockerfilePath
-		if err := s.Build.validate("build source with dockerfile", "`"+c+"`"); err != nil {
-			retErr = goerrors.Join(retErr, err)
-		}
-
 		count++
 	}
 
 	if s.Inline != nil {
-		if err := s.Inline.validate(s.Path); err != nil {
-			retErr = goerrors.Join(retErr, err)
-		}
 		count++
 	}
 
@@ -1006,5 +783,108 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 		retErr = goerrors.Join(retErr, fmt.Errorf("more than one source variant defined"))
 	}
 
+	if err := s.toIntercace().validate(s.fetchOptions()); err != nil {
+		retErr = goerrors.Join(retErr, err)
+	}
+
 	return retErr
+}
+
+type source interface {
+	toState(fetchOptions) llb.State
+	IsDir() bool
+	validate(fetchOptions) error
+	toMount(to string, opt fetchOptions, mountOpts ...llb.MountOption) llb.RunOption
+}
+
+type fetchOptions struct {
+	Constraints []llb.ConstraintsOpt
+	Path        string
+	Includes    []string
+	Excludes    []string
+	Rename      string
+	SourceOpt   SourceOpts
+}
+
+func (s *Source) fetchOptions() fetchOptions {
+	return fetchOptions{
+		Includes: s.Includes,
+		Excludes: s.Excludes,
+		Path:     s.Path,
+	}
+}
+
+func (s *Source) toIntercace() source {
+	switch {
+	case s.HTTP != nil:
+		return s.HTTP
+	case s.Git != nil:
+		return s.Git
+	case s.Context != nil:
+		return s.Context
+	case s.DockerImage != nil:
+		return s.DockerImage
+	case s.Build != nil:
+		return s.Build
+	case s.Inline != nil:
+		return s.Inline
+	default:
+		panic("unknown source type")
+	}
+}
+
+func (s *Source) ToState(name string, opts ...llb.ConstraintsOpt) llb.State {
+	fo := s.fetchOptions()
+	fo.Constraints = opts
+	fo.Rename = name
+	st := s.toIntercace().toState(fo)
+	return st
+}
+
+func (s *Source) ToMount(to string, c llb.ConstraintsOpt, opts ...llb.MountOption) llb.RunOption {
+	fo := s.fetchOptions()
+	fo.Constraints = append(fo.Constraints, c)
+	return s.toIntercace().toMount(to, fo, opts...)
+}
+
+func (s *Source) IsDir() bool {
+	return s.toIntercace().IsDir()
+}
+
+func sourceFilters(opts fetchOptions) llb.StateOption {
+	return func(st llb.State) llb.State {
+		if len(opts.Excludes) == 0 && len(opts.Includes) == 0 && isRoot(opts.Path) {
+			return st
+		}
+
+		var copyOpts []llb.CopyOption
+		if len(opts.Excludes) > 0 {
+			copyOpts = append(copyOpts, WithExcludes(opts.Excludes))
+		}
+		if len(opts.Includes) > 0 {
+			copyOpts = append(copyOpts, WithIncludes(opts.Includes))
+		}
+
+		return llb.Scratch().File(llb.Copy(st, opts.Path, opts.Rename, copyOpts...), opts.Constraints...)
+	}
+}
+
+func mountFilters(opts fetchOptions) llb.StateOption {
+	// Here we don't want the normal source filters because this is going to be mounted, we can filter
+	// down to the requested path as part of a mount.
+	//
+	// We also don't need to rename anything since we are mounting it to a specific path.
+	//
+	// We do however need to handle any includes/excludes that are set so that we don't have more data
+	// than expected in the mount.
+	return func(st llb.State) llb.State {
+		var copyOpts []llb.CopyOption
+		if len(opts.Excludes) > 0 {
+			copyOpts = append(copyOpts, WithExcludes(opts.Excludes))
+		}
+		if len(opts.Includes) > 0 {
+			copyOpts = append(copyOpts, WithIncludes(opts.Includes))
+		}
+		return llb.Scratch().File(llb.Copy(st, "/", "/", copyOpts...), opts.Constraints...)
+	}
 }
