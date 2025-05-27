@@ -856,17 +856,57 @@ func sourceFilters(opts fetchOptions) llb.StateOption {
 		if len(opts.Excludes) == 0 && len(opts.Includes) == 0 && isRoot(opts.Path) {
 			return st
 		}
-
-		var copyOpts []llb.CopyOption
-		if len(opts.Excludes) > 0 {
-			copyOpts = append(copyOpts, WithExcludes(opts.Excludes))
-		}
-		if len(opts.Includes) > 0 {
-			copyOpts = append(copyOpts, WithIncludes(opts.Includes))
-		}
-
-		return llb.Scratch().File(llb.Copy(st, opts.Path, opts.Rename, copyOpts...), opts.Constraints...)
+		return llb.Scratch().File(llb.Copy(st, opts.Path, opts.Rename, opts), opts.Constraints...)
 	}
+}
+
+// SetCopyOptions is an llb.CopyOption that sets the includes and excludes for a copy operation.
+func (opts fetchOptions) SetCopyOption(info *llb.CopyInfo) {
+	if len(opts.Includes) > 0 {
+		WithIncludes(opts.Includes).SetCopyOption(info)
+	}
+	if len(opts.Excludes) > 0 {
+		WithExcludes(opts.Excludes).SetCopyOption(info)
+	}
+}
+
+// SetLocalOption is an llb.LocalOption that sets various options needed for local (or context) backed sources.
+func (opts fetchOptions) SetLocalOption(info *llb.LocalInfo) {
+	includes := opts.Includes
+	excludes := opts.Excludes
+	isRoot := isRoot(opts.Path)
+
+	// For all include/exclude patterns, we need to prepend the base path
+	// since the dalec spec assumes that include/excludes are relative to the requested source path.
+	// Since we are relying on the underlying LLB implementation to handle the filtering and not requesting
+	// more data from the client than it should, we need to ensure that the paths are correct.
+
+	if len(opts.Excludes) > 0 && !isRoot {
+		excludes = make([]string, len(opts.Excludes))
+		for i, exclude := range opts.Excludes {
+			excludes[i] = filepath.Join(opts.Path, exclude)
+		}
+	}
+
+	if len(opts.Includes) > 0 && !isRoot {
+		includes = make([]string, len(opts.Includes))
+		for i, include := range opts.Includes {
+			includes[i] = filepath.Join(opts.Path, include)
+		}
+	}
+
+	if isRoot {
+		// Exclude anything that is not underneath the requested path
+		// This way we aren't needlessly copying data that is not needed.
+		excludes = append(excludeAllButPath(opts.Path), excludes...)
+	}
+
+	localIncludeExcludeMerge(includes, excludes).SetLocalOption(info)
+	if len(opts.Constraints) > 0 {
+		WithConstraints(opts.Constraints...).SetLocalOption(info)
+	}
+
+	withFollowPath(opts.Path).SetLocalOption(info)
 }
 
 func mountFilters(opts fetchOptions) llb.StateOption {
@@ -878,13 +918,6 @@ func mountFilters(opts fetchOptions) llb.StateOption {
 	// We do however need to handle any includes/excludes that are set so that we don't have more data
 	// than expected in the mount.
 	return func(st llb.State) llb.State {
-		var copyOpts []llb.CopyOption
-		if len(opts.Excludes) > 0 {
-			copyOpts = append(copyOpts, WithExcludes(opts.Excludes))
-		}
-		if len(opts.Includes) > 0 {
-			copyOpts = append(copyOpts, WithIncludes(opts.Includes))
-		}
-		return llb.Scratch().File(llb.Copy(st, "/", "/", copyOpts...), opts.Constraints...)
+		return llb.Scratch().File(llb.Copy(st, "/", "/", opts), opts.Constraints...)
 	}
 }

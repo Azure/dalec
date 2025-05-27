@@ -45,18 +45,8 @@ func (src *SourceContext) IsDir() bool {
 }
 
 func (src *SourceContext) baseState(opts fetchOptions) llb.State {
-	var lOpts []llb.LocalOption
-
-	excludes := opts.Excludes
-	if !isRoot(opts.Path) {
-		excludes = append(excludeAllButPath(opts.Path), excludes...)
-	}
-
-	lOpts = append(lOpts, localIncludeExcludeMerge(opts.Includes, excludes))
-	lOpts = append(lOpts, WithConstraints(opts.Constraints...))
-
 	return llb.Scratch().Async(func(ctx context.Context, _ llb.State, _ *llb.Constraints) (llb.State, error) {
-		st, err := opts.SourceOpt.GetContext(opts.Rename, lOpts...)
+		st, err := opts.SourceOpt.GetContext(src.Name, opts)
 		if err != nil {
 			return llb.Scratch(), err
 		}
