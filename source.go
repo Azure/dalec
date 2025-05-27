@@ -218,8 +218,8 @@ func (s *InvalidPatchError) Unwrap() error {
 }
 
 var (
-	sourceNamePathSeparatorError = goerrors.New("source name must not contain path separator")
-	errMissingSource             = goerrors.New("source is missing from sources list")
+	errSourceNamePathSeparator = goerrors.New("source name must not contain path separator")
+	errMissingSource           = goerrors.New("source is missing from sources list")
 
 	errPatchRequiresSubpath = goerrors.New("patch source refers to a directory source without a subpath to the patch file to use")
 	errPatchFileNoSubpath   = goerrors.New("patch source refers to a file source but patch spec specifies a subpath")
