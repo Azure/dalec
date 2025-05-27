@@ -53,6 +53,7 @@ func (cmd *Command) validate() error {
 			if _, ok := dests[mount.Dest]; ok {
 				errs = append(errs, fmt.Errorf("cmd mount %d: dest %q: duplicate mount destination", i, mount.Dest))
 			}
+			dests[mount.Dest] = struct{}{}
 			if err := mount.validate(); err != nil {
 				errs = append(errs, fmt.Errorf("cmd mount %d: dest %q: %w", i, mount.Dest, err))
 			}
@@ -104,10 +105,18 @@ func (s SourceMount) SetRunOption(ei *llb.ExecInfo) {
 }
 
 func (m *SourceMount) validate() error {
+	var errs []error
 	if m.Dest == "/" {
-		return errors.Wrap(errInvalidMountConfig, "mount destination must not be \"/\"")
+		errs = append(errs, errors.Wrap(errInvalidMountConfig, "mount destination must not be \"/\""))
 	}
-	return m.Spec.validate()
+
+	if err := m.Spec.validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		return stderrors.Join(errs...)
+	}
+	return nil
 }
 
 func (m *SourceMount) validateInRoot(root string) error {
@@ -250,6 +259,8 @@ func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPa
 	return out, nil
 }
 
+var errNoImageSourcePath = stderrors.New("docker image source path cannot be empty")
+
 func (src *SourceDockerImage) validate(opts fetchOptions) error {
 	var errs []error
 	if src.Ref == "" {
@@ -262,6 +273,15 @@ func (src *SourceDockerImage) validate(opts fetchOptions) error {
 		}
 	}
 
+	// If someone *really* wants to extract the entire rootfs, they need to say so explicitly.
+	// We won't fill this in for them, particularly because this is almost certainly not the user's intent.
+	if opts.Path == "" {
+		errs = append(errs, errNoImageSourcePath)
+	}
+
+	if len(errs) > 0 {
+		return stderrors.Join(errs...)
+	}
 	return nil
 }
 

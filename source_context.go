@@ -33,10 +33,6 @@ func (src *SourceContext) AsState(path string, includes []string, excludes []str
 }
 
 func (src *SourceContext) validate(opts fetchOptions) error {
-	if src.Name == "" {
-		// Should we assume "context" as a default?
-		return errors.New("context source must have a name")
-	}
 	return nil
 }
 
