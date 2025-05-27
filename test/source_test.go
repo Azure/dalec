@@ -317,9 +317,16 @@ func getAvailablePort(t *testing.T) int {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
+	defer func(t *testing.T) {
+		_ = l.Close() // if we got the port, ignore failure to close
+	}(t)
 
-	p := l.Addr().(*net.TCPAddr).Port
+	tcpa, ok := l.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("extpeccted return value of l.Addr() to be a (*net.TCPAddr)")
+	}
+
+	p := tcpa.Port
 	return p
 }
 
