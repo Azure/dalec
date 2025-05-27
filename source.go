@@ -1,3 +1,4 @@
+//go:generate go run ./cmd/gen-source-variants source_generated.go
 package dalec
 
 import (
@@ -227,19 +228,7 @@ func WithCreateDestPath() llb.CopyOption {
 }
 
 func SourceIsDir(src Source) bool {
-	switch {
-	case src.DockerImage != nil,
-		src.Git != nil,
-		src.Build != nil,
-		src.Context != nil:
-		return true
-	case src.HTTP != nil:
-		return false
-	case src.Inline != nil:
-		return src.Inline.Dir != nil
-	default:
-		panic("unreachable")
-	}
+	return src.IsDir()
 }
 
 func (src *Source) GetDisplayRef() (string, error) {
@@ -721,8 +710,6 @@ func (g *GeneratorGomod) processBuildArgs(args map[string]string, allowArg func(
 }
 
 func (s *Source) validate(failContext ...string) (retErr error) {
-	count := 0
-
 	defer func() {
 		if retErr != nil && failContext != nil {
 			retErr = errors.Wrap(retErr, strings.Join(failContext, " "))
@@ -753,37 +740,13 @@ func (s *Source) validate(failContext ...string) (retErr error) {
 				}
 			}
 		}
-
-		count++
 	}
 
-	if s.Git != nil {
-		count++
-	}
-	if s.HTTP != nil {
-		count++
-	}
-	if s.Context != nil {
-		count++
-	}
-	if s.Build != nil {
-		count++
+	if err := s.validateSourceVariants(); err != nil {
+		retErr = goerrors.Join(retErr, err)
 	}
 
-	if s.Inline != nil {
-		count++
-	}
-
-	switch count {
-	case 0:
-		retErr = goerrors.Join(retErr, fmt.Errorf("no non-nil source variant"))
-	case 1:
-		return retErr
-	default:
-		retErr = goerrors.Join(retErr, fmt.Errorf("more than one source variant defined"))
-	}
-
-	if err := s.toIntercace().validate(s.fetchOptions()); err != nil {
+	if err := s.toInterface().validate(s.fetchOptions()); err != nil {
 		retErr = goerrors.Join(retErr, err)
 	}
 
@@ -815,22 +778,7 @@ func (s *Source) fetchOptions() fetchOptions {
 }
 
 func (s *Source) toIntercace() source {
-	switch {
-	case s.HTTP != nil:
-		return s.HTTP
-	case s.Git != nil:
-		return s.Git
-	case s.Context != nil:
-		return s.Context
-	case s.DockerImage != nil:
-		return s.DockerImage
-	case s.Build != nil:
-		return s.Build
-	case s.Inline != nil:
-		return s.Inline
-	default:
-		panic("unknown source type")
-	}
+	return s.toInterface()
 }
 
 func (s *Source) ToState(name string, opts ...llb.ConstraintsOpt) llb.State {
