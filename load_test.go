@@ -574,7 +574,7 @@ func TestSourceNameWithPathSeparator(t *testing.T) {
 		t.Error("expected error to contain source name")
 	}
 
-	if !errors.Is(err, sourceNamePathSeparatorError) {
+	if !errors.Is(err, errSourceNamePathSeparator) {
 		t.Errorf("expected error to be sourceNamePathSeparatorError, got: %v", err)
 	}
 }
