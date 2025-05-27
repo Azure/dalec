@@ -625,6 +625,23 @@ getent group testgroup >/dev/null || groupadd --system testgroup
 
 		assert.Equal(t, want, got)
 	})
+
+	t.Run("disable auto requires", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				DisableAutoRequires: true,
+			},
+		}}
+
+		got := w.DisableAutoReq()
+		want := "AutoReq: no"
+		assert.Equal(t, want, got)
+
+		w = &specWrapper{Spec: &dalec.Spec{}}
+		got = w.DisableAutoReq()
+		want = ""
+		assert.Equal(t, want, got)
+	})
 }
 
 func TestTemplate_Requires(t *testing.T) {
@@ -951,6 +968,9 @@ func TestTemplate_TargetSpecificOverrides(t *testing.T) {
 		Targets: map[string]dalec.Target{
 			// target1 overrides values
 			"target1": {
+				Artifacts: &dalec.Artifacts{
+					DisableAutoRequires: true,
+				},
 				Replaces: map[string]dalec.PackageConstraints{
 					"target-pkg-r": {Version: []string{">= 1.1.0"}},
 					"common-pkg":   {Version: []string{">= 2.1.0"}}, // Overrides root
@@ -996,6 +1016,8 @@ func TestTemplate_TargetSpecificOverrides(t *testing.T) {
 		assert.Assert(t, cmp.Contains(provides, "Provides: target-pkg-p == 5.1.0"))
 		assert.Assert(t, !strings.Contains(provides, "root-pkg-p"))
 		assert.Assert(t, !strings.Contains(provides, "= 6.0.0")) // common-pkg old version
+
+		assert.Assert(t, cmp.Equal(w.DisableAutoReq(), "AutoReq: no"))
 	})
 
 	t.Run("target2 should use empty maps", func(t *testing.T) {
