@@ -98,3 +98,9 @@ func (src *SourceBuild) toMount(to string, opts fetchOptions, mountOpts ...llb.M
 	st := src.baseState(opts).With(mountFilters(opts))
 	return llb.AddMount(to, st, mountOpts...)
 }
+
+func (src *SourceBuild) fillDefaults() {
+	bsrc := &src.Source
+	bsrc.fillDefaults()
+	src.Source = *bsrc
+}
