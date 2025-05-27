@@ -260,6 +260,30 @@ sources:
 
 ```
 
+You can also mount other sources in invidual steps:
+
+```yaml
+sources:
+  someDockerImage:
+    path: /bar # Extract `/bar` from he result of running the command in the docker image below
+    image:
+      ref: docker.io/library/alpine:3.14
+      cmd:
+        steps:
+          - command: echo add some extra stuff >> /foo; mkdir /bar; cp /foo /bar
+            mounts: # Mount other sources into each command step
+              - dest: /foo
+                spec:
+                  inline:
+                    file:
+                      uid: 0
+                      gid: 0
+                      permissions: 0644
+                      contents: |
+                        some content
+                        some more content
+```
+
 You can use the docker image source to produce any kind of content for your build.
 
 Docker image sources are considered to be "directory" sources.
