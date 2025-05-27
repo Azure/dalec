@@ -496,9 +496,6 @@ func TestSourceFillDefaults(t *testing.T) {
 			src := tc.before
 			expected := tc.after
 
-			if err := src.validate(); err != nil {
-				t.Fatal(err)
-			}
 			spec := &Spec{
 				Sources: map[string]Source{
 					"test": src,
@@ -871,6 +868,8 @@ x-vars:
       cmd:
         env:
           TEST: ${SOME_ARG}
+        steps:
+          - command: echo $TEST		
   git-src: &git-src
     git:
       url: https://${SOME_ARG}

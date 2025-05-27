@@ -797,3 +797,36 @@ func (b ArtifactBuild) validate() error {
 
 	return goerrors.Join(errs...)
 }
+
+// errIsOnly checks if the error is the only instance of the target error in the
+// error chain.
+// This is useful when we want to know if a specific error is the only one.
+func errorIsOnly(err error, target error) bool {
+	if err == nil {
+		return target == nil
+	}
+	if target == nil {
+		return false
+	}
+
+	type joinedError interface {
+		Unwrap() []error
+	}
+
+	joined, ok := err.(joinedError)
+	if !ok {
+		return errors.Is(err, target)
+	}
+
+	var count int
+	for _, e := range joined.Unwrap() {
+		if errors.Is(e, target) {
+			count++
+		}
+		if count > 1 {
+			return false
+		}
+	}
+
+	return count == 1
+}
