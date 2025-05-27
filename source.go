@@ -709,48 +709,33 @@ func (g *GeneratorGomod) processBuildArgs(args map[string]string, allowArg func(
 	return goerrors.Join(errs...)
 }
 
-func (s *Source) validate(failContext ...string) (retErr error) {
-	defer func() {
-		if retErr != nil && failContext != nil {
-			retErr = errors.Wrap(retErr, strings.Join(failContext, " "))
-		}
-	}()
+func (s *Source) validate() error {
+	var errs []error
 
-	for _, g := range s.Generate {
+	for i, g := range s.Generate {
 		if err := g.Validate(); err != nil {
-			retErr = goerrors.Join(retErr, err)
+			errs = append(errs, errors.Wrapf(err, "source generator %d", i))
 		}
 	}
 
-	if s.DockerImage != nil {
-		if s.DockerImage.Ref == "" {
-			retErr = goerrors.Join(retErr, fmt.Errorf("docker image source variant must have a ref"))
-		}
-
-		if s.DockerImage.Cmd != nil {
-			// If someone *really* wants to extract the entire rootfs, they need to say so explicitly.
-			// We won't fill this in for them, particularly because this is almost certainly not the user's intent.
-			if s.Path == "" {
-				retErr = goerrors.Join(retErr, errors.Errorf("source path cannot be empty"))
-			}
-
-			for i, mnt := range s.DockerImage.Cmd.Mounts {
-				if err := mnt.validateInRoot(s.Path); err != nil {
-					retErr = goerrors.Join(retErr, fmt.Errorf("docker image source mount %d at dest %s: %w", i, mnt.Dest, err))
-				}
-			}
-		}
-	}
-
+	var invalid bool
 	if err := s.validateSourceVariants(); err != nil {
-		retErr = goerrors.Join(retErr, err)
+		invalid = true
+		errs = append(errs, err)
 	}
 
-	if err := s.toInterface().validate(s.fetchOptions()); err != nil {
-		retErr = goerrors.Join(retErr, err)
+	if !invalid {
+		// Only validate the source if it is a valid source variant so as to avoid panics.
+		if err := s.toInterface().validate(s.fetchOptions()); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
-	return retErr
+	if len(errs) > 0 {
+		return goerrors.Join(errs...)
+	}
+
+	return nil
 }
 
 type source interface {

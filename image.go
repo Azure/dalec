@@ -157,7 +157,7 @@ func (i *ImageConfig) validate() error {
 	}
 
 	for i, base := range i.Bases {
-		if err := base.validate(); err != nil {
+		if err := base.validate(); err != nil && !errorIsOnly(err, errNoImageSourcePath) {
 			errs = append(errs, errors.Wrapf(err, "bases[%d]", i))
 		}
 	}
