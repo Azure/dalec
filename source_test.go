@@ -922,7 +922,9 @@ func stubListener(t *testing.T) net.Addr {
 func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 	t.Helper()
 
-	fillDefaults(&src)
+	s := &src
+	s.fillDefaults()
+	src = *s
 
 	var sOpt SourceOpts
 	if src.Build != nil {

@@ -138,9 +138,9 @@ func (m *SourceMount) processBuildArgs(lex *shell.Lex, args map[string]string, a
 }
 
 func (m *SourceMount) fillDefaults() {
-	src := m.Spec
-	fillDefaults(&src)
-	m.Spec = src
+	src := &m.Spec
+	src.fillDefaults()
+	m.Spec = *src
 }
 
 func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -365,5 +365,26 @@ func (cmd *Command) baseState(opts fetchOptions) llb.StateOption {
 		}
 
 		return out
+	}
+}
+
+func (s *SourceDockerImage) fillDefaults() {
+	if s == nil {
+		return
+	}
+	if s.Cmd != nil {
+		s.Cmd.fillDefaults()
+	}
+}
+
+func (s *Command) fillDefaults() {
+	if s == nil {
+		return
+	}
+
+	for i, mnt := range s.Mounts {
+		m := &mnt
+		m.fillDefaults()
+		s.Mounts[i] = *m
 	}
 }

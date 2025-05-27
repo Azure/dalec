@@ -3,6 +3,7 @@ package dalec
 import (
 	stderrors "errors"
 	"fmt"
+	"net/url"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/util/gitutil"
@@ -157,4 +158,23 @@ func (src *SourceGit) toMount(to string, opts fetchOptions, mountOpts ...llb.Mou
 
 	mountOpts = append(mountOpts, llb.SourcePath(opts.Path))
 	return llb.AddMount(to, st, mountOpts...)
+}
+
+func (src *SourceGit) fillDefaults() {
+	if git == nil {
+		return
+	}
+
+	host := git.URL
+
+	u, err := url.Parse(git.URL)
+	if err == nil {
+		host = u.Host
+	}
+
+	// Thes the git auth from the git source is autofilled for the gomods, so
+	// the user doesn't have to repeat themselves.
+	for _, generator := range generators {
+		generator.fillDefaults(host, &git.Auth)
+	}
 }

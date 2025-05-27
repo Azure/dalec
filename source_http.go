@@ -92,3 +92,5 @@ func (src *SourceHTTP) toMount(to string, opts fetchOptions, mountOpts ...llb.Mo
 	mountOpts = append(mountOpts, llb.SourcePath(opts.Rename))
 	return llb.AddMount(to, st, mountOpts...)
 }
+
+func (src *SourceHTTP) fillDefaults() {}

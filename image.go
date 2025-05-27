@@ -221,7 +221,9 @@ func (p *PostInstall) validate() error {
 }
 
 func (s *BaseImage) fillDefaults() {
-	fillDefaults(&s.Rootfs)
+	rootfs := &s.Rootfs
+	rootfs.fillDefaults()
+	s.Rootfs = *rootfs
 }
 
 func (p *PostInstall) normalizeSymlinks() {
