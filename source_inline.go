@@ -285,3 +285,5 @@ func (s *SourceInlineDir) toMount(to string, opts fetchOptions, mountOpts ...llb
 	mountOpts = append(mountOpts, llb.SourcePath(opts.Rename))
 	return llb.AddMount(to, st, mountOpts...)
 }
+
+func (s *SourceInline) fillDefaults() {}

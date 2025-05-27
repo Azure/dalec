@@ -64,3 +64,9 @@ func (src *SourceContext) toMount(to string, opts fetchOptions, mountOpts ...llb
 	mountOpts = append(mountOpts, llb.SourcePath(opts.Path))
 	return llb.AddMount(to, st, mountOpts...)
 }
+
+func (src *SourceContext) fillDefaults() {
+	if src.Name == "" {
+		src.Name = "context"
+	}
+}

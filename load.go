@@ -516,8 +516,9 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, allow
 
 func (s *Spec) FillDefaults() {
 	for name, src := range s.Sources {
-		fillDefaults(&src)
-		s.Sources[name] = src
+		ss := &src
+		ss.fillDefaults()
+		s.Sources[name] = *ss
 	}
 
 	for k, patches := range s.Patches {

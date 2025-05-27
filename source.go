@@ -8,13 +8,11 @@ import (
 	goerrors "errors"
 	"fmt"
 	"io"
-	"net/url"
 	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
-	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/gitutil"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -490,47 +488,6 @@ func Sources(spec *Spec, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (map[strin
 	return states, nil
 }
 
-func fillDefaults(s *Source) {
-	switch {
-	case s.DockerImage != nil:
-		if s.DockerImage.Cmd != nil {
-			for _, mnt := range s.DockerImage.Cmd.Mounts {
-				fillDefaults(&mnt.Spec)
-			}
-		}
-	case s.Git != nil:
-		s.Git.fillDefaults(s.Generate)
-	case s.HTTP != nil:
-	case s.Context != nil:
-		if s.Context.Name == "" {
-			s.Context.Name = dockerui.DefaultLocalNameContext
-		}
-	case s.Build != nil:
-		fillDefaults(&s.Build.Source)
-	case s.Inline != nil:
-	}
-
-}
-
-func (git *SourceGit) fillDefaults(generators []*SourceGenerator) {
-	if git == nil {
-		return
-	}
-
-	host := git.URL
-
-	u, err := url.Parse(git.URL)
-	if err == nil {
-		host = u.Host
-	}
-
-	// Thes the git auth from the git source is autofilled for the gomods, so
-	// the user doesn't have to repeat themselves.
-	for _, generator := range generators {
-		generator.fillDefaults(host, &git.Auth)
-	}
-}
-
 func (g *SourceGenerator) fillDefaults(host string, authInfo *GitAuth) {
 	if g == nil || authInfo == nil {
 		return
@@ -743,6 +700,7 @@ type source interface {
 	IsDir() bool
 	validate(fetchOptions) error
 	toMount(to string, opt fetchOptions, mountOpts ...llb.MountOption) llb.RunOption
+	fillDefaults()
 }
 
 type fetchOptions struct {
@@ -853,4 +811,8 @@ func mountFilters(opts fetchOptions) llb.StateOption {
 	return func(st llb.State) llb.State {
 		return llb.Scratch().File(llb.Copy(st, "/", "/", opts), opts.Constraints...)
 	}
+}
+
+func (s *Source) fillDefaults() {
+	s.toIntercace().fillDefaults()
 }
