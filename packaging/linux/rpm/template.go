@@ -305,11 +305,7 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 			ref += ".tar.gz"
 		}
 
-		doc, err := src.Doc(name)
-		if err != nil {
-			return nil, fmt.Errorf("error getting doc for source %s: %w", name, err)
-		}
-
+		doc := src.Doc(name)
 		scanner := bufio.NewScanner(doc)
 		for scanner.Scan() {
 			fmt.Fprintf(b, "# %s\n", scanner.Text())

@@ -2,6 +2,8 @@ package dalec
 
 import (
 	stderrors "errors"
+	"fmt"
+	"io"
 	"io/fs"
 
 	"github.com/moby/buildkit/client/llb"
@@ -103,4 +105,9 @@ func (src *SourceHTTP) processBuildArgs(lex *shell.Lex, args map[string]string, 
 	}
 	src.URL = updated
 	return nil
+}
+
+func (src *SourceHTTP) doc(w io.Writer, name string) {
+	fmt.Fprintln(w, "Generated from a http(s) source:")
+	fmt.Fprintln(w, "	URL:", src.URL)
 }
