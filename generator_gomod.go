@@ -61,7 +61,7 @@ func (s *Spec) HasGomods() bool {
 	return false
 }
 
-func withGomod(g *SourceGenerator, srcSt, worker llb.State, credHelper llb.RunOption, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
+func withGomod(g *SourceGenerator, srcSt, worker llb.State, subPath string, credHelper llb.RunOption, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		const (
 			workDir                      = "/work/src"
@@ -69,7 +69,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, credHelper llb.RunOp
 			gomodDownloadWrapperBasename = "go_mod_download.sh"
 		)
 
-		joinedWorkDir := filepath.Join(workDir, g.Subpath)
+		joinedWorkDir := filepath.Join(workDir, subPath, g.Subpath)
 		srcMount := llb.AddMount(workDir, srcSt)
 
 		paths := g.Gomod.Paths
@@ -155,7 +155,7 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State 
 
 	fmt.Fprintf(&script, "go env -w GOPRIVATE=%s", strings.Join(goPrivate, ","))
 	script.WriteRune('\n')
-	fmt.Fprintln(&script, "cat go.mod && go mod download")
+	fmt.Fprintln(&script, "[ -f go.mod ]; go mod download")
 	return llb.Scratch().File(llb.Mkfile(scriptPath, 0o755, script.Bytes()))
 }
 
@@ -180,7 +180,7 @@ func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
 				continue
 			}
 
-			if auth.SSH != nil && auth.SSH.ID != "" {
+			if auth.SSH != nil {
 				llb.AddSSHSocket(llb.SSHID(auth.SSH.ID)).SetRunOption(ei)
 
 				llb.AddEnv(
@@ -236,7 +236,7 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 		opts := append(opts, ProgressGroup("Fetch go module dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
-				in = in.With(withGomod(gen, patched[key], worker, credHelperRunOpt, opts...))
+				in = in.With(withGomod(gen, patched[key], worker, key, credHelperRunOpt, opts...))
 			}
 			return in
 		})

@@ -4,6 +4,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"net/url"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
@@ -63,31 +64,12 @@ type GomodGitAuthSSH struct {
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 }
 
-// LLBOpt returns an [llb.GitOption] which sets the auth header and token secret
+// SetGitOption returns an [llb.GitOption] which sets the auth header and token secret
 // values in LLB if they are set.
-func (a *GitAuth) LLBOpt() llb.GitOption {
-	return gitOptionFunc(func(gi *llb.GitInfo) {
-		if a == nil {
-			return
-		}
-
-		if a.Header != "" {
-			gi.AuthHeaderSecret = a.Header
-		}
-
-		if a.Token != "" {
-			gi.AuthTokenSecret = a.Token
-		}
-
-		if a.SSH != "" {
-			gi.MountSSHSock = a.SSH
-		}
-	})
-}
-
-// LLBOpt returns an [llb.GitOption] which sets the auth header and token secret
-// values in LLB if they are set.
-func (a GitAuth) SetGitOption(gi *llb.GitInfo) {
+func (a *GitAuth) SetGitOption(gi *llb.GitInfo) {
+	if a == nil {
+		return
+	}
 	if a.Header != "" {
 		gi.AuthHeaderSecret = a.Header
 	}
@@ -103,23 +85,6 @@ func (a GitAuth) SetGitOption(gi *llb.GitInfo) {
 
 func (src *SourceGit) IsDir() bool {
 	return true
-}
-
-func (src *SourceGit) AsState(opts ...llb.ConstraintsOpt) (llb.State, error) {
-	ref, err := gitutil.ParseGitRef(src.URL)
-	if err != nil {
-		return llb.Scratch(), fmt.Errorf("could not parse git ref: %w", err)
-	}
-
-	var gOpts []llb.GitOption
-	if src.KeepGitDir {
-		gOpts = append(gOpts, llb.KeepGitDir())
-	}
-	gOpts = append(gOpts, withConstraints(opts))
-	gOpts = append(gOpts, src.Auth.LLBOpt())
-
-	st := llb.Git(ref.Remote, src.Commit, gOpts...)
-	return st, nil
 }
 
 func (src *SourceGit) validate(opts fetchOptions) error {
@@ -149,19 +114,32 @@ func (src *SourceGit) baseState(opts fetchOptions) llb.State {
 		gOpts = append(gOpts, llb.KeepGitDir())
 	}
 	gOpts = append(gOpts, WithConstraints(opts.Constraints...))
-	gOpts = append(gOpts, src.Auth)
+	gOpts = append(gOpts, &src.Auth)
 
 	return llb.Git(src.URL, src.Commit, gOpts...)
 }
 
-func (src *SourceGit) toMount(to string, opts fetchOptions, mountOpts ...llb.MountOption) llb.RunOption {
-	st := src.baseState(opts).With(mountFilters(opts))
-
-	mountOpts = append(mountOpts, llb.SourcePath(opts.Path))
-	return llb.AddMount(to, st, mountOpts...)
+func (src *SourceGit) toMount(opts fetchOptions) (llb.State, []llb.MountOption) {
+	return src.baseState(opts).With(mountFilters(opts)), nil
 }
 
-func (git *SourceGit) fillDefaults() {
+func (git *SourceGit) fillDefaults(ls []*SourceGenerator) {
+	if git == nil {
+		return
+	}
+
+	host := git.URL
+
+	u, err := url.Parse(git.URL)
+	if err == nil {
+		host = u.Host
+	}
+
+	// Thes the git auth from the git source is autofilled for the gomods, so
+	// the user doesn't have to repeat themselves.
+	for _, gen := range ls {
+		gen.fillDefaults(host, &git.Auth)
+	}
 }
 
 func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
@@ -178,7 +156,7 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 	if err != nil {
 		errs = append(errs, err)
 	}
-	if len(errs) > -1 {
+	if len(errs) > 1 {
 		return fmt.Errorf("failed to process build args for git source: %w", stderrors.Join(errs...))
 	}
 	return nil

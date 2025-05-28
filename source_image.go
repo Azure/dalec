@@ -1,7 +1,6 @@
 package dalec
 
 import (
-	"context"
 	stderrors "errors"
 	"fmt"
 	"io"
@@ -97,13 +96,15 @@ func (step *BuildStep) validate() error {
 type SourceMount struct {
 	// Dest is the destination directory to mount to
 	Dest string `yaml:"dest" json:"dest" jsonschema:"required"`
+
 	// Spec specifies the source to mount
 	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
 }
 
-func (s SourceMount) ToRunOption(sOpt SourceOpts) llb.RunOption {
+func (s SourceMount) ToRunOption(sOpt SourceOpts, c llb.ConstraintsOpt) llb.RunOption {
 	return RunOptFunc(func(ei *llb.ExecInfo) {
-		s.Spec.ToMount(s.Dest, WithConstraint(&ei.Constraints), sOpt).SetRunOption(ei)
+		st, mountOpts := s.Spec.ToMount(sOpt, c)
+		llb.AddMount(s.Dest, st, mountOpts...).SetRunOption(ei)
 	})
 }
 
@@ -126,7 +127,7 @@ func (m *SourceMount) validateInRoot(root string) error {
 	if err := m.validate(); err != nil {
 		return err
 	}
-	if root != "/" && pathHasPrefix(m.Dest, root) {
+	if !isRoot(root) && pathHasPrefix(m.Dest, root) {
 		// We cannot support this as the base mount for subPath will shadow the mount being done here.
 		return errors.Wrapf(errInvalidMountConfig, "mount destination (%s) must not be a descendent of the target source path (%s)", m.Dest, root)
 	}
@@ -140,126 +141,11 @@ func (m *SourceMount) processBuildArgs(lex *shell.Lex, args map[string]string, a
 	return nil
 }
 
-func (m *SourceMount) fillDefaults() {
+func (m *SourceMount) fillDefaults(gen []*SourceGenerator) {
 	src := &m.Spec
+	// TODO: need to pass in generators to fill defaults for the source
 	src.fillDefaults()
 	m.Spec = *src
-}
-
-func (src *SourceDockerImage) AsState(name string, path string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st := llb.Image(src.Ref, llb.WithMetaResolver(sOpt.Resolver), withConstraints(opts))
-	if src.Cmd == nil {
-		return st, nil
-	}
-
-	st, err := generateSourceFromImage(st, src.Cmd, sOpt, path, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return st, nil
-}
-
-// must not be called with a nil cmd pointer
-// subPath must be a valid non-empty path
-func generateSourceFromImage(st llb.State, cmd *Command, sOpts SourceOpts, subPath string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	if len(cmd.Steps) == 0 {
-		return llb.Scratch(), fmt.Errorf("no steps defined for image source")
-	}
-
-	if subPath == "" {
-		// TODO: We should log a warning here since extracting an entire image while also running a command is
-		// probably not what the user really wanted to do here.
-		// The buildkit client provides functionality to do this we just need to wire it in.
-		subPath = "/"
-	}
-
-	for k, v := range cmd.Env {
-		st = st.AddEnv(k, v)
-	}
-	if cmd.Dir != "" {
-		st = st.Dir(cmd.Dir)
-	}
-
-	baseRunOpts := []llb.RunOption{}
-
-	for _, src := range cmd.Mounts {
-		if err := src.validateInRoot(subPath); err != nil {
-			return llb.Scratch(), err
-		}
-
-		srcSt, err := src.Spec.AsMount(internalMountSourceName, sOpts, opts...)
-		if err != nil {
-			return llb.Scratch(), err
-		}
-		var mountOpt []llb.MountOption
-
-		// This handles the case where we are mounting a source with a target extract path and
-		// no includes and excludes. In this case, we can extract the path here as a source mount
-		// if the source does not handle its own path extraction. This saves an extra llb.Copy operation
-		if src.Spec.Path != "" && len(src.Spec.Includes) == 0 && len(src.Spec.Excludes) == 0 &&
-			!src.Spec.handlesOwnPath() {
-			mountOpt = append(mountOpt, llb.SourcePath(src.Spec.Path))
-		}
-
-		if !src.Spec.IsDir() {
-			mountOpt = append(mountOpt, llb.SourcePath(internalMountSourceName))
-		}
-		baseRunOpts = append(baseRunOpts, llb.AddMount(src.Dest, srcSt, mountOpt...))
-	}
-
-	out := llb.Scratch()
-	for i, step := range cmd.Steps {
-		rOpts := []llb.RunOption{llb.Args([]string{"/bin/sh", "-c", step.Command})}
-
-		rOpts = append(rOpts, baseRunOpts...)
-
-		for k, v := range step.Env {
-			rOpts = append(rOpts, llb.AddEnv(k, v))
-		}
-
-		for _, m := range step.Mounts {
-			if err := m.validateInRoot(subPath); err != nil {
-				return llb.Scratch(), err
-			}
-
-			srcSt, err := m.Spec.AsMount(internalMountSourceName, sOpts, opts...)
-			if err != nil {
-				return llb.Scratch(), err
-			}
-			var mountOpt []llb.MountOption
-			// This handles the case where we are mounting a source with a target extract path and
-			// no includes and excludes. In this case, we can extract the path here as a source mount
-			// if the source does not handle its own path extraction. This saves an extra llb.Copy operation
-			if m.Spec.Path != "" && len(m.Spec.Includes) == 0 && len(m.Spec.Excludes) == 0 &&
-				!m.Spec.handlesOwnPath() {
-				mountOpt = append(mountOpt, llb.SourcePath(m.Spec.Path))
-			}
-
-			if !SourceIsDir(m.Spec) {
-				mountOpt = append(mountOpt, llb.SourcePath(internalMountSourceName))
-			}
-			rOpts = append(rOpts, llb.AddMount(m.Dest, srcSt, mountOpt...))
-		}
-
-		rOpts = append(rOpts, withConstraints(opts))
-		cmdSt := st.Run(rOpts...)
-
-		// on first iteration with a root subpath
-		// do not use AddMount, as this will overwrite / with a
-		// scratch fs
-		if i == 0 && subPath == "/" {
-			out = cmdSt.Root()
-		} else {
-			out = cmdSt.AddMount(subPath, out)
-		}
-
-		// Update the base state so that changes to the rootfs propagate between
-		// steps.
-		st = cmdSt.Root()
-	}
-
-	return out, nil
 }
 
 var errNoImageSourcePath = stderrors.New("docker image source path cannot be empty")
@@ -292,29 +178,41 @@ func (src *SourceDockerImage) IsDir() bool {
 	return true
 }
 
+func (src *SourceDockerImage) baseState(opts fetchOptions) llb.State {
+	base := llb.Image(src.Ref, llb.WithMetaResolver(opts.SourceOpt.Resolver), WithConstraints(opts.Constraints...))
+	return base.With(src.Cmd.baseState(opts))
+}
+
 func (src *SourceDockerImage) toState(opts fetchOptions) llb.State {
-	st := llb.Image(src.Ref, llb.WithMetaResolver(opts.SourceOpt.Resolver), WithConstraints(opts.Constraints...))
-	if src.Cmd == nil {
-		return st
+	optsFiltered := opts
+	if src.Cmd != nil {
+		// If there is a command to run, then the content will already be filtered
+		// down to opts.Path.
+		optsFiltered.Path = "/"
 	}
 
-	return st.With(src.Cmd.toState(opts))
+	return src.baseState(opts).With(sourceFilters(optsFiltered))
 }
 
-func (src *SourceDockerImage) toMount(to string, opts fetchOptions, mountOpts ...llb.MountOption) llb.RunOption {
-	st := src.toState(opts)
-	return llb.AddMount(to, st, mountOpts...)
-}
-
-func (cmd *Command) toState(opts fetchOptions) llb.StateOption {
-	return func(img llb.State) llb.State {
-		// We've already copied out just the path we want, so use mount filters for just the include/exclude filters.
-		return img.With(cmd.baseState(opts)).With(mountFilters(opts))
+func (src *SourceDockerImage) toMount(opts fetchOptions) (llb.State, []llb.MountOption) {
+	optsFiltered := opts
+	var mountOpts []llb.MountOption
+	if src.Cmd != nil {
+		// If there is a command to run, then the content will already be filtered
+		// down to opts.Path.
+		optsFiltered.Path = "/"
+		mountOpts = append(mountOpts, llb.SourcePath("/"))
 	}
+
+	return src.baseState(opts).With(mountFilters(optsFiltered)), mountOpts
 }
 
 func (cmd *Command) baseState(opts fetchOptions) llb.StateOption {
 	return func(img llb.State) llb.State {
+		if cmd == nil {
+			return img
+		}
+
 		subPath := opts.Path
 		if subPath == "" {
 			// TODO: We should log a warning here since extracting an entire image while also running a command is
@@ -333,11 +231,9 @@ func (cmd *Command) baseState(opts fetchOptions) llb.StateOption {
 		baseRunOpts := make([]llb.RunOption, 0, len(cmd.Mounts))
 		for _, mnt := range cmd.Mounts {
 			if err := mnt.validateInRoot(subPath); err != nil {
-				return img.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
-					return in, err
-				})
+				return asyncState(img, err)
 			}
-			baseRunOpts = append(baseRunOpts, mnt.ToRunOption(opts.SourceOpt))
+			baseRunOpts = append(baseRunOpts, mnt.ToRunOption(opts.SourceOpt, WithConstraints(opts.Constraints...)))
 		}
 
 		out := llb.Scratch()
@@ -350,13 +246,20 @@ func (cmd *Command) baseState(opts fetchOptions) llb.StateOption {
 				rOpts = append(rOpts, llb.AddEnv(k, v))
 			}
 
+			for _, mnt := range step.Mounts {
+				if err := mnt.validateInRoot(subPath); err != nil {
+					return asyncState(img, err)
+				}
+				rOpts = append(rOpts, mnt.ToRunOption(opts.SourceOpt, WithConstraints(opts.Constraints...)))
+			}
+
 			rOpts = append(rOpts, WithConstraints(opts.Constraints...))
 			cmdSt := img.Run(rOpts...)
 
 			// on first iteration with a root subpath
 			// do not use AddMount, as this will overwrite / with a
 			// scratch fs
-			if i == 0 && subPath == "/" {
+			if i == 0 && isRoot(subPath) {
 				out = cmdSt.Root()
 			} else {
 				out = cmdSt.AddMount(subPath, out)
@@ -371,23 +274,23 @@ func (cmd *Command) baseState(opts fetchOptions) llb.StateOption {
 	}
 }
 
-func (s *SourceDockerImage) fillDefaults() {
+func (s *SourceDockerImage) fillDefaults(gen []*SourceGenerator) {
 	if s == nil {
 		return
 	}
 	if s.Cmd != nil {
-		s.Cmd.fillDefaults()
+		s.Cmd.fillDefaults(gen)
 	}
 }
 
-func (s *Command) fillDefaults() {
+func (s *Command) fillDefaults(gen []*SourceGenerator) {
 	if s == nil {
 		return
 	}
 
 	for i, mnt := range s.Mounts {
 		m := &mnt
-		m.fillDefaults()
+		m.fillDefaults(gen)
 		s.Mounts[i] = *m
 	}
 }
