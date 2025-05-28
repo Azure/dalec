@@ -229,28 +229,6 @@ func SourceIsDir(src Source) bool {
 	return src.IsDir()
 }
 
-func (src *Source) GetDisplayRef() (string, error) {
-	s := ""
-	switch {
-	case src.DockerImage != nil:
-		s = src.DockerImage.Ref
-	case src.Git != nil:
-		s = src.Git.URL
-	case src.HTTP != nil:
-		s = src.HTTP.URL
-	case src.Context != nil:
-		s = src.Context.Name
-	case src.Build != nil:
-		s = fmt.Sprintf("%v", src.Build.Source)
-	case src.Inline != nil:
-		s = "inline"
-	default:
-		return "", fmt.Errorf("no non-nil source provided")
-	}
-
-	return s, nil
-}
-
 // Doc returns the details of how the source was created.
 // This should be included, where applicable, in build in build specs (such as RPM spec files)
 // so that others can reproduce the build.
