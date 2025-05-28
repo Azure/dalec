@@ -18,23 +18,6 @@ type SourceContext struct {
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 }
 
-func (src *SourceContext) AsState(path string, includes []string, excludes []string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	if !isRoot(path) {
-		excludes = append(excludeAllButPath(path), excludes...)
-	}
-
-	st, err := sOpt.GetContext(src.Name, localIncludeExcludeMerge(includes, excludes), withFollowPath(path), withConstraints(opts))
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	if st == nil {
-		return llb.Scratch(), errors.Errorf("context %q not found", src.Name)
-	}
-
-	return *st, nil
-}
-
 func (src *SourceContext) validate(opts fetchOptions) error {
 	return nil
 }
@@ -61,17 +44,15 @@ func (src *SourceContext) baseState(opts fetchOptions) llb.State {
 }
 
 func (src *SourceContext) toState(opts fetchOptions) llb.State {
-	st := src.baseState(opts).With(sourceFilters(opts))
-	return st
+	return src.baseState(opts).With(sourceFilters(opts))
 }
 
-func (src *SourceContext) toMount(to string, opts fetchOptions, mountOpts ...llb.MountOption) llb.RunOption {
+func (src *SourceContext) toMount(opts fetchOptions) (llb.State, []llb.MountOption) {
 	st := src.baseState(opts).With(mountFilters(opts))
-	mountOpts = append(mountOpts, llb.SourcePath(opts.Path))
-	return llb.AddMount(to, st, mountOpts...)
+	return st, nil
 }
 
-func (src *SourceContext) fillDefaults() {
+func (src *SourceContext) fillDefaults(_ []*SourceGenerator) {
 	if src.Name == "" {
 		src.Name = "context"
 	}

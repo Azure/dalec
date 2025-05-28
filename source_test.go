@@ -49,10 +49,7 @@ func TestSourceGitSSH(t *testing.T) {
 		checkGitOp(t, ops2, &src)
 
 		// git ops require extra filtering to get the correct subdir, so we should have an extra op
-		if len(ops2) != len(ops)+1 {
-			t.Fatalf("expected %d ops, got %d", len(ops)+1, len(ops2))
-		}
-
+		assert.Check(t, cmp.Len(ops2, len(ops)+1))
 		checkFilter(t, ops2[1].GetFile(), &src)
 	})
 
@@ -466,7 +463,8 @@ func TestSourceDockerImage(t *testing.T) {
 					},
 				}
 
-				_, err := src.AsState("test", SourceOpts{})
+				st := src.ToState("test", SourceOpts{})
+				_, err := st.Marshal(ctx)
 				assert.ErrorIs(t, err, errInvalidMountConfig)
 			})
 
@@ -567,7 +565,7 @@ func TestSourceDockerImage(t *testing.T) {
 				nextCmd1 := getChildren(cmdOp, ops, dMap)
 				nextCmd2 := getChildren(nextCmd1[0], ops, dMap)
 
-				checkCmd(t, []*pb.Op{nextCmd1[0], nextCmd2[0]}, &src, [][]expectMount{{{dest: "/dst", selector: ""}}, noMountCheck})
+				checkCmd(t, []*pb.Op{nextCmd1[0], nextCmd2[0]}, &src, [][]expectMount{{{dest: "/dst", selector: "/"}}, noMountCheck})
 			})
 		})
 	})
@@ -637,6 +635,7 @@ func TestSourceContext(t *testing.T) {
 				src := src
 				src.Path = "subdir"
 				ops := getSourceOp(ctx, t, src)
+				assert.Assert(t, cmp.Len(ops, 2))
 				checkContext(t, ops[0].GetSource(), &src)
 				// for context source, we expect to have a copy operation as the last op when subdir is used
 				checkFilter(t, ops[1].GetFile(), &src)
@@ -647,13 +646,11 @@ func TestSourceContext(t *testing.T) {
 				src.Includes = []string{"foo", "bar"}
 				src.Excludes = []string{"baz"}
 				ops := getSourceOp(ctx, t, src)
-				checkContext(t, ops[0].GetSource(), &src)
 				// With include/exclude only, this should be handled with just one op.
 				// except... there are optimizations to prevent fetching the same context multiple times
 				// As such we need to make sure filters are applied correctly.
-				if len(ops) != 2 {
-					t.Fatalf("expected 1 op, got %d\n%s", len(ops), ops)
-				}
+				assert.Assert(t, cmp.Len(ops, 2))
+				checkContext(t, ops[0].GetSource(), &src)
 				checkFilter(t, ops[1].GetFile(), &src)
 			})
 
@@ -662,9 +659,12 @@ func TestSourceContext(t *testing.T) {
 				src.Path = "subdir"
 				src.Includes = []string{"foo", "bar"}
 				src.Excludes = []string{"baz"}
+				t.Log("includes before: ", src.Includes)
+				t.Log("excludes before:", src.Excludes)
 				ops := getSourceOp(ctx, t, src)
-				checkContext(t, ops[0].GetSource(), &src)
 				// for context source, we expect to have a copy operation as the last op when subdir is used
+				assert.Assert(t, cmp.Len(ops, 2))
+				checkContext(t, ops[0].GetSource(), &src)
 				checkFilter(t, ops[1].GetFile(), &src)
 			})
 		})
@@ -947,11 +947,16 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 		return &st, nil
 	}
 
-	st, err := src.AsState("test", sOpt)
-	if err != nil {
-		t.Fatal(err)
+	// The name we pass to `ToState` will be the path that the source is copied to
+	// For dirs, and the sake of tests, don't use any name so the everything is
+	// at the root path.
+	// Files must have a name, so give it a name of "test".
+	name := ""
+	if !src.IsDir() {
+		name = "test"
 	}
 
+	st := src.ToState(name, sOpt)
 	def, err := st.Marshal(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -1030,7 +1035,7 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 
 func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, expectedNumSecrets, expectedNumSSH int) {
 	const (
-		scriptExecOpIdx = 3
+		scriptExecOpIdx = 4
 	)
 
 	var (
@@ -1040,6 +1045,7 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, 
 
 	// Check that the requests for secrets are there for when the script runs.
 	scriptOp := ops[scriptExecOpIdx].GetExec()
+	assert.Assert(t, scriptOp != nil, "expected script exec op")
 
 	secrets := map[string]struct{}{}
 	for _, mnt := range scriptOp.Mounts {
@@ -1088,6 +1094,7 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, 
 	}
 
 	// check that the inputs are mounted
+	var mkfileFound bool
 	for i := range ops[scriptExecOpIdx].Inputs {
 		inpDigest := ops[scriptExecOpIdx].Inputs[i].Digest
 		mf, hasMkFileDigest := m[inpDigest]
@@ -1101,17 +1108,25 @@ func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, 
 		// Check that it depends on the `mkfile` op which generates the script.
 		assert.Check(t, cmp.Len(mkFileOp.Actions, 1), mkFileOp)
 		famf, ok := mkFileOp.Actions[0].Action.(*pb.FileAction_Mkfile)
-		assert.Check(t, ok, mkFileOp)
-		basename := strings.TrimPrefix(filepath.Base(famf.Mkfile.Path), "/")
+		if !ok {
+			continue
+		}
 
+		assert.Assert(t, ok, "expected mkfile action, got %T:\n%s", mkFileOp.Actions[0].Action, mkFileOp.String())
+
+		basename := strings.TrimPrefix(filepath.Base(famf.Mkfile.Path), "/")
 		// This is from the way the test is set up, but will not be the case during actual runtime
 		if basename == "frontend" {
 			continue
 		}
 
+		mkfileFound = true
 		_, hasValidFilename := validBasenames[basename]
 		assert.Check(t, hasValidFilename, basename)
+		break
 	}
+
+	assert.Check(t, mkfileFound)
 }
 
 func hasSSHMount(scriptOp *pb.ExecOp) bool {
@@ -1146,14 +1161,18 @@ func checkFilter(t *testing.T, op *pb.FileOp, src *Source) {
 	}
 
 	if cpAction.Dest != "/" {
-		t.Errorf("expected dest \"/\", got %q", cpAction.Dest)
+		t.Errorf("expected dest \"/test\", got %q:\n%+v\n\n%+v", cpAction.Dest, src, op)
 	}
+
+	includes := src.Includes
+	excludes := src.Excludes
 
 	p := src.Path
 	if src.DockerImage != nil {
 		// DockerImage handles subpaths itself
 		p = "/"
 	}
+
 	if !filepath.IsAbs(p) {
 		p = "/" + p
 	}
@@ -1164,13 +1183,8 @@ func checkFilter(t *testing.T, op *pb.FileOp, src *Source) {
 		t.Error("expected dir copy contents")
 	}
 
-	if !reflect.DeepEqual(cpAction.IncludePatterns, src.Includes) {
-		t.Fatalf("expected include patterns %v, got %v", src.Includes, cpAction.IncludePatterns)
-	}
-
-	if !reflect.DeepEqual(cpAction.ExcludePatterns, src.Excludes) {
-		t.Fatalf("expected exclude patterns %v, got %v", src.Excludes, cpAction.ExcludePatterns)
-	}
+	assert.Check(t, cmp.DeepEqual(cpAction.IncludePatterns, includes))
+	assert.Check(t, cmp.DeepEqual(cpAction.ExcludePatterns, excludes))
 }
 
 type expectMount struct {
@@ -1244,31 +1258,39 @@ func checkContext(t *testing.T, op *pb.SourceOp, src *Source) {
 		t.Errorf("expected identifier %q, got %q", xID, op.Identifier)
 	}
 
-	if src.Includes != nil {
-		includesJson, err := json.Marshal(src.Includes)
+	if len(src.Includes) > 0 {
+		includes := make([]string, len(src.Includes))
+		for i, in := range src.Includes {
+			includes[i] = filepath.Join(src.Path, in)
+		}
+
+		includesJson, err := json.Marshal(includes)
 		if err != nil {
 			t.Fatal(err)
 		}
 		localIncludes := op.Attrs["local.includepattern"]
-
-		if string(includesJson) != localIncludes {
-			t.Errorf("expected includes %q on local op, got %q", includesJson, localIncludes)
-		}
-
+		assert.Check(t, cmp.Equal(string(includesJson), localIncludes))
 	}
 
+	var excludes []string
+	if len(src.Excludes) > 0 {
+		excludes = make([]string, len(src.Excludes))
+		for i, ex := range src.Excludes {
+			excludes[i] = filepath.Join(src.Path, ex)
+		}
+	}
 	if !isRoot(src.Path) {
-		expect := append(excludeAllButPath(src.Path), src.Excludes...)
+		expect := append(excludeAllButPath(src.Path), excludes...)
 
 		var actual []string
 		localExcludes := op.Attrs["local.excludepatterns"]
 		err := json.Unmarshal([]byte(localExcludes), &actual)
-		assert.NilError(t, err)
+		assert.NilError(t, err, op)
 		assert.Check(t, cmp.DeepEqual(actual, expect))
 	}
 
 	if src.Excludes != nil {
-		v := src.Excludes
+		v := excludes
 		if src.Path != "" {
 			v = append(excludeAllButPath(src.Path), v...)
 		}

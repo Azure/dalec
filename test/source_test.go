@@ -13,6 +13,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/opencontainers/go-digest"
+	"gotest.tools/v3/assert"
 )
 
 func TestSourceCmd(t *testing.T) {
@@ -20,7 +21,10 @@ func TestSourceCmd(t *testing.T) {
 
 	ctx := startTestSpan(baseCtx, t)
 
-	sourceName := "checkcmd"
+	const (
+		sourceName = "checkcmd"
+		imgName    = "busybox:latest"
+	)
 	testSpec := func() *dalec.Spec {
 		return &dalec.Spec{
 			Args: map[string]string{
@@ -31,7 +35,7 @@ func TestSourceCmd(t *testing.T) {
 				sourceName: {
 					Path: "/output",
 					DockerImage: &dalec.SourceDockerImage{
-						Ref: "busybox:latest",
+						Ref: imgName,
 						Cmd: &dalec.Command{
 							Steps: []*dalec.BuildStep{
 								{
@@ -121,7 +125,7 @@ func TestSourceCmd(t *testing.T) {
 				spec := testSpec()
 				spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
 					{
-						Command: `grep 'foo bar' /tmp/foo`,
+						Command: `ls -lh /tmp; grep 'foo bar' /tmp/foo`,
 					},
 					{
 						Command: `mkdir -p /output; cp /tmp/foo /output/foo`,
@@ -288,6 +292,35 @@ func TestSourceCmd(t *testing.T) {
 			})
 		})
 	})
+
+	t.Run("image as source mount", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := testSpec()
+			src := spec.Sources[sourceName]
+			spec.Sources[sourceName] = dalec.Source{
+				Path: "/output",
+				DockerImage: &dalec.SourceDockerImage{
+					Ref: imgName,
+					Cmd: &dalec.Command{
+						Mounts: []dalec.SourceMount{
+							{Dest: "/tmp", Spec: src},
+						},
+						Steps: []*dalec.BuildStep{
+							{Command: "grep hello /tmp/hello"},
+							{Command: "mkdir -p /output"},
+							{Command: "cp /tmp/hello /output/hello2"},
+						},
+					},
+				},
+			}
+
+			req := newSolveRequest(withBuildTarget("debug/sources"), withSpec(ctx, t, spec))
+			res := solveT(ctx, t, gwc, req)
+			checkFile(ctx, t, "checkcmd/hello2", res, []byte("hello\n"))
+		})
+	})
 }
 
 func TestSourceBuild(t *testing.T) {
@@ -302,11 +335,24 @@ func TestSourceBuild(t *testing.T) {
 
 				res := solveT(ctx, t, gwc, ro)
 				checkFile(ctx, t, "test/hello", res, []byte("hello\n"))
+
+				ref, err := res.SingleRef()
+				assert.NilError(t, err)
+				fs := bkfs.FromRef(ctx, ref)
+				checkFileStat(t, fs, "test/world", checkFileStatOpt{})
 			})
 		})
 	}
 
-	const dockerfile = "FROM busybox\nRUN echo hello > /hello"
+	const dockerfile = `
+FROM scratch
+COPY <<EOF  /hello
+hello
+EOF
+COPY <<EOF  /world
+world
+EOF
+`
 
 	newBuildSpec := func(p string, f func() dalec.Source) *dalec.Spec {
 		return &dalec.Spec{

@@ -179,7 +179,7 @@ func (r *PackageRepositoryConfig) fillDefaults() {
 	}
 
 	for i, mount := range r.Data {
-		mount.fillDefaults()
+		mount.fillDefaults(nil)
 		r.Data[i] = mount
 	}
 }
