@@ -2,11 +2,13 @@ package dalec
 
 import (
 	"bytes"
+	goerrors "errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
 )
 
@@ -16,6 +18,29 @@ const (
 	// It is exported only for testing purposes.
 	GomodCacheKey = "dalec-gomod-proxy-cache"
 )
+
+func (g *GeneratorGomod) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
+	var errs []error
+	lex := shell.NewLex('\\')
+	// force the shell lexer to skip unresolved env vars so they aren't
+	// replaced with ""
+	lex.SkipUnsetEnv = true
+
+	for host, auth := range g.Auth {
+		subbed, err := expandArgs(lex, host, args, allowArg)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		g.Auth[subbed] = auth
+		if subbed != host {
+			delete(g.Auth, host)
+		}
+	}
+
+	return goerrors.Join(errs...)
+}
 
 func (s *Source) isGomod() bool {
 	for _, gen := range s.Generate {

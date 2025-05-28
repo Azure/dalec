@@ -699,6 +699,7 @@ func TestSpec_SubstituteBuildArgs(t *testing.T) {
 		Path:     "foo/${BAR}",
 		Includes: []string{"foo/${BAR}"},
 		Excludes: []string{"foo/${BAR}"},
+		Inline:   &SourceInline{},
 	}
 
 	spec.Patches = map[string][]PatchSpec{

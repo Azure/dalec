@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
 )
 
@@ -287,3 +288,7 @@ func (s *SourceInlineDir) toMount(to string, opts fetchOptions, mountOpts ...llb
 }
 
 func (s *SourceInline) fillDefaults() {}
+
+func (s *SourceInline) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
+	return nil
+}
