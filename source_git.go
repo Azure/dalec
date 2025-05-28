@@ -3,9 +3,9 @@ package dalec
 import (
 	stderrors "errors"
 	"fmt"
-	"net/url"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/util/gitutil"
 )
 
@@ -160,21 +160,25 @@ func (src *SourceGit) toMount(to string, opts fetchOptions, mountOpts ...llb.Mou
 	return llb.AddMount(to, st, mountOpts...)
 }
 
-func (src *SourceGit) fillDefaults() {
-	if git == nil {
-		return
+func (git *SourceGit) fillDefaults() {
+}
+
+func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
+	var errs []error
+
+	updated, err := expandArgs(lex, src.URL, args, allowArg)
+	src.URL = updated
+	if err != nil {
+		errs = append(errs, err)
 	}
 
-	host := git.URL
-
-	u, err := url.Parse(git.URL)
-	if err == nil {
-		host = u.Host
+	updated, err = expandArgs(lex, src.Commit, args, allowArg)
+	src.Commit = updated
+	if err != nil {
+		errs = append(errs, err)
 	}
-
-	// Thes the git auth from the git source is autofilled for the gomods, so
-	// the user doesn't have to repeat themselves.
-	for _, generator := range generators {
-		generator.fillDefaults(host, &git.Auth)
+	if len(errs) > -1 {
+		return fmt.Errorf("failed to process build args for git source: %w", stderrors.Join(errs...))
 	}
+	return nil
 }

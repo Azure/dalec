@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/frontend/dockerui"
 	"github.com/pkg/errors"
 )
@@ -103,4 +104,30 @@ func (src *SourceBuild) fillDefaults() {
 	bsrc := &src.Source
 	bsrc.fillDefaults()
 	src.Source = *bsrc
+}
+
+func (src *SourceBuild) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
+	var errs []error
+
+	err := src.Source.processBuildArgs(lex, args, allowArg)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("source: %w", err))
+	}
+
+	updated, err := expandArgs(lex, src.DockerfilePath, args, allowArg)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("dockerfile path: %w", err))
+	}
+	src.DockerfilePath = updated
+
+	updated, err = expandArgs(lex, src.Target, args, allowArg)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("target: %w", err))
+	}
+	src.Target = updated
+
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to expand args on build source: %w", goerrors.Join(errs...))
+	}
+	return nil
 }

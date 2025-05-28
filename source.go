@@ -543,61 +543,8 @@ func (s *Source) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 		s.Excludes[i] = updated
 	}
 
-	switch {
-	case s.DockerImage != nil:
-		updated, err := expandArgs(lex, s.DockerImage.Ref, args, allowArg)
-		if err != nil {
-			appendErr(fmt.Errorf("image ref: %w", err))
-		}
-		s.DockerImage.Ref = updated
-
-		if s.DockerImage.Cmd != nil {
-			if err := s.DockerImage.Cmd.processBuildArgs(lex, args, allowArg); err != nil {
-				appendErr(errors.Wrap(err, "docker image cmd source"))
-			}
-		}
-	case s.Git != nil:
-		updated, err := expandArgs(lex, s.Git.URL, args, allowArg)
-		s.Git.URL = updated
-		if err != nil {
-			appendErr(err)
-		}
-
-		updated, err = expandArgs(lex, s.Git.Commit, args, allowArg)
-		s.Git.Commit = updated
-		if err != nil {
-			appendErr(err)
-		}
-
-	case s.HTTP != nil:
-		updated, err := expandArgs(lex, s.HTTP.URL, args, allowArg)
-		if err != nil {
-			appendErr(err)
-		}
-		s.HTTP.URL = updated
-	case s.Context != nil:
-		updated, err := expandArgs(lex, s.Context.Name, args, allowArg)
-		s.Context.Name = updated
-		if err != nil {
-			appendErr(err)
-		}
-	case s.Build != nil:
-		err := s.Build.Source.processBuildArgs(lex, args, allowArg)
-		if err != nil {
-			appendErr(err)
-		}
-
-		updated, err := expandArgs(lex, s.Build.DockerfilePath, args, allowArg)
-		if err != nil {
-			appendErr(err)
-		}
-		s.Build.DockerfilePath = updated
-
-		updated, err = expandArgs(lex, s.Build.Target, args, allowArg)
-		if err != nil {
-			appendErr(err)
-		}
-		s.Build.Target = updated
+	if err := s.toIntercace().processBuildArgs(lex, args, allowArg); err != nil {
+		appendErr(err)
 	}
 
 	for _, gen := range s.Generate {
@@ -606,7 +553,10 @@ func (s *Source) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 		}
 	}
 
-	return goerrors.Join(errs...)
+	if len(errs) > 0 {
+		return errors.Wrapf(goerrors.Join(errs...), "failed to process build args for source")
+	}
+	return nil
 }
 
 func (g *SourceGenerator) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
@@ -615,29 +565,6 @@ func (g *SourceGenerator) processBuildArgs(args map[string]string, allowArg func
 	if g.Gomod != nil {
 		if err := g.Gomod.processBuildArgs(args, allowArg); err != nil {
 			errs = append(errs, err)
-		}
-	}
-
-	return goerrors.Join(errs...)
-}
-
-func (g *GeneratorGomod) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
-	var errs []error
-	lex := shell.NewLex('\\')
-	// force the shell lexer to skip unresolved env vars so they aren't
-	// replaced with ""
-	lex.SkipUnsetEnv = true
-
-	for host, auth := range g.Auth {
-		subbed, err := expandArgs(lex, host, args, allowArg)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-
-		g.Auth[subbed] = auth
-		if subbed != host {
-			delete(g.Auth, host)
 		}
 	}
 
@@ -679,6 +606,7 @@ type source interface {
 	validate(fetchOptions) error
 	toMount(to string, opt fetchOptions, mountOpts ...llb.MountOption) llb.RunOption
 	fillDefaults()
+	processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error
 }
 
 type fetchOptions struct {
