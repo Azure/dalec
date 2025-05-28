@@ -43,7 +43,7 @@ var debianInstall []byte
 // This creates a directory in the debian root directory for each patch, and copies the patch files into it.
 // The format for each patch dir matches what would normally be under `debian/patches`, just that this is a separate dir for every source we are patching
 // This is purely for documenting in the source package how patches are applied in a more readable way than the big merged patch file.
-func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, spec *dalec.Spec, opts ...llb.ConstraintsOpt) ([]llb.State, error) {
+func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, spec *dalec.Spec, opts ...llb.ConstraintsOpt) []llb.State {
 	patchesPath := filepath.Join(dir, name)
 	base = base.
 		File(llb.Mkdir(patchesPath, 0o755), opts...)
@@ -60,21 +60,20 @@ func sourcePatchesDir(sOpt dalec.SourceOpts, base llb.State, dir, name string, s
 			copySrc = patch.Path
 		}
 
-		st, err := src.AsState(patch.Source, sOpt, opts...)
-		if err != nil {
-			return nil, errors.Wrap(err, "error creating patch state")
+		patchStateName := ""
+		if !src.IsDir() {
+			patchStateName = patch.Source
 		}
+		st := src.ToState(patchStateName, sOpt, opts...)
 
 		st = base.File(llb.Copy(st, copySrc, filepath.Join(patchesPath, patch.Source)), opts...)
-		if _, err := seriesBuf.WriteString(name + "\n"); err != nil {
-			return nil, errors.Wrap(err, "error writing to series file")
-		}
+		seriesBuf.WriteString(name + "\n")
 		states = append(states, st)
 	}
 
 	series := base.File(llb.Mkfile(filepath.Join(patchesPath, "series"), 0o640, seriesBuf.Bytes()), opts...)
 
-	return append(states, series), nil
+	return append(states, series)
 }
 
 type SourcePkgConfig struct {
@@ -176,10 +175,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	patchDir := dalecDir.File(llb.Mkdir(filepath.Join(dir, "dalec/patches"), 0o755), opts...)
 	sorted := dalec.SortMapKeys(spec.Patches)
 	for _, name := range sorted {
-		pls, err := sourcePatchesDir(sOpt, patchDir, filepath.Join(dir, "dalec/patches"), name, spec, opts...)
-		if err != nil {
-			return llb.Scratch(), errors.Wrapf(err, "error creating patch directory for source %q", name)
-		}
+		pls := sourcePatchesDir(sOpt, patchDir, filepath.Join(dir, "dalec/patches"), name, spec, opts...)
 		states = append(states, pls...)
 	}
 
@@ -330,7 +326,7 @@ func createPatchScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	for name, patches := range spec.Patches {
 		for _, patch := range patches {
 			p := filepath.Join("${DEBIAN_DIR:=debian}/dalec/patches", name, patch.Source)
-			fmt.Fprintf(buf, "patch -d %q -p%d -s < %q\n", name, *patch.Strip, p)
+			fmt.Fprintf(buf, "ls -lh %q; patch -d %q -p%d -s < %q\n", name, name, *patch.Strip, p)
 		}
 	}
 

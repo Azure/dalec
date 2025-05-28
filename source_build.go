@@ -9,7 +9,6 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/frontend/dockerui"
-	"github.com/pkg/errors"
 )
 
 // SourceBuild is used to generate source from a DockerFile build.
@@ -45,36 +44,13 @@ func (s *SourceBuild) validate(fetchOptions) error {
 	return goerrors.Join(errs...)
 }
 
-func (src *SourceBuild) AsState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	if src.Source.Inline != nil && src.Source.Inline.File != nil {
-		name = src.DockerfilePath
-		if name == "" {
-			name = dockerui.DefaultDockerfileName
-		}
-	}
-
-	st, err := src.Source.AsState(name, sOpt, opts...)
-	if err != nil {
-		if !errors.Is(err, errNoSourceVariant) {
-			return llb.Scratch(), err
-		}
-		st = llb.Scratch()
-	}
-
-	st, err = sOpt.Forward(st, src, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return st, nil
-}
-
 func (src *SourceBuild) baseState(opts fetchOptions) llb.State {
-	name := opts.Rename
-	if src.Source.Inline != nil && src.Source.Inline.File != nil {
-		name = src.DockerfilePath
-		if name == "" {
-			name = dockerui.DefaultDockerfileName
+	var name string
+
+	if !src.Source.IsDir() {
+		name = dockerui.DefaultDockerfileName
+		if src.DockerfilePath != "" {
+			name = src.DockerfilePath
 		}
 	}
 
@@ -96,12 +72,12 @@ func (src *SourceBuild) toState(opts fetchOptions) llb.State {
 	return src.baseState(opts).With(sourceFilters(opts))
 }
 
-func (src *SourceBuild) toMount(to string, opts fetchOptions, mountOpts ...llb.MountOption) llb.RunOption {
+func (src *SourceBuild) toMount(opts fetchOptions) (llb.State, []llb.MountOption) {
 	st := src.baseState(opts).With(mountFilters(opts))
-	return llb.AddMount(to, st, mountOpts...)
+	return st, nil
 }
 
-func (src *SourceBuild) fillDefaults() {
+func (src *SourceBuild) fillDefaults(_ []*SourceGenerator) {
 	bsrc := &src.Source
 	bsrc.fillDefaults()
 	src.Source = *bsrc

@@ -2,12 +2,12 @@
 package dalec
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	goerrors "errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -21,62 +21,6 @@ import (
 type FilterFunc = func(string, []string, []string, ...llb.ConstraintsOpt) llb.StateOption
 
 var errNoSourceVariant = fmt.Errorf("no source variant found")
-
-func (src Source) handlesOwnPath() bool {
-	// docker images handle their own path extraction if they have an attached command,
-	// and this information is needed in the case of mounts when we can do path
-	// extraction at mount time
-	return src.DockerImage != nil && src.DockerImage.Cmd != nil
-}
-
-func getFilter(src Source, forMount bool, opts ...llb.ConstraintsOpt) llb.StateOption {
-	var path = src.Path
-	if forMount {
-		// if we're using a mount for these sources, the mount will handle path extraction
-		path = "/"
-	}
-
-	switch {
-	case src.HTTP != nil,
-		src.Git != nil,
-		src.Build != nil,
-		src.Context != nil,
-		src.Inline != nil:
-		return filterState(path, src.Includes, src.Excludes, opts...)
-	case src.DockerImage != nil:
-		if src.DockerImage.Cmd != nil {
-			// if a docker image source has a command,
-			// the path extraction will be handled with a mount on the command
-			path = "/"
-		}
-
-		return filterState(path, src.Includes, src.Excludes)
-	}
-
-	return func(st llb.State) llb.State { return st }
-}
-
-func getSource(src Source, name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (st llb.State, err error) {
-	// load the source
-	switch {
-	case src.HTTP != nil:
-		st, err = src.HTTP.AsState(name, opts...)
-	case src.Git != nil:
-		st, err = src.Git.AsState(opts...)
-	case src.Context != nil:
-		st, err = src.Context.AsState(src.Path, src.Includes, src.Excludes, sOpt, opts...)
-	case src.DockerImage != nil:
-		st, err = src.DockerImage.AsState(name, src.Path, sOpt, opts...)
-	case src.Build != nil:
-		st, err = src.Build.AsState(name, sOpt, opts...)
-	case src.Inline != nil:
-		st, err = src.Inline.AsState(name)
-	default:
-		st, err = llb.Scratch(), errNoSourceVariant
-	}
-
-	return
-}
 
 // withFollowPath similar to using [llb.IncludePatterns] except that it will
 // follow symlinks at the provided path.
@@ -153,24 +97,7 @@ type SourceOpts struct {
 	GitCredHelperOpt func() (llb.RunOption, error)
 }
 
-func (s *Source) asState(name string, forMount bool, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	st, err := getSource(*s, name, sOpt, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return st.With(getFilter(*s, forMount)), nil
-}
-
-func (s *Source) AsState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	return s.asState(name, false, sOpt, opts...)
-}
-
-func (s *Source) AsMount(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	return s.asState(name, true, sOpt, opts...)
-}
-
-var errInvalidMountConfig = goerrors.New("invalid mount config")
+var errInvalidMountConfig = errors.New("invalid mount config")
 
 func pathHasPrefix(s string, prefix string) bool {
 	if s == prefix {
@@ -192,30 +119,6 @@ func pathHasPrefix(s string, prefix string) bool {
 
 func isRoot(extract string) bool {
 	return extract == "" || extract == "/" || extract == "."
-}
-
-func filterState(extract string, includes, excludes []string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return func(st llb.State) llb.State {
-		// if we have no includes, no excludes, and no non-root source path,
-		// then this is a no-op
-		if len(includes) == 0 && len(excludes) == 0 && isRoot(extract) {
-			return st
-		}
-
-		filtered := llb.Scratch().File(
-			llb.Copy(
-				st,
-				extract,
-				"/",
-				WithIncludes(includes),
-				WithExcludes(excludes),
-				WithDirContentsOnly(),
-			),
-			withConstraints(opts),
-		)
-
-		return filtered
-	}
 }
 
 func WithCreateDestPath() llb.CopyOption {
@@ -240,20 +143,17 @@ func (s Source) Doc(name string) io.Reader {
 	return buf
 }
 
-func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
+func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, subPath string, opts ...llb.ConstraintsOpt) llb.State {
 	for _, p := range patchNames {
 		patchState := sourceToState[p.Source]
 		// on each iteration, mount source state to /src to run `patch`, and
 		// set the state under /src to be the source state for the next iteration
 
-		subPath := p.Source
-		if p.Path != "" {
-			subPath = p.Path
-		}
+		patchPath := filepath.Join(p.Source, p.Path)
 
 		sourceState = worker.Run(
-			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(subPath)),
-			llb.Dir("src"),
+			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(patchPath)),
+			llb.Dir(filepath.Join("src", subPath)),
 			ShArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
 			WithConstraints(opts...),
 		).AddMount("/src", sourceState)
@@ -280,7 +180,7 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 			continue
 		}
 		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" ", false)
-		states[sourceName] = patchSource(worker, sourceState, states, patches, pg, withConstraints(opts))
+		states[sourceName] = patchSource(worker, sourceState, states, patches, sourceName, pg, withConstraints(opts))
 	}
 
 	return states
@@ -293,22 +193,14 @@ func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc f
 			continue
 		}
 
-		st, err := src.AsState(name, sOpt, opts...)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get source state for %q", name)
-		}
-
+		st := src.ToState(name, sOpt, opts...)
 		states[name] = st
 		for _, p := range s.Patches[name] {
 			src, ok := s.Sources[p.Source]
 			if !ok {
 				return nil, errors.Errorf("patch source %q not found", p.Source)
 			}
-
-			states[p.Source], err = src.AsState(p.Source, sOpt, opts...)
-			if err != nil {
-				return nil, errors.Wrapf(err, "failed to get patch source state for %q", p.Source)
-			}
+			states[p.Source] = src.ToState(p.Source, sOpt, opts...)
 		}
 	}
 
@@ -317,13 +209,14 @@ func (s *Spec) getPatchedSources(sOpt SourceOpts, worker llb.State, filterFunc f
 
 // Tar creates a tar+gz from the provided state and puts it in the provided dest.
 // The provided work state is used to perform the necessary operations to produce the tarball and requires the tar and gzip binaries.
-func Tar(work llb.State, src llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
+func Tar(work llb.State, st llb.State, dest string, opts ...llb.ConstraintsOpt) llb.State {
+
 	// Put the output tar in a consistent location regardless of `dest`
 	// This way if `dest` changes we don't have to rebuild the tarball, which can be expensive.
 	outBase := "/tmp/out"
 	out := filepath.Join(outBase, filepath.Dir(dest))
 	worker := work.Run(
-		llb.AddMount("/src", src, llb.Readonly),
+		llb.AddMount("/src", st, llb.Readonly),
 		ShArgs("tar -C /src -czf /tmp/st ."),
 		WithConstraints(opts...),
 	).
@@ -333,6 +226,14 @@ func Tar(work llb.State, src llb.State, dest string, opts ...llb.ConstraintsOpt)
 		)
 
 	return worker.AddMount(outBase, llb.Scratch())
+}
+
+// AsTar returns an [llb.StateOption] which converts the input state into a tar
+// with the given "dest" path as the name.
+func AsTar(worker llb.State, dest string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(in llb.State) llb.State {
+		return Tar(worker, in, dest, opts...)
+	}
 }
 
 func DefaultTarWorker(resolver llb.ImageMetaResolver, opts ...llb.ConstraintsOpt) llb.State {
@@ -347,11 +248,7 @@ func Sources(spec *Spec, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (map[strin
 		pg := ProgressGroup("Prepare source: " + k)
 		opts := append(opts, pg)
 
-		st, err := src.AsState(k, sOpt, opts...)
-		if err != nil {
-			return nil, errors.Wrapf(err, "could not get source stat e for source: %s", k)
-		}
-
+		st := src.ToState(k, sOpt, opts...)
 		states[k] = st
 	}
 	return states, nil
@@ -492,13 +389,15 @@ func (s *Source) validate() error {
 }
 
 type source interface {
-	toState(fetchOptions) llb.State
-	IsDir() bool
 	validate(fetchOptions) error
-	toMount(to string, opt fetchOptions, mountOpts ...llb.MountOption) llb.RunOption
-	fillDefaults()
+	fillDefaults([]*SourceGenerator)
 	processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error
+
+	toState(fetchOptions) llb.State
+	toMount(opt fetchOptions) (llb.State, []llb.MountOption)
+
 	doc(w io.Writer, name string)
+	IsDir() bool
 }
 
 type fetchOptions struct {
@@ -531,10 +430,17 @@ func (s *Source) ToState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOp
 	return st
 }
 
-func (s *Source) ToMount(to string, c llb.ConstraintsOpt, sOpt SourceOpts, opts ...llb.MountOption) llb.RunOption {
+func (s *Source) ToMount(sOpt SourceOpts, constraints ...llb.ConstraintsOpt) (llb.State, []llb.MountOption) {
 	fo := s.fetchOptions(sOpt)
-	fo.Constraints = append(fo.Constraints, c)
-	return s.toIntercace().toMount(to, fo, opts...)
+	fo.Constraints = append(fo.Constraints, constraints...)
+
+	st, mountOpts := s.toIntercace().toMount(fo)
+	if !isRoot(s.Path) {
+		// Prepend source path to mount opts so that the returned options can
+		// overwrite that.
+		mountOpts = append([]llb.MountOption{llb.SourcePath(s.Path)}, mountOpts...)
+	}
+	return st, mountOpts
 }
 
 func (s *Source) IsDir() bool {
@@ -542,11 +448,25 @@ func (s *Source) IsDir() bool {
 }
 
 func sourceFilters(opts fetchOptions) llb.StateOption {
-	return func(st llb.State) llb.State {
-		if len(opts.Excludes) == 0 && len(opts.Includes) == 0 && isRoot(opts.Path) {
-			return st
+	return func(in llb.State) llb.State {
+		if opts.Rename == "" && len(opts.Includes) == 0 && len(opts.Excludes) == 0 && isRoot(opts.Path) {
+			return in
 		}
-		return llb.Scratch().File(llb.Copy(st, opts.Path, opts.Rename, opts), opts.Constraints...)
+		if opts.Path == "" {
+			opts.Path = "/"
+		}
+
+		// Append the path separator (i.e. "/") to the end of opts.Rename to ensure
+		// that if the apth being copied is a file that the file is put *into* `opts.Rename`
+		// instead of being called `opts.Rename` itself.
+		// Example:
+		//	Given we have a file some/path/to/file
+		//	When opts.Path is some/path/to/file and we want that to go into /other/file
+		//	Then we need to set tell buildkit to copy to /other/ (not /other)
+		//  Else buildkit will rename the file to /other
+		sep := string(os.PathSeparator)
+		rename := opts.Rename + string(sep)
+		return llb.Scratch().File(llb.Copy(in, opts.Path, rename, opts), opts.Constraints...)
 	}
 }
 
@@ -558,6 +478,7 @@ func (opts fetchOptions) SetCopyOption(info *llb.CopyInfo) {
 	if len(opts.Excludes) > 0 {
 		WithExcludes(opts.Excludes).SetCopyOption(info)
 	}
+	info.CopyDirContentsOnly = true
 }
 
 // SetLocalOption is an llb.LocalOption that sets various options needed for local (or context) backed sources.
@@ -571,8 +492,8 @@ func (opts fetchOptions) SetLocalOption(info *llb.LocalInfo) {
 	// Since we are relying on the underlying LLB implementation to handle the filtering and not requesting
 	// more data from the client than it should, we need to ensure that the paths are correct.
 
-	if len(opts.Excludes) > 0 && !isRoot {
-		excludes = make([]string, len(opts.Excludes))
+	if len(excludes) > 0 && !isRoot {
+		excludes = make([]string, len(excludes))
 		for i, exclude := range opts.Excludes {
 			excludes[i] = filepath.Join(opts.Path, exclude)
 		}
@@ -585,7 +506,7 @@ func (opts fetchOptions) SetLocalOption(info *llb.LocalInfo) {
 		}
 	}
 
-	if isRoot {
+	if !isRoot {
 		// Exclude anything that is not underneath the requested path
 		// This way we aren't needlessly copying data that is not needed.
 		excludes = append(excludeAllButPath(opts.Path), excludes...)
@@ -599,6 +520,13 @@ func (opts fetchOptions) SetLocalOption(info *llb.LocalInfo) {
 	withFollowPath(opts.Path).SetLocalOption(info)
 }
 
+func (opts fetchOptions) mountOpts() (mOpts []llb.MountOption) {
+	if !isRoot(opts.Path) {
+		mOpts = append(mOpts, llb.SourcePath(opts.Path))
+	}
+	return
+}
+
 func mountFilters(opts fetchOptions) llb.StateOption {
 	// Here we don't want the normal source filters because this is going to be mounted, we can filter
 	// down to the requested path as part of a mount.
@@ -608,30 +536,14 @@ func mountFilters(opts fetchOptions) llb.StateOption {
 	// We do however need to handle any includes/excludes that are set so that we don't have more data
 	// than expected in the mount.
 	return func(st llb.State) llb.State {
+		if len(opts.Includes) == 0 && len(opts.Excludes) == 0 {
+			// if we have no includes or excludes, then we can just return the state as is
+			return st
+		}
 		return llb.Scratch().File(llb.Copy(st, "/", "/", opts), opts.Constraints...)
 	}
 }
 
 func (s *Source) fillDefaults() {
-	s.toIntercace().fillDefaults()
-}
-
-type indentWriter struct {
-	w io.Writer
-}
-
-func (w *indentWriter) Write(p []byte) (int, error) {
-	scanner := bufio.NewScanner(bytes.NewReader(p))
-	total := 0
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		w.w.Write([]byte("\t" + line + "\n"))
-		total += len(line)
-	}
-
-	if scanner.Err() != nil {
-		return total, scanner.Err()
-	}
-	return total, nil
+	s.toIntercace().fillDefaults(s.Generate)
 }
