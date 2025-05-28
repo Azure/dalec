@@ -27,6 +27,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 const (
@@ -79,10 +80,14 @@ func readFile(ctx context.Context, t *testing.T, name string, res *gwclient.Resu
 		Filename: name,
 	})
 	if err != nil {
+		dir := filepath.Dir(name)
+		if strings.Contains(err.Error(), "not a directory") {
+			dir = filepath.Dir(dir)
+		}
 		stat, _ := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-			Path: filepath.Dir(name),
+			Path: filepath.Dir(dir),
 		})
-		t.Fatalf("error reading file %q: %v, dir contents: \n%s", name, err, dirStatAsStringer(stat))
+		t.Fatalf("error reading file %q: %v, dir contents of %s: \n%s", name, err, dir, dirStatAsStringer(stat))
 	}
 
 	return dt
@@ -127,9 +132,7 @@ func checkFile(ctx context.Context, t *testing.T, name string, res *gwclient.Res
 	t.Helper()
 
 	dt := readFile(ctx, t, name, res)
-	if !bytes.Equal(dt, expect) {
-		t.Fatalf("expected %q, got %q", string(expect), string(dt))
-	}
+	assert.Check(t, cmp.Equal(string(dt), string(expect)))
 }
 
 func listTargets(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec) targets.List {

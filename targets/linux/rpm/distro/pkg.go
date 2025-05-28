@@ -91,29 +91,18 @@ func (cfg *Config) RunTests(ctx context.Context, client gwclient.Client, worker 
 	return ref, errors.Wrap(err, "TESTS FAILED")
 }
 
-func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string, error) {
+func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, []string) {
 	opts = append(opts, dalec.ProgressGroup("Prepare custom repos"))
 	repoConfig := cfg.RepoPlatformConfig
 	if repoConfig == nil {
 		repoConfig = defaultRepoConfig
 	}
 
-	withRepos, err := dalec.WithRepoConfigs(repos, repoConfig, sOpt, opts...)
-	if err != nil {
-		return nil, []string{}, err
-	}
+	withRepos := dalec.WithRepoConfigs(repos, repoConfig, sOpt, opts...)
+	withData := dalec.WithRepoData(repos, sOpt, opts...)
+	keyMounts, keyPaths := dalec.GetRepoKeys(repos, repoConfig, sOpt, opts...)
 
-	withData, err := dalec.WithRepoData(repos, sOpt, opts...)
-	if err != nil {
-		return nil, []string{}, err
-	}
-
-	keyMounts, keyPaths, err := dalec.GetRepoKeys(repos, repoConfig, sOpt, opts...)
-	if err != nil {
-		return nil, []string{}, err
-	}
-
-	return dalec.WithRunOptions(withRepos, withData, keyMounts), keyPaths, nil
+	return dalec.WithRunOptions(withRepos, withData, keyMounts), keyPaths
 }
 
 func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targetKey string, spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOption {
@@ -123,21 +112,14 @@ func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targ
 	}
 
 	return func(in llb.State) llb.State {
-		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
-			repos := spec.GetTestRepos(targetKey)
+		repos := spec.GetTestRepos(targetKey)
+		repoMounts, keyPaths := cfg.RepoMounts(repos, sOpt, opts...)
+		importRepos := []DnfInstallOpt{DnfAtRoot("/tmp/rootfs"), DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
 
-			repoMounts, keyPaths, err := cfg.RepoMounts(repos, sOpt, opts...)
-			if err != nil {
-				return in, err
-			}
-
-			importRepos := []DnfInstallOpt{DnfAtRoot("/tmp/rootfs"), DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
-
-			opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
-			return worker.Run(
-				dalec.WithConstraints(opts...),
-				cfg.Install(deps, importRepos...),
-			).AddMount("/tmp/rootfs", in), nil
-		})
+		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
+		return worker.Run(
+			dalec.WithConstraints(opts...),
+			cfg.Install(deps, importRepos...),
+		).AddMount("/tmp/rootfs", in)
 	}
 }

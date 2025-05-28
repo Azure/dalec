@@ -114,33 +114,42 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 	return out, nil
 }
 
-func withSourcesMounted(dst string, states map[string]llb.State, sources map[string]dalec.Source) llb.RunOption {
-	opts := make([]llb.RunOption, 0, len(states))
+func withSourcesMounted(dst string, states map[string]llb.State, sources map[string]dalec.Source, opts ...llb.ConstraintsOpt) llb.RunOption {
+	runOpts := make([]llb.RunOption, 0, len(states))
 
 	sorted := dalec.SortMapKeys(states)
-	files := []llb.State{}
+
+	var files []llb.State
 
 	for _, k := range sorted {
 		state := states[k]
 
-		// In cases where we have a generated source (e.g. gomods) we don't have a [dalec.Source] in the `sources` map.
-		// So we need to check for this.
-		src, ok := sources[k]
+		dest := filepath.Join(dst, k)
+		sourcePath := k
 
-		if ok && !dalec.SourceIsDir(src) {
-			files = append(files, state)
+		src, ok := sources[k]
+		if ok && !src.IsDir() {
+			// If this is a file, we need to have some special handling.
+			// Specifically if we just mount the file directly there are limitations
+			// on what can be done with it (e.g. it can get "device or resource busy" errors).
+			files = append(files, states[k])
 			continue
 		}
 
-		dirDst := filepath.Join(dst, k)
-		opts = append(opts, llb.AddMount(dirDst, state))
+		if !ok {
+			// In some cases we have a state that is not in the sources map (e.g. source generators)
+			// In these cases,t he data is not nested under `k` like sources are, so adjust the path accordingly
+			sourcePath = "/"
+		}
+
+		runOpts = append(runOpts, llb.AddMount(dest, state, llb.SourcePath(sourcePath)))
 	}
 
-	ordered := make([]llb.RunOption, 1, len(opts)+1)
-	ordered[0] = llb.AddMount(dst, dalec.MergeAtPath(llb.Scratch(), files, "/"))
-	ordered = append(ordered, opts...)
+	// Merge all the files into a single state that gets mounted in as a directory.
+	filesSt := dalec.MergeAtPath(llb.Scratch(), files, "/", opts...)
+	runOpts = append(runOpts, llb.AddMount(dst, filesSt))
 
-	return dalec.WithRunOptions(ordered...)
+	return dalec.WithRunOptions(runOpts...)
 }
 
 func addGoCache(spec *dalec.Spec, targetKey string) {
@@ -184,7 +193,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	st := builder.Run(
 		dalec.ShArgs(script.String()),
 		llb.Dir("/build"),
-		withSourcesMounted("/build", patched, spec.Sources),
+		withSourcesMounted("/build", patched, spec.Sources, opts...),
 		llb.AddMount("/tmp/scripts", buildScript),
 		dalec.WithConstraints(opts...),
 		// We could check if we even need the var (ie there are gomods) but this

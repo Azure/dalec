@@ -15,6 +15,19 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	// This is used as the source name for sources in specified in `SourceMount`
+	// For any sources we need to mount we need to give the source a name.
+	// We don't actually care about the name here *except* the way file-backed
+	// sources work the name of the file becomes the source name.
+	// So we at least need to track it.
+	// Source names must also not contain path separators or it can screw up the logic.
+	//
+	// To note, the name of the source affects how the source is cached, so this
+	// should just be a single specific name so we can get maximal cache re-use.
+	internalMountSourceName = "mount"
+)
+
 // SourceInlineFile is used to specify the content of an inline source.
 type SourceInlineFile struct {
 	// Contents is the content.
@@ -60,13 +73,6 @@ type SourceInline struct {
 	Dir *SourceInlineDir `yaml:"dir,omitempty" json:"dir,omitempty"`
 }
 
-func (src *SourceInline) AsState(name string) (llb.State, error) {
-	if src.File != nil {
-		return llb.Scratch().With(src.File.PopulateAt(name)), nil
-	}
-	return llb.Scratch().With(src.Dir.PopulateAt("/")), nil
-}
-
 func (src *SourceInline) IsDir() bool {
 	return src.Dir != nil
 }
@@ -75,38 +81,6 @@ const (
 	defaultFilePerms = 0o644
 	defaultDirPerms  = 0o755
 )
-
-func (d *SourceInlineDir) PopulateAt(p string) llb.StateOption {
-	return func(st llb.State) llb.State {
-		perms := d.Permissions.Perm()
-		if perms == 0 {
-			perms = defaultDirPerms
-		}
-
-		st = st.File(llb.Mkdir(p, perms, llb.WithUIDGID(int(d.UID), int(d.GID))))
-
-		sorted := SortMapKeys(d.Files)
-		for _, k := range sorted {
-			f := d.Files[k]
-			st = st.With(f.PopulateAt(filepath.Join(p, k)))
-		}
-
-		return st
-	}
-}
-
-func (f *SourceInlineFile) PopulateAt(p string) llb.StateOption {
-	return func(st llb.State) llb.State {
-		perms := f.Permissions.Perm()
-		if perms == 0 {
-			perms = defaultFilePerms
-		}
-
-		return st.File(
-			llb.Mkfile(p, perms, []byte(f.Contents), llb.WithUIDGID(int(f.UID), int(f.GID))),
-		)
-	}
-}
 
 func (s *SourceInline) validate(opts fetchOptions) (retErr error) {
 	var errs []error
@@ -138,6 +112,10 @@ func (s *SourceInline) validate(opts fetchOptions) (retErr error) {
 		if err := s.File.validate(); err != nil {
 			errs = append(errs, err)
 		}
+
+		if err := s.File.validate(); err != nil {
+			errs = append(errs, errors.Wrap(err, "inline file source validation failed"))
+		}
 	}
 
 	return goerrors.Join(errs...)
@@ -162,6 +140,7 @@ func (s *SourceInlineDir) validate() error {
 			errs = append(errs, errors.Wrapf(err, "file %q", k))
 		}
 	}
+
 	return goerrors.Join(errs...)
 }
 
@@ -245,49 +224,91 @@ func (s *SourceInline) toState(opts fetchOptions) llb.State {
 	return s.Dir.toState(opts)
 }
 
-func (s *SourceInline) toMount(to string, opts fetchOptions, mountOpts ...llb.MountOption) llb.RunOption {
+func (s *SourceInline) toMount(opts fetchOptions) (llb.State, []llb.MountOption) {
 	if s.File != nil {
-		return s.File.toMount(to, opts, mountOpts...)
+		return s.File.toMount(opts)
 	}
-	return s.Dir.toMount(to, opts, mountOpts...)
+	return s.Dir.toMount(opts)
 }
 
 func (s *SourceInlineFile) toState(opts fetchOptions) llb.StateOption {
 	return func(in llb.State) llb.State {
+		if isRoot(opts.Rename) {
+			// If we are here, then something is very much not right and is almost
+			// certainly a dalec bug.
+			panic(fmt.Sprintf("invalid file name: %q", opts.Rename))
+		}
 		st := in.File(llb.Mkfile(opts.Rename, s.Permissions, []byte(s.Contents), llb.WithUIDGID(int(s.UID), int(s.GID))))
 		return st
 	}
 }
 
-func (s *SourceInlineFile) toMount(to string, opts fetchOptions, mountOpts ...llb.MountOption) llb.RunOption {
-	mountOpts = append(mountOpts, llb.SourcePath(opts.Rename))
+func (s *SourceInlineFile) toMount(opts fetchOptions) (llb.State, []llb.MountOption) {
+	if isRoot(opts.Rename) {
+		opts.Rename = internalMountSourceName
+	}
+
+	// This is always a file, so to make sure we always mount a file instead of
+	// a directory we need to add a mount opt pointing at the file name.
+	mountOpts := []llb.MountOption{llb.SourcePath(opts.Rename)}
+
 	st := llb.Scratch().With(s.toState(opts))
-	return llb.AddMount(to, st, mountOpts...)
+	return st, mountOpts
 }
 
 func (s *SourceInlineDir) toState(opts fetchOptions) llb.State {
-	return s.baseState(opts).With(sourceFilters(opts))
+	base := s.baseState(opts)
+	// inline dir handles dir names and subpaths itself
+	// Do not pass rename to sourceFilters
+	opts.Rename = ""
+	return base.With(sourceFilters(opts))
 }
 
 func (s *SourceInlineDir) baseState(opts fetchOptions) llb.State {
 	st := llb.Scratch().File(llb.Mkdir(opts.Rename, s.Permissions, llb.WithUIDGID(int(s.UID), int(s.GID))))
 	sorted := SortMapKeys(s.Files)
 	for _, k := range sorted {
+		if !isRoot(opts.Path) && opts.Path != k {
+			continue
+		}
 		f := s.Files[k]
 		opts := opts
-		opts.Rename = k
+		opts.Rename = filepath.Join(opts.Rename, k)
 		st = st.With(f.toState(opts))
 	}
 	return st
 }
 
-func (s *SourceInlineDir) toMount(to string, opts fetchOptions, mountOpts ...llb.MountOption) llb.RunOption {
+func (s *SourceInlineDir) toMount(opts fetchOptions) (llb.State, []llb.MountOption) {
 	st := s.toState(opts).With(mountFilters(opts))
-	mountOpts = append(mountOpts, llb.SourcePath(opts.Rename))
-	return llb.AddMount(to, st, mountOpts...)
+	return st, nil
 }
 
-func (s *SourceInline) fillDefaults() {}
+func (s *SourceInlineFile) fillDefaults(_ []*SourceGenerator) {
+	if s.Permissions == 0 {
+		s.Permissions = defaultFilePerms
+	}
+}
+
+func (s *SourceInlineDir) fillDefaults(gen []*SourceGenerator) {
+	if s.Permissions == 0 {
+		s.Permissions = defaultDirPerms
+	}
+
+	for _, f := range s.Files {
+		f.fillDefaults(gen)
+	}
+}
+
+func (s *SourceInline) fillDefaults(gen []*SourceGenerator) {
+	if s.File != nil {
+		s.File.fillDefaults(gen)
+	}
+
+	if s.Dir != nil {
+		s.Dir.fillDefaults(gen)
+	}
+}
 
 func (s *SourceInline) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
 	return nil

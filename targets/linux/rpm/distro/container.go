@@ -24,16 +24,10 @@ func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, w
 	}
 
 	skipBase := bi != nil
-	rootfs, err := bi.ToState(sOpt, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
+	rootfs := bi.ToState(sOpt, opts...)
 
 	installTimeRepos := spec.GetInstallRepos(targetKey)
-	repoMounts, keyPaths, err := cfg.RepoMounts(installTimeRepos, sOpt, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
+	repoMounts, keyPaths := cfg.RepoMounts(installTimeRepos, sOpt, opts...)
 	importRepos := []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
 
 	rpmMountDir := "/tmp/rpms"

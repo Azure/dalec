@@ -253,11 +253,11 @@ func (bi *BaseImage) ResolveImageConfig(ctx context.Context, sOpt SourceOpts, op
 	return dt, err
 }
 
-func (bi *BaseImage) ToState(sOpt SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+func (bi *BaseImage) ToState(sOpt SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
 	if bi == nil {
-		return llb.Scratch(), nil
+		return llb.Scratch()
 	}
-	return bi.Rootfs.AsState("rootfs", sOpt, opts...)
+	return bi.Rootfs.ToState("", sOpt, opts...)
 }
 
 func (s *Spec) GetImageBases(targetKey string) []BaseImage {

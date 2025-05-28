@@ -28,7 +28,7 @@ func mountSources(sources map[string]llb.State, dir string, mod func(string) str
 			if mod != nil {
 				key = mod(key)
 			}
-			llb.AddMount(filepath.Join(dir, key), src).SetRunOption(ei)
+			llb.AddMount(filepath.Join(dir, key), src, llb.SourcePath(key)).SetRunOption(ei)
 		}
 	})
 }
@@ -75,6 +75,16 @@ func createPatches(spec *dalec.Spec, sources map[string]llb.State, worker llb.St
 	return patches
 }
 
+func nestState(dest string) llb.StateOption {
+	return func(in llb.State) llb.State {
+		return llb.Scratch().File(
+			llb.Mkdir(dest, 0o755, llb.WithParents(true)),
+		).File(
+			llb.Copy(in, "/", dest, dalec.WithDirContentsOnly()),
+		)
+	}
+}
+
 func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State, spec *dalec.Spec, targetKey, distroVersionID string, cfg SourcePkgConfig, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	if err := validateSpec(spec); err != nil {
 		return llb.Scratch(), err
@@ -93,15 +103,27 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error preparing gomod deps")
 	}
+	if gomodSt != nil {
+		st := gomodSt.With(nestState(gomodsName))
+		gomodSt = &st
+	}
 
 	cargohomeSt, err := spec.CargohomeDeps(sOpt, worker, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error preparing cargohome deps")
 	}
+	if cargohomeSt != nil {
+		st := cargohomeSt.With(nestState(cargohomeName))
+		cargohomeSt = &st
+	}
 
 	pipDepsSt, err := spec.PipDeps(sOpt, worker, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error preparing pip deps")
+	}
+	if pipDepsSt != nil {
+		st := pipDepsSt.With(nestState(pipDepsName))
+		pipDepsSt = &st
 	}
 
 	srcsWithNodeMods, err := spec.NodeModDeps(sOpt, worker, opts...)
@@ -153,7 +175,7 @@ func BuildDebBinaryOnly(worker llb.State, spec *dalec.Spec, debroot llb.State, d
 			dalec.WithConstraints(opts...),
 		).AddMount("/tmp/out", llb.Scratch())
 
-	return dalec.MergeAtPath(llb.Scratch(), []llb.State{st}, "/"), nil
+	return st, nil
 }
 
 func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersionID string, opts ...llb.ConstraintsOpt) (llb.State, error) {
@@ -179,42 +201,25 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersio
 }
 
 func TarDebSources(work llb.State, spec *dalec.Spec, srcStates map[string]llb.State, dest string, sOpts dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
-	outBase := "/tmp/out"
-	out := filepath.Join(outBase, filepath.Dir(dest))
+	opts = append(opts, dalec.ProgressGroup("Prepare debian sources"))
+	states := make([]llb.State, 0, len(srcStates))
+	for key, state := range srcStates {
+		src, ok := spec.Sources[key]
 
-	worker := work.Run(
-		llb.AddMount("/src", llb.Scratch()),
-		dalec.RunOptFunc(func(ei *llb.ExecInfo) {
-			for key, state := range srcStates {
+		// If the source is not explicitly listed in the spec sources, assume it is a directory (e.g., for gomod dependencies)
+		isDir := true
+		if ok {
+			isDir = src.IsDir()
+		}
 
-				mountOpts := []llb.MountOption{}
-				src, ok := spec.Sources[key]
+		// If the tar contains only a single directory, dpkg will extract its contents directly into the root directory.
+		// So nest it an extra step
+		if len(srcStates) == 1 && isDir {
+			state = llb.Scratch().File(llb.Copy(state, "/", key, dalec.WithDirContentsOnly()), opts...)
+		}
+		states = append(states, state)
+	}
 
-				// If the source is not explicitly listed in the spec sources, assume it is a directory (e.g., for gomod dependencies)
-				isDir := true
-				if ok {
-					isDir = dalec.SourceIsDir(src)
-				}
-
-				if !isDir {
-					mountOpts = append(mountOpts, llb.SourcePath(filepath.Join("/", key)))
-				}
-
-				// If the tar contains only a single directory, dpkg will extract its contents directly into the root directory.
-				mounthPath := filepath.Join("/src", key)
-				if len(srcStates) == 1 && isDir {
-					mounthPath = filepath.Join("/src", key, key)
-				}
-
-				llb.AddMount(mounthPath, state, mountOpts...).SetRunOption(ei)
-			}
-		}),
-		dalec.ShArgs("tar -C /src -cvzf /tmp/st ."),
-		dalec.WithConstraints(opts...),
-	).Run(
-		llb.Args([]string{"/bin/sh", "-c", "mkdir -p " + out + " && mv /tmp/st " + filepath.Join(out, filepath.Base(dest))}),
-		dalec.WithConstraints(opts...),
-	)
-
-	return worker.AddMount(outBase, llb.Scratch())
+	st := dalec.MergeAtPath(llb.Scratch(), states, "/")
+	return dalec.Tar(work, st, dest, opts...)
 }
