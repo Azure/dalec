@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
 )
 
@@ -69,4 +70,13 @@ func (src *SourceContext) fillDefaults() {
 	if src.Name == "" {
 		src.Name = "context"
 	}
+}
+
+func (src *SourceContext) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
+	updated, err := expandArgs(lex, src.Name, args, allowArg)
+	if err != nil {
+		return errors.Wrapf(err, "could not expand context name %q", src.Name)
+	}
+	src.Name = updated
+	return nil
 }

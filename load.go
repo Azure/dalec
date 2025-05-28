@@ -473,6 +473,10 @@ func (c *Command) processBuildArgs(lex *shell.Lex, args map[string]string, allow
 		return nil
 	}
 
+	newLex := *lex
+	newLex.SkipUnsetEnv = true // skip unset env vars so they aren't replaced with ""
+	lex = &newLex
+
 	var errs []error
 	appendErr := func(err error) {
 		errs = append(errs, err)

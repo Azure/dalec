@@ -5,6 +5,7 @@ import (
 	"io/fs"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
@@ -94,3 +95,12 @@ func (src *SourceHTTP) toMount(to string, opts fetchOptions, mountOpts ...llb.Mo
 }
 
 func (src *SourceHTTP) fillDefaults() {}
+
+func (src *SourceHTTP) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
+	updated, err := expandArgs(lex, src.URL, args, allowArg)
+	if err != nil {
+		return errors.Wrap(err, "failed to expand HTTP URL")
+	}
+	src.URL = updated
+	return nil
+}

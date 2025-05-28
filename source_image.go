@@ -388,3 +388,23 @@ func (s *Command) fillDefaults() {
 		s.Mounts[i] = *m
 	}
 }
+
+func (src *SourceDockerImage) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
+	var errs []error
+	updated, err := expandArgs(lex, src.Ref, args, allowArg)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("image ref: %w", err))
+	}
+	src.Ref = updated
+
+	if src.Cmd != nil {
+		if err := src.Cmd.processBuildArgs(lex, args, allowArg); err != nil {
+			errs = append(errs, errors.Wrap(err, "docker image cmd source"))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to process build args for docker image source: %w", stderrors.Join(errs...))
+	}
+	return nil
+}
