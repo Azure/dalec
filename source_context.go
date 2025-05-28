@@ -45,6 +45,9 @@ func (src *SourceContext) IsDir() bool {
 
 func (src *SourceContext) baseState(opts fetchOptions) llb.State {
 	return llb.Scratch().Async(func(ctx context.Context, _ llb.State, _ *llb.Constraints) (llb.State, error) {
+		if opts.SourceOpt.GetContext == nil {
+			panic("SourceOpt.GetContext is not set, cannot fetch source context")
+		}
 		st, err := opts.SourceOpt.GetContext(src.Name, opts)
 		if err != nil {
 			return llb.Scratch(), err
