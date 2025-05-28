@@ -479,7 +479,7 @@ func (s *Source) validate() error {
 
 	if !invalid {
 		// Only validate the source if it is a valid source variant so as to avoid panics.
-		if err := s.toInterface().validate(s.fetchOptions()); err != nil {
+		if err := s.toInterface().validate(s.fetchOptions(SourceOpts{})); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -510,11 +510,12 @@ type fetchOptions struct {
 	SourceOpt   SourceOpts
 }
 
-func (s *Source) fetchOptions() fetchOptions {
+func (s *Source) fetchOptions(sOpt SourceOpts) fetchOptions {
 	return fetchOptions{
-		Includes: s.Includes,
-		Excludes: s.Excludes,
-		Path:     s.Path,
+		Includes:  s.Includes,
+		Excludes:  s.Excludes,
+		Path:      s.Path,
+		SourceOpt: sOpt,
 	}
 }
 
@@ -522,16 +523,16 @@ func (s *Source) toIntercace() source {
 	return s.toInterface()
 }
 
-func (s *Source) ToState(name string, opts ...llb.ConstraintsOpt) llb.State {
-	fo := s.fetchOptions()
+func (s *Source) ToState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
+	fo := s.fetchOptions(sOpt)
 	fo.Constraints = opts
 	fo.Rename = name
 	st := s.toIntercace().toState(fo)
 	return st
 }
 
-func (s *Source) ToMount(to string, c llb.ConstraintsOpt, opts ...llb.MountOption) llb.RunOption {
-	fo := s.fetchOptions()
+func (s *Source) ToMount(to string, c llb.ConstraintsOpt, sOpt SourceOpts, opts ...llb.MountOption) llb.RunOption {
+	fo := s.fetchOptions(sOpt)
 	fo.Constraints = append(fo.Constraints, c)
 	return s.toIntercace().toMount(to, fo, opts...)
 }

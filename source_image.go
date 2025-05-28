@@ -101,8 +101,10 @@ type SourceMount struct {
 	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
 }
 
-func (s SourceMount) SetRunOption(ei *llb.ExecInfo) {
-	s.Spec.ToMount(s.Dest, WithConstraint(&ei.Constraints)).SetRunOption(ei)
+func (s SourceMount) ToRunOption(sOpt SourceOpts) llb.RunOption {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
+		s.Spec.ToMount(s.Dest, WithConstraint(&ei.Constraints), sOpt).SetRunOption(ei)
+	})
 }
 
 func (m *SourceMount) validate() error {
@@ -335,7 +337,7 @@ func (cmd *Command) baseState(opts fetchOptions) llb.StateOption {
 					return in, err
 				})
 			}
-			baseRunOpts = append(baseRunOpts, mnt)
+			baseRunOpts = append(baseRunOpts, mnt.ToRunOption(opts.SourceOpt))
 		}
 
 		out := llb.Scratch()

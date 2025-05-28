@@ -78,7 +78,7 @@ func (src *SourceBuild) baseState(opts fetchOptions) llb.State {
 		}
 	}
 
-	st := src.Source.ToState(name, opts.Constraints...)
+	st := src.Source.ToState(name, opts.SourceOpt, opts.Constraints...)
 
 	return st.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
 		// prepend the constraints passed into the async call to the ones from the source
