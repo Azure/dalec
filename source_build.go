@@ -4,6 +4,7 @@ import (
 	"context"
 	goerrors "errors"
 	"fmt"
+	"io"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
@@ -130,4 +131,25 @@ func (src *SourceBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 		return fmt.Errorf("failed to expand args on build source: %w", goerrors.Join(errs...))
 	}
 	return nil
+}
+
+func (src *SourceBuild) doc(w io.Writer, name string) {
+	fmt.Fprintln(w, "Generated from a docker build:")
+	fmt.Fprintln(w, "	Docker Build Target:", src.Target)
+
+	src.Source.toIntercace().doc(&indentWriter{w}, name)
+
+	if len(src.Args) > 0 {
+		sorted := SortMapKeys(src.Args)
+		fmt.Fprintln(w, "	Build Args:")
+		for _, k := range sorted {
+			fmt.Fprintf(w, "		%s=%s\n", k, src.Args[k])
+		}
+	}
+
+	p := "Dockerfile"
+	if src.DockerfilePath != "" {
+		p = src.DockerfilePath
+	}
+	fmt.Fprintln(w, "	Dockerfile path in context:", p)
 }

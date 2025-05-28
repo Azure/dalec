@@ -3,6 +3,7 @@ package dalec
 import (
 	stderrors "errors"
 	"fmt"
+	"io"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
@@ -181,4 +182,16 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 		return fmt.Errorf("failed to process build args for git source: %w", stderrors.Join(errs...))
 	}
 	return nil
+}
+
+func (src *SourceGit) doc(w io.Writer, name string) {
+	ref, err := gitutil.ParseGitRef(src.URL)
+	if err != nil {
+		// This should have always been validated before, so we panic here
+		panic(fmt.Errorf("could not parse git ref %q: %w", src.URL, err))
+	}
+
+	fmt.Fprintln(w, "Generated from a git repository:")
+	fmt.Fprintln(w, "	Remote:", ref.Remote)
+	fmt.Fprintln(w, "	Ref:", src.Commit)
 }

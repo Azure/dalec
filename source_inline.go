@@ -292,3 +292,8 @@ func (s *SourceInline) fillDefaults() {}
 func (s *SourceInline) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
 	return nil
 }
+
+func (src *SourceInline) doc(w io.Writer, name string) {
+	fmt.Fprintln(w, "Generated from an inline source:")
+	src.Doc(w, name)
+}

@@ -2,6 +2,8 @@ package dalec
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
@@ -79,4 +81,8 @@ func (src *SourceContext) processBuildArgs(lex *shell.Lex, args map[string]strin
 	}
 	src.Name = updated
 	return nil
+}
+
+func (src *SourceContext) doc(w io.Writer, _ string) {
+	fmt.Fprintln(w, "Generated from a local docker build context and is unreproducible.")
 }
