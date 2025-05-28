@@ -13,6 +13,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/opencontainers/go-digest"
+	"gotest.tools/v3/assert"
 )
 
 func TestSourceCmd(t *testing.T) {
@@ -121,7 +122,7 @@ func TestSourceCmd(t *testing.T) {
 				spec := testSpec()
 				spec.Sources[sourceName].DockerImage.Cmd.Steps = []*dalec.BuildStep{
 					{
-						Command: `grep 'foo bar' /tmp/foo`,
+						Command: `ls -lh /tmp; grep 'foo bar' /tmp/foo`,
 					},
 					{
 						Command: `mkdir -p /output; cp /tmp/foo /output/foo`,
@@ -302,11 +303,24 @@ func TestSourceBuild(t *testing.T) {
 
 				res := solveT(ctx, t, gwc, ro)
 				checkFile(ctx, t, "test/hello", res, []byte("hello\n"))
+
+				ref, err := res.SingleRef()
+				assert.NilError(t, err)
+				fs := bkfs.FromRef(ctx, ref)
+				checkFileStat(t, fs, "test/world", checkFileStatOpt{})
 			})
 		})
 	}
 
-	const dockerfile = "FROM busybox\nRUN echo hello > /hello"
+	const dockerfile = `
+FROM scratch
+COPY <<EOF  /hello
+hello
+EOF
+COPY <<EOF  /world
+world
+EOF
+`
 
 	newBuildSpec := func(p string, f func() dalec.Source) *dalec.Spec {
 		return &dalec.Spec{

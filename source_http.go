@@ -53,21 +53,6 @@ func (src *SourceHTTP) validate(opts fetchOptions) error {
 	return nil
 }
 
-func (src *SourceHTTP) AsState(name string, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	httpOpts := []llb.HTTPOption{withConstraints(opts)}
-	httpOpts = append(httpOpts, llb.Filename(name))
-	if src.Digest != "" {
-		httpOpts = append(httpOpts, llb.Checksum(src.Digest))
-	}
-
-	if src.Permissions != 0 {
-		httpOpts = append(httpOpts, llb.Chmod(src.Permissions))
-	}
-
-	st := llb.HTTP(src.URL, httpOpts...)
-	return st, nil
-}
-
 func (src *SourceHTTP) toState(opts fetchOptions) llb.State {
 	var httpOpts []llb.HTTPOption
 
@@ -96,7 +81,7 @@ func (src *SourceHTTP) toMount(to string, opts fetchOptions, mountOpts ...llb.Mo
 	return llb.AddMount(to, st, mountOpts...)
 }
 
-func (src *SourceHTTP) fillDefaults() {}
+func (src *SourceHTTP) fillDefaults(_ []*SourceGenerator) {}
 
 func (src *SourceHTTP) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
 	updated, err := expandArgs(lex, src.URL, args, allowArg)
