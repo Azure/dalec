@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"io"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
@@ -407,4 +408,46 @@ func (src *SourceDockerImage) processBuildArgs(lex *shell.Lex, args map[string]s
 		return fmt.Errorf("failed to process build args for docker image source: %w", stderrors.Join(errs...))
 	}
 	return nil
+}
+
+func (cmd *Command) doc(w io.Writer, name string) {
+	if len(cmd.Env) > 0 {
+		fmt.Fprintln(w, "	With the following environment variables set for all commands:")
+
+		sorted := SortMapKeys(cmd.Env)
+		for _, k := range sorted {
+			fmt.Fprintf(w, "		%s=%s\n", k, cmd.Env[k])
+		}
+	}
+	if cmd.Dir != "" {
+		fmt.Fprintln(w, "	Working Directory:", cmd.Dir)
+	}
+
+	fmt.Fprintln(w, "	Command(s):")
+	for _, step := range cmd.Steps {
+		fmt.Fprintf(w, "		%s\n", step.Command)
+		if len(step.Env) > 0 {
+			fmt.Fprintln(w, "			With the following environment variables set for this command:")
+			sorted := SortMapKeys(step.Env)
+			for _, k := range sorted {
+				fmt.Fprintf(w, "				%s=%s\n", k, step.Env[k])
+			}
+		}
+	}
+	if len(cmd.Mounts) > 0 {
+		fmt.Fprintln(w, "	With the following items mounted:")
+		for _, src := range cmd.Mounts {
+			fmt.Fprintln(w, "		Destination Path:", src.Dest)
+			src.Spec.toIntercace().doc(&indentWriter{w}, name)
+		}
+	}
+}
+
+func (src *SourceDockerImage) doc(w io.Writer, name string) {
+	fmt.Fprintln(w, "Generated from a docker image:")
+	fmt.Fprintln(w, "	Image:", src.Ref)
+
+	if src.Cmd != nil {
+		src.Cmd.doc(&indentWriter{w}, name)
+	}
 }

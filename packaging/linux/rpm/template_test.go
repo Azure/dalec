@@ -28,10 +28,7 @@ func TestTemplateSources(t *testing.T) {
 	// Each source entry is prefixed by comments documenting how the source was generated
 	// This gets the source documentation and turns it into the expected comment string
 	srcDoc := func(name string, src dalec.Source) string {
-		rdr, err := src.Doc(name)
-		if err != nil {
-			return ""
-		}
+		rdr := src.Doc(name)
 		buf := bytes.NewBuffer(nil)
 		scanner := bufio.NewScanner(rdr)
 		for scanner.Scan() {

@@ -14,7 +14,6 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/identity"
-	"github.com/moby/buildkit/util/gitutil"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -232,121 +231,13 @@ func SourceIsDir(src Source) bool {
 // Doc returns the details of how the source was created.
 // This should be included, where applicable, in build in build specs (such as RPM spec files)
 // so that others can reproduce the build.
-func (s Source) Doc(name string) (io.Reader, error) {
-	b := bytes.NewBuffer(nil)
-	switch {
-	case s.Context != nil:
-		fmt.Fprintln(b, "Generated from a local docker build context and is unreproducible.")
-	case s.Build != nil:
-		fmt.Fprintln(b, "Generated from a docker build:")
-		fmt.Fprintln(b, "	Docker Build Target:", s.Build.Target)
-		sub, err := s.Build.Source.Doc(name)
-		if err != nil {
-			return nil, err
-		}
-
-		scanner := bufio.NewScanner(sub)
-		for scanner.Scan() {
-			fmt.Fprintf(b, "			%s\n", scanner.Text())
-		}
-		if scanner.Err() != nil {
-			return nil, scanner.Err()
-		}
-
-		if len(s.Build.Args) > 0 {
-			sorted := SortMapKeys(s.Build.Args)
-			fmt.Fprintln(b, "	Build Args:")
-			for _, k := range sorted {
-				fmt.Fprintf(b, "		%s=%s\n", k, s.Build.Args[k])
-			}
-		}
-
-		p := "Dockerfile"
-		if s.Build.DockerfilePath != "" {
-			p = s.Build.DockerfilePath
-		}
-		fmt.Fprintln(b, "	Dockerfile path in context:", p)
-	case s.HTTP != nil:
-		fmt.Fprintln(b, "Generated from a http(s) source:")
-		fmt.Fprintln(b, "	URL:", s.HTTP.URL)
-	case s.Git != nil:
-		git := s.Git
-		ref, err := gitutil.ParseGitRef(git.URL)
-		if err != nil {
-			return nil, err
-		}
-		fmt.Fprintln(b, "Generated from a git repository:")
-		fmt.Fprintln(b, "	Remote:", ref.Remote)
-		fmt.Fprintln(b, "	Ref:", git.Commit)
-		if s.Path != "" {
-			fmt.Fprintln(b, "	Extracted path:", s.Path)
-		}
-	case s.DockerImage != nil:
-		img := s.DockerImage
-		if img.Cmd == nil {
-			fmt.Fprintln(b, "Generated from a docker image:")
-			fmt.Fprintln(b, "	Image:", img.Ref)
-			if s.Path != "" {
-				fmt.Fprintln(b, "	Extracted path:", s.Path)
-			}
-		} else {
-			fmt.Fprintln(b, "Generated from running a command(s) in a docker image:")
-			fmt.Fprintln(b, "	Image:", img.Ref)
-			if s.Path != "" {
-				fmt.Fprintln(b, "	Extracted path:", s.Path)
-			}
-			if len(img.Cmd.Env) > 0 {
-				fmt.Fprintln(b, "	With the following environment variables set for all commands:")
-
-				sorted := SortMapKeys(img.Cmd.Env)
-				for _, k := range sorted {
-					fmt.Fprintf(b, "		%s=%s\n", k, img.Cmd.Env[k])
-				}
-			}
-			if img.Cmd.Dir != "" {
-				fmt.Fprintln(b, "	Working Directory:", img.Cmd.Dir)
-			}
-			fmt.Fprintln(b, "	Command(s):")
-			for _, step := range img.Cmd.Steps {
-				fmt.Fprintf(b, "		%s\n", step.Command)
-				if len(step.Env) > 0 {
-					fmt.Fprintln(b, "			With the following environment variables set for this command:")
-					sorted := SortMapKeys(step.Env)
-					for _, k := range sorted {
-						fmt.Fprintf(b, "				%s=%s\n", k, step.Env[k])
-					}
-				}
-			}
-			if len(img.Cmd.Mounts) > 0 {
-				fmt.Fprintln(b, "	With the following items mounted:")
-				for _, src := range img.Cmd.Mounts {
-					sub, err := src.Spec.Doc(name)
-					if err != nil {
-						return nil, err
-					}
-
-					fmt.Fprintln(b, "		Destination Path:", src.Dest)
-					scanner := bufio.NewScanner(sub)
-					for scanner.Scan() {
-						fmt.Fprintf(b, "			%s\n", scanner.Text())
-					}
-					if scanner.Err() != nil {
-						return nil, scanner.Err()
-					}
-				}
-			}
-			return b, nil
-		}
-	case s.Inline != nil:
-		fmt.Fprintln(b, "Generated from an inline source:")
-		s.Inline.Doc(b, name)
-	default:
-		// This should be unrecable.
-		// We could panic here, but ultimately this is just a doc string and parsing user generated content.
-		fmt.Fprintln(b, "Generated from an unknown source type")
+func (s Source) Doc(name string) io.Reader {
+	buf := bytes.NewBuffer(nil)
+	s.toIntercace().doc(buf, name)
+	if s.Path != "" {
+		fmt.Fprintln(buf, "	Extracted path:", s.Path)
 	}
-
-	return b, nil
+	return buf
 }
 
 func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, opts ...llb.ConstraintsOpt) llb.State {
@@ -607,6 +498,7 @@ type source interface {
 	toMount(to string, opt fetchOptions, mountOpts ...llb.MountOption) llb.RunOption
 	fillDefaults()
 	processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error
+	doc(w io.Writer, name string)
 }
 
 type fetchOptions struct {
@@ -721,4 +613,24 @@ func mountFilters(opts fetchOptions) llb.StateOption {
 
 func (s *Source) fillDefaults() {
 	s.toIntercace().fillDefaults()
+}
+
+type indentWriter struct {
+	w io.Writer
+}
+
+func (w *indentWriter) Write(p []byte) (int, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(p))
+	total := 0
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		w.w.Write([]byte("\t" + line + "\n"))
+		total += len(line)
+	}
+
+	if scanner.Err() != nil {
+		return total, scanner.Err()
+	}
+	return total, nil
 }
