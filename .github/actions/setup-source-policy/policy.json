@@ -3,10 +3,28 @@
         {
             "action": "CONVERT",
             "selector": {
+                "identifier": "docker-image://docker.io/library/*@sha256:*"
+            },
+            "updates": {
+                "identifier": "docker-image://${REPO_PREFIX}/mirror/dockerhub/library/$1"
+            }
+        },
+        {
+            "action": "CONVERT",
+            "selector": {
                 "identifier": "docker-image://docker.io/*"
             },
             "updates": {
                 "identifier": "docker-image://${REPO_PREFIX}/mirror/dockerhub/$1"
+            }
+        },
+        {
+            "action": "CONVERT",
+            "selector": {
+                "identifier": "docker-image://mcr.microsoft.com/*@sha256:*"
+            },
+            "updates": {
+                "identifier": "docker-image://mcr.microsoft.com/$1"
             }
         },
         {

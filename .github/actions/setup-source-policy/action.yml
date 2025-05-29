@@ -7,13 +7,14 @@ runs:
     - name: Format repository name
       id: format-repo
       uses: ./.github/actions/format-repo
-    
     - name: Process policy file
       id: process-policy
       shell: bash
       run: |
         # Get the formatted repo from the previous step
-        FORMATTED_REPO="${{ steps.format-repo.outputs.oci-name }}"
+        set -eux
+
+        FORMATTED_REPO="${{ steps.format-repo.outputs.result }}"
         
         # Set REPO_PREFIX for envsubst
         export REPO_PREFIX="ghcr.io/${FORMATTED_REPO}"
@@ -24,6 +25,8 @@ runs:
         # Process the policy file with envsubst and save to a temporary file
         TEMP_POLICY_PATH="${RUNNER_TEMP}/processed_policy.json"
         envsubst < "${POLICY_PATH}" > "${TEMP_POLICY_PATH}"
+
+        cat "${TEMP_POLICY_PATH}"
         
-        # Set BUILDKIT_SOURCE_POLICY as a global environment variable
-        echo "BUILDKIT_SOURCE_POLICY=${TEMP_POLICY_PATH}" >> $GITHUB_ENV
+        # Set EXPERIMENTAL_BUILDKIT_SOURCE_POLICY as a global environment variable
+        echo "EXPERIMENTAL_BUILDKIT_SOURCE_POLICY=${TEMP_POLICY_PATH}" >> $GITHUB_ENV
