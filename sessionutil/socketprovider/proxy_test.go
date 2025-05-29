@@ -16,8 +16,8 @@ import (
 )
 
 // echoServer implements a message based echo server
-// It expects tos end and receive discreete json messages over a net.Conn
-// Using discreete messages is helpful for testing purposes over a literal echo.
+// It expects to send and receive discrete json messages over a net.Conn
+// Using discrete messages is helpful for testing purposes over a literal echo.
 type echoServer struct{}
 
 type echoRequest struct {
@@ -75,7 +75,7 @@ func TestProxyHandler(t *testing.T) {
 	echoListener := &PipeListener{}
 	defer echoListener.Close()
 	echo := &echoServer{}
-	go echo.Serve(echoListener)
+	go echo.Serve(echoListener) //nolint:errcheck
 
 	handler, err := NewProxyHandler([]ProxyConfig{
 		{ID: "test", Dialer: echoListener.Dialer},
@@ -86,13 +86,13 @@ func TestProxyHandler(t *testing.T) {
 	handler.Register(srv)
 
 	// Start proxy handler service
-	go srv.Serve(handlerListener)
+	go srv.Serve(handlerListener) //nolint:errcheck
 
 	// passthrough:// is a special scheme that allows us to use the handlerListener's Dialer directly
 	// otherwise grpc will try to resolve whatever we put in there.
 	c, err := grpc.NewClient("passthrough://", dialerFnToGRPCDialer(handlerListener.Dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NilError(t, err)
-	defer c.Close()
+	defer c.Close() //nolint:errcheck
 
 	client := sshforward.NewSSHClient(c)
 
@@ -108,7 +108,7 @@ func TestProxyHandler(t *testing.T) {
 	stream, err := client.ForwardAgent(ctx)
 	assert.NilError(t, err)
 
-	defer stream.CloseSend()
+	defer stream.CloseSend() //nolint:errcheck
 
 	req := echoRequest{Data: "hello, world!"}
 	sw := &streamWriter{stream: stream}

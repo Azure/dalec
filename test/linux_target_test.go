@@ -1764,7 +1764,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		testAutoGobuildCache(ctx, t, testConfig.Target)
 	})
 
-	t.Run("bazel remote cache", func(t *testing.T) {
+	t.Run("bazel cache", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 		testBazelCache(ctx, t, testConfig.Target)
