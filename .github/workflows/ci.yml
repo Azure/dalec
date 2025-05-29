@@ -35,6 +35,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   lint:
@@ -148,6 +149,13 @@ jobs:
           sudo systemctl restart containerd
           sudo systemctl restart docker
 
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        name: Login to GHCR
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: download deps
         run: go mod download
       - name: Setup QEMU
@@ -239,6 +247,12 @@ jobs:
         uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Setup source policy
         uses: ./.github/actions/setup-source-policy
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        name: Login to GHCR
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: ./.github/actions/format-repo
         id: format-repo
       - name: Setup builder
