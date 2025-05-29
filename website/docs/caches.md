@@ -114,3 +114,39 @@ caches:
   - bazel:
       scope: my_scope
 ```
+
+### Remote Cache
+
+Bazel supports remote caching. When bazel caching is enabled in the spec dalec will look for a socket ID, `bazel-default`,
+which is provided by a buildkit client and forward it into the build environment adding the appropriate configuration to
+bazelrc.
+
+:::note
+The Docker CLI does not currently support this feature, a custom client must be used.
+DALEC provides a (go) library to help with this in the `sessionutil/socketprovider` package.
+These are generic and not specific to dalec or bazel caching, so they must be configured based on your needs.
+:::
+
+1. `socketprovider.SocketProxy` - This implements the required interface to pass sockets to buildkit.
+2. `socketprovider.Mux` - Routes requests for sockets to different backends,
+    this is needed if you'll want to forward SSH agents into the build like the
+    docker CLI does. This acts sort of like an http.ServeMux but for buildkit's
+    socket forwarding implementation, where a request comes in with a socket ID and
+    the mux routes it to the appropriate backend based on the ID, which is up to you
+    to configure how you want those routes to be handled.
+
+These implement the
+[session.Attachable](https://pkg.go.dev/github.com/moby/buildkit/session#Attachable) interface and need to be provided to the
+[SolveOpt](https://pkg.go.dev/github.com/moby/buildkit/client#SolveOpt) in the `Session` field when starting a build.
+
+The way this works is the buildkit client is expected to provide a set of GRPC API's tunnelled through a "session".
+The buildkit solver will call those API's for a nunmber of things, including fetching files, authentication, and in this case
+forwarding sockets.
+The API's for forwarding sockets are designed around forwarding SSH agents, but the buildkit solver doesn't care about SSH
+or the agent protocol at all.
+The docker CLI, however, is expecting to only provide SSH agent forwarding and is not able to be used with generic proxies like
+is provided in these libraries.
+Any buildkit server should work with this, just that the buildkit client requires special configuration to do this.
+
+[bazel-remote](https://github.com/buchgr/bazel-remote) is an example of a remote bazel caching server, but technically any
+implementation of the [bazel remote caching protocol](https://bazel.build/remote/caching) can be used.
