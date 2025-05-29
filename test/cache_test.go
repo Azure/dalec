@@ -12,8 +12,13 @@ import (
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/sessionutil/socketprovider"
 	"github.com/Azure/dalec/targets"
+	"github.com/Azure/dalec/test/internal/bazeltest"
+	"github.com/Azure/dalec/test/testenv"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"google.golang.org/grpc"
+	"gotest.tools/v3/assert"
 )
 
 func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConfig) {
@@ -187,9 +192,8 @@ func testBazelCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 	// We also use this key in each of the dest paths to force cache invalidation.
 	// This is important because we need each case to actually run uncached (at least from the actual build part)
 	// otherwise the test will almost certainly fail if the part that writes data is cached but the part that reads it is not.
-	randKey := getRand()
 
-	newSpec := func(cmds ...string) *dalec.Spec {
+	newSpec := func(randKey string, cmds ...string) *dalec.Spec {
 		spec := newSimpleSpec()
 		spec.Build.Caches = []dalec.CacheConfig{
 			{
@@ -201,7 +205,6 @@ func testBazelCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 
 		spec.Dependencies = &dalec.PackageDependencies{}
 		spec.Dependencies.Build = map[string]dalec.PackageConstraints{
-			"curl": {},
 			bzlPkg: {},
 		}
 		spec.Sources["src"] = dalec.Source{
@@ -236,20 +239,62 @@ genrule(
 		return spec
 	}
 
-	dirCmd := "dir=$(grep disk_cache /etc/bazel.bazelrc | awk -F'=' '{ print $2 }')"
+	t.Run("local", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
 
-	// Write to the bazel cache using bazel itself
-	spec := newSpec(`[ ! -d "${dir}/ac" ]`, `[ ! -d "${dir}/cas" ]`, "cd src; bazel build --announce_rc //:hello")
-	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
-		solveT(ctx, t, client, sr)
+		randKey := getRand()
+
+		dirCmd := "dir=$(grep disk_cache /etc/bazel.bazelrc | awk -F'=' '{ print $2 }')"
+		// Write to the bazel cache using bazel itself
+		spec := newSpec(randKey, dirCmd, `[ ! -d "${dir}/ac" ]`, `[ ! -d "${dir}/cas" ]`, "cd src; bazel build //:hello")
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
+			solveT(ctx, t, client, sr)
+		})
+		// Now validate that bazel wrote to the cache
+		spec = newSpec(randKey, dirCmd, `[ -d "${dir}/ac" ]`, `[ -d "${dir}/cas" ]`)
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+			solveT(ctx, t, client, sr)
+		})
 	})
 
-	// Now validate that bazel wrote to the cache
-	spec = newSpec(dirCmd, `[ -d "${dir}/ac" ]`, `[ -d "${dir}/cas" ]`)
-	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
-		solveT(ctx, t, client, sr)
+	t.Run("remote", func(t *testing.T) {
+		if bzlPkg == "bazel-bootstrap" {
+			// bazel-bootstrap is a minimial bazel package that does not support remote caching
+			t.Skip("bazel remote cache not available for bazel-bootstrap")
+		}
+
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		randKey := getRand()
+
+		// Setup the bazel "remote" cache server.
+		var pipeL socketprovider.PipeListener
+		defer pipeL.Close()
+
+		srv := grpc.NewServer()
+		cache := bazeltest.NewRemoteCache()
+		bazeltest.RegisterRemoteCache(srv, cache)
+
+		go srv.Serve(&pipeL) //nolint:errcheck
+		defer srv.Stop()
+
+		// socket path format is 'remote_cache=unix:/path/to/socket
+		sockPathCmd := "set -euxo pipefail; sock_path=$(grep remote_cache /etc/bazel.bazelrc | awk -F'=' '{ print $2 }' | awk -F':' '{ print $2 }')"
+		spec := newSpec(randKey, sockPathCmd, `set -ux; [ -S "${sock_path}" ]`, "cd src; bazel build //:hello")
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
+			solveT(ctx, t, client, sr)
+		}, testenv.WithSocketProxies(socketprovider.ProxyConfig{
+			ID:     dalec.BazelDefaultSocketID,
+			Dialer: pipeL.Dialer,
+		}))
+
+		assert.Assert(t, cache.Called.Load(), "expected bazel to write to the cache")
 	})
 }
 

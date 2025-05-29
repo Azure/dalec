@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/sshforward"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -15,6 +16,9 @@ type ProxyConfig struct {
 	// ID is the identifier for the proxy connection.
 	// If empty, the default ID will be used.
 	// This must be unique across all proxies in a single [ProxyHandler] instance.
+	//
+	// This is the ID that the client uses to identify the socket it wants to forward.
+	// e.g. docker build --ssh <id>[=<socket-path>] ...
 	ID string
 	// Dialer is the function that will be used to establish a connection to the
 	// proxy target.
@@ -60,6 +64,9 @@ func NewProxyHandler(configs []ProxyConfig) (*ProxyHandler, error) {
 
 	return sp, nil
 }
+
+var _ session.Attachable = (*ProxyHandler)(nil)
+var _ sshforward.SSHServer = (*ProxyHandler)(nil)
 
 // Register registers the ProxyHandler with the given gRPC server.
 //

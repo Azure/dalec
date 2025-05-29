@@ -19,3 +19,4 @@ linters:
         - (io.ReadCloser).Close
         - (*io.PipeReader).Close
         - (*io.PipeWriter).Close
+        - (*github.com/Azure/dalec/sessionutil/socketprovider.PipeListener).Close

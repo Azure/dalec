@@ -96,6 +96,8 @@ func (m *Mux) getHandler(id string) sshforward.SSHServer {
 func (m *Mux) ForwardAgent(stream sshforward.SSH_ForwardAgentServer) error {
 	opts, _ := metadata.FromIncomingContext(stream.Context()) // if no metadata continue with empty object
 
+	// `id` here would be the socket ID being requested.
+	// This is the ID that the client uses to identify the socket it wants to forward.
 	var id string
 	if v, ok := opts[sshforward.KeySSHID]; ok && len(v) > 0 && v[0] != "" {
 		id = v[0]
