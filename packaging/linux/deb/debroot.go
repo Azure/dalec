@@ -32,6 +32,8 @@ const (
 	LibsPath                  = "/usr/lib"
 	LibexecPath               = "/usr/libexec"
 	DataDirsPath              = "/usr/share"
+	yarnCacheDir              = nodeModsName + "/yarn-dalec-cache"
+	npmCacheDir               = nodeModsName + "/npm-dalec-cache"
 )
 
 //go:embed templates/patch-header.txt
@@ -296,6 +298,10 @@ func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		fmt.Fprint(buf, "\n")
 	}
 
+	if spec.HasYarnPackageManager() {
+		fmt.Fprintln(buf, "npm install --offline --cache \"$(pwd)/"+npmCacheDir+"\" -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheDir)
+		fmt.Fprint(buf, "\n")
+	}
 	return buf.Bytes()
 }
 
