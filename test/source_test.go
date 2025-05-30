@@ -1,19 +1,383 @@
 package test
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	_ "embed"
+	"fmt"
 	"io/fs"
+	"net"
+	"net/http"
 	"os"
+	"os/exec"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
+	githttp "github.com/AaronO/go-git-http"
+	"github.com/AaronO/go-git-http/auth"
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/Azure/dalec/test/testenv"
+	ps "github.com/mitchellh/go-ps"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/opencontainers/go-digest"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
+
+var (
+	isRootLess     bool
+	isRootlessOnce sync.Once
+)
+
+func TestGomodGitAuthHTTPS(t *testing.T) {
+	t.Parallel()
+
+	const host = "host.docker.internal"
+
+	ctx := startTestSpan(baseCtx, t)
+	sourceName := "gitauth"
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
+		const gomodFmt = `module %[1]s/user/public
+
+go 1.23.5
+
+require %[1]s/user/private.git v0.0.0
+`
+
+		gomodContents := fmt.Sprintf(gomodFmt, host)
+		port := getAvailablePort(t)
+
+		spec := &dalec.Spec{
+			Name: "gomod-git-auth",
+			Sources: map[string]dalec.Source{
+				sourceName: {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"go.mod": {
+									Contents: gomodContents,
+								},
+							},
+						},
+					},
+					Generate: []*dalec.SourceGenerator{
+						{
+							Gomod: &dalec.GeneratorGomod{
+								Auth: map[string]dalec.GomodGitAuth{
+									fmt.Sprintf("%s:%d", host, port): {
+										Token: "super-secret",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		outsideAddr, insideAddr := getGitServerAddrs(ctx, t, c)
+		if err := runGitServer(ctx, t, outsideAddr, port, host); err != nil {
+			t.Fatal(err)
+		}
+
+		sr := newSolveRequest(
+			withBuildTarget("debug/gomods"),
+			withSpec(ctx, t, spec),
+			withExtraHost(host, insideAddr),
+			withBuildContext(ctx, t, "gomod-worker", initGomodWorker(c, host, port)),
+		)
+		res := solveT(ctx, t, c, sr)
+
+		filename := filepath.Join(host, "user/private.git@v0.0.0/hello")
+		checkFile(ctx, t, filename, res, []byte("hello\n"))
+	}, testenv.WithSecrets(testenv.KeyVal{
+		K: "super-secret",
+		V: "value",
+	}))
+}
+
+func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
+	worker := llb.Image("alpine:latest", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"}), llb.WithMetaResolver(c)).
+		Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
+
+	run := func(cmd string) {
+		// tell git to use the port along with the host
+		worker = worker.Run(
+			llb.Shlex(cmd),
+			llb.AddEnv("HOST", host),
+			llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
+		).Root()
+	}
+
+	run(`sh -c 'git config --global "url.http://${HOST}:${PORT}.insteadOf" "https://${HOST}"'`)
+	run(`sh -c 'git config --global credential."http://${HOST}:${PORT}.helper" "/usr/local/bin/frontend credential-helper --kind=token"'`)
+
+	return worker
+}
+
+func getGitServerAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
+	const (
+		rootlessOutsideAddr = "localhost"
+		rootlessInsideAddr  = "10.0.2.2" // as per the docs here: https://docs.docker.com/engine/release-notes/26.0/#new
+	)
+
+	if !isRootless(ctx, t, c) {
+		addr := getExtraHostRootful(t)
+		return addr, addr
+	}
+
+	// These may fast-fail the test if the configuration is wrong
+	dockerdPid := getDockerdPid(t)
+	assertDockerdEnvironment(t, dockerdPid)
+
+	return rootlessOutsideAddr, rootlessInsideAddr
+}
+
+func nullCharSplit(data []byte, atEOF bool) (int, []byte, error) {
+	var (
+		i   int
+		err error
+	)
+
+	for i = 0; i < len(data); i++ {
+		if data[i] == 0 {
+			break
+		}
+	}
+
+	if atEOF {
+		err = bufio.ErrFinalToken
+	}
+
+	return i + 1, data[:i], err
+}
+
+func assertDockerdEnvironment(t *testing.T, dockerdPid int) {
+	const (
+		envVarRootlessKitLocalhostKey   = "DOCKERD_ROOTLESS_ROOTLESSKIT_DISABLE_HOST_LOOPBACK"
+		envVarRootlessKitLocalhostValue = "false"
+	)
+
+	f, err := os.Open(fmt.Sprintf("/proc/%d/environ", dockerdPid))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := bufio.NewScanner(f)
+	scanner.Split(nullCharSplit)
+
+	for scanner.Scan() {
+		k, v, ok := strings.Cut(scanner.Text(), "=")
+		if !ok || k != envVarRootlessKitLocalhostKey {
+			continue
+		}
+
+		if v != envVarRootlessKitLocalhostValue {
+			t.Fatalf("You have a rootless setup. In order to permit TCP service forwarding, you must restart the docker daemon with the %q env var set to %q", envVarRootlessKitLocalhostKey, envVarRootlessKitLocalhostValue)
+		}
+	}
+}
+
+func getDockerdPid(t *testing.T) int {
+	const dockerProcName = "dockerd"
+	procs, err := ps.Processes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	currentUser, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var pid int
+
+outer:
+	for _, proc := range procs {
+		name := proc.Executable()
+		if filepath.Base(name) != dockerProcName {
+			continue
+		}
+
+		pp := proc.Pid()
+
+		f, err := os.Open(fmt.Sprintf("/proc/%d/status", pp))
+		if err != nil {
+			t.Fatal(err)
+		}
+		scanner := bufio.NewScanner(f)
+
+		for scanner.Scan() {
+			t := scanner.Text()
+			_, val, ok := strings.Cut(t, "Uid:")
+			if !ok {
+				continue
+			}
+
+			val = strings.TrimSpace(val)
+			if !strings.HasPrefix(val, currentUser.Uid) {
+				continue outer
+			}
+
+			pid = pp
+			break outer
+		}
+	}
+
+	if pid == 0 {
+		t.Fatal("cannot find pid of docker daemon")
+	}
+	return pid
+}
+
+func runGitServer(ctx context.Context, t *testing.T, addr string, port int, host string) error {
+	td := t.TempDir()
+	privateGitRepo := filepath.Join(td, "user", "private")
+	if err := os.MkdirAll(privateGitRepo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	git := func(args ...string) {
+		c := exec.Command("git", args...)
+		c.Dir = privateGitRepo
+		c.Env = append(c.Env, "GIT_CONFIG_NOGLOBAL=true")
+
+		out, err := c.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %s", err, out)
+		}
+	}
+
+	git("init")
+	git("config", "user.name", "foo")
+	git("config", "user.email", "foo@bar.com")
+
+	const repoFileBase = "hello"
+	repoFile := filepath.Join(privateGitRepo, repoFileBase)
+
+	if err := os.WriteFile(repoFile, []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(privateGitRepo, "go.mod"), []byte(fmt.Sprintf(`module %s/user/private.git
+
+go 1.23.5
+`, host)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	git("add", "-A")
+	git("commit", "-m", "commit", "--no-gpg-sign")
+	git("tag", "v0.0.0")
+
+	gitHandler := githttp.New(td)
+	authr := auth.Authenticator(func(ai auth.AuthInfo) (bool, error) {
+		if ai.Push {
+			return false, nil
+		}
+
+		if ai.Username == "x-access-token" && ai.Password == "value" {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	s := http.Server{Addr: fmt.Sprintf("%s:%d", addr, port)}
+	http.Handle("/", authr(gitHandler))
+	t.Cleanup(func() {
+		if err := s.Shutdown(ctx); err != nil {
+			t.Log(err)
+		}
+	})
+
+	t.Logf("starting git server on %s:%d, hosted in directory %s", addr, port, td)
+	go func() {
+		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			t.Logf("unexpected server error: %s", err)
+		}
+	}()
+
+	return nil
+}
+
+func getAvailablePort(t *testing.T) int {
+	addr, err := net.ResolveTCPAddr("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func(t *testing.T) {
+		_ = l.Close() // if we got the port, ignore failure to close
+	}(t)
+
+	tcpa, ok := l.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("extpeccted return value of l.Addr() to be a (*net.TCPAddr)")
+	}
+
+	p := tcpa.Port
+	return p
+}
+
+func withExtraHost(host string, ipv4 string) func(cfg *newSolveRequestConfig) {
+	return func(cfg *newSolveRequestConfig) {
+		const addHostsKey = "add-hosts"
+		r := cfg.req
+
+		if r.FrontendOpt == nil {
+			r.FrontendOpt = make(map[string]string)
+		}
+
+		var prefix string
+		if existing, ok := r.FrontendOpt[addHostsKey]; ok {
+			prefix = existing + ","
+		}
+
+		r.FrontendOpt[addHostsKey] = fmt.Sprintf("%s%s=%s", prefix, host, ipv4)
+	}
+}
+
+func getExtraHostRootful(t *testing.T) string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			t.Log(err)
+			continue
+		}
+
+		for _, addr := range addrs {
+			if ip := addr.(*net.IPNet).IP.To4(); ip != nil {
+				if ip.IsLoopback() {
+					continue
+				}
+
+				if ip.IsPrivate() {
+					t.Log("IP ADDRESS", ip)
+					return ip.String()
+				}
+			}
+		}
+	}
+
+	t.FailNow()
+	return "host-gateway"
+}
 
 func TestSourceCmd(t *testing.T) {
 	t.Parallel()
@@ -1029,4 +1393,54 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 			t.Fatal("expected error, got none")
 		}
 	})
+}
+
+func isRootless(ctx context.Context, t *testing.T, client gwclient.Client) bool {
+	isRootlessOnce.Do(func() {
+		st := llb.Image("mcr.microsoft.com/azurelinux/base/core:3.0", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"})).Run(llb.Args([]string{
+			"bash", "-c", `
+set -exu
+read -r x < /proc/self/uid_map
+echo "$x" > /tmp/out
+            `,
+		})).AddMount("/tmp", llb.Scratch())
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		res, err := client.Solve(ctx, gwclient.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ref, err := res.SingleRef()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		bs, err := ref.ReadFile(ctx, gwclient.ReadRequest{
+			Filename: "/out",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		uidMap := bytes.NewBuffer(bs)
+		var a, b, c int
+		if _, err := fmt.Fscanf(uidMap, "%d %d %d", &a, &b, &c); err != nil {
+			// Assume we are in a regular, non user namespace.
+			isRootLess = false
+			return
+		}
+
+		// As per user_namespaces(7), /proc/self/uid_map of
+		// the initial user namespace shows 0 0 4294967295.
+		initNS := a == 0 && b == 0 && c == 4294967295
+		isRootLess = !initNS
+	})
+
+	return isRootLess
 }
