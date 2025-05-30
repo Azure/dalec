@@ -29,6 +29,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update docker
+        run: sudo apt update && sudo apt install -y docker-ce
       - name: Setup containerd snapshotter
         run: |
           sudo mkdir -p /etc/docker
@@ -37,9 +39,13 @@ jobs:
           tmp="$(mktemp)"
           jq '.features["containerd-snapshotter"] = true' /etc/docker/daemon.json | tee "${tmp}"
           sudo cp "${tmp}" /etc/docker/daemon.json
+          jq '.debug = true' /etc/docker/daemon.json | tee "${tmp}"
+          sudo cp "${tmp}" /etc/docker/daemon.json
           rm "${tmp}"
 
           sudo systemctl restart docker
+      - name: docker info
+        run: docker version; docker info
       - if: ${{ github.event_name == 'pull_request' }}
         name: Setup local registry
         run: |
@@ -64,10 +70,24 @@ jobs:
 
             if [[ "$source" == *"windows"* ]]; then
               platform="--platform windows/amd64"
+            else
+              platform="--platform linux/amd64"
             fi
 
             docker pull ${platform} "$source"
             docker tag "$source" "$dest"
 
-            docker push ${platform} "$dest"
+            docker push ${platform} "$dest" || (
+              echo "Failed to push $dest"
+              img_digest="$(sudo ctr -n moby image list | grep $dest | awk '{ print $3 }')"
+              img_index="$(sudo ctr -n moby content get "$img_digest" | jq)"
+              jq <<<"$img_index"
+              manifest_digest="$(jq -r '.manifests | map(select(.platform.architecture == "amd64")) | first | .digest' <<<"$img_index")"
+              sudo ctr -n moby content get "${manifest_digest}" | jq
+
+              exit 42
+            )
           done
+      - if: failure()
+        name: daemon logs
+        run: sudo journalctl -u docker

@@ -54,3 +54,6 @@
 
 - source: "mcr.microsoft.com/cbl-mariner/base/core:2.0"
   dest: mirror/mcr/cbl-mariner/base/core:2.0
+
+- source: "mcr.microsoft.com/oss/go/microsoft/golang:1.23"
+  dest: mirror/mcr/oss/go/microsoft/golang:1.23
