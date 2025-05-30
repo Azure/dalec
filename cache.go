@@ -15,6 +15,8 @@ const (
 	cacheMountLocked  = "locked"  // llb.CacheMountLocked
 	cacheMountPrivate = "private" // llb.CacheMountPrivate
 	cacheMountUnset   = ""
+
+	BazelDefaultSocketID = "bazel-default" // Default ID for bazel socket
 )
 
 // CacheConfig configures a cache to use for a build.
@@ -75,7 +77,7 @@ func WithCacheDirConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
 	})
 }
 
-func (c *CacheConfig) ToRunOption(distroKey string, opts ...CacheConfigOption) llb.RunOption {
+func (c *CacheConfig) ToRunOption(worker llb.State, distroKey string, opts ...CacheConfigOption) llb.RunOption {
 	if c.Dir != nil {
 		return c.Dir.ToRunOption(distroKey, CacheDirOptionFunc(func(info *CacheDirInfo) {
 			var cacheInfo CacheInfo
@@ -97,7 +99,7 @@ func (c *CacheConfig) ToRunOption(distroKey string, opts ...CacheConfigOption) l
 	}
 
 	if c.Bazel != nil {
-		return c.Bazel.ToRunOption(distroKey, BazelCacheOptionFunc(func(info *BazelCacheInfo) {
+		return c.Bazel.ToRunOption(worker, distroKey, BazelCacheOptionFunc(func(info *BazelCacheInfo) {
 			var cacheInfo CacheInfo
 			for _, opt := range opts {
 				opt.SetCacheConfigOption(&cacheInfo)
@@ -364,7 +366,7 @@ type BazelCacheOption interface {
 	SetBazelCacheOption(*BazelCacheInfo)
 }
 
-func (c *BazelCache) ToRunOption(distroKey string, opts ...BazelCacheOption) llb.RunOption {
+func (c *BazelCache) ToRunOption(worker llb.State, distroKey string, opts ...BazelCacheOption) llb.RunOption {
 	return RunOptFunc(func(ei *llb.ExecInfo) {
 		var info BazelCacheInfo
 
@@ -391,6 +393,7 @@ func (c *BazelCache) ToRunOption(distroKey string, opts ...BazelCacheOption) llb
 
 		const (
 			cacheDir = "/tmp/dalec/bazel-local-cache"
+			sockPath = "/tmp/dalec/bazel-remote.sock"
 		)
 
 		rcFileContent := "build --disk_cache=" + cacheDir + "\n"
@@ -399,7 +402,14 @@ func (c *BazelCache) ToRunOption(distroKey string, opts ...BazelCacheOption) llb
 			WithConstraint(info.constraints),
 		)
 
+		rcFile = worker.Run(
+			llb.AddSSHSocket(llb.SSHID(BazelDefaultSocketID), llb.SSHSocketTarget(sockPath), llb.SSHOptional),
+			ShArgsf("if [ -S %q ]; then echo build --remote_cache=unix:/%s >> /tmp/dalec/bazelrc; fi", sockPath, sockPath),
+			llb.IgnoreCache,
+		).AddMount("/tmp/dalec/bazelrc", rcFile, llb.SourcePath("bazelrc"))
+
 		llb.AddMount("/etc/bazel.bazelrc", rcFile, llb.SourcePath("bazelrc")).SetRunOption(ei)
 		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
+		llb.AddSSHSocket(llb.SSHID(BazelDefaultSocketID), llb.SSHSocketTarget(sockPath), llb.SSHOptional).SetRunOption(ei)
 	})
 }

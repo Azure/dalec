@@ -6,14 +6,23 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"log"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/sessionutil/socketprovider"
 	"github.com/Azure/dalec/targets"
+	"github.com/Azure/dalec/test/testenv"
+	"github.com/buchgr/bazel-remote/v2/cache/disk"
+	bazelremote "github.com/buchgr/bazel-remote/v2/server"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"google.golang.org/grpc"
+	"gotest.tools/v3/assert"
 )
 
 func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConfig) {
@@ -238,12 +247,40 @@ genrule(
 
 	dirCmd := "dir=$(grep disk_cache /etc/bazel.bazelrc | awk -F'=' '{ print $2 }')"
 
+	// Setup the bazel "remote" cache server.
+	var pipeL socketprovider.PipeListener
+	defer pipeL.Close()
+
+	srv := grpc.NewServer()
+	cacheDir := t.TempDir()
+	logger := &bazelRemoteLogger{t}
+
+	log.SetOutput(io.Discard) // Disable bazel-remote's default logging to avoid cluttering the test output
+	diskCache, err := disk.New(cacheDir, 10*1024*1024, disk.WithAccessLogger(log.New(io.Discard, "", 0)))
+	log.SetOutput(os.Stderr) // Restore logging to stderr for bazel-remote
+	assert.NilError(t, err)
+
+	origPaths := make(map[string]struct{}, 20)
+	err = filepath.Walk(cacheDir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		origPaths[p] = struct{}{}
+		return nil
+	})
+	assert.NilError(t, err)
+
+	go bazelremote.ServeGRPC(&pipeL, srv, false, false, true, diskCache, logger, logger)
+
 	// Write to the bazel cache using bazel itself
-	spec := newSpec(`[ ! -d "${dir}/ac" ]`, `[ ! -d "${dir}/cas" ]`, "cd src; bazel build --announce_rc //:hello")
+	spec := newSpec(`[ ! -d "${dir}/ac" ]`, `[ ! -d "${dir}/cas" ]`, "[ -S /tmp/dalec/bazel-remote.sock ]", "cd src; bazel build --announce_rc //:hello")
 	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
 		solveT(ctx, t, client, sr)
-	})
+	}, testenv.WithSocketProxies(socketprovider.ProxyConfig{
+		ID:     dalec.BazelDefaultSocketID,
+		Dialer: pipeL.Dialer,
+	}))
 
 	// Now validate that bazel wrote to the cache
 	spec = newSpec(dirCmd, `[ -d "${dir}/ac" ]`, `[ -d "${dir}/cas" ]`)
@@ -251,6 +288,29 @@ genrule(
 		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)
 	})
+
+	// Make sure bazel wrote to our "remote" cache.
+	newPaths := make(map[string]struct{}, 20)
+	err = filepath.Walk(cacheDir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if _, ok := origPaths[p]; ok {
+			return nil
+		}
+		newPaths[p] = struct{}{}
+		return nil
+	})
+	assert.NilError(t, err)
+	assert.Assert(t, len(newPaths) > 0, "expected bazel to write to the cache")
+}
+
+type bazelRemoteLogger struct {
+	t *testing.T
+}
+
+func (l *bazelRemoteLogger) Printf(format string, args ...interface{}) {
+	l.t.Logf(format, args...)
 }
 
 func testAutoGobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {
