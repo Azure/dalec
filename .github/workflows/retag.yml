@@ -11,7 +11,7 @@ on:
     paths:
       - '.github/workflows/retag/images.yml'
       - '.github/workflows/retag.yml'
-
+      - 'cmd/retagger/**'
 
 permissions:
   contents: read
@@ -47,47 +47,26 @@ jobs:
       - name: docker info
         run: docker version; docker info
       - if: ${{ github.event_name == 'pull_request' }}
-        name: Setup local registry
+        name: Setup retag registry (pr)
         run: |
           set -ex -o pipefail
           docker run -d --rm --name registry -p 5000:5000 ghcr.io/azure/dalec/mirror/dockerhub/library/registry:latest
           echo "RETAG_REGISTRY=localhost:5000" >> $GITHUB_ENV
+          echo "RETAG_REGISTRY_USE_HTTP=true" >> $GITHUB_ENV
       - if: ${{ github.event_name != 'pull_request' }}
-        name: Setup local registry
+        name: Setup retag registry (non-pr)
         run: |
           set -ex -o pipefail
           repo="ghcr.io/${{ github.repository }}"
           repo="$(tr '[:upper:]' '[:lower:]' <<<"$repo")"
           echo "RETAG_REGISTRY=${repo}" >> $GITHUB_ENV
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: '1.23'
+          cache: true
       - name: Retag images
         run: |
-
-          yq eval '.[] | [.source, .dest ] | @tsv' ./.github/workflows/retag/images.yml | while IFS=$'\t' read -r source dest; do
-            dest="${RETAG_REGISTRY}/$dest"
-            echo "Retagging $source to $dest"
-
-            platform=""
-
-            if [[ "$source" == *"windows"* ]]; then
-              platform="--platform windows/amd64"
-            else
-              platform="--platform linux/amd64"
-            fi
-
-            docker pull ${platform} "$source"
-            docker tag "$source" "$dest"
-
-            docker push ${platform} "$dest" || (
-              echo "Failed to push $dest"
-              img_digest="$(sudo ctr -n moby image list | grep $dest | awk '{ print $3 }')"
-              img_index="$(sudo ctr -n moby content get "$img_digest" | jq)"
-              jq <<<"$img_index"
-              manifest_digest="$(jq -r '.manifests | map(select(.platform.architecture == "amd64")) | first | .digest' <<<"$img_index")"
-              sudo ctr -n moby content get "${manifest_digest}" | jq
-
-              exit 42
-            )
-          done
+          go run ./cmd/retagger .github/workflows/retag/images.yml
       - if: failure()
         name: daemon logs
         run: sudo journalctl -u docker
