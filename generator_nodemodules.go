@@ -52,11 +52,12 @@ func withNodeMod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constr
 		srcMount := llb.AddMount(workDir, srcSt)
 
 		var installCmd string
-		if g.NodeMod.PackageManager == "yarn" {
+		switch g.NodeMod.PackageManager {
+		case "yarn":
 			installCmd = "npm install --cache " + npmCacheDir + " -g yarn; yarn config set yarn-offline-mirror " + yarnCacheDir + "; yarn install"
-		} else if g.NodeMod.PackageManager == "npm" {
+		case "npm":
 			installCmd = "npm install --cache " + npmCacheDir
-		} else {
+		default:
 			panic("unsupported package manager: " + g.NodeMod.PackageManager)
 		}
 
