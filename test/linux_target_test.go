@@ -1112,7 +1112,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					{Command: "[ -f ./src/package.json ]"},
 					{Command: "[ -f ./src/npm.lock ]"},
 					{Command: "[ -f ./src/index.js ]"},
-					{Command: "node_cache=\"$(pwd)/__nodemods-cache/npm-dalec-cache\"; cd ./src; npm install --offline --cache \"${node_cache}\"; npm start > result.txt"},
+					{Command: "node_cache=\"../__nodemods-cache/npm-dalec-cache\"; cd ./src; npm install --offline --cache \"${node_cache}\"; npm start > result.txt"},
 				},
 			},
 			Artifacts: dalec.Artifacts{
