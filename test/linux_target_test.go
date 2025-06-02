@@ -1096,7 +1096,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 							Files: map[string]*dalec.SourceInlineFile{
 								"package.json": {Contents: npmPackageJson},
 								"npm.lock":     {Contents: npmPackageLockJson},
-								"index.js":     {Contents: npmIndexJS},
+								"index.js":     {Contents: IndexJS},
 							},
 						},
 					},
@@ -1105,8 +1105,6 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Dependencies: &dalec.PackageDependencies{
 				Build: map[string]dalec.PackageConstraints{
 					testConfig.GetPackage("npm"): {},
-					// testConfig.GetPackage("node"): {},
-
 				},
 			},
 			Build: dalec.ArtifactBuild{
@@ -1114,6 +1112,95 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					{Command: "[ -f ./src/package.json ]"},
 					{Command: "[ -f ./src/npm.lock ]"},
 					{Command: "[ -f ./src/index.js ]"},
+					{Command: "node_cache=\"$(pwd)/__nodemods-cache/npm-dalec-cache\"; cd ./src; npm install --offline --cache \"${node_cache}\"; npm start > result.txt"},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/result.txt": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check npm result",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/bin/result.txt": {
+							CheckOutput: dalec.CheckOutput{
+								Contains: []string{"Lodash chunk: [ [ 1, 2 ], [ 3, 4 ] ]"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
+		})
+	})
+
+	t.Run("node yarn generator", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-build-with-nodeyarn-generator",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing container target with node npm generator",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Generate: []*dalec.SourceGenerator{
+						{
+							NodeMod: &dalec.GeneratorNodeMod{
+								PackageManager: "yarn",
+							},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"package.json": {Contents: npmPackageJson},
+								"yarn.lock":    {Contents: yarnLock},
+								"index.js":     {Contents: IndexJS},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					testConfig.GetPackage("npm"): {},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{Command: "[ -f ./src/package.json ]"},
+					{Command: "[ -f ./src/yarn.lock ]"},
+					{Command: "[ -f ./src/index.js ]"},
+					{Command: "cd ./src; yarn install --offline; npm start > result.txt"},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/result.txt": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check yarn result",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/bin/result.txt": {
+							CheckOutput: dalec.CheckOutput{
+								Contains: []string{"Lodash chunk: [ [ 1, 2 ], [ 3, 4 ] ]"},
+							},
+						},
+					},
 				},
 			},
 		}

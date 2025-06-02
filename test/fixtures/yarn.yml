@@ -11,22 +11,71 @@ packager: Microsoft <support@microsoft.com>
 license: Apache 2.0
 sources:
   src:
-    context: {}
-    path: "./website"
-    includes:
-    - "*"
+    # context: {}
+    # path: "./website"
+    # includes:
+    # - "*"
     generate:
     - nodemod:
         package_manager: npm
+    inline:
+      dir:
+        files:
+          "package.json":
+            contents: |
+              {
+                "name": "npm-test",
+                "version": "1.0.0",
+                "main": "index.js",
+                "scripts": {
+                  "test": "echo \"Error: no test specified\" && exit 1",
+                  "start": "node index.js"
+                },
+                "keywords": [],
+                "author": "",
+                "license": "MIT",
+                "description": "",
+                "dependencies": {
+                  "lodash": "^4.17.21"
+                }
+              }
+          "npm.lock":
+            contents: |
+              {
+                "name": "npm-test",
+                "version": "1.0.0",
+                "lockfileVersion": 3,
+                "requires": true,
+                "packages": {
+                  "": {
+                    "name": "npm-test",
+                    "version": "1.0.0",
+                    "license": "MIT",
+                    "dependencies": {
+                      "lodash": "^4.17.21"
+                    }
+                  },
+                  "node_modules/lodash": {
+                    "version": "4.17.21",
+                    "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz",
+                    "integrity": "sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==",
+                    "license": "MIT"
+                  }
+                }
+              }
+          "index.js":
+            contents: |
+              const _ = require('lodash');
+              console.log('Lodash chunk:', _.chunk([1,2,3,4], 2));
 dependencies:
   build:
     npm: {}
-    ca-certificates: {}
-    nodejs: {}
+    # ca-certificates: {}
+    # nodejs: {}
   runtime:
     npm: {}
-    ca-certificates: {}
-    nodejs: {}
+    # ca-certificates: {}
+    # nodejs: {}
 
 build:
   # network_mode: sandbox
@@ -40,7 +89,7 @@ build:
         cd src
         ls -lha
         npm install --offline --cache $cpath/__nodemods-cache/npm-dalec-cache
-        npm run build --cache $cpath/__nodemods-cache/npm-dalec-cache
+        npm start > ./result.log
         echo $?
     # yarn
     # - command: |
@@ -54,10 +103,18 @@ build:
     #     yarn install --offline
     #     yarn build
     #     echo $?
-image:
-  base: mcr.microsoft.com/cbl-mariner/base/core:2.0
+# image:
+#   base: mcr.microsoft.com/cbl-mariner/base/core:2.0
 
 artifacts:
   binaries:
     src: {}
     __nodemods-cache: {}
+    src/result.log: {}
+
+tests:
+  - name: package files
+    files:
+      /usr/bin/result.log:
+        contains:
+          - "Lodash chunk: [ [ 1, 2 ], [ 3, 4 ] ]"
