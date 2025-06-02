@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	isRootLess     bool
+	isRootless     bool
 	isRootlessOnce sync.Once
 )
 
@@ -128,7 +128,7 @@ func getGitServerAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (st
 		rootlessInsideAddr  = "10.0.2.2" // as per the docs here: https://docs.docker.com/engine/release-notes/26.0/#new
 	)
 
-	if !isRootless(ctx, t, c) {
+	if setupIsRootful(ctx, t, c) {
 		addr := getExtraHostRootful(t)
 		return addr, addr
 	}
@@ -173,6 +173,7 @@ func assertDockerdEnvironment(t *testing.T, dockerdPid int) {
 	scanner := bufio.NewScanner(f)
 	scanner.Split(nullCharSplit)
 
+	var envIsSet bool
 	for scanner.Scan() {
 		k, v, ok := strings.Cut(scanner.Text(), "=")
 		if !ok || k != envVarRootlessKitLocalhostKey {
@@ -180,8 +181,15 @@ func assertDockerdEnvironment(t *testing.T, dockerdPid int) {
 		}
 
 		if v != envVarRootlessKitLocalhostValue {
+			// aborts the loop
 			t.Fatalf("You have a rootless setup. In order to permit TCP service forwarding, you must restart the docker daemon with the %q env var set to %q", envVarRootlessKitLocalhostKey, envVarRootlessKitLocalhostValue)
 		}
+
+		envIsSet = true
+	}
+
+	if !envIsSet {
+		t.Fatalf("You have a rootless setup. In order to permit TCP service forwarding, you must restart the docker daemon with the %q env var set to %q", envVarRootlessKitLocalhostKey, envVarRootlessKitLocalhostValue)
 	}
 }
 
@@ -1395,7 +1403,7 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 	})
 }
 
-func isRootless(ctx context.Context, t *testing.T, client gwclient.Client) bool {
+func setupIsRootless(ctx context.Context, t *testing.T, client gwclient.Client) bool {
 	isRootlessOnce.Do(func() {
 		st := llb.Image("mcr.microsoft.com/azurelinux/base/core:3.0", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"})).Run(llb.Args([]string{
 			"bash", "-c", `
@@ -1432,15 +1440,19 @@ echo "$x" > /tmp/out
 		var a, b, c int
 		if _, err := fmt.Fscanf(uidMap, "%d %d %d", &a, &b, &c); err != nil {
 			// Assume we are in a regular, non user namespace.
-			isRootLess = false
+			isRootless = false
 			return
 		}
 
 		// As per user_namespaces(7), /proc/self/uid_map of
 		// the initial user namespace shows 0 0 4294967295.
 		initNS := a == 0 && b == 0 && c == 4294967295
-		isRootLess = !initNS
+		isRootless = !initNS
 	})
 
-	return isRootLess
+	return isRootless
+}
+
+func setupIsRootful(ctx context.Context, t *testing.T, client gwclient.Client) bool {
+	return !setupIsRootless(ctx, t, client)
 }
