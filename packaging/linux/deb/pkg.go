@@ -19,7 +19,7 @@ const (
 	cargohomeName = "xxxdalecCargoHomeInternal"
 	// Unique name that would not normally be in the spec
 	// This will get used to create the source tar for node module deps
-	nodeModsName = "xxxdalecNodeModulesInternal"
+	nodeModsName = "__nodemods-cache"
 )
 
 func mountSources(sources map[string]llb.State, dir string, mod func(string) string) llb.RunOption {

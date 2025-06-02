@@ -1183,7 +1183,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					{Command: "[ -f ./src/package.json ]"},
 					{Command: "[ -f ./src/yarn.lock ]"},
 					{Command: "[ -f ./src/index.js ]"},
-					{Command: "cd ./src; yarn install --offline; npm start > result.txt"},
+					{Command: "cd ./src; yarn install --offline; yarn start > result.txt"},
 				},
 			},
 			Artifacts: dalec.Artifacts{
