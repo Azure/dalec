@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	v8TargetKey    = "rockylinux8"
+	V8TargetKey    = "rockylinux8"
 	dnfCacheNameV8 = "rockylinux8-dnf-cache"
 
 	// v8Ref is the image ref used for the base worker image
@@ -24,7 +24,7 @@ var ConfigV8 = &distro.Config{
 
 	ReleaseVer:         "8",
 	BuilderPackages:    builderPackages,
-	BasePackages:       basePackages(v8TargetKey),
+	BasePackages:       basePackages(V8TargetKey),
 	RepoPlatformConfig: &defaultPlatformConfig,
 	InstallFunc:        distro.DnfInstall,
 }
