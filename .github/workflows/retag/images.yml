@@ -40,6 +40,9 @@
 - source: "alpine:latest"
   dest: mirror/dockerhub/library/alpine:latest
 
+- source: "rust:latest"
+  dest: mirror/dockerhub/library/rust:latest
+
 - source: "mcr.microsoft.com/windows/nanoserver:ltsc2022"
   dest: mirror/mcr/windows/nanoserver:ltsc2022
 
