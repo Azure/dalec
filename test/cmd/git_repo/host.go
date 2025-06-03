@@ -30,7 +30,7 @@ func run() error {
 	}
 
 	repo := args[1]
-	addr := "127.0.0.1"
+	addr := "0.0.0.0"
 	port := args[3]
 	gitHandler := githttp.New(repo)
 	authr := auth.Authenticator(func(ai auth.AuthInfo) (bool, error) {
