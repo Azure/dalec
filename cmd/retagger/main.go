@@ -21,6 +21,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/goccy/go-yaml"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/sync/semaphore"
 )
 
 type retagConfig struct {
@@ -177,7 +178,8 @@ func run(ctx context.Context, configPath string, rcfg runConfig) error {
 			if err != nil {
 				return fmt.Errorf("error creating pusher for destination %s: %w", cfg.Dest, err)
 			}
-			return remotes.PushContent(ctx, pusher, desc, cp, nil, platforms.All, nil)
+			sem := semaphore.NewWeighted(5)
+			return remotes.PushContent(ctx, pusher, desc, cp, sem, platforms.All, nil)
 		})
 	}
 
