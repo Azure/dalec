@@ -270,7 +270,6 @@ jobs:
             echo USE_BUILDX=1 >> $GITHUB_ENV
           else
             echo DALEC_NO_CACHE_EXPORT="1" >> $GITHUB_ENV
-            echo DALEC_DISABLE_NESTED="1" >> $GITHUB_ENV
             echo FRONTEND_BAKE_TARGET="frontend-ci" >> $GITHUB_ENV
           fi
       - name: Build frontend image

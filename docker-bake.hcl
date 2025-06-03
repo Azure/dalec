@@ -3,7 +3,7 @@ group "default" {
 }
 
 group "test" {
-    targets = ["test-fixture", "runc-test", "test-deps-only"]
+    targets = ["runc-test", "test-deps-only"]
 }
 
 variable "FRONTEND_REF" {
@@ -109,36 +109,6 @@ target "runc-test" {
     dockerfile-inline = <<EOT
     FROM dalec-runc-img
     EOT
-}
-
-# When running with docker <= v24, the nested build will fail with the following error:
-#   missing provenance for 61xav4v751u8cuhj3ydxmgoob
-# This is due to a bug in buildkit. Its already been fixed but not yet backported to moby v24.
-# This should be removed once the bug is fixed.
-variable "DALEC_DISABLE_NESTED" {
-    default = "0"
-}
-
-target "test-fixture" {
-    name = "test-fixture-${f}"
-    matrix = {
-        f = DALEC_DISABLE_NESTED == "1" ? (
-            ["http-src", "frontend", "local-context", "cmd-src-ref"]
-        ) : (
-            ["http-src", "frontend", "local-context", "cmd-src-ref", "nested"]
-        )
-        tgt = ["mariner2/container"]
-    }
-    dockerfile = "test/fixtures/${f}.yml"
-
-    args = {
-        "BUILDKIT_SYNTAX" = "dalec_frontend"
-        "DALEC_DISABLE_DIFF_MERGE" = DALEC_DISABLE_DIFF_MERGE
-    }
-    contexts = {
-        "dalec_frontend" = "target:frontend"
-    }
-    target = tgt
 }
 
 variable "BUILD_SPEC" {
