@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	v9TargetKey    = "almalinux9"
+	V9TargetKey    = "almalinux9"
 	dnfCacheNameV9 = "almalinux9-dnf-cache"
 
 	// v9Ref is the image ref used for the base worker image
@@ -24,7 +24,7 @@ var ConfigV9 = &distro.Config{
 
 	ReleaseVer:         "9",
 	BuilderPackages:    builderPackages,
-	BasePackages:       basePackages(v9TargetKey),
+	BasePackages:       basePackages(V9TargetKey),
 	RepoPlatformConfig: &defaultPlatformConfig,
 	InstallFunc:        distro.DnfInstall,
 }
