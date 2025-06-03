@@ -37,6 +37,9 @@
 - source: "rockylinux:8"
   dest: mirror/dockerhub/library/rockylinux:8
 
+- source: "alpine:latest"
+  dest: mirror/dockerhub/library/alpine:latest
+
 - source: "mcr.microsoft.com/windows/nanoserver:ltsc2022"
   dest: mirror/mcr/windows/nanoserver:ltsc2022
 
