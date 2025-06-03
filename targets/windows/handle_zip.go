@@ -242,9 +242,9 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 	}
 
 	if spec.HasNodeMods() {
-		fmt.Fprintln(buf, "export NPM_CONFIG_CACHE=\"$(pwd)/"+nodeModsName+"\"")
+		fmt.Fprintln(buf, "export NPM_CONFIG_CACHE=\"$(pwd)/"+npmCacheDir+"\"")
 		if spec.HasYarnPackageManager() {
-			fmt.Fprintln(buf, "npm install --offline -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+nodeModsName)
+			fmt.Fprintln(buf, "npm install --offline -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheDir)
 		}
 	}
 	// add node_modules if they exist?
