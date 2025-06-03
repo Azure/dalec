@@ -10,7 +10,7 @@ const (
 	BullseyeAptCachePrefix    = "bullseye"
 	BullseyeWorkerContextName = "dalec-bullseye-worker"
 
-	bullseyeRef       = "mcr.microsoft.com/mirror/docker/library/debian:bullseye"
+	bullseyeRef       = "docker.io/library/debian:bullseye"
 	bullseyeVersionID = "debian11"
 )
 

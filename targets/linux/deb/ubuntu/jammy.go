@@ -9,7 +9,7 @@ const (
 	JammyAptCachePrefix    = "jammy"
 	JammyWorkerContextName = "dalec-jammy-worker"
 
-	jammyRef       = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
+	jammyRef       = "docker.io/library/ubuntu:jammy"
 	JammyVersionID = "ubuntu22.04"
 )
 

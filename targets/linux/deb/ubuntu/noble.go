@@ -9,7 +9,7 @@ const (
 	NobleAptCachePrefix    = "noble"
 	NobleWorkerContextName = "dalec-noble-worker"
 
-	nobleRef       = "mcr.microsoft.com/mirror/docker/library/ubuntu:noble"
+	nobleRef       = "docker.io/library/ubuntu:noble"
 	nobleVersionID = "ubuntu24.04"
 )
 
