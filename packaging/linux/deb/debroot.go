@@ -299,7 +299,7 @@ func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	}
 
 	if spec.HasYarnPackageManager() {
-		fmt.Fprintln(buf, "npm install --offline --cache \"$(pwd)/"+npmCacheDir+"\" -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheDir)
+		fmt.Fprintln(buf, "npm install --offline -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheDir)
 		fmt.Fprint(buf, "\n")
 	}
 	return buf.Bytes()

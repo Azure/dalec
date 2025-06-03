@@ -88,7 +88,9 @@ build:
         ls -lha $cpath/__nodemods-cache
         cd src
         ls -lha
-        npm install --offline --cache $cpath/__nodemods-cache/npm-dalec-cache
+        # export NPM_CONFIG_CACHE=$cpath/__nodemods-cache/npm-dalec-cache
+        npm install
+        # npm install --offline --cache $cpath/__nodemods-cache/npm-dalec-cache
         npm start > ./result.log
         echo $?
     # yarn
