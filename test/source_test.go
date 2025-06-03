@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
@@ -245,7 +246,7 @@ outer:
 
 func runGitServer(ctx context.Context, t *testing.T, client gwclient.Client, addr string, port int, host string) error {
 	const serverRoot = "/git_server"
-	const repoDir = "/user/private"
+	const repoDir = "/user/private.git"
 	const repoMountpoint = serverRoot + repoDir
 
 	var modFile bytes.Buffer
@@ -279,13 +280,19 @@ git tag v0.0.0
 		t.Fatal(err)
 	}
 
-	gitServerSt, err := dc.MainContext(ctx)
+	gitServerProgramPtr, err := dc.MainContext(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	gitServerProgramSt := *gitServerProgramPtr
+	gitServerBinSt := worker.Run(
+		dalec.ShArgs("cd /tmp/dalec/internal/dalec && go build -o /tmp/out/host ./test/cmd/git_repo"),
+		llb.AddMount("/tmp/dalec/internal/dalec", gitServerProgramSt),
+	).AddMount("/tmp/out", llb.Scratch())
+
 	workerRef := stateToRef(ctx, t, client, worker)
-	gitServerRef := stateToRef(ctx, t, client, *gitServerSt)
+	gitServerProgramRef := stateToRef(ctx, t, client, gitServerBinSt)
 
 	cont, err := client.NewContainer(ctx, gwclient.NewContainerRequest{
 		Mounts: []gwclient.Mount{
@@ -295,12 +302,13 @@ git tag v0.0.0
 				Readonly: true,
 			},
 			{
-				Dest:     "/tmp/dalec/internal/dalec",
-				Ref:      gitServerRef,
+				Dest:     "/git_repo",
+				Ref:      gitServerProgramRef,
 				Readonly: true,
 			},
 		},
-		// Hostname: "hello.world.internal",
+		Hostname: "",
+		NetMode:  pb.NetMode_HOST,
 		ExtraHosts: []*pb.HostIP{
 			{
 				Host: host,
@@ -318,7 +326,7 @@ git tag v0.0.0
 	}
 
 	envArr := env.ToArray()
-	invocation := fmt.Sprintf(`go run ./test/cmd/git_repo %s %s %d`, serverRoot, addr, port)
+	invocation := fmt.Sprintf(`/git_repo/host %s %s %d`, serverRoot, addr, port)
 
 	cp, err := cont.Start(ctx, gwclient.StartRequest{
 		Args: []string{
@@ -328,7 +336,6 @@ git tag v0.0.0
 		},
 		Env:       envArr,
 		SecretEnv: []*pb.SecretEnv{},
-		Cwd:       "/tmp/dalec/internal/dalec",
 		Stdin:     os.Stdin,
 		Stdout:    os.Stdout,
 		Stderr:    os.Stderr,
@@ -340,8 +347,29 @@ git tag v0.0.0
 	go func() {
 		if err := cp.Wait(); err != nil {
 			t.Logf("unexpected server error: %s", err)
+			t.FailNow()
 		}
 	}()
+
+	time.Sleep(time.Second * 86400)
+
+	// var failed int
+	// const maxFailed = 20
+	// for {
+	// 	time.Sleep(time.Second)
+	// 	if failed > maxFailed {
+	// 		t.Fatalf("unable to connect to git server")
+	// 	}
+
+	// 	c, err := net.Dial("tcp", fmt.Sprintf("%s:%d", "127.0.0.1", port))
+	// 	if err != nil {
+	// 		failed++
+	// 		continue
+	// 	}
+
+	// 	_ = c.Close()
+	// 	break
+	// }
 
 	return nil
 }

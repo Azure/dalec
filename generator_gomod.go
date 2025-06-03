@@ -131,6 +131,8 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State 
 
 	fmt.Fprintf(&script, "go env -w GOPRIVATE=%s", strings.Join(goPrivate, ","))
 	script.WriteRune('\n')
+	fmt.Fprintf(&script, "go env -w GOINSECURE=%s", strings.Join(goPrivate, ","))
+	script.WriteRune('\n')
 	fmt.Fprintln(&script, "go mod download")
 	return llb.Scratch().File(llb.Mkfile(scriptPath, 0o755, script.Bytes()))
 }
