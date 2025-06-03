@@ -8,9 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net"
-	"net/http"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"runtime"
@@ -18,14 +16,14 @@ import (
 	"sync"
 	"testing"
 
-	githttp "github.com/AaronO/go-git-http"
-	"github.com/AaronO/go-git-http/auth"
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/Azure/dalec/test/testenv"
 	ps "github.com/mitchellh/go-ps"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -43,7 +41,7 @@ func TestGomodGitAuthHTTPS(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	sourceName := "gitauth"
 
-	testEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
+	netHostTestEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
 		const gomodFmt = `module %[1]s/user/public
 
 go 1.23.5
@@ -83,7 +81,7 @@ require %[1]s/user/private.git v0.0.0
 		}
 
 		outsideAddr, insideAddr := getGitServerAddrs(ctx, t, c)
-		if err := runGitServer(ctx, t, outsideAddr, port, host); err != nil {
+		if err := runGitServer(ctx, t, c, outsideAddr, port, host); err != nil {
 			t.Fatal(err)
 		}
 
@@ -124,7 +122,7 @@ func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
 
 func getGitServerAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
 	const (
-		rootlessOutsideAddr = "localhost"
+		rootlessOutsideAddr = "127.0.0.1"
 		rootlessInsideAddr  = "10.0.2.2" // as per the docs here: https://docs.docker.com/engine/release-notes/26.0/#new
 	)
 
@@ -245,74 +243,125 @@ outer:
 	return pid
 }
 
-func runGitServer(ctx context.Context, t *testing.T, addr string, port int, host string) error {
-	td := t.TempDir()
-	privateGitRepo := filepath.Join(td, "user", "private")
-	if err := os.MkdirAll(privateGitRepo, 0o755); err != nil {
+func runGitServer(ctx context.Context, t *testing.T, client gwclient.Client, addr string, port int, host string) error {
+	const serverRoot = "/git_server"
+	const repoDir = "/user/private"
+	const repoMountpoint = serverRoot + repoDir
+
+	var modFile bytes.Buffer
+	fmt.Fprintf(&modFile, `module %s/user/private.git`, serverRoot)
+	modFile.WriteRune('\n')
+	modFile.WriteString("\n\ngo 1.23.5\n")
+
+	repo := llb.Scratch().
+		File(
+			llb.Mkdir(repoDir, 0o755, llb.WithParents(true)).
+				Mkfile(repoDir+"/hello", 0o644, []byte("hello\n")).
+				Mkfile(repoDir+"/go.mod", 0o644, modFile.Bytes()),
+		)
+
+	worker := initGomodWorker(client, host, port)
+	worker = worker.File(llb.Copy(repo, "/", serverRoot))
+	worker = worker.Dir(repoMountpoint).Run(dalec.ShArgs(`
+set -ex
+export GIT_CONFIG_NOGLOBAL=true
+git init
+git config user.name foo
+git config user.email foo@bar.com
+
+git add -A
+git commit -m commit --no-gpg-sign
+git tag v0.0.0
+    `)).Root()
+
+	dc, err := dockerui.NewClient(client)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	git := func(args ...string) {
-		c := exec.Command("git", args...)
-		c.Dir = privateGitRepo
-		c.Env = append(c.Env, "GIT_CONFIG_NOGLOBAL=true")
-
-		out, err := c.CombinedOutput()
-		if err != nil {
-			t.Fatalf("%s: %s", err, out)
-		}
-	}
-
-	git("init")
-	git("config", "user.name", "foo")
-	git("config", "user.email", "foo@bar.com")
-
-	const repoFileBase = "hello"
-	repoFile := filepath.Join(privateGitRepo, repoFileBase)
-
-	if err := os.WriteFile(repoFile, []byte("hello\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(privateGitRepo, "go.mod"), []byte(fmt.Sprintf(`module %s/user/private.git
-
-go 1.23.5
-`, host)), 0o644); err != nil {
+	gitServerSt, err := dc.MainContext(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	git("add", "-A")
-	git("commit", "-m", "commit", "--no-gpg-sign")
-	git("tag", "v0.0.0")
+	workerRef := stateToRef(ctx, t, client, worker)
+	gitServerRef := stateToRef(ctx, t, client, *gitServerSt)
 
-	gitHandler := githttp.New(td)
-	authr := auth.Authenticator(func(ai auth.AuthInfo) (bool, error) {
-		if ai.Push {
-			return false, nil
-		}
-
-		if ai.Username == "x-access-token" && ai.Password == "value" {
-			return true, nil
-		}
-
-		return false, nil
+	cont, err := client.NewContainer(ctx, gwclient.NewContainerRequest{
+		Mounts: []gwclient.Mount{
+			{
+				Dest:     "/",
+				Ref:      workerRef,
+				Readonly: true,
+			},
+			{
+				Dest:     "/tmp/dalec/internal/dalec",
+				Ref:      gitServerRef,
+				Readonly: true,
+			},
+		},
+		// Hostname: "hello.world.internal",
+		ExtraHosts: []*pb.HostIP{
+			{
+				Host: host,
+				IP:   addr,
+			},
+		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	s := http.Server{Addr: fmt.Sprintf("%s:%d", addr, port)}
-	http.Handle("/", authr(gitHandler))
-	t.Cleanup(func() {
-		if err := s.Shutdown(ctx); err != nil {
-			t.Log(err)
-		}
+	env, err := worker.Env(ctx)
+	if err != nil {
+		t.Logf("unable to copy env: %s", err)
+	}
+
+	envArr := env.ToArray()
+	invocation := fmt.Sprintf(`go run ./test/cmd/git_repo %s %s %d`, serverRoot, addr, port)
+
+	cp, err := cont.Start(ctx, gwclient.StartRequest{
+		Args: []string{
+			"sh",
+			"-c",
+			invocation,
+		},
+		Env:       envArr,
+		SecretEnv: []*pb.SecretEnv{},
+		Cwd:       "/tmp/dalec/internal/dalec",
+		Stdin:     os.Stdin,
+		Stdout:    os.Stdout,
+		Stderr:    os.Stderr,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	t.Logf("starting git server on %s:%d, hosted in directory %s", addr, port, td)
 	go func() {
-		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := cp.Wait(); err != nil {
 			t.Logf("unexpected server error: %s", err)
 		}
 	}()
 
 	return nil
+}
+
+func stateToRef(ctx context.Context, t *testing.T, client gwclient.Client, st llb.State) gwclient.Reference {
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		t.Fatalf("could not marshal git repo llb: %s", err)
+	}
+
+	res, err := client.Solve(ctx, gwclient.SolveRequest{Definition: def.ToPB()})
+	if err != nil {
+		t.Fatalf("could not solve git repo llb %s", err)
+	}
+
+	ref, err := res.SingleRef()
+	if err != nil {
+		t.Fatalf("could not convert result to single ref %s", err)
+	}
+	return ref
 }
 
 func getAvailablePort(t *testing.T) int {
