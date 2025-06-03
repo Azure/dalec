@@ -9,7 +9,7 @@ const (
 	BionicAptCachePrefix    = "bionic"
 	BionicWorkerContextName = "dalec-bionic-worker"
 
-	bionicRef       = "mcr.microsoft.com/mirror/docker/library/ubuntu:bionic"
+	bionicRef       = "docker.io/library/ubuntu:bionic"
 	bionicVersionID = "ubuntu18.04"
 )
 

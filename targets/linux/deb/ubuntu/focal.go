@@ -9,7 +9,7 @@ const (
 	FocalAptCachePrefix    = "focal"
 	FocalWorkerContextName = "dalec-focal-worker"
 
-	focalRef       = "mcr.microsoft.com/mirror/docker/library/ubuntu:focal"
+	focalRef       = "docker.io/library/ubuntu:focal"
 	focalVersionID = "ubuntu20.04"
 )
 

@@ -17,7 +17,7 @@ import (
 const (
 	DefaultTargetKey              = "windowscross"
 	outputKey                     = "windows"
-	workerImgRef                  = "mcr.microsoft.com/mirror/docker/library/ubuntu:jammy"
+	workerImgRef                  = "docker.io/library/ubuntu:jammy"
 	WindowscrossWorkerContextName = "dalec-windowscross-worker"
 )
 

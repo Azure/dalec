@@ -9,7 +9,7 @@ const (
 	BookwormAptCachePrefix    = "bookworm"
 	BookwormWorkerContextName = "dalec-bookworm-worker"
 
-	bookwormRef       = "mcr.microsoft.com/mirror/docker/library/debian:bookworm"
+	bookwormRef       = "docker.io/library/debian:bookworm"
 	bookwormVersionID = "debian12"
 )
 

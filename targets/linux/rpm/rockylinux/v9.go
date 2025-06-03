@@ -9,7 +9,7 @@ const (
 	dnfCacheNameV9 = "rockylinux9-dnf-cache"
 
 	// v9Ref is the image ref used for the base worker image
-	v9Ref      = "mcr.microsoft.com/mirror/docker/library/rockylinux:9"
+	v9Ref      = "docker.io/library/rockylinux:9"
 	v9FullName = "rockyLinux 9"
 	// v9WorkerContextName is the build context name that can be used to lookup
 	v9WorkerContextName = "dalec-rockylinux9-worker"

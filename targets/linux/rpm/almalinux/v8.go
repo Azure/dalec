@@ -9,7 +9,7 @@ const (
 	dnfCacheNameV8 = "almalinux8-dnf-cache"
 
 	// v8Ref is the image ref used for the base worker image
-	v8Ref      = "mcr.microsoft.com/mirror/docker/library/almalinux:8"
+	v8Ref      = "docker.io/library/almalinux:8"
 	v8FullName = "AlmaLinux 8"
 	// v8WorkerContextName is the build context name that can be used to lookup
 	v8WorkerContextName = "dalec-almalinux8-worker"
