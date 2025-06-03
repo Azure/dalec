@@ -16,8 +16,8 @@ var (
 	}
 
 	targets = map[string]gwclient.BuildFunc{
-		v8TargetKey: ConfigV8.Handle,
-		v9TargetKey: ConfigV9.Handle,
+		V8TargetKey: ConfigV8.Handle,
+		V9TargetKey: ConfigV9.Handle,
 	}
 
 	defaultPlatformConfig = dalec.RepoPlatformConfig{
