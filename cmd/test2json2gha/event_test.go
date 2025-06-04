@@ -35,6 +35,42 @@ const (
 {"Time":"2025-03-31T09:46:20.327954-07:00","Action":"output","Package":"some_package","Test":"TestGenSkip","Output":"    foo_test.go:47: some skip reason\n"}
 {"Time":"2025-03-31T09:46:20.327971-07:00","Action":"output","Package":"some_package","Test":"TestGenSkip","Output":"--- SKIP: TestGenSkip (0.00s)\n"}
 {"Time":"2025-03-31T09:46:20.327977-07:00","Action":"skip","Package":"some_package","Test":"TestGenSkip","Elapsed":0}
+{"Time":"2025-06-04T09:51:33.180898-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"=== RUN   TestGenTimeout\n"}
+{"Time":"2025-06-04T09:51:33.180943-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"    foo_test.go:9: some log message\n"}
+{"Time":"2025-06-04T09:51:34.183903-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"panic: test timed out after 1s\n"}
+{"Time":"2025-06-04T09:51:34.183948-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\trunning tests:\n"}
+{"Time":"2025-06-04T09:51:34.183955-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t\tTestGenTimeout (1s)\n"}
+{"Time":"2025-06-04T09:51:34.18396-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\n"}
+{"Time":"2025-06-04T09:51:34.183965-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"goroutine 23 [running]:\n"}
+{"Time":"2025-06-04T09:51:34.18397-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"testing.(*M).startAlarm.func1()\n"}
+{"Time":"2025-06-04T09:51:34.183974-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:2484 +0x308\n"}
+{"Time":"2025-06-04T09:51:34.184331-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"created by time.goFunc\n"}
+{"Time":"2025-06-04T09:51:34.184344-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/time/sleep.go:215 +0x38\n"}
+{"Time":"2025-06-04T09:51:34.18435-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\n"}
+{"Time":"2025-06-04T09:51:34.184355-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"goroutine 1 [chan receive]:\n"}
+{"Time":"2025-06-04T09:51:34.184359-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"testing.(*T).Run(0x14000103500, {0x104c8448d?, 0x14000269b38?}, 0x10500a490)\n"}
+{"Time":"2025-06-04T09:51:34.184365-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:1859 +0x388\n"}
+{"Time":"2025-06-04T09:51:34.184493-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"testing.runTests.func1(0x14000103500)\n"}
+{"Time":"2025-06-04T09:51:34.184503-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:2279 +0x40\n"}
+{"Time":"2025-06-04T09:51:34.184509-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"testing.tRunner(0x14000103500, 0x14000269c68)\n"}
+{"Time":"2025-06-04T09:51:34.184534-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:1792 +0xe4\n"}
+{"Time":"2025-06-04T09:51:34.184543-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"testing.runTests(0x14000129410, {0x1056b7400, 0x19, 0x19}, {0x140002da760?, 0x7?, 0x1056c5420?})\n"}
+{"Time":"2025-06-04T09:51:34.184708-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:2277 +0x3ec\n"}
+{"Time":"2025-06-04T09:51:34.184716-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"testing.(*M).Run(0x140002f66e0)\n"}
+{"Time":"2025-06-04T09:51:34.184721-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:2142 +0x588\n"}
+{"Time":"2025-06-04T09:51:34.184726-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"main.main()\n"}
+{"Time":"2025-06-04T09:51:34.18473-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t_testmain.go:93 +0x90\n"}
+{"Time":"2025-06-04T09:51:34.184735-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\n"}
+{"Time":"2025-06-04T09:51:34.18474-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"goroutine 22 [sleep]:\n"}
+{"Time":"2025-06-04T09:51:34.184871-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"time.Sleep(0x12a05f200)\n"}
+{"Time":"2025-06-04T09:51:34.184927-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/runtime/time.go:338 +0x158\n"}
+{"Time":"2025-06-04T09:51:34.18495-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"github.com/Azure/dalec.TestGenTimeout(0x140001036c0)\n"}
+{"Time":"2025-06-04T09:51:34.184965-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/Users/cpuguy83/dev/dalec/gen_test.go:10 +0x58\n"}
+{"Time":"2025-06-04T09:51:34.18497-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"testing.tRunner(0x140001036c0, 0x10500a490)\n"}
+{"Time":"2025-06-04T09:51:34.184978-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:1792 +0xe4\n"}
+{"Time":"2025-06-04T09:51:34.184984-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"created by testing.(*T).Run in goroutine 1\n"}
+{"Time":"2025-06-04T09:51:34.184988-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"\t/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:1851 +0x374\n"}
+{"Time":"2025-06-04T09:51:34.185052-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"exit status 2\n"}
 {"Time":"2025-03-31T09:46:20.328007-07:00","Action":"output","Package":"some_package","Output":"FAIL\n"}
 {"Time":"2025-03-31T09:46:20.328475-07:00","Action":"output","Package":"some_package","Output":"FAIL\tsome_package\t0.249s\n"}
 {"Time":"2025-03-31T09:46:20.32851-07:00","Action":"fail","Package":"some_package","Elapsed":0.25}
@@ -43,6 +79,43 @@ const (
 	testEventPassOutput    = "=== RUN   TestGenPass\n    foo_test.go:38: some log\n--- PASS: TestGenPass (0.00s)\n"
 	testEventFailOutput    = "=== RUN   TestGenFail\n    foo_test.go:42: some error\n    build.go.go:42: some build message\n    foo_test.go:43: some fatal error\n--- FAIL: TestGenFail (0.00s)\n"
 	testEventSkipOutput    = "=== RUN   TestGenSkip\n    foo_test.go:47: some skip reason\n--- SKIP: TestGenSkip (0.00s)\n"
+	testEventTimeoutOutput = `=== RUN   TestGenTimeout
+    foo_test.go:9: some log message
+panic: test timed out after 1s
+	running tests:
+		TestGenTimeout (1s)
+
+goroutine 23 [running]:
+testing.(*M).startAlarm.func1()
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:2484 +0x308
+created by time.goFunc
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/time/sleep.go:215 +0x38
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0x14000103500, {0x104c8448d?, 0x14000269b38?}, 0x10500a490)
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:1859 +0x388
+testing.runTests.func1(0x14000103500)
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:2279 +0x40
+testing.tRunner(0x14000103500, 0x14000269c68)
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:1792 +0xe4
+testing.runTests(0x14000129410, {0x1056b7400, 0x19, 0x19}, {0x140002da760?, 0x7?, 0x1056c5420?})
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:2277 +0x3ec
+testing.(*M).Run(0x140002f66e0)
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:2142 +0x588
+main.main()
+	_testmain.go:93 +0x90
+
+goroutine 22 [sleep]:
+time.Sleep(0x12a05f200)
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/runtime/time.go:338 +0x158
+github.com/Azure/dalec.TestGenTimeout(0x140001036c0)
+	/Users/cpuguy83/dev/dalec/gen_test.go:10 +0x58
+testing.tRunner(0x140001036c0, 0x10500a490)
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:1792 +0xe4
+created by testing.(*T).Run in goroutine 1
+	/opt/homebrew/Cellar/go/1.24.3/libexec/src/testing/testing.go:1851 +0x374
+exit status 2
+`
 	testEventPackageOutput = "FAIL\nFAIL\tsome_package\t0.249s\n"
 
 	// This is for the error annotations handler which skips build logs so as not to overflow the github annotation.
@@ -82,7 +155,6 @@ func readTestEvents(t *testing.T) iter.Seq[*TestEvent] {
 }
 
 func TestOutputStreamer(t *testing.T) {
-
 	var output strings.Builder
 	streamer := &outputStreamer{out: &output}
 
@@ -91,8 +163,8 @@ func TestOutputStreamer(t *testing.T) {
 		assert.NilError(t, err)
 	}
 
-	expectedOutput := testEventPassOutput + testEventFailOutput + testEventSkipOutput + testEventPackageOutput
-	assert.Equal(t, output.String(), expectedOutput)
+	expectedOutput := testEventPassOutput + testEventFailOutput + testEventSkipOutput + testEventTimeoutOutput + testEventPackageOutput
+	assert.Equal(t, expectedOutput, output.String())
 }
 
 func TestOutputStreamer_HandleEvent(t *testing.T) {
@@ -104,7 +176,7 @@ func TestOutputStreamer_HandleEvent(t *testing.T) {
 		assert.NilError(t, err)
 	}
 
-	expectedOutput := testEventPassOutput + testEventFailOutput + testEventSkipOutput + testEventPackageOutput
+	expectedOutput := testEventPassOutput + testEventFailOutput + testEventSkipOutput + testEventTimeoutOutput + testEventPackageOutput
 	assert.Equal(t, output.String(), expectedOutput)
 }
 
@@ -116,21 +188,31 @@ func TestResultsHandler(t *testing.T) {
 		case "TestGenPass":
 			assert.Check(t, !r.failed)
 			assert.Check(t, !r.skipped)
+			assert.Check(t, !r.timeout)
 			output, err := io.ReadAll(r.Reader())
 			assert.NilError(t, err)
 			assert.Check(t, cmp.Equal(string(output), testEventPassOutput))
 		case "TestGenFail":
 			assert.Check(t, r.failed)
 			assert.Check(t, !r.skipped)
+			assert.Check(t, !r.timeout)
 			output, err := io.ReadAll(r.Reader())
 			assert.NilError(t, err)
 			assert.Check(t, cmp.Equal(string(output), testEventFailOutput))
 		case "TestGenSkip":
 			assert.Check(t, !r.failed)
 			assert.Check(t, r.skipped)
+			assert.Check(t, !r.timeout)
 			output, err := io.ReadAll(r.Reader())
 			assert.NilError(t, err)
 			assert.Check(t, cmp.Equal(string(output), testEventSkipOutput))
+		case "TestGenTimeout":
+			assert.Check(t, !r.failed)
+			assert.Check(t, !r.skipped)
+			assert.Check(t, r.timeout)
+			output, err := io.ReadAll(r.Reader())
+			assert.NilError(t, err)
+			assert.Check(t, cmp.Equal(string(output), testEventTimeoutOutput))
 		case "":
 			assert.Check(t, r.failed)
 			output, err := io.ReadAll(r.Reader())

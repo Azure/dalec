@@ -72,6 +72,8 @@ func do(in io.Reader, out io.Writer, cfg config) (bool, error) {
 	defer func() {
 		var wg waitGroup
 
+		results.markUnfinishedAsTimeout()
+
 		wg.Go(func() {
 			var rf ResultsFormatter
 			rf = &consoleFormatter{modName: cfg.modName, verbose: cfg.verbose}
