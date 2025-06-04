@@ -22,7 +22,6 @@ func main() {
 
 func run() error {
 	ctx := context.Background()
-	fmt.Println("HELLO")
 
 	args := os.Args
 	if len(args) < 4 {
@@ -30,7 +29,7 @@ func run() error {
 	}
 
 	repo := args[1]
-	addr := "0.0.0.0"
+	addr := args[2]
 	port := args[3]
 	gitHandler := githttp.New(repo)
 	authr := auth.Authenticator(func(ai auth.AuthInfo) (bool, error) {
