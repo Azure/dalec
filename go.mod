@@ -7,7 +7,7 @@ toolchain go1.23.2
 require (
 	github.com/atombender/go-jsonschema v0.17.0
 	github.com/cavaliergopher/rpm v1.3.0
-	github.com/containerd/containerd/v2 v2.0.4
+	github.com/containerd/containerd/v2 v2.0.5
 	github.com/containerd/platforms v1.0.0-rc.1
 	github.com/cpuguy83/dockercfg v0.3.2
 	github.com/distribution/reference v0.6.0
