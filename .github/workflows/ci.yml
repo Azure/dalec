@@ -167,9 +167,6 @@ jobs:
         env:
           TEST_SUITE: ${{ matrix.suite }}
           TEST_SKIP: ${{ matrix.skip }}
-      - name: dump logs
-        if: failure()
-        run: sudo journalctl -u docker
       - name: Get traces
         if: always()
         run: |
@@ -192,7 +189,23 @@ jobs:
           name: integration-test-logs-${{matrix.suite}}
           path: /tmp/testlogs/*
           retention-days: 1
+      - name: dump logs
+        if: failure()
+        id: dump-logs
+        run: |
+          set -e
 
+          dir="$(mktemp -d)"
+          f="${dir}/dockerd.log"
+          echo "DOCKERD_LOG_PATH=${f}" >> $GITHUB_OUTPUT
+          sudo journalctl -u docker > "${f}"
+      - name: Upload buildkit logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-dockerd-logs-${{ matrix.suite }}
+          path: ${{ steps.dump-logs.outputs.DOCKERD_LOG_PATH }}
+          retention-days: 1
 
   unit:
     runs-on: ubuntu-22.04
@@ -271,9 +284,23 @@ jobs:
           docker build -t go-md2man:$version -f docs/examples/go-md2man.yml --target=mariner2 .
       - name: dump logs
         if: failure()
+        id: dump-logs
         run: |
+          set -e
+
+          dir="$(mktemp -d)"
+          f="${dir}/dockerd.log"
+          echo "DOCKERD_LOG_PATH=${f}" >> $GITHUB_OUTPUT
           if [ "${USE_BUILDX}" = "1" ]; then
-            docker logs $(docker ps -lq)
+            docker logs $(docker ps -lq) > "${f}"
           else
-            sudo journalctl -u docker
+            sudo journalctl -u docker > "${f}"
           fi
+      - name: Upload buildkit logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-dockerd-logs-diffmerge=${{ matrix.disable_diff_merge }}
+          path: ${{ steps.dump-logs.outputs.DOCKERD_LOG_PATH }}
+          retention-days: 1
+
