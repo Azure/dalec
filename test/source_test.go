@@ -99,13 +99,35 @@ require %[1]s/user/private.git %[2]s
 		)
 
 		res := solveT(ctx, t, c, sr)
+		modDir := getModuleDirName(ctx, t, res)
+		filename := filepath.Join("host.docker.internal/user", modDir, "hello")
 
-		filename := filepath.Join(host, "user/private.git@v0.0.0/hello")
 		checkFile(ctx, t, filename, res, []byte("hello\n"))
 	}, testenv.WithSecrets(testenv.KeyVal{
 		K: "super-secret",
 		V: "value",
 	}), testenv.WithHostNetworking)
+}
+
+func getModuleDirName(ctx context.Context, t *testing.T, res *gwclient.Result) string {
+	ref, err := res.SingleRef()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+		Path:           "host.docker.internal/user",
+		IncludePattern: "private.git@*",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(stats) == 0 {
+		t.Fatalf("private go module directory not found")
+	}
+
+	return stats[0].Path
 }
 
 func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
@@ -252,11 +274,11 @@ outer:
 
 func runGitServer(ctx context.Context, t *testing.T, client gwclient.Client, addr string, port int, host string, tag string) error {
 	const serverRoot = "/git_server"
-	const repoDir = "/user/private.git"
+	const repoDir = "/user/private"
 	const repoMountpoint = serverRoot + repoDir
 
 	var modFile bytes.Buffer
-	fmt.Fprintf(&modFile, `module %s/user/private.git`, serverRoot)
+	fmt.Fprintf(&modFile, `module %s/user/private.git`, host)
 	modFile.WriteRune('\n')
 	modFile.WriteString("\n\ngo 1.23.5\n")
 
