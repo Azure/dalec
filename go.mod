@@ -17,7 +17,6 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/invopop/jsonschema v0.12.0
-	github.com/mitchellh/go-ps v1.0.0
 	github.com/moby/buildkit v0.20.2
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/moby/go-archive v0.1.0
@@ -30,6 +29,7 @@ require (
 	github.com/vearutop/dynhist-go v1.2.3
 	go.opentelemetry.io/otel v1.31.0
 	go.opentelemetry.io/otel/sdk v1.31.0
+	golang.org/x/crypto v0.36.0
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 	golang.org/x/sync v0.12.0
 	golang.org/x/sys v0.31.0
@@ -99,7 +99,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.31.0 // indirect
 	go.opentelemetry.io/otel/trace v1.31.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
