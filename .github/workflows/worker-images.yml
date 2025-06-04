@@ -1,0 +1,117 @@
+name: Build Worker Images
+
+on:
+  push:
+    branches:
+      - main
+      - 'releases/*'
+    tags:
+      - 'v[0-9]+.[0-9]+.*'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/worker-images/matrix.json'
+      - '.github/workflows/worker-images.yml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git reference to build worker images for'
+        required: true
+        default: ''
+        type: string
+
+jobs:
+  load-matrix:
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        uses:  actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Checkout code (workflow_dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses:  actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.inputs.ref }}
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          MATRIX=$(cat .github/workflows/worker-images/matrix.json)
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  build-worker-images:
+    permissions:
+      contents: read
+      packages: write
+    needs: load-matrix
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.load-matrix.outputs.matrix) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        name: Login to GHCR
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/enable-containerd
+      - uses: ./.github/actions/setup-source-policy
+        name: Setup Source Policy
+        id: source-policy
+      - name: Setup environment
+        run: |
+          echo MAIN_CACHE_SCOPE=main.${{ matrix.target }} >> $GITHUB_ENV
+
+          tag="${{ github.ref_name }}"
+          tag="${tag//\//-}" # Replace slashes with dashes
+          echo "IMAGE_REPO=${{ steps.source-policy.outputs.formatted-repo }}/${{ matrix.target }}:tag"  >> $GITHUB_ENV
+      - if: ${{ github.event_name == 'pull_request' }}
+        name: Setup up (PR)
+        run: |
+          set -eux
+          # Here we try to build this as much like a release as possible, but we push to a local registry
+
+          ref="localhost:5000/${IMAGE_REPO}"
+          EXTRA_FLAGS="--set worker.cache-from=type=gha,scope=${MAIN_CACHE_SCOPE} --set worker.tags=${ref} --push"
+          echo "EXTRA_FLAGS=${EXTRA_FLAGS}" >> $GITHUB_ENV
+
+          docker run -d --net=host ghcr.io/${{ steps.source-policy.outputs.formatted-repo }}/dockerhub/mirror/library/registry:latest
+      - if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+        name: Setup (tagged)
+        run: |
+          set -eux
+
+          ref="ghcr.io/${IMAGE_REPO}"
+
+          # Don't need o care about cache-from in this case as this is the "prod" image, better to build it from scratch
+          # Inline the cache with the image so others can use it as a cache-from for their own builds.
+          EXTRA_FLAGS="--set worker.cache-to=type=inline,mode=max --set worker.tags=${ref} --push"
+
+          echo "EXTRA_FLAGS=${EXTRA_FLAGS}" >> $GITHUB_ENV
+      - if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
+        name: Setup (merged)
+        run: |
+          set -ex -o pipefail
+          EXTRA_FLAGS=--set worker.cache-to=type=gha,scope=main.${{matrix.target}},mode=max --set worker.cache-from=type=gha,scope=${MAIN_CACHE_SCOPE}"
+          echo "EXTRA_FLAGS=${EXTRA_FLAGS}" >> $GITHUB_ENV
+      - name: Setup QEMU
+        run: docker run --rm --privileged tonistiigi/binfmt:latest --install all
+      - name: Expose GitHub tokens for caching
+        uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
+      - name: Build worker images
+        run: |
+          set -eux
+
+          docker buildx bake worker \
+            --set worker.platform=linux/amd64,linux/arm64 \
+            ${EXTRA_FLAGS}
+        env:
+          WORKER_TARGET: ${{ matrix.target }}

@@ -1,6 +1,11 @@
 name: 'Setup BuildKit Source Policy'
 description: 'Sets up BUILDKIT_SOURCE_POLICY environment variable with processed policy.json'
 
+outputs:
+  formatted-repo:
+    description: 'Formatted repository name for use in the policy file taken from the format-repo action for convenience.'
+    value: ${{ steps.format-repo.outputs.result }}
+
 runs:
   using: 'composite'
   steps:
