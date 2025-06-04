@@ -10,19 +10,16 @@ import (
 	"io/fs"
 	"net"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/Azure/dalec/test/testenv"
-	ps "github.com/mitchellh/go-ps"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -32,20 +29,17 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-var (
-	isRootless     bool
-	isRootlessOnce sync.Once
-)
-
 func TestGomodGitAuthHTTPS(t *testing.T) {
 	t.Parallel()
 
 	const host = "host.docker.internal"
+	const addr = "127.0.0.1"
 
 	ctx := startTestSpan(baseCtx, t)
 	sourceName := "gitauth"
 
 	tag := identity.NewID()
+	netHostTestEnv := testenv.NewWithBuildxInstance(ctx, t)
 
 	netHostTestEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
 		const gomodFmt = `module %[1]s/user/public
@@ -75,7 +69,7 @@ require %[1]s/user/private.git %[2]s
 						{
 							Gomod: &dalec.GeneratorGomod{
 								Auth: map[string]dalec.GomodGitAuth{
-									fmt.Sprintf("%s:%d", host, port): {
+									fmt.Sprintf("%s:%s", host, port): {
 										Token: "super-secret",
 									},
 								},
@@ -86,15 +80,14 @@ require %[1]s/user/private.git %[2]s
 			},
 		}
 
-		outsideAddr, insideAddr := getGitServerAddrs(ctx, t, c)
-		if err := runGitServer(ctx, t, c, outsideAddr, port, host, tag); err != nil {
+		if err := runGitServer(ctx, t, c, addr, port, host, tag); err != nil {
 			t.Fatal(err)
 		}
 
 		sr := newSolveRequest(
 			withBuildTarget("debug/gomods"),
 			withSpec(ctx, t, spec),
-			withExtraHost(host, insideAddr),
+			withExtraHost(host, addr),
 			withBuildContext(ctx, t, "gomod-worker", initGomodWorker(c, host, port)),
 		)
 
@@ -130,7 +123,7 @@ func getModuleDirName(ctx context.Context, t *testing.T, res *gwclient.Result) s
 	return stats[0].Path
 }
 
-func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
+func initGomodWorker(c gwclient.Client, host, port string) llb.State {
 	worker := llb.Image("alpine:latest", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"}), llb.WithMetaResolver(c)).
 		Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh netcat-openbsd")).Root()
 
@@ -139,7 +132,7 @@ func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
 		worker = worker.Run(
 			dalec.ShArgs(cmd),
 			llb.AddEnv("HOST", host),
-			llb.AddEnv("PORT", strconv.Itoa(port)),
+			llb.AddEnv("PORT", port),
 		).Root()
 	}
 
@@ -147,24 +140,6 @@ func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
 	run(`sh -c 'git config --global credential."http://${HOST}:${PORT}.helper" "/usr/local/bin/frontend credential-helper --kind=token"'`)
 
 	return worker
-}
-
-func getGitServerAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
-	const (
-		rootlessOutsideAddr = "127.0.0.1"
-		rootlessInsideAddr  = "127.0.0.1" // as per the docs here: https://docs.docker.com/engine/release-notes/26.0/#new
-	)
-
-	if setupIsRootful(ctx, t, c) {
-		addr := getExtraHostRootful(t)
-		return addr, addr
-	}
-
-	// These may fast-fail the test if the configuration is wrong
-	dockerdPid := getDockerdPid(t)
-	assertDockerdEnvironment(t, dockerdPid)
-
-	return rootlessOutsideAddr, rootlessInsideAddr
 }
 
 func nullCharSplit(data []byte, atEOF bool) (int, []byte, error) {
@@ -186,93 +161,7 @@ func nullCharSplit(data []byte, atEOF bool) (int, []byte, error) {
 	return i + 1, data[:i], err
 }
 
-func assertDockerdEnvironment(t *testing.T, dockerdPid int) {
-	const (
-		envVarRootlessKitLocalhostKey   = "DOCKERD_ROOTLESS_ROOTLESSKIT_DISABLE_HOST_LOOPBACK"
-		envVarRootlessKitLocalhostValue = "false"
-	)
-
-	f, err := os.Open(fmt.Sprintf("/proc/%d/environ", dockerdPid))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	scanner := bufio.NewScanner(f)
-	scanner.Split(nullCharSplit)
-
-	var envIsSet bool
-	for scanner.Scan() {
-		k, v, ok := strings.Cut(scanner.Text(), "=")
-		if !ok || k != envVarRootlessKitLocalhostKey {
-			continue
-		}
-
-		if v != envVarRootlessKitLocalhostValue {
-			// aborts the loop
-			t.Fatalf("You have a rootless setup. In order to permit TCP service forwarding, you must restart the docker daemon with the %q env var set to %q", envVarRootlessKitLocalhostKey, envVarRootlessKitLocalhostValue)
-		}
-
-		envIsSet = true
-	}
-
-	if !envIsSet {
-		t.Fatalf("You have a rootless setup. In order to permit TCP service forwarding, you must restart the docker daemon with the %q env var set to %q", envVarRootlessKitLocalhostKey, envVarRootlessKitLocalhostValue)
-	}
-}
-
-func getDockerdPid(t *testing.T) int {
-	const dockerProcName = "dockerd"
-	procs, err := ps.Processes()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	currentUser, err := user.Current()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var pid int
-
-outer:
-	for _, proc := range procs {
-		name := proc.Executable()
-		if filepath.Base(name) != dockerProcName {
-			continue
-		}
-
-		pp := proc.Pid()
-
-		f, err := os.Open(fmt.Sprintf("/proc/%d/status", pp))
-		if err != nil {
-			t.Fatal(err)
-		}
-		scanner := bufio.NewScanner(f)
-
-		for scanner.Scan() {
-			t := scanner.Text()
-			_, val, ok := strings.Cut(t, "Uid:")
-			if !ok {
-				continue
-			}
-
-			val = strings.TrimSpace(val)
-			if !strings.HasPrefix(val, currentUser.Uid) {
-				continue outer
-			}
-
-			pid = pp
-			break outer
-		}
-	}
-
-	if pid == 0 {
-		t.Fatal("cannot find pid of docker daemon")
-	}
-	return pid
-}
-
-func runGitServer(ctx context.Context, t *testing.T, client gwclient.Client, addr string, port int, host string, tag string) error {
+func runGitServer(ctx context.Context, t *testing.T, client gwclient.Client, addr, port, host, tag string) error {
 	const serverRoot = "/git_server"
 	const repoDir = "/user/private"
 	const repoMountpoint = serverRoot + repoDir
@@ -353,15 +242,10 @@ git tag %s
 	}
 
 	envArr := env.ToArray()
-	envArr = append(envArr, "HOST="+host, "ADDR="+addr, "PORT="+strconv.Itoa(port))
+	envArr = append(envArr, "HOST="+host, "ADDR="+addr, "PORT="+port)
 
 	cp, err := cont.Start(ctx, gwclient.StartRequest{
-		Args: []string{
-			"/git_repo/host",
-			serverRoot,
-			addr,
-			strconv.Itoa(port),
-		},
+		Args:      []string{"/git_repo/host", serverRoot, addr, port},
 		Env:       envArr,
 		SecretEnv: []*pb.SecretEnv{},
 		Stdin:     os.Stdin,
@@ -429,7 +313,7 @@ func stateToRef(ctx context.Context, t *testing.T, client gwclient.Client, st ll
 	return ref
 }
 
-func getAvailablePort(t *testing.T) int {
+func getAvailablePort(t *testing.T) string {
 	addr, err := net.ResolveTCPAddr("tcp", ":0")
 	if err != nil {
 		t.Fatal(err)
@@ -449,7 +333,7 @@ func getAvailablePort(t *testing.T) int {
 	}
 
 	p := tcpa.Port
-	return p
+	return strconv.Itoa(p)
 }
 
 func withExtraHost(host string, ipv4 string) func(cfg *newSolveRequestConfig) {
@@ -471,6 +355,7 @@ func withExtraHost(host string, ipv4 string) func(cfg *newSolveRequestConfig) {
 }
 
 func getExtraHostRootful(t *testing.T) string {
+	return "127.0.0.1"
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		t.Fatal(err)
@@ -1515,58 +1400,4 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 			t.Fatal("expected error, got none")
 		}
 	})
-}
-
-func setupIsRootless(ctx context.Context, t *testing.T, client gwclient.Client) bool {
-	isRootlessOnce.Do(func() {
-		st := llb.Image("mcr.microsoft.com/azurelinux/base/core:3.0", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"})).Run(llb.Args([]string{
-			"bash", "-c", `
-set -exu
-read -r x < /proc/self/uid_map
-echo "$x" > /tmp/out
-            `,
-		})).AddMount("/tmp", llb.Scratch())
-		def, err := st.Marshal(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		res, err := client.Solve(ctx, gwclient.SolveRequest{
-			Definition: def.ToPB(),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		ref, err := res.SingleRef()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		bs, err := ref.ReadFile(ctx, gwclient.ReadRequest{
-			Filename: "/out",
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		uidMap := bytes.NewBuffer(bs)
-		var a, b, c int
-		if _, err := fmt.Fscanf(uidMap, "%d %d %d", &a, &b, &c); err != nil {
-			// Assume we are in a regular, non user namespace.
-			isRootless = false
-			return
-		}
-
-		// As per user_namespaces(7), /proc/self/uid_map of
-		// the initial user namespace shows 0 0 4294967295.
-		initNS := a == 0 && b == 0 && c == 4294967295
-		isRootless = !initNS
-	})
-
-	return isRootless
-}
-
-func setupIsRootful(ctx context.Context, t *testing.T, client gwclient.Client) bool {
-	return !setupIsRootless(ctx, t, client)
 }

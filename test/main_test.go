@@ -22,7 +22,6 @@ import (
 var (
 	baseCtx          = context.Background()
 	testEnv          *testenv.BuildxEnv
-	netHostTestEnv   *testenv.BuildxEnv
 	externalTestHost = os.Getenv("TEST_DALEC_EXTERNAL_HOST")
 )
 
@@ -69,7 +68,6 @@ func TestMain(m *testing.M) {
 	otel.SetTracerProvider(tp)
 
 	testEnv = testenv.New()
-	netHostTestEnv = testenv.New().WithBuilder("lol_rootless")
 
 	run := func() int {
 		ctx, done := signal.NotifyContext(baseCtx, os.Interrupt)
@@ -102,14 +100,6 @@ func TestMain(m *testing.M) {
 		}
 
 		if err := testEnv.Load(ctx, phonySignerRef, fixtures.PhonySigner); err != nil {
-			panic(err)
-		}
-
-		if err := netHostTestEnv.Load(ctx, phonyRef, fixtures.PhonyFrontend); err != nil {
-			panic(err)
-		}
-
-		if err := netHostTestEnv.Load(ctx, phonySignerRef, fixtures.PhonySigner); err != nil {
 			panic(err)
 		}
 
