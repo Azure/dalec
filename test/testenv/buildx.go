@@ -280,6 +280,12 @@ func WithSecrets(kvs ...KeyVal) TestRunnerOpt {
 	}
 }
 
+func WithHostNetworking(trc *TestRunnerConfig) {
+	trc.SolveOptFns = append(trc.SolveOptFns, func(so *client.SolveOpt) {
+		so.AllowedEntitlements = append(so.AllowedEntitlements, "network.host")
+	})
+}
+
 func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts ...TestRunnerOpt) {
 	var cfg TestRunnerConfig
 

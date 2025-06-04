@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -99,19 +101,19 @@ require %[1]s/user/private.git v0.0.0
 	}, testenv.WithSecrets(testenv.KeyVal{
 		K: "super-secret",
 		V: "value",
-	}))
+	}), testenv.WithHostNetworking)
 }
 
 func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
 	worker := llb.Image("alpine:latest", llb.Platform(ocispecs.Platform{Architecture: runtime.GOARCH, OS: "linux"}), llb.WithMetaResolver(c)).
-		Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh")).Root()
+		Run(llb.Shlex("apk add --no-cache go git ca-certificates patch openssh netcat-openbsd")).Root()
 
 	run := func(cmd string) {
 		// tell git to use the port along with the host
 		worker = worker.Run(
-			llb.Shlex(cmd),
+			dalec.ShArgs(cmd),
 			llb.AddEnv("HOST", host),
-			llb.AddEnv("PORT", fmt.Sprintf("%d", port)),
+			llb.AddEnv("PORT", strconv.Itoa(port)),
 		).Root()
 	}
 
@@ -124,7 +126,7 @@ func initGomodWorker(c gwclient.Client, host string, port int) llb.State {
 func getGitServerAddrs(ctx context.Context, t *testing.T, c gwclient.Client) (string, string) {
 	const (
 		rootlessOutsideAddr = "127.0.0.1"
-		rootlessInsideAddr  = "10.0.2.2" // as per the docs here: https://docs.docker.com/engine/release-notes/26.0/#new
+		rootlessInsideAddr  = "127.0.0.1" // as per the docs here: https://docs.docker.com/engine/release-notes/26.0/#new
 	)
 
 	if setupIsRootful(ctx, t, c) {
@@ -307,8 +309,7 @@ git tag v0.0.0
 				Readonly: true,
 			},
 		},
-		Hostname: "",
-		NetMode:  pb.NetMode_HOST,
+		NetMode: pb.NetMode_HOST,
 		ExtraHosts: []*pb.HostIP{
 			{
 				Host: host,
@@ -326,13 +327,14 @@ git tag v0.0.0
 	}
 
 	envArr := env.ToArray()
-	invocation := fmt.Sprintf(`/git_repo/host %s %s %d`, serverRoot, addr, port)
+	envArr = append(envArr, "HOST="+host, "ADDR="+addr, "PORT="+strconv.Itoa(port))
 
 	cp, err := cont.Start(ctx, gwclient.StartRequest{
 		Args: []string{
-			"sh",
-			"-c",
-			invocation,
+			"/git_repo/host",
+			serverRoot,
+			addr,
+			strconv.Itoa(port),
 		},
 		Env:       envArr,
 		SecretEnv: []*pb.SecretEnv{},
@@ -347,29 +349,39 @@ git tag v0.0.0
 	go func() {
 		if err := cp.Wait(); err != nil {
 			t.Logf("unexpected server error: %s", err)
-			t.FailNow()
 		}
 	}()
 
-	time.Sleep(time.Second * 86400)
+	t.Log("waiting for git server to come online")
+	ctxT, cancel := context.WithTimeout(ctx, time.Second*20)
+	defer cancel()
 
-	// var failed int
-	// const maxFailed = 20
-	// for {
-	// 	time.Sleep(time.Second)
-	// 	if failed > maxFailed {
-	// 		t.Fatalf("unable to connect to git server")
-	// 	}
+	// netcat's -z will return 0 if a connection can be made, 1 if not
+	// -w5 means timeout after 5 seconds
+	untilConnected, err := cont.Start(ctxT, gwclient.StartRequest{
+		Env: envArr,
+		Args: []string{
+			"sh", "-c", `
+while ! nc -zw5 "$ADDR" "$PORT"; do
+	sleep 0.1
+done
+			`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("could not check progress of git server: %s", err)
+	}
 
-	// 	c, err := net.Dial("tcp", fmt.Sprintf("%s:%d", "127.0.0.1", port))
-	// 	if err != nil {
-	// 		failed++
-	// 		continue
-	// 	}
+	if err := untilConnected.Wait(); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("Could not start git server: %s", err)
+		}
 
-	// 	_ = c.Close()
-	// 	break
-	// }
+		t.Fatalf("could not check progress of git server: %s", err)
+	}
+
+	t.Logf("git server is online")
+	// time.Sleep(86400 * time.Second)
 
 	return nil
 }
