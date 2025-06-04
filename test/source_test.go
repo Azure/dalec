@@ -26,6 +26,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -44,15 +45,17 @@ func TestGomodGitAuthHTTPS(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	sourceName := "gitauth"
 
+	tag := identity.NewID()
+
 	netHostTestEnv.RunTest(ctx, t, func(ctx context.Context, c gwclient.Client) {
 		const gomodFmt = `module %[1]s/user/public
 
 go 1.23.5
 
-require %[1]s/user/private.git v0.0.0
+require %[1]s/user/private.git %[2]s
 `
 
-		gomodContents := fmt.Sprintf(gomodFmt, host)
+		gomodContents := fmt.Sprintf(gomodFmt, host, tag)
 		port := getAvailablePort(t)
 
 		spec := &dalec.Spec{
@@ -84,7 +87,7 @@ require %[1]s/user/private.git v0.0.0
 		}
 
 		outsideAddr, insideAddr := getGitServerAddrs(ctx, t, c)
-		if err := runGitServer(ctx, t, c, outsideAddr, port, host); err != nil {
+		if err := runGitServer(ctx, t, c, outsideAddr, port, host, tag); err != nil {
 			t.Fatal(err)
 		}
 
@@ -94,6 +97,7 @@ require %[1]s/user/private.git v0.0.0
 			withExtraHost(host, insideAddr),
 			withBuildContext(ctx, t, "gomod-worker", initGomodWorker(c, host, port)),
 		)
+
 		res := solveT(ctx, t, c, sr)
 
 		filename := filepath.Join(host, "user/private.git@v0.0.0/hello")
@@ -246,7 +250,7 @@ outer:
 	return pid
 }
 
-func runGitServer(ctx context.Context, t *testing.T, client gwclient.Client, addr string, port int, host string) error {
+func runGitServer(ctx context.Context, t *testing.T, client gwclient.Client, addr string, port int, host string, tag string) error {
 	const serverRoot = "/git_server"
 	const repoDir = "/user/private.git"
 	const repoMountpoint = serverRoot + repoDir
@@ -265,7 +269,7 @@ func runGitServer(ctx context.Context, t *testing.T, client gwclient.Client, add
 
 	worker := initGomodWorker(client, host, port)
 	worker = worker.File(llb.Copy(repo, "/", serverRoot))
-	worker = worker.Dir(repoMountpoint).Run(dalec.ShArgs(`
+	worker = worker.Dir(repoMountpoint).Run(dalec.ShArgsf(`
 set -ex
 export GIT_CONFIG_NOGLOBAL=true
 git init
@@ -274,8 +278,8 @@ git config user.email foo@bar.com
 
 git add -A
 git commit -m commit --no-gpg-sign
-git tag v0.0.0
-    `)).Root()
+git tag %s
+    `, tag)).Root()
 
 	dc, err := dockerui.NewClient(client)
 	if err != nil {
@@ -381,7 +385,6 @@ done
 	}
 
 	t.Logf("git server is online")
-	// time.Sleep(86400 * time.Second)
 
 	return nil
 }
