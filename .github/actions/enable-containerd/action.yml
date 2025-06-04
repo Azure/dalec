@@ -1,0 +1,23 @@
+name: Enable containerd backend in Docker
+description: 'Enables the containerd snapshotter in Docker by modifying the daemon.json configuration file.'
+
+runs:
+  using: 'composite'
+  steps:
+      - name: Configure dockerd
+        shell: bash
+        run: |
+          set -ex -o pipefail
+
+          docker ps -a
+          docker images
+
+          sudo mkdir -p /etc/docker
+          test ! -f /etc/docker/daemon.json && echo '{}' | sudo tee /etc/docker/daemon.json
+
+          tmp="$(mktemp)"
+          jq '.features["containerd-snapshotter"] = true' /etc/docker/daemon.json | tee "${tmp}"
+          sudo cp "${tmp}" /etc/docker/daemon.json
+          rm "${tmp}"
+
+          sudo systemctl restart docker

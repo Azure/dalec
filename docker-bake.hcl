@@ -16,6 +16,11 @@ variable "DALEC_DISABLE_DIFF_MERGE" {
     default = "0"
 }
 
+variable "WORKER_TARGET" {
+    default = "must set WORKER_TARGET variable to the target to build for the worker"
+}
+
+
 target "frontend" {
     // uses default Dockerfile
     target = "frontend"
@@ -201,3 +206,15 @@ target "frontend-ci-full" {
     inherits = ["frontend-ci"]
     platforms = ["linux/amd64", "linux/arm64"]
 }
+
+target "worker" {
+    target = WORKER_TARGET
+    dockerfile-inline = "{}"
+    args = {
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+        "dalec_frontend" = "target:frontend"
+    }
+}
+
