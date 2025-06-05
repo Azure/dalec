@@ -1085,15 +1085,71 @@ build:
       env:
         OS: ${TARGETOS}
         TARGET: ${DALEC_TARGET}
+        EPOCH: ${SOURCE_DATE_EPOCH}
 `)
 		spec, err := LoadSpec(dt)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		err = spec.SubstituteArgs(map[string]string{})
+		epochValue := "1609459200"
+		err = spec.SubstituteArgs(map[string]string{
+			"SOURCE_DATE_EPOCH": epochValue,
+		})
 		assert.ErrorContains(t, err,
 			`opt-in arg "TARGETOS" not present in args`)
+		assert.Check(t, cmp.Equal(spec.Build.Steps[0].Env["EPOCH"], epochValue))
+	})
+
+	t.Run("SOURCE_DATE_EPOCH passthrough", func(t *testing.T) {
+		dt := []byte(`
+args:
+
+build:
+  steps:
+    - command: echo "$SOURCE_DATE_EPOCH"
+      env:
+        SOURCE_DATE_EPOCH: ${SOURCE_DATE_EPOCH}
+`)
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		epochValue := "1609459200"
+		err = spec.SubstituteArgs(map[string]string{
+			"SOURCE_DATE_EPOCH": epochValue,
+		})
+		assert.NilError(t, err)
+		assert.Check(t, cmp.Equal(spec.Build.Steps[0].Command, `echo `+epochValue))
+	})
+
+	t.Run("SOURCE_DATE_EPOCH with explicit declaration", func(t *testing.T) {
+		dt := []byte(`
+args:
+  SOURCE_DATE_EPOCH: "999999999"  # default value
+
+build:
+  steps:
+    - command: echo ${SOURCE_DATE_EPOCH}
+`)
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = spec.SubstituteArgs(map[string]string{
+			"SOURCE_DATE_EPOCH": "1609459200",
+		})
+		assert.NilError(t, err)
+		assert.Check(t, cmp.Contains(spec.Build.Steps[0].Command, "1609459200"))
+
+		spec2, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = spec2.SubstituteArgs(map[string]string{})
+		assert.NilError(t, err)
+		assert.Check(t, cmp.Contains(spec2.Build.Steps[0].Command, "999999999"))
 	})
 }
 
