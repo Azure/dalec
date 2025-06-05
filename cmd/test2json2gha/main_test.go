@@ -18,8 +18,11 @@ const (
 func TestDo(t *testing.T) {
 	passGroup := "::group::some_package.TestGenPass\n" + testEventPassOutput + "::endgroup::\n"
 	failGroup := "::group::some_package.TestGenFail\n" + testEventFailOutput + "::endgroup::\n"
+	timeoutGroup := "::group::some_package.TestGenTimeout\n::warning::Test timed out\n" + testEventTimeoutOutput + "::endgroup::\n"
 	skipGroup := "::group::some_package.TestGenSkip\n" + testEventSkipOutput + "::endgroup::\n"
-	annotation := "::error file=foo_test.go,line=43::" + strings.ReplaceAll(testLogsAnnotation, "\n", "%0A") + "\n"
+
+	timeoutAnnotation := strings.TrimPrefix(testEventTimeoutOutput, "=== RUN   TestGenTimeout\n")
+	annotation := "::error file=foo_test.go,line=43::" + strings.ReplaceAll(testLogsAnnotation, "\n", "%0A") + "\n" + "::error file=foo_test.go,line=9::" + strings.ReplaceAll(timeoutAnnotation, "\n", "%0A") + "\n"
 
 	t.Run("verbose=false", func(t *testing.T) {
 		input := strings.NewReader(testEventJSON)
@@ -37,8 +40,8 @@ func TestDo(t *testing.T) {
 		assert.Assert(t, anyFail, "expected anyFail to be true due to failed tests")
 
 		// Non-verbose output should only include the grouped fail events + error annotations
-		expected := failGroup + annotation
-		assert.Equal(t, output.String(), expected)
+		expected := failGroup + timeoutGroup + annotation
+		assert.Equal(t, expected, output.String())
 	})
 
 	t.Run("verbose=true", func(t *testing.T) {
@@ -57,8 +60,7 @@ func TestDo(t *testing.T) {
 		assert.Assert(t, anyFail, "expected anyFail to be true due to failed tests")
 
 		// verbose output should include grouped events for all test results + error annotations
-		expected := failGroup + passGroup + skipGroup + annotation
-		t.Log(output.String())
+		expected := failGroup + passGroup + skipGroup + timeoutGroup + annotation
 		assert.Equal(t, output.String(), expected)
 	})
 
@@ -78,7 +80,7 @@ func TestDo(t *testing.T) {
 		assert.Assert(t, anyFail, "expected anyFail to be true due to failed tests")
 
 		// Stream output should include all the raw events + the grouped fail events + the annotation
-		expected := testEventPassOutput + testEventFailOutput + testEventSkipOutput + testEventPackageOutput + failGroup + annotation
+		expected := testEventPassOutput + testEventFailOutput + testEventSkipOutput + testEventTimeoutOutput + testEventPackageOutput + failGroup + timeoutGroup + annotation
 		assert.Equal(t, output.String(), expected)
 	})
 
@@ -107,12 +109,12 @@ func TestDo(t *testing.T) {
 		assert.NilError(t, err)
 
 		expect := `## Test metrics
-**Skipped:** 1 &nbsp;&nbsp;&nbsp;&nbsp; **Failed:** 2 &nbsp;&nbsp;&nbsp;&nbsp; **Total:** 4 &nbsp;&nbsp;&nbsp;&nbsp; **Elapsed:** 0.250s
+**Skipped:** 1 &nbsp;&nbsp;&nbsp;&nbsp; **Failed:** 2 &nbsp;&nbsp;&nbsp;&nbsp; **Total:** 5 &nbsp;&nbsp;&nbsp;&nbsp; **Elapsed:** 0.250s
 
 ` + "```" + `
-[ min  max] cnt total%  sum (4 events)
-[0.00 0.00] 3 75.00% 0.00 ...........................................................................
-[0.25 0.25] 1 25.00% 0.25 .........................
+[ min  max] cnt total%  sum (5 events)
+[0.00 0.00] 4 80.00% 0.00 ................................................................................
+[0.25 0.25] 1 20.00% 0.25 ....................
 ` + "```" + `
 
 ## Slow tests

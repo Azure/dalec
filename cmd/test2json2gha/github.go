@@ -36,7 +36,7 @@ func (c *consoleFormatter) FormatResults(results iter.Seq[*TestResult], out io.W
 			continue
 		}
 
-		if !c.verbose && !tr.failed {
+		if !c.verbose && !tr.failed && !tr.timeout {
 			// Skip non-failed tests if not verbose
 			continue
 		}
@@ -50,7 +50,10 @@ func (c *consoleFormatter) FormatResults(results iter.Seq[*TestResult], out io.W
 		}
 		group += tr.name
 
-		hdr := strings.NewReader(groupHeader + group + "\n")
+		var hdr io.Reader = strings.NewReader(groupHeader + group + "\n")
+		if tr.timeout {
+			hdr = io.MultiReader(hdr, strings.NewReader("::warning::Test timed out\n"))
+		}
 		output := tr.Reader()
 		footer := strings.NewReader(groupFooter)
 
@@ -69,7 +72,7 @@ type errorAnnotationFormatter struct{}
 func (c *errorAnnotationFormatter) FormatResults(results iter.Seq[*TestResult], out io.Writer) error {
 	var rdrs []io.Reader
 	for tr := range results {
-		if !tr.failed || tr.name == "" {
+		if (!tr.failed && !tr.timeout) || tr.name == "" {
 			continue
 		}
 
@@ -103,7 +106,12 @@ func (a *errorAnnotationReader) Read(p []byte) (n int, err error) {
 		}
 
 		// Create the header
-		hdr := strings.NewReader(fmt.Sprintf("::error file=%s,line=%d::", file, line))
+		var hdr io.Reader
+		if file == "" && line == 0 {
+			hdr = strings.NewReader("::error::")
+		} else {
+			hdr = strings.NewReader(fmt.Sprintf("::error file=%s,line=%d::", file, line))
+		}
 		footer := strings.NewReader("\n")
 
 		// Setup the underlying reader
@@ -134,7 +142,8 @@ func filterBuildLogs(rdr io.ReaderAt) io.Reader {
 	scanner := bufio.NewScanner(newSectionReader(rdr))
 
 	var (
-		pos int64
+		pos     int64
+		isPanic bool
 	)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -142,11 +151,14 @@ func filterBuildLogs(rdr io.ReaderAt) io.Reader {
 		pos += lineLength
 
 		file, _, ok := getTestOutputLoc(line)
-		if !ok {
-			continue
+		if !ok && !isPanic {
+			if !strings.HasPrefix(line, "panic:") {
+				continue
+			}
+			isPanic = true
 		}
 
-		if !strings.HasSuffix(file, "_test.go") {
+		if !isPanic && !strings.HasSuffix(file, "_test.go") {
 			continue
 		}
 

@@ -78,6 +78,19 @@ func (h *resultsHandler) getOutputStream(te *TestEvent) (*TestResult, error) {
 	return tr, nil
 }
 
+// markUnfinishedAsTimeout marks all tests that have not been marked as pass, skip, or fail
+// as a timeout.
+// Call this after all events have been handled to ensure that any tests that were not completed
+// are marked appropriately.
+// This would typically occur when there is a test timeout (e.g. `go test -timeout 30s`, and it took more than 30 seconds to run).
+func (h *resultsHandler) markUnfinishedAsTimeout() {
+	for _, tr := range h.results {
+		if !tr.pass && !tr.skipped && !tr.failed {
+			tr.timeout = true
+		}
+	}
+}
+
 func (h *resultsHandler) HandleEvent(te *TestEvent) error {
 	tr, err := h.getOutputStream(te)
 	if err != nil {
@@ -89,6 +102,8 @@ func (h *resultsHandler) HandleEvent(te *TestEvent) error {
 		tr.failed = true
 	case skip:
 		tr.skipped = true
+	case pass:
+		tr.pass = true
 	}
 
 	tr.elapsed = te.Elapsed
@@ -183,6 +198,8 @@ type TestResult struct {
 	failed  bool
 	skipped bool
 	elapsed float64
+	pass    bool
+	timeout bool // true if the test was not completed within the timeout period
 }
 
 // [Close] closes the underlying output file and invalidates any readers
