@@ -283,6 +283,20 @@ func solveT(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient
 	return res
 }
 
+func solveTCh(ctx context.Context, t *testing.T, gwc gwclient.Client, req gwclient.SolveRequest, rc chan *gwclient.Result, ec chan error) {
+	t.Helper()
+
+	go func() {
+		t.Helper()
+		res, err := gwc.Solve(ctx, req)
+		if err != nil {
+			ec <- err
+		}
+
+		rc <- res
+	}()
+}
+
 func withMainContext(ctx context.Context, t *testing.T, st llb.State) srOpt {
 	return func(cfg *newSolveRequestConfig) {
 		if cfg.req.FrontendOpt == nil {
