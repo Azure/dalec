@@ -444,7 +444,7 @@ func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, all
 	// Process the command field with a permissive allowArg function
 	// Commands can contain shell variables that aren't build arguments
 	if s.Command != "" {
-		updated, err := expandArgs(lex, s.Command, args, AllowAnyArg)
+		updated, err := expandArgs(lex, s.Command, args, allowArg)
 		if err != nil {
 			errs = append(errs, errors.Wrapf(err, "command %s", s.Command))
 		} else {
