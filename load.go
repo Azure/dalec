@@ -152,11 +152,21 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 			}
 
 			// if the build arg isn't present in args by opt-in, skip
-			// and don't automatically inject a value unless it is SOURCE_DATE_EPOCH
 			continue
 		}
 
 		args[k] = v
+	}
+
+	// If SOURCE_DATE_EPOCH is available as a build arg, ensure it's also available
+	// as an environment variable in the build environment
+	if epochValue, ok := args["SOURCE_DATE_EPOCH"]; ok {
+		if s.Build.Env == nil {
+			s.Build.Env = make(map[string]string)
+		}
+		if _, exists := s.Build.Env["SOURCE_DATE_EPOCH"]; !exists {
+			s.Build.Env["SOURCE_DATE_EPOCH"] = epochValue
+		}
 	}
 
 	for name, src := range s.Sources {
@@ -440,19 +450,6 @@ func (s Spec) MarshalYAML() ([]byte, error) {
 
 func (s *BuildStep) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(string) bool) error {
 	var errs []error
-
-	// Process the command field with a permissive allowArg function
-	// Commands can contain shell variables that aren't build arguments
-	if s.Command != "" {
-		updated, err := expandArgs(lex, s.Command, args, allowArg)
-		if err != nil {
-			errs = append(errs, errors.Wrapf(err, "command %s", s.Command))
-		} else {
-			s.Command = updated
-		}
-	}
-
-	// Process environment variables with the original allowArg function
 	for k, v := range s.Env {
 		updated, err := expandArgs(lex, v, args, allowArg)
 		if err != nil {

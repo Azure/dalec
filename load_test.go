@@ -1121,7 +1121,7 @@ build:
 			"SOURCE_DATE_EPOCH": epochValue,
 		})
 		assert.NilError(t, err)
-		assert.Check(t, cmp.Equal(spec.Build.Steps[0].Command, `echo `+epochValue))
+		assert.Check(t, cmp.Equal(spec.Build.Steps[0].Env["SOURCE_DATE_EPOCH"], epochValue))
 	})
 
 	t.Run("SOURCE_DATE_EPOCH with explicit declaration", func(t *testing.T) {
@@ -1132,6 +1132,8 @@ args:
 build:
   steps:
     - command: echo ${SOURCE_DATE_EPOCH}
+      env:
+        SOURCE_DATE_EPOCH: ${SOURCE_DATE_EPOCH}
 `)
 		spec, err := LoadSpec(dt)
 		if err != nil {
@@ -1141,7 +1143,7 @@ build:
 			"SOURCE_DATE_EPOCH": "1609459200",
 		})
 		assert.NilError(t, err)
-		assert.Check(t, cmp.Contains(spec.Build.Steps[0].Command, "1609459200"))
+		assert.Check(t, cmp.Equal(spec.Build.Steps[0].Env["SOURCE_DATE_EPOCH"], "1609459200"))
 
 		spec2, err := LoadSpec(dt)
 		if err != nil {
@@ -1149,7 +1151,46 @@ build:
 		}
 		err = spec2.SubstituteArgs(map[string]string{})
 		assert.NilError(t, err)
-		assert.Check(t, cmp.Contains(spec2.Build.Steps[0].Command, "999999999"))
+		assert.Check(t, cmp.Equal(spec2.Build.Steps[0].Env["SOURCE_DATE_EPOCH"], "999999999"))
+	})
+
+	t.Run("SOURCE_DATE_EPOCH added to build environment", func(t *testing.T) {
+		dt := []byte(`
+build:
+  steps:
+    - command: echo "build step"
+`)
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		epochValue := "1609459200"
+		err = spec.SubstituteArgs(map[string]string{
+			"SOURCE_DATE_EPOCH": epochValue,
+		})
+		assert.NilError(t, err)
+		assert.Check(t, cmp.Equal(spec.Build.Env["SOURCE_DATE_EPOCH"], epochValue))
+	})
+
+	t.Run("SOURCE_DATE_EPOCH respects existing environment", func(t *testing.T) {
+		dt := []byte(`
+build:
+  env:
+    SOURCE_DATE_EPOCH: "888888888"  # explicitly set in spec
+  steps:
+    - command: echo "build step"
+`)
+		spec, err := LoadSpec(dt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = spec.SubstituteArgs(map[string]string{
+			"SOURCE_DATE_EPOCH": "1609459200",
+		})
+		assert.NilError(t, err)
+		assert.Check(t, cmp.Equal(spec.Build.Env["SOURCE_DATE_EPOCH"], "888888888"))
 	})
 }
 
