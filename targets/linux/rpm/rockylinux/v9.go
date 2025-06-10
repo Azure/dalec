@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	v9TargetKey    = "rockylinux9"
+	V9TargetKey    = "rockylinux9"
 	dnfCacheNameV9 = "rockylinux9-dnf-cache"
 
 	// v9Ref is the image ref used for the base worker image
@@ -24,7 +24,7 @@ var ConfigV9 = &distro.Config{
 
 	ReleaseVer:         "9",
 	BuilderPackages:    append(builderPackages, "systemd-rpm-macros"),
-	BasePackages:       basePackages(v9TargetKey),
+	BasePackages:       basePackages(V9TargetKey),
 	RepoPlatformConfig: &defaultPlatformConfig,
 	InstallFunc:        distro.DnfInstall,
 }
