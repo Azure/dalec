@@ -35,8 +35,6 @@ func knownArg(key string) bool {
 		return true
 	case "DALEC_SIGNING_CONFIG_PATH":
 		return true
-	case "SOURCE_DATE_EPOCH":
-		return true
 	case "DALEC_SKIP_TESTS":
 		return true
 	case KeyDalecTarget:
@@ -144,6 +142,7 @@ func (s *Spec) SubstituteArgs(env map[string]string, opts ...SubstituteOpt) erro
 	for k, v := range env {
 		if k == "SOURCE_DATE_EPOCH" {
 			args[k] = v
+			continue
 		}
 
 		if _, ok := args[k]; !ok {
