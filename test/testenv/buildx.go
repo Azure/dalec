@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/solver/pb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
+	"github.com/opencontainers/go-digest"
 	pkgerrors "github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 	"gotest.tools/v3/assert"
@@ -376,7 +378,17 @@ var (
 )
 
 func NewWithNetHostBuildxInstance(ctx context.Context, t *testing.T) *BuildxEnv {
-	name := "dalec_integration_test"
+	dgst := digest.Canonical.Encode([]byte(t.Name()))
+
+	var randomBytes [8]byte
+	_, err := rand.Read(randomBytes[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dgst2 := digest.Canonical.Encode(randomBytes[:])
+	name := "dalec_integration_test_" + dgst[:12] + dgst2
+
 	netHostTestEnvOnce.Do(func() {
 		netHostTestEnv = New().WithBuilder(name)
 		ctxT, cancel := context.WithTimeout(ctx, 5*time.Second)
