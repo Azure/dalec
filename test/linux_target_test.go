@@ -3169,7 +3169,7 @@ func testPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinu
 			assert.NilError(t, err)
 
 			// Read the contents of the package to ensure it has the marker file and not the rebuild.txt file.
-			contents, err := pkgRef.ReadFile(ctx, gwclient.ReadRequest{
+			contents, err := containerRef.ReadFile(ctx, gwclient.ReadRequest{
 				Filename: "/etc/marker.txt",
 			})
 			assert.NilError(t, err)
