@@ -3,14 +3,13 @@ package test
 import (
 	"bufio"
 	"bytes"
-	_ "embed"
-	"io"
-	"io/fs"
-
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -167,16 +166,10 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 		})
 	})
 
-	t.Run("target specific prebuilt packages", func(t *testing.T) {
+	t.Run("target-prebuilt-packages", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
-		testTargetSpecificPrebuiltPackages(ctx, t, testConfig)
-	})
-
-	t.Run("generic prebuilt packages", func(t *testing.T) {
-		t.Parallel()
-		ctx := startTestSpan(ctx, t)
-		testGenericPrebuiltPackages(ctx, t, testConfig)
+		testPrebuiltPackages(ctx, t, testConfig)
 	})
 
 	t.Run("test-dalec-empty-artifacts", func(t *testing.T) {
@@ -1218,7 +1211,6 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-change-perm", 0o755); err != nil {
 				t.Fatal(err)
 			}
-
 		})
 	})
 
@@ -3104,12 +3096,12 @@ int main() {
 	})
 }
 
-func testTargetSpecificPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
-	t.Run("Use pre-built packages from target named context", func(t *testing.T) {
+func testPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
+	t.Run("Use pre-built packages from build context", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
 
-		spec := &dalec.Spec{
+		preBuiltSpec := &dalec.Spec{
 			Name:        "test-prebuilt-package",
 			Version:     "0.0.1",
 			Revision:    "1",
@@ -3149,133 +3141,43 @@ func testTargetSpecificPrebuiltPackages(ctx context.Context, t *testing.T, testC
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			// Build the package first with a unique marker file.
-			spec.Build.Steps = []dalec.BuildStep{
+			// This rebuilt.txt marker file will only be created if the package is rebuilt.
+			preBuiltSpec.Build.Steps = []dalec.BuildStep{
 				{
-					Command: "echo 'unique marker' > /etc/marker.txt",
+					Command: "echo 'rebuilt' > /rebuild.txt; echo 'unique marker' > /etc/marker.txt",
 				},
 			}
-			// Add this to make sure marker.txt gets included in the package.
-			spec.Artifacts.ConfigFiles = map[string]dalec.ArtifactConfig{
+			preBuiltSpec.Artifacts.ConfigFiles = map[string]dalec.ArtifactConfig{
 				"/etc/marker.txt": {},
 			}
 
-			pkgSr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(testConfig.Target.Package))
+			// Build the package which contains the unique marker file.
+			pkgSr := newSolveRequest(withSpec(ctx, t, preBuiltSpec), withBuildTarget(testConfig.Target.Package))
 			pkgRes := solveT(ctx, t, client, pkgSr)
 			pkgRef, err := pkgRes.SingleRef()
 			assert.NilError(t, err)
-
-			pkgSt, _ := pkgRef.ToState()
-			targetKey := strings.Split(testConfig.Target.Package, "/")[1]
-			targetSpecificName := targetKey + "-pkg"
-
-			// Use the built package directly as a named build context.
-			// This is how the prebuilt package gets picked up and used
-			// for the container build.
-			containerSr := newSolveRequest(
-				withSpec(ctx, t, spec),
-				withBuildTarget(testConfig.Target.Container),
-				withBuildContext(ctx, t, targetSpecificName, pkgSt),
-			)
-
-			// Build the container.
-			containerRes := solveT(ctx, t, client, containerSr)
-			containerRef, err := containerRes.SingleRef()
-			assert.NilError(t, err)
-
-			// Verify that the container has the marker file from the pre-built package.
-			contents, err := containerRef.ReadFile(ctx, gwclient.ReadRequest{
-				Filename: "/etc/marker.txt",
-			})
-			assert.NilError(t, err)
-			assert.Check(t, strings.Contains(string(contents), "unique marker"))
-		})
-	})
-}
-
-func testGenericPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
-	t.Run("Use pre-built packages from target named context", func(t *testing.T) {
-		t.Parallel()
-		ctx := startTestSpan(ctx, t)
-
-		spec := &dalec.Spec{
-			Name:        "test-prebuilt-package",
-			Version:     "0.0.1",
-			Revision:    "1",
-			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
-			Vendor:      "Dalec",
-			Packager:    "Dalec",
-			Description: "Test using pre-built packages",
-			Sources: map[string]dalec.Source{
-				"hello": {
-					Inline: &dalec.SourceInline{
-						File: &dalec.SourceInlineFile{
-							Contents:    "#!/bin/sh\necho 'Hello from pre-built package'",
-							Permissions: 0o755,
-						},
-					},
-				},
-			},
-			Artifacts: dalec.Artifacts{
-				Binaries: map[string]dalec.ArtifactConfig{
-					"hello": {},
-				},
-			},
-			Tests: []*dalec.TestSpec{
-				{
-					Name: "Test that binary from pre-built package works",
-					Steps: []dalec.TestStep{
-						{
-							Command: "/usr/bin/hello",
-							Stdout: dalec.CheckOutput{
-								Contains: []string{"Hello from pre-built package"},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			// Build the package first with a unique marker file.
-			spec.Build.Steps = []dalec.BuildStep{
-				{
-					Command: "echo 'unique marker' > /etc/marker.txt",
-				},
-			}
-			// Add this to make sure marker.txt gets included in the package.
-			spec.Artifacts.ConfigFiles = map[string]dalec.ArtifactConfig{
-				"/etc/marker.txt": {},
-			}
-
-			pkgSr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(testConfig.Target.Package))
-			pkgRes := solveT(ctx, t, client, pkgSr)
-			pkgRef, err := pkgRes.SingleRef()
-			assert.NilError(t, err)
-
 			pkgSt, _ := pkgRef.ToState()
 
-			// Use the built package directly as a named build context.
-			// This is how the prebuilt package gets picked up and used
-			// for the container build.
+			// Build the container and pass the pre-built package as a dependency.
 			containerSr := newSolveRequest(
-				withSpec(ctx, t, spec),
+				withSpec(ctx, t, preBuiltSpec),
 				withBuildTarget(testConfig.Target.Container),
 				withBuildContext(ctx, t, dalec.GenericPkg, pkgSt),
 			)
-
-			// Build the container.
 			containerRes := solveT(ctx, t, client, containerSr)
 			containerRef, err := containerRes.SingleRef()
 			assert.NilError(t, err)
 
-			// Verify that the container has the marker file from the pre-built package.
-			contents, err := containerRef.ReadFile(ctx, gwclient.ReadRequest{
+			// Read the contents of the package to ensure it has the marker file and not the rebuild.txt file.
+			contents, err := pkgRef.ReadFile(ctx, gwclient.ReadRequest{
 				Filename: "/etc/marker.txt",
 			})
 			assert.NilError(t, err)
 			assert.Check(t, strings.Contains(string(contents), "unique marker"))
+			_, err = containerRef.ReadFile(ctx, gwclient.ReadRequest{
+				Filename: "/rebuild.txt",
+			})
+			assert.ErrorContains(t, err, "no such file or directory", "rebuild.txt should not be present in the container")
 		})
 	})
 }
