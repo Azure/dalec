@@ -595,10 +595,15 @@ func validatePatch(patch PatchSpec, patchSrc Source) error {
 }
 
 func (g *SourceGenerator) Validate() error {
-	if g.Gomod == nil && g.Cargohome == nil {
-		// Gomod and Cargohome are the only valid generator types
-		// An empty generator is invalid
+	if g.Gomod == nil && g.Cargohome == nil && g.NodeMod == nil {
+		// Gomod, Cargohome and NodeMod are the only valid generator types
 		return fmt.Errorf("no generator type specified")
+	}
+	if g.NodeMod != nil {
+		pm := g.NodeMod.PackageManager
+		if pm != "npm" && pm != "yarn" {
+			return fmt.Errorf("invalid node package manager %q, only npm and yarn are supported", pm)
+		}
 	}
 	return nil
 }
