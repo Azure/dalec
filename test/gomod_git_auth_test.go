@@ -8,7 +8,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
-	goerrors "errors"
 	"fmt"
 	"io"
 	"net"
@@ -46,8 +45,6 @@ func TestGomodGitAuth(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	netHostBuildxEnv := testenv.NewWithNetHostBuildxInstance(ctx, t)
 	sshID := "dalecssh"
-
-	const sourcename = "gitauth"
 
 	attr := GitServicesAttributes{
 		ServerRoot:             "/",
@@ -228,12 +225,6 @@ func calculateFilename(ctx context.Context, t *testing.T, attr *GitServicesAttri
 	return filename
 }
 
-func copyAttr(g *GitServicesAttributes) GitServicesAttributes {
-	gg := new(GitServicesAttributes)
-	*gg = *g
-	return *gg
-}
-
 // GitServicesAttributes are the basic pieces of information needed to host two git
 // servers, one via SSH and one via HTTP
 type GitServicesAttributes struct {
@@ -342,10 +333,12 @@ func (f *file) inject(t *testing.T, obj *GitServicesAttributes) []byte {
 	}
 
 	var contents bytes.Buffer
-	tmpl.Execute(&contents, injector{
+	if err := tmpl.Execute(&contents, injector{
 		GitServicesAttributes: obj,
 		GoVersion:             goVersion,
-	})
+	}); err != nil {
+		t.Fatalf("could not inject values into template: %s", err)
+	}
 
 	return contents.Bytes()
 }
@@ -390,30 +383,6 @@ func (a *GitServicesAttributes) WithNewTag() *GitServicesAttributes {
 func (a *GitServicesAttributes) RepoAbsDir() string {
 	return filepath.Join(a.ServerRoot, a.PrivateRepoPath)
 }
-
-func (a *GitServicesAttributes) inPrivateGitRepo(basename string) string {
-	return filepath.Join(a.RepoAbsDir(), basename)
-}
-
-// func (ts *TestState) createGitUser(user *string) llb.StateOption {
-// 	s := script{
-// 		basename: "create_git_user.sh",
-// 		template: `
-//                         #!/usr/bin/env sh
-//                         adduser -D -u 9999 -h {{ .ServerRoot }} {{ .GitUsername }}
-//                         chown -R {{ .GitUsername }} {{ .ServerRoot }}
-//                         printf 'abc\nabc\n' | passwd git
-//                     `,
-// 	}
-
-// 	if user != nil {
-// 		*user = "git"
-// 	}
-
-// 	return func(worker llb.State) llb.State {
-// 		return ts.runScriptOn(worker, s).Root().User(ts.attr.GitUsername)
-// 	}
-// }
 
 func (ts *TestState) generateSpec(gomodContents string, auth dalec.GomodGitAuth) *dalec.Spec {
 	const sourceName = "gitauth"
@@ -715,7 +684,7 @@ func (ts *TestState) runWaitScript(cont gwclient.Container, env []string, s scri
 	untilConnected, stdout, stderr := ts2.startContainer(cont, env, s)
 
 	if err := untilConnected.Wait(); err != nil {
-		if goerrors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) {
 			ts2.t.Fatalf("Could not start server, timed out: %s", err)
 		}
 
@@ -724,8 +693,8 @@ func (ts *TestState) runWaitScript(cont gwclient.Container, env []string, s scri
 }
 
 var (
-	errContainerNoStart = goerrors.New("could not start server container")
-	errContainerFailed  = goerrors.New("container process failed")
+	errContainerNoStart = errors.New("could not start server container")
+	errContainerFailed  = errors.New("container process failed")
 )
 
 // runContainer runs a container in the background and sends errors to the returned channel
@@ -747,14 +716,14 @@ func (ts *TestState) runContainer(cont gwclient.Container, env []string, s scrip
 	})
 
 	if err != nil {
-		ts.t.Fatal(goerrors.Join(errContainerNoStart, err))
+		ts.t.Fatal(errors.Join(errContainerNoStart, err))
 	}
 
 	// Log but do not fail, since you cannot fail from within a goroutine
 	ec := make(chan error)
 	go func() {
 		if err := cp.Wait(); err != nil {
-			ec <- goerrors.Join(errContainerFailed, err, fmt.Errorf("stdout:\n%s\n=====\nstderr:\n%s\n", stdout.String(), stderr.String()))
+			ec <- errors.Join(errContainerFailed, err, fmt.Errorf("stdout:\n%s\n=====\nstderr:\n%s\n", stdout.String(), stderr.String()))
 		}
 	}()
 
@@ -812,15 +781,6 @@ func bareRepo(repo llb.State, mountpoint string) llb.StateOption {
 	}
 }
 
-func (ts *TestState) mountScript(s script) dalec.RunOptFunc {
-	scriptDir := customScriptDir
-	st := llb.Scratch().With(ts.customScript(s))
-
-	return func(ei *llb.ExecInfo) {
-		llb.AddMount(scriptDir, st).SetRunOption(ei)
-	}
-}
-
 // `runScript` is a replacement for `llb.State.Run(...)`. It mounts the
 // specified script in the custom script directory, then generates the llb to
 // run the script on `worker`.
@@ -871,9 +831,11 @@ func startSSHAgent(t *testing.T, privkey crypto.PrivateKey, sockaddr string) cha
 	})
 
 	kr := agent.NewKeyring()
-	kr.Add(agent.AddedKey{
+	if err := kr.Add(agent.AddedKey{
 		PrivateKey: privkey,
-	})
+	}); err != nil {
+		t.Fatalf("could not add private key to agent keyring: %s", err)
+	}
 
 	t.Logf("starting ssh agent on socket %s", sockaddr)
 	listener, err := net.Listen("unix", sockaddr)
