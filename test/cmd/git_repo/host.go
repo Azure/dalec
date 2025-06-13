@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,8 +11,7 @@ import (
 	"github.com/AaronO/go-git-http/auth"
 )
 
-const usage = `Usage:  host [dirctory] [ip] [port]
-`
+var errUsage = errors.New(`usage:  host [dirctory] [ip] [port]`)
 
 func main() {
 	if err := run(); err != nil {
@@ -25,7 +25,7 @@ func run() error {
 
 	args := os.Args
 	if len(args) < 4 {
-		return fmt.Errorf(usage)
+		return errUsage
 	}
 
 	repo := args[1]
