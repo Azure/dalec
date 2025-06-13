@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,11 +16,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/session/secrets/secretsprovider"
+	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/solver/pb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
+	"github.com/opencontainers/go-digest"
 	pkgerrors "github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 	"gotest.tools/v3/assert"
@@ -224,6 +229,11 @@ type FrontendSpec struct {
 	Build gwclient.BuildFunc
 }
 
+type KeyVal struct {
+	K string
+	V string
+}
+
 // withResolveLocal tells buildkit to prefer local images when resolving image references.
 // This prevents unnecessary API requests to registries.
 func withResolveLocal(so *client.SolveOpt) {
@@ -245,6 +255,7 @@ type TestRunnerConfig struct {
 	// SolveStatusFn replaces the builtin status logger with a custom implementation.
 	// This is useful particularly if you need to inspect the solve statuses.
 	SolveStatusFn func(*client.SolveStatus)
+	SolveOptFns   []func(*client.SolveOpt)
 }
 
 type TestRunnerOpt func(*TestRunnerConfig)
@@ -252,11 +263,47 @@ type TestRunnerOpt func(*TestRunnerConfig)
 // SolveStatus is convenience wrapper for [client.SolveStatus] to help disambiguate
 // imports of the [client] package.
 type SolveStatus = client.SolveStatus
+type SolveOpt = client.SolveOpt
 
 func WithSolveStatusFn(f func(*SolveStatus)) TestRunnerOpt {
 	return func(cfg *TestRunnerConfig) {
 		cfg.SolveStatusFn = f
 	}
+}
+
+func WithSecrets(kvs ...KeyVal) TestRunnerOpt {
+	return func(cfg *TestRunnerConfig) {
+		cfg.SolveOptFns = append(cfg.SolveOptFns, func(so *client.SolveOpt) {
+			m := map[string][]byte{}
+			for _, kv := range kvs {
+				m[kv.K] = []byte(kv.V)
+			}
+			so.Session = append(so.Session, secretsprovider.FromMap(m))
+		})
+	}
+}
+
+func WithSSHSocket(id, addr string) TestRunnerOpt {
+	return func(cfg *TestRunnerConfig) {
+		a, err := sshprovider.NewSSHAgentProvider([]sshprovider.AgentConfig{
+			{
+				ID:    id,
+				Paths: []string{addr},
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+		cfg.SolveOptFns = append(cfg.SolveOptFns, func(so *client.SolveOpt) {
+			so.Session = append(so.Session, a)
+		})
+	}
+}
+
+func WithHostNetworking(trc *TestRunnerConfig) {
+	trc.SolveOptFns = append(trc.SolveOptFns, func(so *client.SolveOpt) {
+		so.AllowedEntitlements = append(so.AllowedEntitlements, "network.host")
+	})
 }
 
 func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts ...TestRunnerOpt) {
@@ -299,6 +346,10 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	err = withSourcePolicy(&so)
 	assert.NilError(t, err)
 
+	for _, f := range cfg.SolveOptFns {
+		f(&so)
+	}
+
 	_, err = c.Build(ctx, so, "", func(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
 		gwc = &clientForceDalecWithInput{gwc}
 
@@ -318,6 +369,57 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+var (
+	netHostTestEnv            *BuildxEnv
+	netHostTestEnvOnce        sync.Once
+	netHostTestEnvCleanupOnce sync.Once
+)
+
+func NewWithNetHostBuildxInstance(ctx context.Context, t *testing.T) *BuildxEnv {
+	dgst := digest.Canonical.Encode([]byte(t.Name()))
+
+	var randomBytes [8]byte
+	_, err := rand.Read(randomBytes[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dgst2 := digest.Canonical.Encode(randomBytes[:])
+	name := "dalec_integration_test_" + dgst[:12] + dgst2
+
+	netHostTestEnvOnce.Do(func() {
+		netHostTestEnv = New().WithBuilder(name)
+		ctxT, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := netHostTestEnv.bootstrap(ctxT); err != nil {
+			cmd := exec.CommandContext(ctx, "docker", "buildx", "create", "--name", name, "--driver", "docker-container", "--driver-opt", "network=host", "--buildkitd-flags", "'--allow-insecure-entitlement=network.host'")
+			out, err := cmd.CombinedOutput()
+			assert.NilError(t, err, "failed to create buildx builder: %s", string(out))
+
+			t.Cleanup(func() {
+				netHostTestEnvCleanupOnce.Do(func() {
+					ctx := context.WithoutCancel(ctx)
+					cmd := exec.CommandContext(ctx, "docker", "buildx", "rm", name)
+					out, err := cmd.CombinedOutput()
+					assert.NilError(t, err, "failed to remove buildx builder: %s", string(out))
+				})
+			})
+
+			cmd = exec.CommandContext(ctx, "docker", "buildx", "inspect", name, "--bootstrap")
+			out, err = cmd.CombinedOutput()
+			assert.NilError(t, err, "failed to create buildx builder: %s", string(out))
+
+			netHostTestEnv = New().WithBuilder(name)
+			if err := netHostTestEnv.bootstrap(ctx); err != nil {
+				t.Fatalf("failed to bootstrap buildx environment: %v", err)
+			}
+		}
+
+	})
+
+	return netHostTestEnv
 }
 
 // clientForceDalecWithInput is a gwclient.Client that forces the solve request to use the main dalec frontend.

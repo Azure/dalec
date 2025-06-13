@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	_ "embed"
 	"io/fs"
 	"os"
 	"path/filepath"

@@ -538,7 +538,7 @@ func (s Spec) Validate() error {
 
 	for name, src := range s.Sources {
 		if strings.ContainsRune(name, os.PathSeparator) {
-			errs = append(errs, &InvalidSourceError{Name: name, Err: sourceNamePathSeparatorError})
+			errs = append(errs, &InvalidSourceError{Name: name, Err: errSourceNamePathSeparator})
 		}
 		if err := src.validate(); err != nil {
 			errs = append(errs, &InvalidSourceError{Name: name, Err: fmt.Errorf("error validating source ref %q: %w", name, err)})
