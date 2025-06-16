@@ -12,6 +12,36 @@ import (
 	"strings"
 )
 
+const (
+	keyProtocol          = "protocol"
+	keyHost              = "host"
+	keyPath              = "path"
+	keyUsername          = "username"
+	keyPassword          = "password"
+	keyPasswordExpiryUTC = "password_expiry_utc"
+	keyOauthRefreshToken = "oauth_refresh_token"
+	keyUrl               = "url"
+	keyAuthtype          = "authtype"
+	keyCredential        = "credential"
+	keyEphemeral         = "ephemeral"
+	keyContinue          = "continue"
+	keyWwwauthArr        = "wwwauth[]"
+	keyCapabilityArr     = "capability[]"
+	keyStateArr          = "state[]"
+
+	actionGet   = "get"
+	actionStore = "store"
+	actionErase = "erase"
+
+	protocolHTTP  = "http"
+	protocolHTTPS = "https"
+
+	kindToken  = "token"
+	kindHeader = "header"
+
+	authTypeBasic = "basic"
+)
+
 const secretDir = "/run/secrets/"
 
 type gitPayload struct {
@@ -54,17 +84,18 @@ func gomodMain(args []string) {
 	payload := readPayload(os.Stdin)
 
 	switch action {
-	case "get":
-	case "store", "erase":
+	case actionGet:
+	case actionStore, actionErase:
 		// send the "continue" signal to git, signifying that we can't satisfy
-		// the request.
+		// the request. git will use other credential helpers for these
+		// actions, if provided by the user.
 		sendContinue(&payload)
 		os.Exit(0)
 	default:
 		exit1(fmt.Sprintf("unrecognized action: %q", action))
 	}
 
-	if payload.protocol != "http" && payload.protocol != "https" {
+	if payload.protocol != protocolHTTP && payload.protocol != protocolHTTPS {
 		sendContinue(&payload)
 		os.Exit(0)
 	}
@@ -89,7 +120,7 @@ func gomodMain(args []string) {
 func readKind(kind *string) func(s string) error {
 	return func(s string) error {
 		switch s {
-		case "token", "header":
+		case kindToken, kindHeader:
 			*kind = s
 		default:
 			return fmt.Errorf("kind must be `token` or `header`")
@@ -118,35 +149,35 @@ func readPayload(r io.Reader) gitPayload {
 		}
 
 		switch k {
-		case "protocol":
+		case keyProtocol:
 			payload.protocol = v
-		case "host":
+		case keyHost:
 			payload.host = v
-		case "path":
+		case keyPath:
 			payload.path = v
-		case "username":
+		case keyUsername:
 			payload.username = v
-		case "password":
+		case keyPassword:
 			payload.password = v
-		case "password_expiry_utc":
+		case keyPasswordExpiryUTC:
 			payload.passwordExpiryUtc = v
-		case "oauth_refresh_token":
+		case keyOauthRefreshToken:
 			payload.oauthRefreshToken = v
-		case "url":
+		case keyUrl:
 			payload.url = v
-		case "authtype":
+		case keyAuthtype:
 			payload.authtype = v
-		case "credential":
+		case keyCredential:
 			payload.credential = v
-		case "ephemeral":
+		case keyEphemeral:
 			payload.ephemeral = v
-		case "continue":
+		case keyContinue:
 			payload.kontinue = v
-		case "wwwauth[]":
+		case keyWwwauthArr:
 			payload.wwwauth = append(payload.wwwauth, v)
-		case "capability[]":
+		case keyCapabilityArr:
 			payload.capability = append(payload.capability, v)
-		case "state[]":
+		case keyStateArr:
 			payload.state = append(payload.state, v)
 		default:
 			exit1(fmt.Sprintf("unknown key: %q", k))
@@ -173,29 +204,29 @@ func printPayload(payload *gitPayload) string {
 		}
 	}
 
-	fill("protocol", payload.protocol)
-	fill("path", payload.path)
-	fill("username", payload.username)
-	fill("password", payload.password)
-	fill("password_expiry_utc", payload.passwordExpiryUtc)
-	fill("oauth_refresh_token", payload.oauthRefreshToken)
-	fill("url", payload.url)
-	fill("authtype", payload.authtype)
-	fill("credential", payload.credential)
-	fill("ephemeral", payload.ephemeral)
-	fill("continue", payload.kontinue)
-	fillArray("wwwauth[]", payload.wwwauth)
-	fillArray("capability[]", payload.capability)
-	fillArray("state[]", payload.state)
+	fill(keyProtocol, payload.protocol)
+	fill(keyPath, payload.path)
+	fill(keyUsername, payload.username)
+	fill(keyPassword, payload.password)
+	fill(keyPasswordExpiryUTC, payload.passwordExpiryUtc)
+	fill(keyOauthRefreshToken, payload.oauthRefreshToken)
+	fill(keyUrl, payload.url)
+	fill(keyAuthtype, payload.authtype)
+	fill(keyCredential, payload.credential)
+	fill(keyEphemeral, payload.ephemeral)
+	fill(keyContinue, payload.kontinue)
+	fillArray(keyWwwauthArr, payload.wwwauth)
+	fillArray(keyCapabilityArr, payload.capability)
+	fillArray(keyStateArr, payload.state)
 
 	return buf.String()
 }
 
 func generateResponse(payload *gitPayload, secret []byte, kind string) (string, error) {
 	switch kind {
-	case "token":
+	case kindToken:
 		return handleSecretToken(secret, payload)
-	case "header":
+	case kindHeader:
 		return handleSecretHeader(secret, payload)
 	}
 
@@ -220,7 +251,7 @@ func handleSecretToken(token []byte, payload *gitPayload) (string, error) {
 	buf.WriteString("x-access-token:")
 	buf.Write(token)
 
-	payload.authtype = "basic"
+	payload.authtype = authTypeBasic
 	payload.credential = base64.StdEncoding.EncodeToString(buf.Bytes())
 
 	return printPayload(payload), nil
