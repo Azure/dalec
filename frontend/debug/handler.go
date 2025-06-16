@@ -33,6 +33,10 @@ func Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, erro
 		Name:        "cargohome",
 		Description: "Outputs all the Cargo dependencies for the spec",
 	})
+	r.Add("pip", Pip, &targets.Target{
+		Name:        "pip",
+		Description: "Outputs all the pip dependencies for the spec",
+	})
 
 	return r.Handle(ctx, client)
 }

@@ -296,6 +296,12 @@ func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		fmt.Fprint(buf, "\n")
 	}
 
+	if spec.HasPips() {
+		// Set up pip cache directory for offline installation
+		fmt.Fprintf(buf, `export PIP_CACHE_DIR="$(pwd)/%s"`, pipName)
+		fmt.Fprint(buf, "\n")
+	}
+
 	return buf.Bytes()
 }
 
