@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -229,11 +228,6 @@ type FrontendSpec struct {
 	Build gwclient.BuildFunc
 }
 
-type KeyVal struct {
-	K string
-	V string
-}
-
 // withResolveLocal tells buildkit to prefer local images when resolving image references.
 // This prevents unnecessary API requests to registries.
 func withResolveLocal(so *client.SolveOpt) {
@@ -271,12 +265,11 @@ func WithSolveStatusFn(f func(*SolveStatus)) TestRunnerOpt {
 	}
 }
 
-func WithSecrets(kvs ...KeyVal) TestRunnerOpt {
+func WithSecrets(k, v string) TestRunnerOpt {
 	return func(cfg *TestRunnerConfig) {
 		cfg.SolveOptFns = append(cfg.SolveOptFns, func(so *client.SolveOpt) {
-			m := map[string][]byte{}
-			for _, kv := range kvs {
-				m[kv.K] = []byte(kv.V)
+			m := map[string][]byte{
+				k: []byte(v),
 			}
 			so.Session = append(so.Session, secretsprovider.FromMap(m))
 		})
@@ -378,16 +371,8 @@ var (
 )
 
 func NewWithNetHostBuildxInstance(ctx context.Context, t *testing.T) *BuildxEnv {
-	dgst := digest.Canonical.Encode([]byte(t.Name()))
-
-	var randomBytes [8]byte
-	_, err := rand.Read(randomBytes[:])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dgst2 := digest.Canonical.Encode(randomBytes[:])
-	name := "dalec_integration_test_" + dgst[:12] + dgst2
+	dgst := digest.Canonical.FromString(t.Name()).Encoded()
+	name := "dalec_integration_test_" + dgst[:12]
 
 	netHostTestEnvOnce.Do(func() {
 		netHostTestEnv = New().WithBuilder(name)

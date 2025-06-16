@@ -131,7 +131,7 @@ go {{ .GoVersion }}
 			var res *gwclient.Result
 			select {
 			case err := <-httpErrChan:
-				t.Fatalf("ssh server unexpededly failed: %s", err)
+				t.Fatalf("http server unexpectedly failed: %s", err)
 			case err := <-solveErrChan:
 				t.Fatalf("solve failed: %s", err)
 			case r := <-solveResultChan:
@@ -140,10 +140,8 @@ go {{ .GoVersion }}
 
 			filename := calculateFilename(ctx, t, attr, res)
 			checkFile(ctx, t, filename, res, []byte("bar\n"))
-		}, testenv.WithSecrets(testenv.KeyVal{
-			K: "super-secret",
-			V: "value",
-		}), testenv.WithHostNetworking)
+		}, testenv.WithSecrets("super-secret", "value"),
+			testenv.WithHostNetworking)
 	})
 
 	sockaddr, cleanup := getSocketAddr(t)
@@ -192,7 +190,7 @@ go {{ .GoVersion }}
 			case err := <-agentErrChan:
 				t.Fatalf("ssh agent unexpededly failed: %s", err)
 			case err := <-sshErrChan:
-				t.Fatalf("ssh server unexpededly failed: %s", err)
+				t.Fatalf("ssh server unexpectedly failed: %s", err)
 			case err := <-solveErrChan:
 				t.Fatalf("solve failed: %s", err)
 			case r := <-solveResultChan:
@@ -201,10 +199,7 @@ go {{ .GoVersion }}
 
 			filename := calculateFilename(ctx, t, attr, res)
 			checkFile(ctx, t, filename, res, []byte("bar\n"))
-		}, testenv.WithSSHSocket(sshID, sockaddr), testenv.WithSecrets(testenv.KeyVal{
-			K: "super-secret",
-			V: "value",
-		}), testenv.WithHostNetworking)
+		}, testenv.WithSSHSocket(sshID, sockaddr), testenv.WithHostNetworking)
 	})
 }
 
@@ -470,7 +465,6 @@ func (ts *TestState) startHTTPServer(gitHost llb.State) chan error {
 
 	timeout := waitOnlineTimeout
 	ts.runWaitScript(cont, env, waitScript, timeout)
-	// time.Sleep(time.Second * 86400)
 
 	t.Logf("http server is online")
 
