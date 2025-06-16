@@ -20,10 +20,10 @@ import (
 	"time"
 
 	"github.com/Azure/dalec"
+	"github.com/Azure/dalec/test/cmd/git_repo/build"
 	"github.com/Azure/dalec/test/cmd/git_repo/passwd"
 	"github.com/Azure/dalec/test/testenv"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/pb"
@@ -527,8 +527,7 @@ func (ts *TestState) startHTTPGitServer(gitHost llb.State) <-chan error {
 
 	// The Git HTTP server is coded in a separate program at test/cmd/git_repo.
 	// We need to build and inject it.
-	httpServerBin := ts.getMainDockerContext().
-		With(ts.buildHTTPGitServer(gitHost))
+	httpServerBin := ts.buildHTTPGitServer()
 
 	gitHost = gitHost.
 		With(ts.customScript(serverScript)).
@@ -553,46 +552,23 @@ func (ts *TestState) startHTTPGitServer(gitHost llb.State) <-chan error {
 }
 
 // `buildHTTPGitServer` builds the Git HTTP server helper program.
-func (ts *TestState) buildHTTPGitServer(worker llb.State) llb.StateOption {
-	s := script{
-		basename: "build_http_server.sh",
-		template: `
-            #!/usr/bin/env sh
-            set -ex
-            cd {{ .HTTPServerBuildDir }}
-            go build -o {{ .OutDir }}/git_http_server ./{{ .HTTPServeCodeLocalPath }}
-        `,
-	}
-
-	return func(code llb.State) llb.State {
-		return ts.runScriptOn(worker, s,
-			llb.AddMount(ts.attr.HTTPServerBuildDir, code),
-		).AddMount(ts.attr.OutDir, llb.Scratch())
-	}
-}
-
-func (ts *TestState) getMainDockerContext() llb.State {
+func (ts *TestState) buildHTTPGitServer() llb.State {
 	var (
 		t      = ts.t
 		ctx    = ts.ctx
 		client = ts.client()
 	)
 
-	dc, err := dockerui.NewClient(client)
+	s, err := build.HTTPGitServer(ctx, client)
 	if err != nil {
-		t.Fatalf("could not create dockerui client: %s", err)
+		t.Fatalf("could not build http git server: %s", err)
 	}
 
-	gitServerProgramPtr, err := dc.MainContext(ctx)
-	if err != nil {
-		t.Fatalf("could not obtain main docker context: %s", err)
+	if s == nil {
+		t.Fatalf("fatal: http git server state was nil")
 	}
 
-	if gitServerProgramPtr == nil {
-		t.Fatalf("main context is nil")
-	}
-
-	return *gitServerProgramPtr
+	return *s
 }
 
 type customMount struct {
