@@ -299,6 +299,13 @@ func WithHostNetworking(trc *TestRunnerConfig) {
 	})
 }
 
+// This function just puts the opts before the function argument, which makes
+// it harder to miss what's happening with the opts for those unfamiliar with
+// the pattern.
+func (b *BuildxEnv) RunTestOptsFirst(ctx context.Context, t *testing.T, opts []TestRunnerOpt, f TestFunc) {
+	b.RunTest(ctx, t, f, opts...)
+}
+
 func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts ...TestRunnerOpt) {
 	var cfg TestRunnerConfig
 
@@ -370,6 +377,7 @@ var (
 	netHostTestEnvCleanupOnce sync.Once
 )
 
+// `NewWithNetHostBuildxInstance` creates a buildx instance with host networking enabled.
 func NewWithNetHostBuildxInstance(ctx context.Context, t *testing.T) *BuildxEnv {
 	dgst := digest.Canonical.FromString(t.Name()).Encoded()
 	name := "dalec_integration_test_" + dgst[:12]

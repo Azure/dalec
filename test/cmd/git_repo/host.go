@@ -9,6 +9,7 @@ import (
 
 	githttp "github.com/AaronO/go-git-http"
 	"github.com/AaronO/go-git-http/auth"
+	"github.com/Azure/dalec/test/cmd/git_repo/passwd"
 )
 
 var errUsage = errors.New(`usage:  host [dirctory] [ip] [port]`)
@@ -37,7 +38,7 @@ func run() error {
 			return false, nil
 		}
 
-		if ai.Username == "x-access-token" && ai.Password == "value" {
+		if ai.Username == "x-access-token" && ai.Password == passwd.Password {
 			return true, nil
 		}
 
