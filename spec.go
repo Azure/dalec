@@ -212,7 +212,7 @@ type SourceGit struct {
 }
 
 type GitAuth struct {
-	// Header is the name of the secret which contains the git auth header.
+	// Header is the name of the secret that contains the git auth header.
 	// when using git auth header based authentication.
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
@@ -230,7 +230,7 @@ type GitAuth struct {
 }
 
 type GomodGitAuth struct {
-	// Header is the name of the secret which contains the git auth header.
+	// Header is the name of the secret that contains the git auth header.
 	// when using git auth header based authentication.
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
