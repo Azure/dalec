@@ -420,7 +420,7 @@ func (ts *TestState) generateSpec(gomodContents string, auth dalec.GomodGitAuth)
 	return spec
 }
 
-func (ts *TestState) startHTTPServer(gitHost llb.State) chan error {
+func (ts *TestState) startHTTPServer(gitHost llb.State) <-chan error {
 	t := ts.t
 
 	serverScript := script{
@@ -582,7 +582,7 @@ func (ts *TestState) customScript(s script) llb.StateOption {
 
 // startSSHServer starts an sshd instance in a container hosting the git repo.
 // It runs asynchonously and checks the connection after starting the server.
-func (ts *TestState) startSSHServer(gitHost llb.State) chan error {
+func (ts *TestState) startSSHServer(gitHost llb.State) <-chan error {
 	t := ts.t
 
 	// This script runs an ssh server. Rather than create a new user, we will
@@ -692,7 +692,7 @@ var (
 )
 
 // runContainer runs a container in the background and sends errors to the returned channel
-func (ts *TestState) runContainer(cont gwclient.Container, env []string, s script) chan error {
+func (ts *TestState) runContainer(cont gwclient.Container, env []string, s script) <-chan error {
 
 	var (
 		ctx = ts.ctx
@@ -818,7 +818,7 @@ func (ts *TestState) initializeGitRepo(worker llb.State) llb.StateOption {
 	}
 }
 
-func startSSHAgent(t *testing.T, privkey crypto.PrivateKey, sockaddr string) chan error {
+func startSSHAgent(t *testing.T, privkey crypto.PrivateKey, sockaddr string) <-chan error {
 	ec := make(chan error)
 	t.Cleanup(func() {
 		close(ec)
