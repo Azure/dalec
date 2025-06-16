@@ -55,6 +55,11 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 				Scope: randKey,
 			},
 		},
+		{
+			Pip: &dalec.PipCache{
+				Scope: randKey,
+			},
+		},
 	}
 
 	specWithCommand := func(cmds ...string) *dalec.Spec {
@@ -78,6 +83,9 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 			// There is no good way to determine the bazel cache dir
 			// So just hardcode this for now
 			return "/tmp/dalec/bazel-local-cache"
+		}
+		if c.Pip != nil {
+			return "${PIP_CACHE_DIR}"
 		}
 		t.Fatalf("invalid cache config or maybe the test needs to be updated for a new cache type?")
 		return ""
@@ -142,7 +150,7 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 				// Use the *original* distro name here since that is what wrote the file
 				check := fmt.Sprintf("%s %d", distro, i)
 				cmds = append(cmds, fmt.Sprintf("grep %q %s", check, filepath.Join(dir, "hello")))
-			case c.GoBuild != nil || c.Bazel != nil:
+			case c.GoBuild != nil || c.Bazel != nil || c.Pip != nil:
 				// This should not exist because the cache is not shared between distros
 				cmds = append(cmds, fmt.Sprintf("[ ! -f %q ]", filepath.Join(dir, "hello")))
 			}
@@ -296,6 +304,56 @@ func testAutoGobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 
 		// Also make sure there is no autocache when there is no golang dependency
 		spec = specWithCommand("[ -z \"${GOCACHE}\" ]")
+		spec.Dependencies = nil
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
+	})
+}
+
+func testAutoPipCache(ctx context.Context, t *testing.T, cfg targetConfig) {
+	ctx = startTestSpan(ctx, t)
+
+	specWithCommand := func(cmd string) *dalec.Spec {
+		spec := newSimpleSpec()
+		spec.Dependencies = &dalec.PackageDependencies{}
+		spec.Dependencies.Build = map[string]dalec.PackageConstraints{
+			cfg.GetPackage("python3"):     {},
+			cfg.GetPackage("python3-pip"): {},
+		}
+		spec.Build.Steps = append(spec.Build.Steps, dalec.BuildStep{
+			Command: cmd,
+		})
+		return spec
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		buf := bytes.NewBuffer(nil)
+		buf.WriteString("set -ex;\n")
+		buf.WriteString("[ -d \"$PIP_CACHE_DIR\" ]; echo hello > ${PIP_CACHE_DIR}/hello\n")
+
+		spec := specWithCommand(buf.String())
+		// Set ignore cache to make sure we always run the command so the cache is guaranteed to be populated
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
+		solveT(ctx, t, client, sr)
+
+		buf.Reset()
+		buf.WriteString("set -ex;\n")
+		buf.WriteString("[ -d \"$PIP_CACHE_DIR\" ]; grep hello ${PIP_CACHE_DIR}/hello\n")
+		spec = specWithCommand(buf.String())
+
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
+
+		// Now disable the auto pip cache
+		spec = specWithCommand("[ -z \"${PIP_CACHE_DIR}\" ]")
+		spec.Build.Caches = []dalec.CacheConfig{
+			{Pip: &dalec.PipCache{Disabled: true}},
+		}
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
+
+		// Also make sure there is no autocache when there is no python dependency
+		spec = specWithCommand("[ -z \"${PIP_CACHE_DIR}\" ]")
 		spec.Dependencies = nil
 		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)

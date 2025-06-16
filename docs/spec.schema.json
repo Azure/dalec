@@ -429,6 +429,10 @@
 				"gobuild": {
 					"$ref": "#/$defs/GoBuildCache",
 					"description": "GoBuild specifies a cache for Go's incremental build artifacts.\nThis should speed up repeated builds of Go projects."
+				},
+				"pip": {
+					"$ref": "#/$defs/PipCache",
+					"description": "Pip specifies a cache for pip package downloads and builds.\nThis should speed up repeated builds of Python projects."
 				}
 			},
 			"additionalProperties": {
@@ -456,6 +460,12 @@
 						"bazel"
 					],
 					"title": "bazel-local"
+				},
+				{
+					"required": [
+						"pip"
+					],
+					"title": "pip"
 				}
 			],
 			"description": "CacheConfig configures a cache to use for a build."
@@ -870,6 +880,53 @@
 				"null"
 			],
 			"description": "GeneratorGomod is used to generate a go module cache from go module sources"
+		},
+		"GeneratorPip": {
+			"properties": {
+				"extra_index_urls": {
+					"items": {
+						"type": [
+							"string"
+						]
+					},
+					"type": [
+						"array"
+					],
+					"description": "ExtraIndexUrls specifies additional PyPI index URLs"
+				},
+				"index_url": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "IndexUrl specifies a custom PyPI index URL"
+				},
+				"paths": {
+					"items": {
+						"type": [
+							"string"
+						]
+					},
+					"type": [
+						"array"
+					],
+					"description": "Paths is the list of paths to run the generator on. Used to generate multi-module in a single source."
+				},
+				"requirements_file": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "RequirementsFile is the name of the requirements file (default: \"requirements.txt\")"
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			]
 		},
 		"GitAuth": {
 			"properties": {
@@ -1336,6 +1393,31 @@
 			],
 			"description": "PatchSpec is used to apply a patch to a source with a given set of options."
 		},
+		"PipCache": {
+			"properties": {
+				"disabled": {
+					"type": [
+						"boolean"
+					],
+					"description": "The pip cache may be automatically injected into a build if\npip is detected.\nDisabled explicitly turns this off."
+				},
+				"scope": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Scope adds extra information to the cache key.\nThis is useful to differentiate between different build contexts if required.\n\nThis is mainly intended for internal testing purposes."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			],
+			"description": "PipCache is a cache for pip package downloads and builds."
+		},
 		"PostInstall": {
 			"properties": {
 				"symlinks": {
@@ -1384,7 +1466,7 @@
 					"type": [
 						"array"
 					],
-					"description": "Generate is the list generators to run on the source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `gomod` generator can be used to generate a go module cache from a go source.\nHow a generator operates is dependent on the actual generator.\nGenerators may also cauuse modifications to the build environment.\n\nCurrently only two generators are supported: \"gomod\" and \"cargohome\".\nThe \"gomod\" generator will generate a go module cache from the source.\nThe \"cargohome\" generator will generate a cargo home from the source."
+					"description": "Generate is the list generators to run on the source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `gomod` generator can be used to generate a go module cache from a go source.\nHow a generator operates is dependent on the actual generator.\nGenerators may also cauuse modifications to the build environment.\n\nCurrently supported generators are: \"gomod\", \"cargohome\", and \"pip\".\nThe \"gomod\" generator will generate a go module cache from the source.\nThe \"cargohome\" generator will generate a cargo home from the source.\nThe \"pip\" generator will generate a pip cache from the source."
 				},
 				"git": {
 					"$ref": "#/$defs/SourceGit"
@@ -1514,7 +1596,8 @@
 		"SourceGenerator": {
 			"required": [
 				"gomod",
-				"cargohome"
+				"cargohome",
+				"pip"
 			],
 			"properties": {
 				"cargohome": {
@@ -1524,6 +1607,10 @@
 				"gomod": {
 					"$ref": "#/$defs/GeneratorGomod",
 					"description": "Gomod is the go module generator."
+				},
+				"pip": {
+					"$ref": "#/$defs/GeneratorPip",
+					"description": "Pip is the pip generator."
 				},
 				"subpath": {
 					"type": [
