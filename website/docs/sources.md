@@ -337,7 +337,7 @@ Build sources are considered to be "directory" sources.
 ## Generators
 
 Generators are used to generate a source from another source.
-Currently the only generators supported are `gomod` and `cargohome`.
+Currently the generators supported are `gomod`, `cargohome`, and `pip`.
 
 ### Gomod
 
@@ -431,6 +431,64 @@ sources:
     generate:
       - subpath: "" # path inside the source to use as the root for the generator
         cargohome: {} # Generates a cargo home cache to cache dependencies
+```
+
+### Pip
+
+The `pip` generator manages a single pip cache for all sources that specify it in the spec. It is expected that the build dependencies include a Python toolchain with pip suitable for fetching Python package dependencies.
+
+Adding a pip generator to 1 or more sources causes the following to occur automatically:
+
+1. Fetch all pip dependencies for *all* sources in the spec that specify the generator
+2. Keeps a single pip cache directory for all Python package deps.
+3. Adds the pip cache directory as a source which gets included in source packages like a normal source.
+4. Adds the `PIP_CACHE_DIR` environment variable to the build environment.
+
+```yaml
+sources:
+  python-app:
+    git:
+        url: https://github.com/example/python-app.git
+        commit: v1.0.0
+    generate:
+        subpath: "" # path inside the source to use as the root for the generator
+        pip: {} # Generates a pip cache to cache dependencies
+```
+
+The `pip` generator supports the following configuration options:
+
+- `requirements_file`: Specify a custom requirements file name (default: "requirements.txt")
+- `index_url`: Specify a custom PyPI index URL
+- `extra_index_urls`: Specify additional PyPI index URLs
+
+The pip generator always uses `--no-binary=:all:` to force source builds for all packages, ensuring architecture independence and reproducible builds.
+
+```yaml
+sources:
+  python-app:
+    git:
+        url: https://github.com/example/python-app.git
+        commit: v1.0.0
+    generate:
+        pip:
+          requirements_file: "requirements.txt"
+          index_url: "https://pypi.org/simple/"
+          extra_index_urls:
+            - "https://custom-pypi.example.com/simple/"
+```
+
+The `pip` generator also supports generating dependencies from multiple requirements files in a single source using the `paths` field:
+
+```yaml
+sources:
+  python-monorepo:
+    path: ./
+    context: {}
+    generate:
+      - pip:
+          paths:
+            - app1
+            - app2
 ```
 
 ### NodeMod

@@ -391,9 +391,10 @@ type Source struct {
 	// How a generator operates is dependent on the actual generator.
 	// Generators may also cauuse modifications to the build environment.
 	//
-	// Currently only two generators are supported: "gomod" and "cargohome".
+	// Currently supported generators are: "gomod", "cargohome", and "pip".
 	// The "gomod" generator will generate a go module cache from the source.
 	// The "cargohome" generator will generate a cargo home from the source.
+	// The "pip" generator will generate a pip cache from the source.
 	Generate []*SourceGenerator `yaml:"generate,omitempty" json:"generate,omitempty"`
 }
 
@@ -409,6 +410,20 @@ type GeneratorGomod struct {
 type GeneratorCargohome struct {
 	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
+}
+
+type GeneratorPip struct {
+	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
+	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
+
+	// RequirementsFile is the name of the requirements file (default: "requirements.txt")
+	RequirementsFile string `yaml:"requirements_file,omitempty" json:"requirements_file,omitempty"`
+
+	// IndexUrl specifies a custom PyPI index URL
+	IndexUrl string `yaml:"index_url,omitempty" json:"index_url,omitempty"`
+
+	// ExtraIndexUrls specifies additional PyPI index URLs
+	ExtraIndexUrls []string `yaml:"extra_index_urls,omitempty" json:"extra_index_urls,omitempty"`
 }
 
 // GeneratorNodeMod is used to generate a node module cache for Yarn or npm.
@@ -428,6 +443,9 @@ type SourceGenerator struct {
 
 	// Cargohome is the cargo home generator.
 	Cargohome *GeneratorCargohome `yaml:"cargohome" json:"cargohome"`
+
+	// Pip is the pip generator.
+	Pip *GeneratorPip `yaml:"pip" json:"pip"`
 
 	// NodeMod is the generic node module generator for npm.
 	NodeMod *GeneratorNodeMod `yaml:"nodemod" json:"nodemod"`

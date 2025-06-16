@@ -47,6 +47,12 @@ func buildScript(spec *dalec.Spec) string {
 		fmt.Fprintln(b, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 
+	if spec.HasPips() {
+		// Set PIP environment variables to point to our prepared pip cache
+		fmt.Fprintln(b, "export PIP_CACHE_DIR=\"$(pwd)/"+pipCacheName+"\"")
+		fmt.Fprintln(b, "export PYTHONPATH=\"$(pwd)/"+pipCacheName+":${PYTHONPATH}\"")
+	}
+
 	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
 		v := t.Env[k]
@@ -82,12 +88,21 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
+	pipSt, err := spec.PipDeps(sOpt, worker, withPG("Add pip sources")...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding pip sources")
+	}
+
 	if gomodSt != nil {
 		out = append(out, gomodSt.With(sourceTar(worker, gomodsName, withPG("Tar gomod deps")...)))
 	}
 
 	if cargohomeSt != nil {
 		out = append(out, cargohomeSt.With(sourceTar(worker, cargohomeName, withPG("Tar cargohome deps")...)))
+	}
+
+	if pipSt != nil {
+		out = append(out, pipSt.With(sourceTar(worker, pipCacheName, withPG("Tar pip deps")...)))
 	}
 
 	srcsWithNodeMods, err := spec.NodeModDeps(sOpt, worker, opts...)
