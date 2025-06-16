@@ -228,9 +228,10 @@ func generateResponse(payload *gitPayload, secret []byte, kind string) (string, 
 		return handleSecretToken(secret, payload)
 	case kindHeader:
 		return handleSecretHeader(secret, payload)
+	default:
+		return "", fmt.Errorf("unrecognized authType: %q", kind)
 	}
 
-	return "", fmt.Errorf("unrecognized authType: %q", kind)
 }
 
 func handleSecretHeader(b []byte, payload *gitPayload) (string, error) {
