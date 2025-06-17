@@ -7,13 +7,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Constants for pip cache directories and keys
 const (
 	pipCacheDir = "/pip/cache"
 	PipCacheKey = "dalec-pip-cache"
 )
 
-// Source detection method
 func (s *Source) isPip() bool {
 	for _, gen := range s.Generate {
 		if gen.Pip != nil {
@@ -23,7 +21,6 @@ func (s *Source) isPip() bool {
 	return false
 }
 
-// Spec-level detection method
 func (s *Spec) HasPips() bool {
 	for _, src := range s.Sources {
 		if src.isPip() {
@@ -33,7 +30,6 @@ func (s *Spec) HasPips() bool {
 	return false
 }
 
-// Core generator logic
 func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		workDir := "/work/src"
@@ -47,19 +43,18 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 		const pipProxyPath = "/tmp/dalec/pip-proxy-cache"
 		for _, path := range paths {
-			// Build pip command with appropriate flags
 			requirementsFile := g.Pip.RequirementsFile
 			if requirementsFile == "" {
 				requirementsFile = "requirements.txt"
 			}
 
-			// Construct the pip install command
 			pipCmd := "set -e; "
 
 			// Always use --no-binary=:all: to force source builds for architecture independence
 			// Use explicit --cache-dir to avoid conflicts with user's PIP_CACHE_DIR
 			// Use --break-system-packages to bypass PEP 668 externally-managed-environment protection
-			pipCmd += "pip install --no-binary=:all: --cache-dir=" + pipProxyPath + " --break-system-packages "
+			// Use --ignore-installed to avoid conflicts with system packages
+			pipCmd += "pip install --no-binary=:all: --cache-dir=" + pipProxyPath + " --break-system-packages --ignore-installed "
 
 			// Add requirements file
 			pipCmd += "--requirement=" + requirementsFile
@@ -73,7 +68,6 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			}
 
 			in = worker.Run(
-				// Download and install dependencies using pip with isolated cache
 				ShArgs(pipCmd),
 				llb.IgnoreCache,
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
@@ -86,7 +80,6 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 	}
 }
 
-// Source filtering
 func (s *Spec) pipSources() map[string]Source {
 	sources := map[string]Source{}
 	for name, src := range s.Sources {
@@ -97,7 +90,9 @@ func (s *Spec) pipSources() map[string]Source {
 	return sources
 }
 
-// Main dependency resolution method
+// PipDeps returns an [llb.State] containing all the pip dependencies for the spec
+// for any sources that have a pip generator specified.
+// It fetches the patched sources and applies the pip generators to them.
 func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.ConstraintsOpt) (*llb.State, error) {
 	sources := s.pipSources()
 	if len(sources) == 0 {
