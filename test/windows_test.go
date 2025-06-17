@@ -672,11 +672,6 @@ echo "$BAR" > bar.txt
 		ctx := startTestSpan(baseCtx, t)
 		testAutoGobuildCache(ctx, t, tcfg)
 	})
-	t.Run("auto pip cache", func(t *testing.T) {
-		t.Parallel()
-		ctx := startTestSpan(baseCtx, t)
-		testAutoPipCache(ctx, t, tcfg)
-	})
 }
 
 func prepareWindowsSigningState(ctx context.Context, t *testing.T, gwc gwclient.Client, spec *dalec.Spec, extraSrOpts ...srOpt) llb.State {

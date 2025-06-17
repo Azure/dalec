@@ -8,8 +8,7 @@ import (
 )
 
 const (
-	pipCacheDir = "/pip/cache"
-	PipCacheKey = "dalec-pip-cache"
+	pipCacheDir = "/cache/pip"
 )
 
 func (s *Source) isPip() bool {
@@ -41,7 +40,6 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			paths = []string{"."}
 		}
 
-		const pipProxyPath = "/tmp/dalec/pip-proxy-cache"
 		for _, path := range paths {
 			requirementsFile := g.Pip.RequirementsFile
 			if requirementsFile == "" {
@@ -50,29 +48,24 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			pipCmd := "set -e; "
 
-			// Always use --no-binary=:all: to force source builds for architecture independence
-			// Use explicit --cache-dir to avoid conflicts with user's PIP_CACHE_DIR
-			// Use --break-system-packages to bypass PEP 668 externally-managed-environment protection
-			// Use --ignore-installed to avoid conflicts with system packages
-			pipCmd += "pip install --no-binary=:all: --cache-dir=" + pipProxyPath + " --break-system-packages --ignore-installed "
+			// Build base pip install command
+			basePipCmd := "pip install --no-binary=:all:"
 
 			// Add requirements file
-			pipCmd += "--requirement=" + requirementsFile
+			basePipCmd += " --requirement=" + requirementsFile
 
 			// Add custom index URLs if specified
 			if g.Pip.IndexUrl != "" {
-				pipCmd += " --index-url=" + g.Pip.IndexUrl
+				basePipCmd += " --index-url=" + g.Pip.IndexUrl
 			}
 			for _, extraUrl := range g.Pip.ExtraIndexUrls {
-				pipCmd += " --extra-index-url=" + extraUrl
+				basePipCmd += " --extra-index-url=" + extraUrl
 			}
 
 			in = worker.Run(
 				ShArgs(pipCmd),
-				llb.IgnoreCache,
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
-				llb.AddMount(pipProxyPath, llb.Scratch(), llb.AsPersistentCacheDir(PipCacheKey, llb.CacheMountShared)),
 				WithConstraints(opts...),
 			).AddMount(pipCacheDir, in)
 		}

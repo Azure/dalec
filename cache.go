@@ -30,16 +30,12 @@ type CacheConfig struct {
 	GoBuild *GoBuildCache `json:"gobuild,omitempty" yaml:"gobuild,omitempty" jsonschema:"oneof_required=gobuild"`
 	// Bazel specifies a cache for bazel builds.
 	Bazel *BazelCache `json:"bazel,omitempty" yaml:"bazel,omitempty" jsonschema:"oneof_required=bazel-local"`
-	// Pip specifies a cache for pip package downloads and builds.
-	// This should speed up repeated builds of Python projects.
-	Pip *PipCache `json:"pip,omitempty" yaml:"pip,omitempty" jsonschema:"oneof_required=pip"`
 }
 
 type CacheInfo struct {
 	DirInfo CacheDirInfo
 	GoBuild GoBuildCacheInfo
 	Bazel   BazelCacheInfo
-	Pip     PipCacheInfo
 }
 
 type CacheDirInfo struct {
@@ -109,16 +105,6 @@ func (c *CacheConfig) ToRunOption(distroKey string, opts ...CacheConfigOption) l
 		}))
 	}
 
-	if c.Pip != nil {
-		return c.Pip.ToRunOption(distroKey, PipCacheOptionFunc(func(info *PipCacheInfo) {
-			var cacheInfo CacheInfo
-			for _, opt := range opts {
-				opt.SetCacheConfigOption(&cacheInfo)
-			}
-			*info = cacheInfo.Pip
-		}))
-	}
-
 	// Should not reach this point
 	panic("invalid cache config")
 }
@@ -138,12 +124,9 @@ func (c *CacheConfig) validate() error {
 	if c.Bazel != nil {
 		count++
 	}
-	if c.Pip != nil {
-		count++
-	}
 
 	if count != 1 {
-		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, bazel, pip) must be set")
+		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, bazel) must be set")
 	}
 
 	var errs []error
@@ -160,11 +143,6 @@ func (c *CacheConfig) validate() error {
 	if c.Bazel != nil {
 		if err := c.Bazel.validate(); err != nil {
 			errs = append(errs, fmt.Errorf("invalid bazel cache config: %w", err))
-		}
-	}
-	if c.Pip != nil {
-		if err := c.Pip.validate(); err != nil {
-			errs = append(errs, fmt.Errorf("invalid pip cache config: %w", err))
 		}
 	}
 
@@ -422,80 +400,5 @@ func (c *BazelCache) ToRunOption(distroKey string, opts ...BazelCacheOption) llb
 
 		llb.AddMount("/etc/bazel.bazelrc", rcFile, llb.SourcePath("bazelrc")).SetRunOption(ei)
 		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
-	})
-}
-
-// PipCache is a cache for pip package downloads and builds.
-// It is used to speed up Python builds by caching pip packages.
-type PipCache struct {
-	// Scope adds extra information to the cache key.
-	// This is useful to differentiate between different build contexts if required.
-	//
-	// This is mainly intended for internal testing purposes.
-	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
-
-	// The pip cache may be automatically injected into a build if
-	// pip is detected.
-	// Disabled explicitly turns this off.
-	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
-}
-
-func (c *PipCache) validate() error {
-	return nil
-}
-
-type PipCacheInfo struct {
-	Platform *ocispecs.Platform
-}
-
-type PipCacheOption interface {
-	SetPipCacheOption(*PipCacheInfo)
-}
-
-type PipCacheOptionFunc func(*PipCacheInfo)
-
-func (f PipCacheOptionFunc) SetPipCacheOption(info *PipCacheInfo) {
-	f(info)
-}
-
-func WithPipCacheConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
-	return CacheConfigOptionFunc(func(info *CacheInfo) {
-		var c llb.Constraints
-		for _, opt := range opts {
-			opt.SetConstraintsOption(&c)
-		}
-		info.Pip.Platform = c.Platform
-	})
-}
-
-const userPipCacheDir = "/tmp/dalec/user-pip-cache"
-
-func (c *PipCache) ToRunOption(distroKey string, opts ...PipCacheOption) llb.RunOption {
-	return RunOptFunc(func(ei *llb.ExecInfo) {
-		if c.Disabled {
-			return
-		}
-
-		var info PipCacheInfo
-		for _, opt := range opts {
-			opt.SetPipCacheOption(&info)
-		}
-
-		platform := ei.Platform
-
-		if platform == nil {
-			platform = info.Platform
-		}
-		if platform == nil {
-			p := platforms.DefaultSpec()
-			platform = &p
-		}
-
-		key := fmt.Sprintf("%s-%s-dalec-pipcache", distroKey, platforms.Format(*platform))
-		if c.Scope != "" {
-			key = fmt.Sprintf("%s-%s", key, c.Scope)
-		}
-		llb.AddMount(userPipCacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
-		llb.AddEnv("PIP_CACHE_DIR", userPipCacheDir).SetRunOption(ei)
 	})
 }
