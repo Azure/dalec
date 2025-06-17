@@ -1051,8 +1051,8 @@ if __name__ == "__main__":
 func TestSourceWithPip(t *testing.T) {
 	t.Parallel()
 
-	// Helper function to check if a specific pip package directory exists
-	checkPipPackage := func(ctx context.Context, gwc gwclient.Client, packagePath string, spec *dalec.Spec) {
+	// Helper function to check if the pip cache directory exists
+	checkPipCache := func(ctx context.Context, gwc gwclient.Client, cachePath string, spec *dalec.Spec) {
 		t.Helper()
 		res, err := gwc.Solve(ctx, newSolveRequest(withBuildTarget("debug/pip"), withSpec(ctx, t, spec)))
 		if err != nil {
@@ -1065,7 +1065,7 @@ func TestSourceWithPip(t *testing.T) {
 		}
 
 		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: packagePath,
+			Path: cachePath,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -1103,7 +1103,8 @@ func TestSourceWithPip(t *testing.T) {
 	t.Run("no patch", func(t *testing.T) {
 		t.Parallel()
 		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
-			checkPipPackage(ctx, gwc, "http", baseSpec())
+			// Check for the main pip cache directory structure
+			checkPipCache(ctx, gwc, "wheels", baseSpec())
 		})
 	})
 
@@ -1135,7 +1136,8 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName}},
 				}
 
-				checkPipPackage(ctx, gwc, "http", spec)
+				// Check for pip HTTP cache directory after applying patches
+				checkPipCache(ctx, gwc, "http", spec)
 			})
 		})
 		t.Run("dir", func(t *testing.T) {
@@ -1166,7 +1168,7 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName, Path: "patch-file"}},
 				}
 
-				checkPipPackage(ctx, gwc, "http", spec)
+				checkPipCache(ctx, gwc, "wheels", spec)
 			})
 		})
 	})
@@ -1250,7 +1252,7 @@ func TestSourceWithPip(t *testing.T) {
 			// The pip generator always uses --no-binary=:all: to force source builds
 			// This test verifies that the generator works correctly with this default behavior
 
-			checkPipPackage(ctx, gwc, "http", spec)
+			checkPipCache(ctx, gwc, "wheels", spec)
 		})
 	})
 
@@ -1261,7 +1263,7 @@ func TestSourceWithPip(t *testing.T) {
 			// Test with custom PyPI index
 			spec.Sources[srcName].Generate[0].Pip.IndexUrl = "https://pypi.org/simple/"
 
-			checkPipPackage(ctx, gwc, "http", spec)
+			checkPipCache(ctx, gwc, "wheels", spec)
 		})
 	})
 }
