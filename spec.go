@@ -411,6 +411,9 @@ type GeneratorCargohome struct {
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 }
 
+// GeneratorNodeMod is used to generate a node module cache for Yarn or npm.
+type GeneratorNodeMod struct{}
+
 // SourceGenerator holds the configuration for a source generator.
 // This can be used inside of a [Source] to generate additional sources from the given source.
 type SourceGenerator struct {
@@ -422,6 +425,9 @@ type SourceGenerator struct {
 
 	// Cargohome is the cargo home generator.
 	Cargohome *GeneratorCargohome `yaml:"cargohome" json:"cargohome"`
+
+	// NodeMod is the generic node module generator for npm.
+	NodeMod *GeneratorNodeMod `yaml:"nodemod" json:"nodemod"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
