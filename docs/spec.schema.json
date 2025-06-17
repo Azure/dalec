@@ -438,10 +438,6 @@
 				"gobuild": {
 					"$ref": "#/$defs/GoBuildCache",
 					"description": "GoBuild specifies a cache for Go's incremental build artifacts.\nThis should speed up repeated builds of Go projects."
-				},
-				"pip": {
-					"$ref": "#/$defs/PipCache",
-					"description": "Pip specifies a cache for pip package downloads and builds.\nThis should speed up repeated builds of Python projects."
 				}
 			},
 			"additionalProperties": {
@@ -469,12 +465,6 @@
 						"bazel"
 					],
 					"title": "bazel-local"
-				},
-				{
-					"required": [
-						"pip"
-					],
-					"title": "pip"
 				}
 			],
 			"description": "CacheConfig configures a cache to use for a build."
@@ -1424,31 +1414,6 @@
 				"null"
 			],
 			"description": "PatchSpec is used to apply a patch to a source with a given set of options."
-		},
-		"PipCache": {
-			"properties": {
-				"disabled": {
-					"type": [
-						"boolean"
-					],
-					"description": "The pip cache may be automatically injected into a build if\npip is detected.\nDisabled explicitly turns this off."
-				},
-				"scope": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Scope adds extra information to the cache key.\nThis is useful to differentiate between different build contexts if required.\n\nThis is mainly intended for internal testing purposes."
-				}
-			},
-			"additionalProperties": {
-				"not": {}
-			},
-			"type": [
-				"object",
-				"null"
-			],
-			"description": "PipCache is a cache for pip package downloads and builds."
 		},
 		"PostInstall": {
 			"properties": {
