@@ -29,6 +29,7 @@ func TestBullseye(t *testing.T) {
 		withPackageOverride("golang", "golang-1.19"),
 		withPackageOverride("rust", "cargo-web"),
 		withPackageOverride("bazel", noPackageAvailable),
+		withPackageOverride("python", "python3-pip"),
 	)
 
 	testLinuxDistro(ctx, t, testConf)
