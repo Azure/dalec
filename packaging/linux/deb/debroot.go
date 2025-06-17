@@ -295,7 +295,6 @@ func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		// Above command does not have a newline due to quoting issues, so add that here.
 		fmt.Fprint(buf, "\n")
 	}
-
 	return buf.Bytes()
 }
 

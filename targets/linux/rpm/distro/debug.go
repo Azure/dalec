@@ -32,22 +32,24 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 		if !dalec.HasGolang(spec, targetKey) {
 			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
 		}
-
-		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey))
 	}
 
 	if spec.HasCargohomes() {
 		hasRust := func(s string) bool {
 			return s == "rust"
 		}
-
 		if !slices.ContainsFunc(deps, hasRust) {
 			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
 		}
-
-		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey))
 	}
 
+	if spec.HasNodeMods() {
+		if !dalec.HasNpm(spec, targetKey) {
+			return llb.Scratch(), errors.New("spec contains node modules but does not have npm in build deps")
+		}
+	}
+
+	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey))
 	return worker, nil
 }
 
