@@ -58,7 +58,8 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			// Always use --no-binary=:all: to force source builds for architecture independence
 			// Use explicit --cache-dir to avoid conflicts with user's PIP_CACHE_DIR
-			pipCmd += "pip install --no-binary=:all: --cache-dir=" + pipProxyPath + " "
+			// Use --break-system-packages to bypass PEP 668 externally-managed-environment protection
+			pipCmd += "pip install --no-binary=:all: --cache-dir=" + pipProxyPath + " --break-system-packages "
 
 			// Add requirements file
 			pipCmd += "--requirement=" + requirementsFile
