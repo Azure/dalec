@@ -1167,8 +1167,8 @@ if __name__ == "__main__":
 func TestSourceWithPip(t *testing.T) {
 	t.Parallel()
 
-	// Helper function to check if the pip cache directory exists
-	checkPipCache := func(ctx context.Context, gwc gwclient.Client, cachePath string, spec *dalec.Spec) {
+	// Helper function to check if pip packages were installed successfully
+	checkPipPackages := func(ctx context.Context, gwc gwclient.Client, packageName string, spec *dalec.Spec) {
 		t.Helper()
 		res, err := gwc.Solve(ctx, newSolveRequest(withBuildTarget("debug/pip"), withSpec(ctx, t, spec)))
 		if err != nil {
@@ -1180,15 +1180,16 @@ func TestSourceWithPip(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		// Check if the package directory exists in site-packages
 		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: cachePath,
+			Path: "/.local/lib/python3.12/site-packages/" + packageName,
 		})
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("Package %s not found in site-packages: %v", packageName, err)
 		}
 
 		if !fs.FileMode(stat.Mode).IsDir() {
-			t.Fatal("expected directory")
+			t.Fatalf("Expected %s to be a directory in site-packages", packageName)
 		}
 	}
 
@@ -1219,8 +1220,8 @@ func TestSourceWithPip(t *testing.T) {
 	t.Run("no patch", func(t *testing.T) {
 		t.Parallel()
 		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
-			// Check for the main pip cache directory structure
-			checkPipCache(ctx, gwc, "wheels", baseSpec())
+			// Check that requests package was installed
+			checkPipPackages(ctx, gwc, "requests", baseSpec())
 		})
 	})
 
@@ -1252,8 +1253,8 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName}},
 				}
 
-				// Check for pip HTTP cache directory after applying patches
-				checkPipCache(ctx, gwc, "http", spec)
+				// Check that flask package was installed after applying patches
+				checkPipPackages(ctx, gwc, "flask", spec)
 			})
 		})
 		t.Run("dir", func(t *testing.T) {
@@ -1284,7 +1285,7 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName, Path: "patch-file"}},
 				}
 
-				checkPipCache(ctx, gwc, "wheels", spec)
+				checkPipPackages(ctx, gwc, "requests", spec)
 			})
 		})
 	})
@@ -1317,7 +1318,7 @@ func TestSourceWithPip(t *testing.T) {
 					Generate: []*dalec.SourceGenerator{
 						{
 							Pip: &dalec.GeneratorPip{
-								RequirementsFile: "./dir/module1/requirements.txt", // Use single file field
+								Paths: []string{"./dir/module1", "./dir/module2"},
 							},
 						},
 					},
@@ -1343,19 +1344,19 @@ func TestSourceWithPip(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Check that both packages are cached
-			packages := []string{"http", "itsdangerous"}
+			// Check that both packages from the requirements files are installed
+			packages := []string{"requests", "flask"}
 			for _, pkg := range packages {
 				stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-					Path: pkg,
+					Path: "/.local/lib/python3.12/site-packages/" + pkg,
 				})
 
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("Package %s not found: %v", pkg, err)
 				}
 
 				if !fs.FileMode(stat.Mode).IsDir() {
-					t.Fatal("expected directory")
+					t.Fatalf("Expected %s to be a directory", pkg)
 				}
 			}
 		})
@@ -1368,7 +1369,7 @@ func TestSourceWithPip(t *testing.T) {
 			// The pip generator always uses --no-binary=:all: to force source builds
 			// This test verifies that the generator works correctly with this default behavior
 
-			checkPipCache(ctx, gwc, "wheels", spec)
+			checkPipPackages(ctx, gwc, "requests", spec)
 		})
 	})
 
@@ -1379,7 +1380,7 @@ func TestSourceWithPip(t *testing.T) {
 			// Test with custom PyPI index
 			spec.Sources[srcName].Generate[0].Pip.IndexUrl = "https://pypi.org/simple/"
 
-			checkPipCache(ctx, gwc, "wheels", spec)
+			checkPipPackages(ctx, gwc, "flask", spec)
 		})
 	})
 }
