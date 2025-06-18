@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	pipCacheDir = "/cache/pip"
+	pipInstallDir = "/.local/lib/python3.12/site-packages"
 )
 
 func (s *Source) isPip() bool {
@@ -48,8 +48,8 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			pipCmd := "set -e; "
 
-			// Build base pip install command
-			basePipCmd := "pip install --no-binary=:all:"
+			// Build base pip install command with user installation
+			basePipCmd := "pip install --user --no-binary=:all:"
 
 			// Add requirements file
 			basePipCmd += " --requirement=" + requirementsFile
@@ -62,12 +62,15 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				basePipCmd += " --extra-index-url=" + extraUrl
 			}
 
+			// Add the actual pip install command
+			pipCmd += basePipCmd
+
 			in = worker.Run(
 				ShArgs(pipCmd),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
-			).AddMount(pipCacheDir, in)
+			).AddMount(pipInstallDir, in)
 		}
 		return in
 	}
