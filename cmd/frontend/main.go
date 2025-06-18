@@ -40,7 +40,8 @@ func main() {
 
 	if err := fs.Parse(os.Args); err != nil {
 		bklog.L.WithError(err).Fatal("error parsing frontend args")
-		os.Exit(137)
+		os.Exit(70) // 70 is EX_SOFTWARE, meaning internal software error occurred
+
 	}
 
 	subCmd := fs.Arg(1)
@@ -74,6 +75,6 @@ func dalecMain() {
 		frontend.WithTargetForwardingHandler,
 	)); err != nil {
 		bklog.L.WithError(err).Fatal("error running frontend")
-		os.Exit(137)
+		os.Exit(70) // 70 is EX_SOFTWARE, meaning internal software error occurred
 	}
 }
