@@ -396,7 +396,10 @@ func (c *BazelCache) ToRunOption(worker llb.State, distroKey string, opts ...Baz
 			sockPath = "/tmp/dalec/bazel-remote.sock"
 		)
 
-		rcFileContent := "build --disk_cache=" + cacheDir + "\n"
+		rcFileContent := `
+build --disk_cache=` + cacheDir + `
+fetch --disk_cache=` + cacheDir + `
+`
 		rcFile := llb.Scratch().File(
 			llb.Mkfile("bazelrc", 0o644, []byte(rcFileContent)),
 			WithConstraint(info.constraints),
@@ -405,10 +408,23 @@ func (c *BazelCache) ToRunOption(worker llb.State, distroKey string, opts ...Baz
 		// Add the scope to the socket path that we check in order to avoid unexpected (buildkit) cache hits.
 		// This came up in testing, although I'm not sure why llb.IgnoreCache is not sufficient here.
 		checkSockPath := filepath.Join(filepath.Dir(sockPath), c.Scope, filepath.Base(sockPath))
+		checkScript := fmt.Sprintf(`#!/usr/bin/env sh
+
+if [ -S %q ]; then
+	echo "build --remote_cache=unix:%s" >> /tmp/dalec/bazelrc
+	echo "fetch --remote_cache=unix:%s" >> /tmp/dalec/bazelrc
+fi
+`, checkSockPath, sockPath, sockPath)
+		checkScriptSt := llb.Scratch().File(
+			llb.Mkfile("script.sh", 0o755, []byte(checkScript)),
+		)
+
+		scriptPath := "/tmp/dalec/internal/bazel/check-socket.sh"
 		rcFile = worker.Run(
 			llb.AddSSHSocket(llb.SSHID(BazelDefaultSocketID), llb.SSHSocketTarget(checkSockPath), llb.SSHOptional),
-			ShArgsf(`if [ -S %q ]; then echo "build --remote_cache=unix:%s" >> /tmp/dalec/bazelrc; fi`, checkSockPath, sockPath),
+			ShArgs(scriptPath),
 			llb.IgnoreCache,
+			llb.AddMount(scriptPath, checkScriptSt, llb.SourcePath("script.sh")),
 		).AddMount("/tmp/dalec/bazelrc", rcFile, llb.SourcePath("bazelrc"))
 
 		llb.AddMount("/etc/bazel.bazelrc", rcFile, llb.SourcePath("bazelrc")).SetRunOption(ei)
