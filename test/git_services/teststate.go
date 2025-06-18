@@ -370,7 +370,7 @@ func (ts *TestState) runContainer(cont gwclient.Container, env []string, s Scrip
 	ec := make(chan error)
 	go func() {
 		if err := cp.Wait(); err != nil {
-			ec <- errors.Join(errContainerFailed, err, fmt.Errorf("stdout:\n%s\n=====\nstderr:\n%s\n", stdout.String(), stderr.String()))
+			ec <- errors.Join(errContainerFailed, err, fmt.Errorf("stdout:\n%s\n=====\nstderr:\n%s", stdout.String(), stderr.String()))
 		}
 	}()
 

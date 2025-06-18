@@ -25,10 +25,6 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
-const (
-	usernameRoot = "root"
-)
-
 func TestGomodGitAuth(t *testing.T) {
 	t.Parallel()
 	ctx := startTestSpan(baseCtx, t)
