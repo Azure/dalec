@@ -245,7 +245,7 @@ genrule(
 
 		randKey := getRand()
 
-		dirCmd := "dir=$(grep disk_cache /etc/bazel.bazelrc | awk -F'=' '{ print $2 }')"
+		dirCmd := "dir=$(grep disk_cache /etc/bazel.bazelrc | tail -n 1 | awk -F'=' '{ print $2 }')"
 		// Write to the bazel cache using bazel itself
 		spec := newSpec(randKey, dirCmd, `[ ! -d "${dir}/ac" ]`, `[ ! -d "${dir}/cas" ]`, "cd src; bazel build //:hello")
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
@@ -284,7 +284,7 @@ genrule(
 		defer srv.Stop()
 
 		// socket path format is 'remote_cache=unix:/path/to/socket
-		sockPathCmd := "set -euxo pipefail; sock_path=$(grep remote_cache /etc/bazel.bazelrc | awk -F'=' '{ print $2 }' | awk -F':' '{ print $2 }')"
+		sockPathCmd := "set -euxo pipefail; sock_path=$(grep remote_cache /etc/bazel.bazelrc | tail -n 1 | awk -F'=' '{ print $2 }' | awk -F':' '{ print $2 }')"
 		spec := newSpec(randKey, sockPathCmd, `set -ux; [ -S "${sock_path}" ]`, "cd src; bazel build //:hello")
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
