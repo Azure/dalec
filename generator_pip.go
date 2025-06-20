@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	pipInstallDir = "/.local/lib/python3.12/site-packages"
+	pipInstallDir = "/usr/lib/python3.12/site-packages"
 )
 
 func (s *Source) isPip() bool {
@@ -48,8 +48,8 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			pipCmd := "set -e; "
 
-			// Build base pip install command with user installation
-			basePipCmd := "pip install --user --no-binary=:all:"
+			// Build base pip install command for system-wide installation
+			basePipCmd := "pip3 install --no-binary=:all:"
 
 			// Add requirements file
 			basePipCmd += " --requirement=" + requirementsFile
