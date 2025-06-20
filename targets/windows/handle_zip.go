@@ -83,6 +83,16 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
+	srcsWithNodeMods, err := spec.NodeModDeps(sOpt, worker, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error preparing node deps")
+	}
+	sorted := dalec.SortMapKeys(srcsWithNodeMods)
+
+	for _, key := range sorted {
+		out[key] = srcsWithNodeMods[key]
+	}
+
 	if gomodSt != nil {
 		out[gomodsName] = *gomodSt
 	}
