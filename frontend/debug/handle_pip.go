@@ -30,7 +30,7 @@ func Pip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) 
 		worker, ok := inputs[keyPipWorker]
 		if !ok {
 			worker = llb.Image("python:latest", llb.WithMetaResolver(client)).
-				Run(llb.Shlex("apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*")).
+				Run(dalec.ShArgs("apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*")).
 				Run(llb.Shlex("python3 --version")).
 				Run(llb.Shlex("python3 -m pip --version")).Root()
 		}
