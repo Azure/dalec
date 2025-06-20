@@ -67,6 +67,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			in = worker.Run(
 				ShArgs(pipCmd),
+				llb.AddEnv("PIP_BREAK_SYSTEM_PACKAGES", "1"),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
