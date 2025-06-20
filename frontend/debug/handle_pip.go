@@ -29,8 +29,8 @@ func Pip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) 
 		// This is useful for keeping pre-built worker image, especially for CI.
 		worker, ok := inputs[keyPipWorker]
 		if !ok {
-			worker = llb.Image("alpine:latest", llb.WithMetaResolver(client)).
-				Run(llb.Shlex("apk add --no-cache python3 python3-dev py3-pip build-base")).
+			worker = llb.Image("python:latest", llb.WithMetaResolver(client)).
+				Run(llb.Shlex("apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*")).
 				Run(llb.Shlex("python3 --version")).
 				Run(llb.Shlex("python3 -m pip --version")).Root()
 		}
