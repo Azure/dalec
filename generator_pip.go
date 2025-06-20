@@ -47,9 +47,10 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			}
 
 			pipCmd := "set -e; "
+			tmpInstallDir := "/tmp/pip-install"
 
-			// Build base pip install command with target directory
-			basePipCmd := "python3 -m pip install --no-binary=:all: --target=" + pipInstallDir + " --upgrade --force-reinstall"
+			// Build base pip install command to temporary directory first
+			basePipCmd := "python3 -m pip install --no-binary=:all: --target=" + tmpInstallDir + " --upgrade --force-reinstall"
 
 			// Add requirements file
 			basePipCmd += " --requirement=" + requirementsFile
@@ -62,8 +63,8 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				basePipCmd += " --extra-index-url=" + extraUrl
 			}
 
-			// Add the actual pip install command
-			pipCmd += basePipCmd
+			// Add the actual pip install command, then copy to our mount directory
+			pipCmd += basePipCmd + " && mkdir -p " + pipInstallDir + " && cp -r " + tmpInstallDir + "/* " + pipInstallDir + "/"
 
 			in = worker.Run(
 				ShArgs(pipCmd),
