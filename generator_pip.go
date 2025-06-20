@@ -49,7 +49,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			pipCmd := "set -e; "
 
 			// Build base pip install command for system-wide installation
-			basePipCmd := "pip3 install --no-binary=:all:"
+			basePipCmd := "python3 -m pip install --no-binary=:all:"
 
 			// Add requirements file
 			basePipCmd += " --requirement=" + requirementsFile
