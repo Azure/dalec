@@ -32,7 +32,7 @@ func Pip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) 
 			worker = llb.Image("alpine:latest", llb.WithMetaResolver(client)).
 				Run(llb.Shlex("apk add --no-cache python3 python3-dev py3-pip build-base")).
 				Run(llb.Shlex("python3 --version")).
-				Run(llb.Shlex("pip3 --version")).Root()
+				Run(llb.Shlex("python3 -m pip --version")).Root()
 		}
 
 		st, err := spec.PipDeps(sOpt, worker, dalec.Platform(platform))
