@@ -1030,3 +1030,249 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 		}
 	})
 }
+
+const pipFixtureRequirements = `requests==2.28.1
+flask==2.2.2
+`
+
+const pipFixtureMain = `#!/usr/bin/env python3
+import requests
+import flask
+
+def main():
+    print("Hello from Python with pip dependencies!")
+    print(f"Requests version: {requests.__version__}")
+    print(f"Flask version: {flask.__version__}")
+
+if __name__ == "__main__":
+    main()
+`
+
+func TestSourceWithPip(t *testing.T) {
+	t.Parallel()
+
+	// Helper function to check if pip packages were installed successfully
+	checkPipPackages := func(ctx context.Context, gwc gwclient.Client, packageName string, spec *dalec.Spec) {
+		t.Helper()
+		res, err := gwc.Solve(ctx, newSolveRequest(withBuildTarget("debug/pip"), withSpec(ctx, t, spec)))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ref, err := res.SingleRef()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Debug: List directory contents to see what's actually there
+		files, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+			Path: "usr/lib/python3.12/site-packages",
+		})
+		if err != nil {
+			t.Logf("Could not read site-packages directory: %v", err)
+		} else {
+			t.Logf("Contents of site-packages directory:")
+			for _, file := range files {
+				t.Logf("- %s", file.GetPath())
+			}
+		}
+
+		// Check if the package directory exists in site-packages
+		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
+			Path: "usr/lib/python3.12/site-packages/" + packageName,
+		})
+		if err != nil {
+			t.Fatalf("Package %s not found in site-packages: %v", packageName, err)
+		}
+
+		if !fs.FileMode(stat.Mode).IsDir() {
+			t.Fatalf("Expected %s to be a directory in site-packages", packageName)
+		}
+	}
+
+	const srcName = "src1"
+
+	baseSpec := func() *dalec.Spec {
+		return &dalec.Spec{
+			Sources: map[string]dalec.Source{
+				srcName: {
+					Generate: []*dalec.SourceGenerator{
+						{
+							Pip: &dalec.GeneratorPip{},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"main.py":          {Contents: pipFixtureMain},
+								"requirements.txt": {Contents: pipFixtureRequirements},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("no patch", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+			// Check that requests package was installed
+			checkPipPackages(ctx, gwc, "requests", baseSpec())
+		})
+	})
+
+	t.Run("with patch", func(t *testing.T) {
+		t.Parallel()
+		t.Run("file", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+				const downgradePatch = `diff --git a/requirements.txt b/requirements.txt
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,2 +1,2 @@
+-requests==2.28.1
++requests==2.27.1
+ flask==2.2.2
+`
+				spec := baseSpec()
+
+				patchName := "patch"
+				spec.Sources[patchName] = dalec.Source{
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: downgradePatch,
+						},
+					},
+				}
+
+				spec.Patches = map[string][]dalec.PatchSpec{
+					srcName: {{Source: patchName}},
+				}
+
+				// Check that flask package was installed after applying patches
+				checkPipPackages(ctx, gwc, "flask", spec)
+			})
+		})
+		t.Run("dir", func(t *testing.T) {
+			t.Parallel()
+			testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+				const downgradePatch = `diff --git a/requirements.txt b/requirements.txt
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,2 +1,2 @@
+-requests==2.28.1
++requests==2.27.1
+ flask==2.2.2
+`
+				spec := baseSpec()
+
+				patchName := "patch"
+				spec.Sources[patchName] = dalec.Source{
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"patch-file": {Contents: downgradePatch},
+							},
+						},
+					},
+				}
+
+				spec.Patches = map[string][]dalec.PatchSpec{
+					srcName: {{Source: patchName, Path: "patch-file"}},
+				}
+
+				checkPipPackages(ctx, gwc, "requests", spec)
+			})
+		})
+	})
+
+	t.Run("multi-requirements", func(t *testing.T) {
+		t.Parallel()
+		/*
+			dir/
+				module1/
+					requirements.txt
+					main.py
+				module2/
+					requirements.txt
+					main.py
+		*/
+		contextSt := llb.Scratch().File(llb.Mkdir("/dir", 0644)).
+			File(llb.Mkdir("/dir/module1", 0644)).
+			File(llb.Mkfile("/dir/module1/requirements.txt", 0644, []byte("requests==2.28.1\n"))).
+			File(llb.Mkfile("/dir/module1/main.py", 0644, []byte(pipFixtureMain))).
+			File(llb.Mkdir("/dir/module2", 0644)).
+			File(llb.Mkfile("/dir/module2/requirements.txt", 0644, []byte("flask==2.2.2\n"))).
+			File(llb.Mkfile("/dir/module2/main.py", 0644, []byte(pipFixtureMain)))
+
+		const contextName = "multi-pip-module"
+		spec := &dalec.Spec{
+			Name: "test-dalec-pip-context-source",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Context: &dalec.SourceContext{Name: contextName},
+					Generate: []*dalec.SourceGenerator{
+						{
+							Pip: &dalec.GeneratorPip{
+								Paths: []string{"./dir/module1", "./dir/module2"},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					"python3": {
+						Version: []string{},
+					},
+					"python3-pip": {
+						Version: []string{},
+					},
+				},
+			},
+		}
+
+		runTest(t, func(ctx context.Context, gwc gwclient.Client) {
+			req := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, contextName, contextSt), withBuildTarget("debug/pip"))
+			res := solveT(ctx, t, gwc, req)
+			ref, err := res.SingleRef()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Check that site-packages directory exists
+			stat, err := ref.StatFile(ctx, gwclient.StatRequest{
+				Path: "usr/lib/python3.12/site-packages",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !fs.FileMode(stat.Mode).IsDir() {
+				t.Fatal("expected directory")
+			}
+		})
+	})
+
+	t.Run("force-source-builds", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := baseSpec()
+			// The pip generator always uses --no-binary=:all: to force source builds
+			// This test verifies that the generator works correctly with this default behavior
+
+			checkPipPackages(ctx, gwc, "requests", spec)
+		})
+	})
+
+	t.Run("custom-index", func(t *testing.T) {
+		t.Parallel()
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
+			spec := baseSpec()
+			// Test with custom PyPI index
+			spec.Sources[srcName].Generate[0].Pip.IndexUrl = "https://pypi.org/simple/"
+
+			checkPipPackages(ctx, gwc, "flask", spec)
+		})
+	})
+}

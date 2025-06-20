@@ -16,6 +16,7 @@ import (
 const (
 	gomodsName      = "__gomods"
 	cargohomeName   = "__cargohome"
+	pipCacheName    = "__pip"
 	buildScriptName = "build.sh"
 )
 
@@ -331,6 +332,11 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 		sourceIdx += 1
 	}
 
+	if w.Spec.HasPips() {
+		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", sourceIdx, pipCacheName)
+		sourceIdx += 1
+	}
+
 	if len(w.Spec.Build.Steps) > 0 {
 		fmt.Fprintf(b, "Source%d: %s\n", sourceIdx, buildScriptName)
 	}
@@ -383,6 +389,14 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", cargohomeName, cargohomeName)
 	})
 
+	preparePips := sync.OnceFunc(func() {
+		if !w.Spec.HasPips() {
+			return
+		}
+		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", pipCacheName)
+		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", pipCacheName, pipCacheName)
+	})
+
 	// Extract all the sources from the rpm source dir
 	for _, key := range keys {
 		if !dalec.SourceIsDir(w.Spec.Sources[key]) {
@@ -397,6 +411,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	}
 	prepareGomods()
 	prepareCargohomes()
+	preparePips()
 
 	// Apply patches to all sources.
 	// Note: These are applied based on the key sorting algorithm (lexicographic).

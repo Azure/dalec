@@ -30,6 +30,7 @@ func PhonySigner(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, er
 			llb.AddEnv("CGO_ENABLED", "0"),
 			goModCache,
 			goBuildCache,
+			pipCache,
 			llb.Dir("/build/src"),
 			llb.AddMount("/build/src", *bctx, llb.Readonly),
 		).
