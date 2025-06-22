@@ -47,6 +47,13 @@ func buildScript(spec *dalec.Spec) string {
 		fmt.Fprintln(b, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 
+	if spec.HasNodeMods() {
+		fmt.Fprintln(b, "export NPM_CONFIG_CACHE=\"$(pwd)/"+npmCacheDir+"\"")
+		if spec.HasYarnPackageManager() {
+			fmt.Fprintln(b, "npm install --offline -g yarn; yarn config set yarn-offline-mirror $(pwd)/"+yarnCacheDir)
+		}
+	}
+
 	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
 		v := t.Env[k]
@@ -97,6 +104,15 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 
 	if cargohomeSt != nil {
 		out = append(out, cargohomeSt.With(sourceTar(worker, cargohomeName, withPG("Tar cargohome deps")...)))
+	}
+
+	st, err := spec.NodeModDeps(sOpt, worker, withPG("Add node module deps")...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding node module deps")
+	}
+
+	if st != nil {
+		out = append(out, st.With(sourceTar(worker, nodeModsName, withPG("Tar node module deps")...)))
 	}
 
 	scriptSt := buildScriptSourceState(spec)
