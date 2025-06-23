@@ -1180,29 +1180,16 @@ func TestSourceWithPip(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Debug: List directory contents to see what's actually there
-		files, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-			Path: "usr/lib/python3.12/site-packages",
-		})
-		if err != nil {
-			t.Logf("Could not read site-packages directory: %v", err)
-		} else {
-			t.Logf("Contents of site-packages directory:")
-			for _, file := range files {
-				t.Logf("- %s", file.GetPath())
-			}
-		}
-
-		// Check if the package directory exists in site-packages
+		// Check if the package directory exists in pip-packages
 		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: "usr/lib/python3.12/site-packages/" + packageName,
+			Path: "pip-packages/" + packageName,
 		})
 		if err != nil {
-			t.Fatalf("Package %s not found in site-packages: %v", packageName, err)
+			t.Fatalf("Package %s not found in pip-packages: %v", packageName, err)
 		}
 
 		if !fs.FileMode(stat.Mode).IsDir() {
-			t.Fatalf("Expected %s to be a directory in site-packages", packageName)
+			t.Fatalf("Expected %s to be a directory in pip-packages", packageName)
 		}
 	}
 
@@ -1357,9 +1344,9 @@ func TestSourceWithPip(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Check that site-packages directory exists
+			// Check that pip-packages directory exists
 			stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-				Path: "usr/lib/python3.12/site-packages",
+				Path: "pip-packages",
 			})
 			if err != nil {
 				t.Fatal(err)
