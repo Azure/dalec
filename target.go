@@ -9,8 +9,9 @@ import (
 
 const (
 	// PreBuiltPkgSuffix is what is expected to be appended to a targetKey when it's
-	// meant to be a target specific package. (e.g. rpm-pkg, deb-pkg). When this is
-	// provided and used to build a container, it will take precedence over GenericPkg.
+	// meant to be a target distro specific package (e.g. mariner2-pkg, azlinux3-pkg,
+	// windowscross-pkg, bookworm-pkg, etc.). When this is provided and used to buildkit
+	// and container, it will take precedence over GenericPkg.
 	PreBuiltPkgSuffix = "-pkg"
 	// If not a target specific package, but we want to indicate the use of a
 	// prebuilt package, we use GenericPkg to indicate that it's not target specific.
