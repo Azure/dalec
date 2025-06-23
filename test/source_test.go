@@ -1182,7 +1182,7 @@ func TestSourceWithPip(t *testing.T) {
 
 		// Check if the package directory exists in venv site-packages
 		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: "lib/python3.12/site-packages/" + packageName,
+			Path: filepath.Join("/pip-venv/lib/python3.12/site-packages/", packageName),
 		})
 		if err != nil {
 			t.Fatalf("Package %s not found in venv site-packages: %v", packageName, err)
@@ -1346,7 +1346,7 @@ func TestSourceWithPip(t *testing.T) {
 
 			// Check that venv site-packages directory exists
 			stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-				Path: "lib/python3.12/site-packages",
+				Path: "pip-venv/lib/python3.12/site-packages",
 			})
 			if err != nil {
 				t.Fatal(err)

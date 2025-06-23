@@ -73,7 +73,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			pipCmd += basePipCmd
 
 			in = worker.Run(
-				ShArgs(pipCmd),
+				llb.Args([]string{"bash", "-c", pipCmd}), // Use bash explicitly for source command
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
