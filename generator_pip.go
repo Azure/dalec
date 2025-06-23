@@ -49,7 +49,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			pipCmd := "set -e; "
 
 			// Build base pip install command directly to mount directory
-			basePipCmd := "python3 -m pip install --no-binary=:all: --target=" + pipInstallDir + " --upgrade --force-reinstall"
+			basePipCmd := "python3 -m pip install --no-binary=:all: --upgrade --force-reinstall"
 
 			// Add requirements file
 			basePipCmd += " --requirement=" + requirementsFile
