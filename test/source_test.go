@@ -1180,16 +1180,16 @@ func TestSourceWithPip(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Check if the package directory exists in pip-packages
+		// Check if the package directory exists in venv site-packages
 		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: "site-packages/" + packageName,
+			Path: "lib/python3.12/site-packages/" + packageName,
 		})
 		if err != nil {
-			t.Fatalf("Package %s not found in pip-packages: %v", packageName, err)
+			t.Fatalf("Package %s not found in venv site-packages: %v", packageName, err)
 		}
 
 		if !fs.FileMode(stat.Mode).IsDir() {
-			t.Fatalf("Expected %s to be a directory in pip-packages", packageName)
+			t.Fatalf("Expected %s to be a directory in venv site-packages", packageName)
 		}
 	}
 
@@ -1344,9 +1344,9 @@ func TestSourceWithPip(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Check that site-packages directory exists
+			// Check that venv site-packages directory exists
 			stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-				Path: "site-packages",
+				Path: "lib/python3.12/site-packages",
 			})
 			if err != nil {
 				t.Fatal(err)

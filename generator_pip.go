@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	pipInstallDir = "/site-packages"
+	pipVenvDir    = "/pip-venv"
+	pipInstallDir = "/pip-venv/lib/python3.12/site-packages"
 )
 
 func (s *Source) isPip() bool {
@@ -48,7 +49,13 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			pipCmd := "set -e; "
 
-			// Build base pip install command directly to mount directory
+			// Create virtual environment first
+			pipCmd += "python3 -m venv " + pipVenvDir + " && "
+
+			// Activate venv and install packages
+			pipCmd += "source " + pipVenvDir + "/bin/activate && "
+
+			// Build base pip install command (no --target needed with venv)
 			basePipCmd := "python3 -m pip install --no-binary=:all: --upgrade --force-reinstall"
 
 			// Add requirements file
@@ -67,7 +74,6 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			in = worker.Run(
 				ShArgs(pipCmd),
-				llb.AddEnv("PIP_BREAK_SYSTEM_PACKAGES", "1"),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
