@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	pipInstallDir = "/pip-packages"
+	pipInstallDir = "/site-packages"
 )
 
 func (s *Source) isPip() bool {

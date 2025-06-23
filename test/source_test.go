@@ -1182,7 +1182,7 @@ func TestSourceWithPip(t *testing.T) {
 
 		// Check if the package directory exists in pip-packages
 		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: "pip-packages/" + packageName,
+			Path: "site-packages/" + packageName,
 		})
 		if err != nil {
 			t.Fatalf("Package %s not found in pip-packages: %v", packageName, err)
@@ -1344,9 +1344,9 @@ func TestSourceWithPip(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Check that pip-packages directory exists
+			// Check that site-packages directory exists
 			stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-				Path: "pip-packages",
+				Path: "site-packages",
 			})
 			if err != nil {
 				t.Fatal(err)
