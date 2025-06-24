@@ -77,7 +77,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
-			).AddMount(pipInstallDir, in)
+			).AddMount(pipVenvDir, in)
 		}
 		return in
 	}
