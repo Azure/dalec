@@ -1258,9 +1258,9 @@ func TestSourceWithPip(t *testing.T) {
 --- a/requirements.txt
 +++ b/requirements.txt
 @@ -1,2 +1,2 @@
--requests==2.28.1
-+requests==2.27.1
- flask==2.2.2
+-requests==2.27.1
++requests==2.27.0
+ flask==2.0.0
 `
 				spec := baseSpec()
 
@@ -1288,9 +1288,9 @@ func TestSourceWithPip(t *testing.T) {
 --- a/requirements.txt
 +++ b/requirements.txt
 @@ -1,2 +1,2 @@
--requests==2.28.1
-+requests==2.27.1
- flask==2.2.2
+-requests==2.27.1
++requests==2.27.0
+ flask==2.0.0
 `
 				spec := baseSpec()
 
