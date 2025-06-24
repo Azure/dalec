@@ -3141,22 +3141,21 @@ func testPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinu
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-			// This rebuilt.txt marker file will only be created if the package is rebuilt.
-			preBuiltSpec.Build.Steps = []dalec.BuildStep{
-				{
-					Command: "echo 'rebuilt' > /rebuild.txt; echo 'unique marker' > /etc/marker.txt",
-				},
-			}
-			preBuiltSpec.Artifacts.ConfigFiles = map[string]dalec.ArtifactConfig{
-				"/etc/marker.txt": {},
-			}
-
-			// Build the package which contains the unique marker file.
+			// Build the package which does not contain the unique marker file.
 			pkgSr := newSolveRequest(withSpec(ctx, t, preBuiltSpec), withBuildTarget(testConfig.Target.Package))
 			pkgRes := solveT(ctx, t, client, pkgSr)
 			pkgRef, err := pkgRes.SingleRef()
 			assert.NilError(t, err)
 			pkgSt, _ := pkgRef.ToState()
+
+			// Update the spec to include a unique marker file.
+			//
+			// If the marker file is present in the later container check,
+			// it means the pre-built package was not used and was rebuilt
+			// with this updated spec.
+			preBuiltSpec.Artifacts.DataDirs = map[string]dalec.ArtifactConfig{
+				"/etc/marker.txt": {},
+			}
 
 			// Build the container and pass the pre-built package as a dependency.
 			containerSr := newSolveRequest(
@@ -3168,16 +3167,14 @@ func testPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinu
 			containerRef, err := containerRes.SingleRef()
 			assert.NilError(t, err)
 
-			// Read the contents of the package to ensure it has the marker file and not the rebuild.txt file.
+			// Read the contents of the package to ensure it does not have the marker file.
 			contents, err := containerRef.ReadFile(ctx, gwclient.ReadRequest{
 				Filename: "/etc/marker.txt",
 			})
-			assert.NilError(t, err)
-			assert.Check(t, strings.Contains(string(contents), "unique marker"))
-			_, err = containerRef.ReadFile(ctx, gwclient.ReadRequest{
-				Filename: "/rebuild.txt",
-			})
-			assert.ErrorContains(t, err, "no such file or directory", "rebuild.txt should not be present in the container")
+			// The marker file should not be present in the container,
+			// as it was not part of the pre-built package.
+			assert.Assert(t, contents == nil, "marker file should not be present in the container")
+			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
 		})
 	})
 }
