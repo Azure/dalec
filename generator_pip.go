@@ -8,8 +8,7 @@ import (
 )
 
 const (
-	pipVenvDir    = "/pip-venv"
-	pipInstallDir = "/pip-venv/lib/python3.12/site-packages"
+	pipVenvDir = "/pip-venv"
 )
 
 func (s *Source) isPip() bool {

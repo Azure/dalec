@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -1167,6 +1168,23 @@ if __name__ == "__main__":
 func TestSourceWithPip(t *testing.T) {
 	t.Parallel()
 
+	// Helper function to get the Python version directory name from the venv
+	getPythonVersionDir := func(ctx context.Context, ref gwclient.Reference) (string, error) {
+		libFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+			Path: "lib",
+		})
+		if err != nil {
+			return "", err
+		}
+
+		for _, file := range libFiles {
+			if strings.HasPrefix(file.GetPath(), "python3.") {
+				return file.GetPath(), nil
+			}
+		}
+		return "", fmt.Errorf("no python3.x directory found")
+	}
+
 	// Helper function to check if pip packages were installed successfully
 	checkPipPackages := func(ctx context.Context, gwc gwclient.Client, packageName string, spec *dalec.Spec) {
 		t.Helper()
@@ -1180,9 +1198,15 @@ func TestSourceWithPip(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		// Dynamically detect Python version
+		pythonDir, err := getPythonVersionDir(ctx, ref)
+		if err != nil {
+			t.Fatalf("Could not detect Python version: %v", err)
+		}
+
 		// Check if the package directory exists in venv site-packages
 		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: filepath.Join("lib/python3.12/site-packages/", packageName),
+			Path: filepath.Join("lib", pythonDir, "site-packages", packageName),
 		})
 		if err != nil {
 			t.Fatalf("Package %s not found in venv site-packages: %v", packageName, err)
@@ -1383,8 +1407,16 @@ func TestSourceWithPip(t *testing.T) {
 				}
 			}
 
+			// Dynamically detect Python version
+			pythonDir, err := getPythonVersionDir(ctx, ref)
+			if err != nil {
+				t.Fatalf("Could not detect Python version: %v", err)
+			}
+			t.Logf("Detected Python directory: %s", pythonDir)
+
+			sitePackagesPath := filepath.Join("lib", pythonDir, "site-packages")
 			sitePackagesFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-				Path: "lib/python3.12/site-packages",
+				Path: sitePackagesPath,
 			})
 			if err != nil {
 				t.Logf("Could not read site-packages directory: %v", err)
@@ -1397,7 +1429,7 @@ func TestSourceWithPip(t *testing.T) {
 
 			// Check that venv site-packages directory exists
 			stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-				Path: "lib/python3.12/site-packages",
+				Path: sitePackagesPath,
 			})
 			if err != nil {
 				t.Fatal(err)
