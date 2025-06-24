@@ -3174,7 +3174,7 @@ func testPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinu
 			// The marker file should not be present in the container,
 			// as it was not part of the pre-built package.
 			assert.Assert(t, contents == nil, "marker file should not be present in the container")
-			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+			assert.ErrorContains(t, err, "open /etc/marker.txt: no such file or directory")
 		})
 	})
 }
