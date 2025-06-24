@@ -1148,8 +1148,8 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 	})
 }
 
-const pipFixtureRequirements = `requests==2.28.1
-flask==2.2.2
+const pipFixtureRequirements = `requests==2.27.1
+flask==2.0.0
 `
 
 const pipFixtureMain = `#!/usr/bin/env python3
