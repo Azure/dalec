@@ -100,6 +100,21 @@ func (b *BuildxEnv) supportsDialStdio(ctx context.Context) (bool, error) {
 
 var errDialStdioNotSupported = errors.New("buildx dial-stdio not supported")
 
+type connCloseWrapper struct {
+	net.Conn
+	close func()
+}
+
+func (c *connCloseWrapper) Close() error {
+	if c.close != nil {
+		c.close()
+	}
+	if err := c.Conn.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (b *BuildxEnv) dialStdio(ctx context.Context) error {
 	c, err := client.New(ctx, "", client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 		args := []string{"buildx", "dial-stdio", "--progress=plain"}
@@ -107,7 +122,11 @@ func (b *BuildxEnv) dialStdio(ctx context.Context) error {
 			args = append(args, "--builder="+b.builder)
 		}
 
-		cmd := exec.CommandContext(ctx, "docker", args...)
+		// NOTE: Do *not* use exec.CommandContext here as it will prevent proper cleanup of the process
+		// or more specifically, the subprocess it spawns.
+		// This is because go sends SIGKILL forcing the process to exit immediately, which prevents
+		// the buildx dial-stdio process from cleaning up its resources properly.
+		cmd := exec.Command("docker", args...)
 		cmd.Env = os.Environ()
 
 		c1, c2 := net.Pipe()
@@ -126,6 +145,7 @@ func (b *BuildxEnv) dialStdio(ctx context.Context) error {
 			return nil, err
 		}
 
+		chWait := make(chan struct{})
 		go func() {
 			err := cmd.Wait()
 			c1.Close()
@@ -152,7 +172,27 @@ func (b *BuildxEnv) dialStdio(ctx context.Context) error {
 			return nil, err
 		}
 
-		return c2, nil
+		out := &connCloseWrapper{
+			Conn: c2,
+			close: sync.OnceFunc(func() {
+				// Send 2 interupt signals to the process to ensure it exits gracefully
+				// This is how buildx/docker plugins handle termination
+
+				cmd.Process.Signal(os.Interrupt) //nolint:errcheck // We don't care about this error, we are going to send another one anyway
+				if err := cmd.Process.Signal(os.Interrupt); err != nil {
+					cmd.Process.Kill() //nolint:errcheck //  Force kill if interrupt fails
+				}
+
+				select {
+				case <-chWait:
+				case <-time.After(10 * time.Second):
+					// If it still doesn't exit, force kill
+					cmd.Process.Kill() //nolint:errcheck // Force kill if it doesn't exit after interrupt
+				}
+			}),
+		}
+
+		return out, nil
 	}))
 
 	if err != nil {
