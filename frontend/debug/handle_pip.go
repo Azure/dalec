@@ -30,12 +30,12 @@ func Pip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) 
 		worker, ok := inputs[keyPipWorker]
 		if !ok {
 			worker = llb.Image("python:latest", llb.WithMetaResolver(client)).
-				Run(dalec.ShArgs("apt update && apt install -y build-essential")).
+				Run(dalec.ShArgs("DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y build-essential")).
 				Run(dalec.ShArgs("PYTHON_VERSION=$(python3 -c 'import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")') && " +
-					"apt install -y python${PYTHON_VERSION}-venv || " +
-					"apt install -y python3-venv || " +
-					"apt install -y python3-ensurepip || " +
-					"echo 'Warning: venv packages not available, trying anyway'")).
+					"(DEBIAN_FRONTEND=noninteractive apt-get install -y python${PYTHON_VERSION}-venv || " +
+					"DEBIAN_FRONTEND=noninteractive apt-get install -y python3-venv || " +
+					"DEBIAN_FRONTEND=noninteractive apt-get install -y python3-ensurepip || " +
+					"(echo 'Warning: No venv packages could be installed' && exit 1))")).
 				Run(dalec.ShArgs("rm -rf /var/lib/apt/lists/*")).
 				Run(llb.Shlex("python3 --version")).
 				Run(llb.Shlex("python3 -m pip install --upgrade pip")).
