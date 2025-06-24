@@ -35,8 +35,8 @@ func Pip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) 
 					"(apt-get install -y python${PYTHON_VERSION}-venv || apt-get install -y python3-venv || apt-get install -y python3-ensurepip || true) && " +
 					"rm -rf /var/lib/apt/lists/*")).
 				Run(llb.Shlex("python3 --version")).
-				Run(llb.Shlex("python3 -m pip install --upgrade pip")).
-				Run(llb.Shlex("python3 -m pip --version")).Root()
+				Run(llb.Shlex("pip install --upgrade pip")).
+				Run(llb.Shlex("pip --version")).Root()
 		}
 
 		st, err := spec.PipDeps(sOpt, worker, dalec.Platform(platform))
