@@ -71,6 +71,46 @@ jobs:
             exit 1
           fi
 
+  # profiler:
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - name: Harden Runner
+  #       uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
+  #       with:
+  #         egress-policy: audit
+
+  #     - name: Install profiler dependencies
+  #       run: |
+  #         set -ex
+  #         sudo apt-get update
+  #         sudo apt-get install -y clang-17 libc6-dev g++ gcc pkgconf musl-dev
+  #         go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0
+  #         go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
+
+  #         PB_URL="https://github.com/protocolbuffers/protobuf/releases/download/v24.4/"
+  #         PB_FILE="protoc-24.4-linux-x86_64.zip"
+  #         INSTALL_DIR="$(mktemp -d)"
+  #         wget -nv "$PB_URL/$PB_FILE"
+  #         unzip "$PB_FILE" -d "$INSTALL_DIR" 'bin/*' 'include/*'
+  #         chmod +xr "$INSTALL_DIR/bin/protoc"
+  #         # find "$INSTALL_DIR/include" -type d -exec chmod +x {}
+  #         # find "$INSTALL_DIR/include" -type f -exec chmod +r {}
+  #         rm "$PB_FILE"
+  #         echo "PATH=${INSTALL_DIR}/bin:/usr/local/go/bin:${PATH}" >> $GITHUB_ENV
+  #     
+  #     - name: checkout
+  #       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+  #       with:
+  #         repository: open-telemetry/opentelemetry-ebpf-profiler
+  #         ref: 855b802f0c9c4c181e221fcf5c496a718a349f6411000
+  #     - name: Compile
+  #       run: make
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         path: ./ebpf-profiler
+  #         retention-days: 1
+  #         name: otel-ebpf-profiler
+
   integration:
     runs-on: ubuntu-22.04
     strategy:
@@ -107,7 +147,6 @@ jobs:
         with:
           go-version: '1.23'
           cache: false
-
 
       - name: Configure dockerd
         run: |
@@ -162,6 +201,14 @@ jobs:
         run: docker run --rm --privileged tonistiigi/binfmt:latest --install all
       - name: Setup source policy
         uses: ./.github/actions/setup-source-policy
+
+      - name: Start monitors
+        id: start-monitors
+        run: |
+          data="$(mktemp)"
+          echo "PIDSTAT_DATA=${data}" >> $GITHUB_OUTPUT
+          ( while true; do pidstat -hurd -p ALL 1 1 >> ${data}; done ) &
+          echo PIDSTAT_PID=$! >> $GITHUB_ENV
       - name: Run integration tests
         run: |
           set -ex
@@ -171,10 +218,24 @@ jobs:
           if [ -n "${TEST_SKIP}" ]; then
             skip="-skip=${TEST_SKIP}"
           fi
+
+
+          echo "Starting dstat in background..."
+          dstat --time --cpu --io --vm --load --proc --output dstat.csv 1 > /dev/null &
+          DSTAT_PID=$!
+
+
           go test -timeout=30m -v -json ${run} ${skip} ./test | go run ./cmd/test2json2gha --slow 120s --logdir /tmp/testlogs
         env:
           TEST_SUITE: ${{ matrix.suite }}
           TEST_SKIP: ${{ matrix.skip }}
+      - name: Stop pidstat
+        if: always()
+        run: |
+          pid="${PIDSTAT_PID}"
+          if [ -n "${pid}" ]; then
+            kill "${pid}"
+          fi
       - name: Get traces
         if: always()
         run: |
@@ -214,6 +275,12 @@ jobs:
           name: e2e-dockerd-logs-${{ matrix.suite }}
           path: ${{ steps.dump-logs.outputs.DOCKERD_LOG_PATH }}
           retention-days: 1
+      - name: Upload profiler output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pidstat-{{ matrix.suite }}
+          path: ${{ steps.start-monitors.outputs.PIDSTAT_DATA}}
 
   unit:
     runs-on: ubuntu-22.04
