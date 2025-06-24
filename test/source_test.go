@@ -1371,6 +1371,18 @@ func TestSourceWithPip(t *testing.T) {
 			}
 
 			// Debug: Check site-packages directory specifically
+			libFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+				Path: "lib",
+			})
+			if err != nil {
+				t.Logf("Could not read lib directory: %v", err)
+			} else {
+				t.Logf("Contents of lib directory:")
+				for _, file := range libFiles {
+					t.Logf("- %s", file.GetPath())
+				}
+			}
+
 			sitePackagesFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
 				Path: "lib/python3.12/site-packages",
 			})
