@@ -449,6 +449,9 @@ type BuildStep struct {
 	Command string `yaml:"command" json:"command" jsonschema:"required"`
 	// Env is the list of environment variables to set for the command.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+
+	// Mounts is the list of sources to mount into the build step.
+	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
 }
 
 // SourceMount wraps a [Source] with a target mount point.
