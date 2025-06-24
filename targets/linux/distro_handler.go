@@ -141,14 +141,14 @@ func getPrebuiltPackageName(ctx context.Context, targetKey string, client gwclie
 	if err == nil && targetPkgSt != nil {
 		pkgSt = *targetPkgSt
 		foundPrebuiltPkg = true
-		frontend.Warn(ctx, client, pkgSt, "Using pre-built package from %s context")
+		frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Using pre-built package from %s context", targetSpecificName))
 	} else {
 		// Try generic package.
 		genericPkgSt, err := sOpt.GetContext(dalec.GenericPkg, dalec.WithConstraints(opts...))
 		if err == nil && genericPkgSt != nil {
 			pkgSt = *genericPkgSt
 			foundPrebuiltPkg = true
-			frontend.Warn(ctx, client, pkgSt, "Using pre-built package from %s context")
+			frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Using pre-built package from %s context", targetSpecificName))
 		}
 	}
 
