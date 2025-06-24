@@ -104,7 +104,7 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 			// 2. pkg - Generic package for any package type.
 			//
 			// Target specific package will take precedence over the generic package.
-			pkgSt, foundPrebuiltPkg, opts := getPrebuiltPackageName(targetKey, opts, sOpt)
+			pkgSt, foundPrebuiltPkg := getPrebuiltPackageName(ctx, targetKey, client, opts, sOpt)
 
 			// Pre-built package wasn't found so we need to build it.
 			if !foundPrebuiltPkg {
@@ -131,7 +131,7 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 	}
 }
 
-func getPrebuiltPackageName(targetKey string, opts []llb.ConstraintsOpt, sOpt dalec.SourceOpts) (llb.State, bool, []llb.ConstraintsOpt) {
+func getPrebuiltPackageName(ctx context.Context, targetKey string, client gwclient.Client, opts []llb.ConstraintsOpt, sOpt dalec.SourceOpts) (llb.State, bool) {
 	var pkgSt llb.State
 	var foundPrebuiltPkg bool
 
@@ -141,18 +141,18 @@ func getPrebuiltPackageName(targetKey string, opts []llb.ConstraintsOpt, sOpt da
 	if err == nil && targetPkgSt != nil {
 		pkgSt = *targetPkgSt
 		foundPrebuiltPkg = true
-		opts = append(opts, dalec.ProgressGroup(fmt.Sprintf("Using pre-built package from %s context", targetSpecificName)))
+		frontend.Warn(ctx, client, pkgSt, "Using pre-built package from %s context")
 	} else {
 		// Try generic package.
 		genericPkgSt, err := sOpt.GetContext(dalec.GenericPkg, dalec.WithConstraints(opts...))
 		if err == nil && genericPkgSt != nil {
 			pkgSt = *genericPkgSt
 			foundPrebuiltPkg = true
-			opts = append(opts, dalec.ProgressGroup(fmt.Sprintf("Using pre-built package from %s context", dalec.GenericPkg)))
+			frontend.Warn(ctx, client, pkgSt, "Using pre-built package from %s context")
 		}
 	}
 
-	return pkgSt, foundPrebuiltPkg, opts
+	return pkgSt, foundPrebuiltPkg
 }
 
 func HandlePackage(cfg DistroConfig) gwclient.BuildFunc {
