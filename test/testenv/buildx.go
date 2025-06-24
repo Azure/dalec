@@ -11,7 +11,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -55,47 +54,15 @@ func (b *BuildxEnv) Load(ctx context.Context, id string, f gwclient.BuildFunc) e
 	return nil
 }
 
-func (b *BuildxEnv) version(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "docker", "buildx", "version")
+func (b *BuildxEnv) supportsDialStdio(ctx context.Context) (bool, error) {
+	// Check `docker buildx --help` output to see if `dial-stdio` is listed.
+	// If its listed then dial-stdio is supported.
+	cmd := exec.CommandContext(ctx, "docker", "buildx", "--help")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", pkgerrors.Wrap(err, string(out))
+		return false, pkgerrors.Wrap(err, string(out))
 	}
-
-	fields := strings.Fields(string(out))
-
-	if len(fields) != 3 {
-		return "", errors.New("could not determine buildx version")
-	}
-
-	ver, _, _ := strings.Cut(strings.TrimPrefix(fields[1], "v"), "-")
-	if strings.Count(ver, ".") < 2 {
-		return "", fmt.Errorf("unexpected version format: %s", ver)
-	}
-	return ver, nil
-}
-
-func (b *BuildxEnv) supportsDialStdio(ctx context.Context) (bool, error) {
-	ver, err := b.version(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	majorStr, other, _ := strings.Cut(ver, ".")
-	major, err := strconv.Atoi(majorStr)
-	if err != nil {
-		return false, pkgerrors.Wrapf(err, "could not parse major version number: %s", ver)
-	}
-	if major > 0 {
-		return true, nil
-	}
-
-	minorStr, _, _ := strings.Cut(other, ".")
-	minor, err := strconv.Atoi(minorStr)
-	if err != nil {
-		return false, pkgerrors.Wrapf(err, "could not parse major version number: %s", ver)
-	}
-	return minor >= 13, nil
+	return strings.Contains(string(out), "dial-stdio"), nil
 }
 
 var errDialStdioNotSupported = errors.New("buildx dial-stdio not supported")
