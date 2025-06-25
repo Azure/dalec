@@ -142,6 +142,7 @@ func TestJammy(t *testing.T) {
 	testConf := debLinuxTestConfigFor(ubuntu.JammyDefaultTargetKey, ubuntu.JammyConfig,
 		withPackageOverride("rust", "rust-all"),
 		withPackageOverride("bazel", noPackageAvailable),
+		withPackageOverride("python", "python3 python3-pip python3-venv"),
 	)
 
 	testLinuxDistro(ctx, t, testConf)

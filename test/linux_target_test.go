@@ -1101,8 +1101,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 			Dependencies: &dalec.PackageDependencies{
 				Build: map[string]dalec.PackageConstraints{
-					testConfig.GetPackage("python3"):     {},
-					testConfig.GetPackage("python3-pip"): {},
+					testConfig.GetPackage("python3"):      {},
+					testConfig.GetPackage("python3-pip"):  {},
+					testConfig.GetPackage("python3-venv"): {},
 				},
 			},
 			Build: dalec.ArtifactBuild{
