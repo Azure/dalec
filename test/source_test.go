@@ -1148,18 +1148,20 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 	})
 }
 
-const pipFixtureRequirements = `requests==2.27.1
-flask==2.0.0
+const pipFixtureRequirements = `six==1.16.0
+certifi==2023.7.22
 `
 
 const pipFixtureMain = `#!/usr/bin/env python3
-import requests
-import flask
+import six
+import certifi
 
 def main():
     print("Hello from Python with pip dependencies!")
-    print(f"Requests version: {requests.__version__}")
-    print(f"Flask version: {flask.__version__}")
+    print(f"Six version: {six.__version__}")
+    print(f"Certifi version: {certifi.__version__}")
+    print(f"Six is Python 2/3 compatibility: {hasattr(six, 'PY2')}")
+    print(f"Certifi provides certificates: {len(certifi.where()) > 0}")
 
 if __name__ == "__main__":
     main()
@@ -1244,8 +1246,8 @@ func TestSourceWithPip(t *testing.T) {
 	t.Run("no patch", func(t *testing.T) {
 		t.Parallel()
 		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
-			// Check that requests package was installed
-			checkPipPackages(ctx, gwc, "requests", baseSpec())
+			// Check that six package was installed
+			checkPipPackages(ctx, gwc, "six", baseSpec())
 		})
 	})
 
@@ -1258,9 +1260,9 @@ func TestSourceWithPip(t *testing.T) {
 --- a/requirements.txt
 +++ b/requirements.txt
 @@ -1,2 +1,2 @@
--requests==2.27.1
-+requests==2.27.0
- flask==2.0.0
+-six==1.16.0
++six==1.15.0
+ certifi==2023.7.22
 `
 				spec := baseSpec()
 
@@ -1277,8 +1279,8 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName}},
 				}
 
-				// Check that flask package was installed after applying patches
-				checkPipPackages(ctx, gwc, "flask", spec)
+				// Check that six package was installed after applying patches
+				checkPipPackages(ctx, gwc, "six", spec)
 			})
 		})
 		t.Run("dir", func(t *testing.T) {
@@ -1288,9 +1290,9 @@ func TestSourceWithPip(t *testing.T) {
 --- a/requirements.txt
 +++ b/requirements.txt
 @@ -1,2 +1,2 @@
--requests==2.27.1
-+requests==2.27.0
- flask==2.0.0
+-six==1.16.0
++six==1.15.0
+ certifi==2023.7.22
 `
 				spec := baseSpec()
 
@@ -1309,7 +1311,7 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName, Path: "patch-file"}},
 				}
 
-				checkPipPackages(ctx, gwc, "requests", spec)
+				checkPipPackages(ctx, gwc, "six", spec)
 			})
 		})
 	})
@@ -1327,10 +1329,10 @@ func TestSourceWithPip(t *testing.T) {
 		*/
 		contextSt := llb.Scratch().File(llb.Mkdir("/dir", 0644)).
 			File(llb.Mkdir("/dir/module1", 0644)).
-			File(llb.Mkfile("/dir/module1/requirements.txt", 0644, []byte("requests==2.28.1\n"))).
+			File(llb.Mkfile("/dir/module1/requirements.txt", 0644, []byte("six==1.16.0\n"))).
 			File(llb.Mkfile("/dir/module1/main.py", 0644, []byte(pipFixtureMain))).
 			File(llb.Mkdir("/dir/module2", 0644)).
-			File(llb.Mkfile("/dir/module2/requirements.txt", 0644, []byte("flask==2.2.2\n"))).
+			File(llb.Mkfile("/dir/module2/requirements.txt", 0644, []byte("certifi==2023.7.22\n"))).
 			File(llb.Mkfile("/dir/module2/main.py", 0644, []byte(pipFixtureMain)))
 
 		const contextName = "multi-pip-module"
@@ -1447,7 +1449,7 @@ func TestSourceWithPip(t *testing.T) {
 			// The pip generator always uses --no-binary=:all: to force source builds
 			// This test verifies that the generator works correctly with this default behavior
 
-			checkPipPackages(ctx, gwc, "requests", spec)
+			checkPipPackages(ctx, gwc, "six", spec)
 		})
 	})
 
@@ -1458,7 +1460,7 @@ func TestSourceWithPip(t *testing.T) {
 			// Test with custom PyPI index
 			spec.Sources[srcName].Generate[0].Pip.IndexUrl = "https://pypi.org/simple/"
 
-			checkPipPackages(ctx, gwc, "flask", spec)
+			checkPipPackages(ctx, gwc, "six", spec)
 		})
 	})
 }
