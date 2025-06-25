@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -1166,24 +1165,7 @@ if __name__ == "__main__":
 func TestSourceWithPip(t *testing.T) {
 	t.Parallel()
 
-	// Helper function to get the Python version directory name from the venv
-	getPythonVersionDir := func(ctx context.Context, ref gwclient.Reference) (string, error) {
-		libFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-			Path: "lib",
-		})
-		if err != nil {
-			return "", err
-		}
-
-		for _, file := range libFiles {
-			if strings.HasPrefix(file.GetPath(), "python3.") {
-				return file.GetPath(), nil
-			}
-		}
-		return "", fmt.Errorf("no python3.x directory found")
-	}
-
-	// Helper function to check if pip packages were installed successfully
+	// Helper function to check if pip packages were downloaded successfully to cache
 	checkPipPackages := func(ctx context.Context, gwc gwclient.Client, packageName string, spec *dalec.Spec) {
 		t.Helper()
 		res, err := gwc.Solve(ctx, newSolveRequest(withBuildTarget("debug/pip"), withSpec(ctx, t, spec)))
@@ -1196,22 +1178,43 @@ func TestSourceWithPip(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Dynamically detect Python version
-		pythonDir, err := getPythonVersionDir(ctx, ref)
-		if err != nil {
-			t.Fatalf("Could not detect Python version: %v", err)
-		}
-
-		// Check if the package directory exists in venv site-packages
-		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-			Path: filepath.Join("lib", pythonDir, "site-packages", packageName),
+		// Debug: List the root directory to see what's available
+		rootFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+			Path: "",
 		})
 		if err != nil {
-			t.Fatalf("Package %s not found in venv site-packages: %v", packageName, err)
+			t.Logf("Could not read root directory: %v", err)
+		} else {
+			t.Logf("Contents of root directory:")
+			for _, file := range rootFiles {
+				t.Logf("- %s", file.GetPath())
+			}
 		}
 
-		if !fs.FileMode(stat.Mode).IsDir() {
-			t.Fatalf("Expected %s to be a directory in venv site-packages", packageName)
+		// List files in the pip cache directory to check for downloaded packages
+		files, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+			Path: "pip-cache",
+		})
+		if err != nil {
+			t.Fatalf("Could not read pip cache directory: %v", err)
+		}
+
+		t.Logf("Contents of pip-cache directory:")
+		for _, file := range files {
+			t.Logf("- %s", file.GetPath())
+		}
+
+		// Look for the package name in the downloaded files
+		found := false
+		for _, file := range files {
+			if strings.Contains(file.GetPath(), packageName) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			t.Fatalf("Package %s not found in pip cache directory", packageName)
 		}
 	}
 
@@ -1377,61 +1380,30 @@ func TestSourceWithPip(t *testing.T) {
 				}
 			}
 
-			// Debug: Check if venv directory exists and list its contents
-			venvFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-				Path: "",
+			// Check that the pip cache directory exists and contains downloaded packages
+			files, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
+				Path: "pip-cache",
 			})
 			if err != nil {
-				t.Logf("Could not read venv directory: %v", err)
-			} else {
-				t.Logf("Contents of venv directory:")
-				for _, file := range venvFiles {
-					t.Logf("- %s", file.GetPath())
+				t.Fatalf("Could not read pip cache directory: %v", err)
+			}
+
+			t.Logf("Contents of pip-cache directory:")
+			for _, file := range files {
+				t.Logf("- %s", file.GetPath())
+			}
+
+			// Look for certifi package in downloaded files
+			found := false
+			for _, file := range files {
+				if strings.Contains(file.GetPath(), "certifi") {
+					found = true
+					break
 				}
 			}
 
-			// Debug: Check site-packages directory specifically
-			libFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-				Path: "lib",
-			})
-			if err != nil {
-				t.Logf("Could not read lib directory: %v", err)
-			} else {
-				t.Logf("Contents of lib directory:")
-				for _, file := range libFiles {
-					t.Logf("- %s", file.GetPath())
-				}
-			}
-
-			// Dynamically detect Python version
-			pythonDir, err := getPythonVersionDir(ctx, ref)
-			if err != nil {
-				t.Fatalf("Could not detect Python version: %v", err)
-			}
-			t.Logf("Detected Python directory: %s", pythonDir)
-
-			sitePackagesPath := filepath.Join("lib", pythonDir, "site-packages")
-			sitePackagesFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-				Path: sitePackagesPath,
-			})
-			if err != nil {
-				t.Logf("Could not read site-packages directory: %v", err)
-			} else {
-				t.Logf("Contents of site-packages directory:")
-				for _, file := range sitePackagesFiles {
-					t.Logf("- %s", file.GetPath())
-				}
-			}
-
-			// Check that venv site-packages directory exists
-			stat, err := ref.StatFile(ctx, gwclient.StatRequest{
-				Path: sitePackagesPath,
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !fs.FileMode(stat.Mode).IsDir() {
-				t.Fatal("expected directory")
+			if !found {
+				t.Fatalf("Package certifi not found in pip cache directory")
 			}
 		})
 	})

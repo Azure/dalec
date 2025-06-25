@@ -1106,18 +1106,17 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 			Dependencies: &dalec.PackageDependencies{
 				Build: map[string]dalec.PackageConstraints{
-					testConfig.GetPackage("python3"):      {},
-					testConfig.GetPackage("python3-pip"):  {},
-					testConfig.GetPackage("python3-venv"): {},
+					testConfig.GetPackage("python3"):     {},
+					testConfig.GetPackage("python3-pip"): {},
 				},
 			},
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
-					{Command: "[ -d \"${PIP_CACHE_DIR}/http\" ]"},
 					{Command: "[ -d ./src ]"},
 					{Command: "[ -f ./src/main.py ]"},
 					{Command: "[ -f ./src/requirements.txt ]"},
-					{Command: "cd ./src && python3 -m pip list"},
+					{Command: "[ -d \"${PIP_CACHE_DIR}\" ]"},
+					{Command: "cd ./src && python3 -m pip install --no-index --find-links \"${PIP_CACHE_DIR}\" -r requirements.txt"},
 				},
 			},
 		}

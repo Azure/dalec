@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	pipVenvDir = "/pip-venv"
+	pipCacheDir = "/pip-cache"
 )
 
 func (s *Source) isPip() bool {
@@ -48,15 +48,14 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			pipCmd := "set -e; "
 
-			// Create virtual environment first
-			pipCmd += "python3 -m venv " + pipVenvDir + " && "
+			// Create the pip cache directory if it doesn't exist
+			pipCmd += "mkdir -p " + pipCacheDir + "; "
 
-			// Activate venv and upgrade pip
-			pipCmd += "source " + pipVenvDir + "/bin/activate && "
-			pipCmd += "python3 -m pip install --upgrade pip && "
+			// Build pip download command to cache dependencies
+			basePipCmd := "python3 -m pip download --no-binary=:all:"
 
-			// Build base pip install command (no --target needed with venv)
-			basePipCmd := "python3 -m pip install --no-binary=:all: --upgrade --force-reinstall"
+			// Set cache directory
+			basePipCmd += " --dest=" + pipCacheDir
 
 			// Add requirements file
 			basePipCmd += " --requirement=" + requirementsFile
@@ -69,15 +68,15 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				basePipCmd += " --extra-index-url=" + extraUrl
 			}
 
-			// Add the actual pip install command
+			// Add the actual pip download command
 			pipCmd += basePipCmd
 
 			in = worker.Run(
-				llb.Args([]string{"bash", "-c", pipCmd}), // Use bash explicitly for source command
+				llb.Args([]string{"bash", "-c", pipCmd}),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
-			).AddMount(pipVenvDir, in)
+			).AddMount(pipCacheDir, in)
 		}
 		return in
 	}
@@ -119,7 +118,7 @@ func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constraint
 	for _, key := range sorted {
 		src := s.Sources[key]
 
-		opts := append(opts, ProgressGroup("Fetch pip dependencies for source: "+key))
+		opts := append(opts, ProgressGroup("Download pip dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
 				if gen.Pip != nil {
