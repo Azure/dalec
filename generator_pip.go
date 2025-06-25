@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	pipCacheDir = "/pip-cache"
+	pipCacheDir = "/cache/pip-cache"
+	pipMountDir = "/cache"
 )
 
 func (s *Source) isPip() bool {
@@ -46,37 +47,41 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				requirementsFile = "requirements.txt"
 			}
 
-			pipCmd := "set -e; "
-
-			// Create the pip cache directory if it doesn't exist
-			pipCmd += "mkdir -p " + pipCacheDir + "; "
-
 			// Build pip download command to cache dependencies
-			basePipCmd := "python3 -m pip download --no-binary=:all:"
+			pipCmd := "set -e; "
+			pipCmd += "python3 -m pip download --no-binary=:all:"
 
-			// Set cache directory
-			basePipCmd += " --dest=" + pipCacheDir
+			// Set cache directory to the mount point
+			pipCmd += " --dest=" + pipCacheDir
 
 			// Add requirements file
-			basePipCmd += " --requirement=" + requirementsFile
+			pipCmd += " --requirement=" + requirementsFile
 
 			// Add custom index URLs if specified
 			if g.Pip.IndexUrl != "" {
-				basePipCmd += " --index-url=" + g.Pip.IndexUrl
+				pipCmd += " --index-url=" + g.Pip.IndexUrl
 			}
 			for _, extraUrl := range g.Pip.ExtraIndexUrls {
-				basePipCmd += " --extra-index-url=" + extraUrl
+				pipCmd += " --extra-index-url=" + extraUrl
 			}
 
-			// Add the actual pip download command
-			pipCmd += basePipCmd
+			// Also download common build dependencies that are often needed for source builds
+			pipCmd += "; python3 -m pip download --no-binary=:all: --dest=" + pipCacheDir + " setuptools wheel build"
+
+			// Add debug commands to inspect directory structure
+			pipCmd += "; echo '=== DEBUG: Listing contents of " + pipCacheDir + " ===';"
+			pipCmd += " ls -la " + pipCacheDir + " || echo 'Directory " + pipCacheDir + " does not exist';"
+			pipCmd += " echo '=== DEBUG: Listing contents of /cache ===';"
+			pipCmd += " ls -la /cache || echo 'Directory /cache does not exist';"
+			pipCmd += " echo '=== DEBUG: Listing contents of root ===';"
+			pipCmd += " ls -la / || echo 'Cannot list root directory';"
 
 			in = worker.Run(
 				llb.Args([]string{"bash", "-c", pipCmd}),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
-			).AddMount(pipCacheDir, in)
+			).AddMount(pipMountDir, in)
 		}
 		return in
 	}

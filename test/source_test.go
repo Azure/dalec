@@ -1166,7 +1166,7 @@ func TestSourceWithPip(t *testing.T) {
 	t.Parallel()
 
 	// Helper function to check if pip packages were downloaded successfully to cache
-	checkPipPackages := func(ctx context.Context, gwc gwclient.Client, packageName string, spec *dalec.Spec) {
+	checkPipPackages := func(ctx context.Context, gwc gwclient.Client, packagePath string, spec *dalec.Spec) {
 		t.Helper()
 		res, err := gwc.Solve(ctx, newSolveRequest(withBuildTarget("debug/pip"), withSpec(ctx, t, spec)))
 		if err != nil {
@@ -1178,43 +1178,15 @@ func TestSourceWithPip(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Debug: List the root directory to see what's available
-		rootFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-			Path: "",
+		stat, err := ref.StatFile(ctx, gwclient.StatRequest{
+			Path: packagePath,
 		})
 		if err != nil {
-			t.Logf("Could not read root directory: %v", err)
-		} else {
-			t.Logf("Contents of root directory:")
-			for _, file := range rootFiles {
-				t.Logf("- %s", file.GetPath())
-			}
+			t.Fatal(err)
 		}
 
-		// List files in the pip cache directory to check for downloaded packages
-		files, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-			Path: "pip-cache",
-		})
-		if err != nil {
-			t.Fatalf("Could not read pip cache directory: %v", err)
-		}
-
-		t.Logf("Contents of pip-cache directory:")
-		for _, file := range files {
-			t.Logf("- %s", file.GetPath())
-		}
-
-		// Look for the package name in the downloaded files
-		found := false
-		for _, file := range files {
-			if strings.Contains(file.GetPath(), packageName) {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			t.Fatalf("Package %s not found in pip cache directory", packageName)
+		if fs.FileMode(stat.Mode).IsDir() {
+			t.Fatal("expected file, got directory")
 		}
 	}
 
@@ -1245,8 +1217,8 @@ func TestSourceWithPip(t *testing.T) {
 	t.Run("no patch", func(t *testing.T) {
 		t.Parallel()
 		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
-			// Check that certifi package was installed
-			checkPipPackages(ctx, gwc, "certifi", baseSpec())
+			// Check that certifi package was downloaded
+			checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.7.22.tar.gz", baseSpec())
 		})
 	})
 
@@ -1277,8 +1249,8 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName}},
 				}
 
-				// Check that certifi package was installed after applying patches
-				checkPipPackages(ctx, gwc, "certifi", spec)
+				// Check that certifi package was downloaded after applying patches
+				checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.5.7.tar.gz", spec)
 			})
 		})
 		t.Run("dir", func(t *testing.T) {
@@ -1308,7 +1280,7 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName, Path: "patch-file"}},
 				}
 
-				checkPipPackages(ctx, gwc, "certifi", spec)
+				checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.5.7.tar.gz", spec)
 			})
 		})
 	})
@@ -1367,43 +1339,26 @@ func TestSourceWithPip(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Debug: List the root directory to see what's available
-			rootFiles, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-				Path: "",
-			})
-			if err != nil {
-				t.Logf("Could not read root directory: %v", err)
-			} else {
-				t.Logf("Contents of root directory:")
-				for _, file := range rootFiles {
-					t.Logf("- %s", file.GetPath())
-				}
+			// Check that the pip cache directory contains downloaded packages
+			// We expect to find at least one version of certifi
+			certifiPaths := []string{
+				"pip-cache/certifi-2023.7.22.tar.gz",
+				"pip-cache/certifi-2023.5.7.tar.gz",
 			}
 
-			// Check that the pip cache directory exists and contains downloaded packages
-			files, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{
-				Path: "pip-cache",
-			})
-			if err != nil {
-				t.Fatalf("Could not read pip cache directory: %v", err)
-			}
-
-			t.Logf("Contents of pip-cache directory:")
-			for _, file := range files {
-				t.Logf("- %s", file.GetPath())
-			}
-
-			// Look for certifi package in downloaded files
 			found := false
-			for _, file := range files {
-				if strings.Contains(file.GetPath(), "certifi") {
+			for _, path := range certifiPaths {
+				stat, err := ref.StatFile(ctx, gwclient.StatRequest{
+					Path: path,
+				})
+				if err == nil && !fs.FileMode(stat.Mode).IsDir() {
 					found = true
 					break
 				}
 			}
 
 			if !found {
-				t.Fatalf("Package certifi not found in pip cache directory")
+				t.Fatalf("No certifi package found in pip cache directory")
 			}
 		})
 	})
@@ -1415,7 +1370,7 @@ func TestSourceWithPip(t *testing.T) {
 			// The pip generator always uses --no-binary=:all: to force source builds
 			// This test verifies that the generator works correctly with this default behavior
 
-			checkPipPackages(ctx, gwc, "certifi", spec)
+			checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.7.22.tar.gz", spec)
 		})
 	})
 
@@ -1426,7 +1381,7 @@ func TestSourceWithPip(t *testing.T) {
 			// Test with custom PyPI index
 			spec.Sources[srcName].Generate[0].Pip.IndexUrl = "https://pypi.org/simple/"
 
-			checkPipPackages(ctx, gwc, "certifi", spec)
+			checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.7.22.tar.gz", spec)
 		})
 	})
 }

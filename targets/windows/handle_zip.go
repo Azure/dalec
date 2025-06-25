@@ -251,7 +251,11 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 	}
 
 	if spec.HasPips() {
-		fmt.Fprintln(buf, "export PIP_CACHE_DIR=\"$(pwd)/"+pipName+"\"")
+		// Set PIP environment variables to point to our prepared pip packages
+		// Use --break-system-packages since we're in an isolated build container
+		fmt.Fprintln(buf, "export PIP_FIND_LINKS=\"$(pwd)/"+pipName+"\"")
+		fmt.Fprintln(buf, "export PYTHONPATH=\"$(pwd)/"+pipName+":${PYTHONPATH}\"")
+		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 
 	for i, step := range spec.Build.Steps {
