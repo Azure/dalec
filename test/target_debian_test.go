@@ -13,7 +13,12 @@ func TestBookworm(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testConf := debLinuxTestConfigFor(debian.BookwormDefaultTargetKey, debian.BookwormConfig, withPackageOverride("rust", "rust-all"), withPackageOverride("bazel", "bazel-bootstrap"))
+	testConf := debLinuxTestConfigFor(
+		debian.BookwormDefaultTargetKey,
+		debian.BookwormConfig,
+		withPackageOverride("rust", "rust-all"),
+		withPackageOverride("bazel", "bazel-bootstrap"),
+	)
 
 	testLinuxDistro(ctx, t, testConf)
 	testDebianBaseDependencies(t, testConf.Target)
@@ -29,7 +34,6 @@ func TestBullseye(t *testing.T) {
 		withPackageOverride("golang", "golang-1.19"),
 		withPackageOverride("rust", "cargo-web"),
 		withPackageOverride("bazel", noPackageAvailable),
-		withPackageOverride("python", "python3-pip"),
 	)
 
 	testLinuxDistro(ctx, t, testConf)

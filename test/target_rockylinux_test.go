@@ -21,9 +21,8 @@ func TestRockylinux9(t *testing.T) {
 			},
 			ListExpectedSignFiles: azlinuxListSignFiles("el9"),
 			PackageOverrides: map[string]string{
-				"rust":   "rust cargo",
-				"bazel":  noPackageAvailable,
-				"python": "python3-pip",
+				"rust":  "rust cargo",
+				"bazel": noPackageAvailable,
 			},
 		},
 		LicenseDir: "/usr/share/licenses",
@@ -69,7 +68,7 @@ func TestRockylinux8(t *testing.T) {
 			PackageOverrides: map[string]string{
 				"rust":   "rust cargo",
 				"bazel":  noPackageAvailable,
-				"python": "python3-pip",
+				"python": "python3 python3-pip python3-venv",
 			},
 		},
 		LicenseDir: "/usr/share/licenses",

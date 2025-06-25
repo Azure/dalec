@@ -48,10 +48,6 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			pipCmd := "set -e; "
 
-			// Install necessary packages for venv creation
-			pipCmd += "apt-get update && "
-			pipCmd += "DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip python3-venv python3-dev build-essential && "
-
 			// Create virtual environment first
 			pipCmd += "python3 -m venv " + pipVenvDir + " && "
 
