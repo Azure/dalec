@@ -33,7 +33,7 @@ func Pip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) 
 				Run(dalec.ShArgs("DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y build-essential")).
 				Run(dalec.ShArgs("rm -rf /var/lib/apt/lists/*")).
 				Run(llb.Shlex("python3 --version")).
-				Run(llb.Shlex("python3 -m pip install --upgrade pip")).
+				Run(dalec.ShArgs("python3 -m venv /opt/venv && /opt/venv/bin/pip install --upgrade pip")).
 				Run(llb.Shlex("python3 -m pip --version")).Root()
 		}
 

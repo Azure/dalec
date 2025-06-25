@@ -48,9 +48,11 @@ func buildScript(spec *dalec.Spec) string {
 	}
 
 	if spec.HasPips() {
-		// Set PIP environment variables to point to our prepared pip cache
-		fmt.Fprintln(b, "export PIP_CACHE_DIR=\"$(pwd)/"+pipCacheName+"\"")
+		// Set PIP environment variables to point to our prepared pip packages
+		// Use --break-system-packages since we're in an isolated build container
+		fmt.Fprintln(b, "export PIP_FIND_LINKS=\"$(pwd)/"+pipCacheName+"\"")
 		fmt.Fprintln(b, "export PYTHONPATH=\"$(pwd)/"+pipCacheName+":${PYTHONPATH}\"")
+		fmt.Fprintln(b, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 
 	envKeys := dalec.SortMapKeys(t.Env)

@@ -620,7 +620,7 @@ echo "$BAR" > bar.txt
 			},
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
-					{Command: "[ -d \"${PIP_CACHE_DIR}/http\" ]"},
+					{Command: "[ -f \"${PIP_FIND_LINKS}/certifi-2023.7.22.tar.gz\" ]"},
 					{Command: "[ -d ./src ]"},
 					{Command: "[ -f ./src/main.py ]"},
 					{Command: "[ -f ./src/requirements.txt ]"},
