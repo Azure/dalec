@@ -51,8 +51,9 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			// Create virtual environment first
 			pipCmd += "python3 -m venv " + pipVenvDir + " && "
 
-			// Activate venv and install packages
+			// Activate venv and upgrade pip
 			pipCmd += "source " + pipVenvDir + "/bin/activate && "
+			pipCmd += "python3 -m pip install --upgrade pip && "
 
 			// Build base pip install command (no --target needed with venv)
 			basePipCmd := "python3 -m pip install --no-binary=:all: --upgrade --force-reinstall"
