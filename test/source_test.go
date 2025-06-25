@@ -1148,19 +1148,15 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 	})
 }
 
-const pipFixtureRequirements = `six==1.16.0
-certifi==2023.7.22
+const pipFixtureRequirements = `certifi==2023.7.22
 `
 
 const pipFixtureMain = `#!/usr/bin/env python3
-import six
 import certifi
 
 def main():
     print("Hello from Python with pip dependencies!")
-    print(f"Six version: {six.__version__}")
     print(f"Certifi version: {certifi.__version__}")
-    print(f"Six is Python 2/3 compatibility: {hasattr(six, 'PY2')}")
     print(f"Certifi provides certificates: {len(certifi.where()) > 0}")
 
 if __name__ == "__main__":
@@ -1246,8 +1242,8 @@ func TestSourceWithPip(t *testing.T) {
 	t.Run("no patch", func(t *testing.T) {
 		t.Parallel()
 		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
-			// Check that six package was installed
-			checkPipPackages(ctx, gwc, "six", baseSpec())
+			// Check that certifi package was installed
+			checkPipPackages(ctx, gwc, "certifi", baseSpec())
 		})
 	})
 
@@ -1259,10 +1255,9 @@ func TestSourceWithPip(t *testing.T) {
 				const downgradePatch = `diff --git a/requirements.txt b/requirements.txt
 --- a/requirements.txt
 +++ b/requirements.txt
-@@ -1,2 +1,2 @@
--six==1.16.0
-+six==1.15.0
- certifi==2023.7.22
+@@ -1,1 +1,1 @@
+-certifi==2023.7.22
++certifi==2023.5.7
 `
 				spec := baseSpec()
 
@@ -1279,8 +1274,8 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName}},
 				}
 
-				// Check that six package was installed after applying patches
-				checkPipPackages(ctx, gwc, "six", spec)
+				// Check that certifi package was installed after applying patches
+				checkPipPackages(ctx, gwc, "certifi", spec)
 			})
 		})
 		t.Run("dir", func(t *testing.T) {
@@ -1289,10 +1284,9 @@ func TestSourceWithPip(t *testing.T) {
 				const downgradePatch = `diff --git a/requirements.txt b/requirements.txt
 --- a/requirements.txt
 +++ b/requirements.txt
-@@ -1,2 +1,2 @@
--six==1.16.0
-+six==1.15.0
- certifi==2023.7.22
+@@ -1,1 +1,1 @@
+-certifi==2023.7.22
++certifi==2023.5.7
 `
 				spec := baseSpec()
 
@@ -1311,7 +1305,7 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName, Path: "patch-file"}},
 				}
 
-				checkPipPackages(ctx, gwc, "six", spec)
+				checkPipPackages(ctx, gwc, "certifi", spec)
 			})
 		})
 	})
@@ -1329,10 +1323,10 @@ func TestSourceWithPip(t *testing.T) {
 		*/
 		contextSt := llb.Scratch().File(llb.Mkdir("/dir", 0644)).
 			File(llb.Mkdir("/dir/module1", 0644)).
-			File(llb.Mkfile("/dir/module1/requirements.txt", 0644, []byte("six==1.16.0\n"))).
+			File(llb.Mkfile("/dir/module1/requirements.txt", 0644, []byte("certifi==2023.7.22\n"))).
 			File(llb.Mkfile("/dir/module1/main.py", 0644, []byte(pipFixtureMain))).
 			File(llb.Mkdir("/dir/module2", 0644)).
-			File(llb.Mkfile("/dir/module2/requirements.txt", 0644, []byte("certifi==2023.7.22\n"))).
+			File(llb.Mkfile("/dir/module2/requirements.txt", 0644, []byte("certifi==2023.5.7\n"))).
 			File(llb.Mkfile("/dir/module2/main.py", 0644, []byte(pipFixtureMain)))
 
 		const contextName = "multi-pip-module"
@@ -1449,7 +1443,7 @@ func TestSourceWithPip(t *testing.T) {
 			// The pip generator always uses --no-binary=:all: to force source builds
 			// This test verifies that the generator works correctly with this default behavior
 
-			checkPipPackages(ctx, gwc, "six", spec)
+			checkPipPackages(ctx, gwc, "certifi", spec)
 		})
 	})
 
@@ -1460,7 +1454,7 @@ func TestSourceWithPip(t *testing.T) {
 			// Test with custom PyPI index
 			spec.Sources[srcName].Generate[0].Pip.IndexUrl = "https://pypi.org/simple/"
 
-			checkPipPackages(ctx, gwc, "six", spec)
+			checkPipPackages(ctx, gwc, "certifi", spec)
 		})
 	})
 }
