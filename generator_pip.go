@@ -48,8 +48,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			// Build pip download command to cache dependencies
 			pipCmd := "set -e; "
-			pipCmd += "python3 -m pip install --upgrade pip; "
-			pipCmd += "python3 -m pip download --no-binary=:all: --no-build-isolation"
+			pipCmd += "python3 -m pip download --no-binary=:all: --force-reinstall"
 
 			// Set cache directory to the mount point
 			pipCmd += " --dest=" + pipCacheDir
@@ -64,9 +63,6 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			for _, extraUrl := range g.Pip.ExtraIndexUrls {
 				pipCmd += " --extra-index-url=" + extraUrl
 			}
-
-			// Also download common build dependencies that are often needed for source builds
-			pipCmd += "; python3 -m pip download --no-binary=:all: --no-build-isolation --dest=" + pipCacheDir + " setuptools wheel build"
 
 			// Add debug commands to inspect directory structure
 			pipCmd += "; echo '=== DEBUG: Listing contents of " + pipCacheDir + " ===';"
