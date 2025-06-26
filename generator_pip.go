@@ -48,6 +48,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			// Build pip download command to cache dependencies
 			pipCmd := "set -e; "
+			pipCmd += "python3 -m pip install --upgrade pip; "
 			pipCmd += "python3 -m pip download --no-binary=:all:"
 
 			// Set cache directory to the mount point

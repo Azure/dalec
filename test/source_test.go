@@ -1100,9 +1100,8 @@ func TestSourceWithPip(t *testing.T) {
 
 	t.Run("no patch", func(t *testing.T) {
 		t.Parallel()
-		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) {
-			// Check that certifi package was downloaded
-			checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.7.22.tar.gz", baseSpec())
+		testEnv.RunTest(baseCtx, t, func(ctx context.Context, gwc gwclient.Client) { // Check that certifi package was downloaded
+			checkPipPackages(ctx, gwc, "certifi-2023.7.22.tar.gz", baseSpec())
 		})
 	})
 
@@ -1134,7 +1133,7 @@ func TestSourceWithPip(t *testing.T) {
 				}
 
 				// Check that certifi package was downloaded after applying patches
-				checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.5.7.tar.gz", spec)
+				checkPipPackages(ctx, gwc, "certifi-2023.5.7.tar.gz", spec)
 			})
 		})
 		t.Run("dir", func(t *testing.T) {
@@ -1164,7 +1163,7 @@ func TestSourceWithPip(t *testing.T) {
 					srcName: {{Source: patchName, Path: "patch-file"}},
 				}
 
-				checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.5.7.tar.gz", spec)
+				checkPipPackages(ctx, gwc, "certifi-2023.5.7.tar.gz", spec)
 			})
 		})
 	})
@@ -1226,8 +1225,8 @@ func TestSourceWithPip(t *testing.T) {
 			// Check that the pip cache directory contains downloaded packages
 			// We expect to find at least one version of certifi
 			certifiPaths := []string{
-				"pip-cache/certifi-2023.7.22.tar.gz",
-				"pip-cache/certifi-2023.5.7.tar.gz",
+				"certifi-2023.7.22.tar.gz",
+				"certifi-2023.5.7.tar.gz",
 			}
 
 			found := false
@@ -1254,7 +1253,7 @@ func TestSourceWithPip(t *testing.T) {
 			// The pip generator always uses --no-binary=:all: to force source builds
 			// This test verifies that the generator works correctly with this default behavior
 
-			checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.7.22.tar.gz", spec)
+			checkPipPackages(ctx, gwc, "certifi-2023.7.22.tar.gz", spec)
 		})
 	})
 
@@ -1265,7 +1264,7 @@ func TestSourceWithPip(t *testing.T) {
 			// Test with custom PyPI index
 			spec.Sources[srcName].Generate[0].Pip.IndexUrl = "https://pypi.org/simple/"
 
-			checkPipPackages(ctx, gwc, "pip-cache/certifi-2023.7.22.tar.gz", spec)
+			checkPipPackages(ctx, gwc, "certifi-2023.7.22.tar.gz", spec)
 		})
 	})
 }
