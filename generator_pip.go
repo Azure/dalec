@@ -48,15 +48,11 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			// Build pip download command to cache dependencies
 			pipCmd := "set -e; "
-			pipCmd += "python3 -m pip download --no-binary=:all:"
 
-			// Set cache directory to the mount point
-			pipCmd += " --dest=" + pipCacheDir
+			// First, download essential build dependencies that are needed for source builds
+			pipCmd += "python3 -m pip download --dest=" + pipCacheDir + " setuptools wheel"
 
-			// Add requirements file
-			pipCmd += " --requirement=" + requirementsFile
-
-			// Add custom index URLs if specified
+			// Add custom index URLs for build deps if specified
 			if g.Pip.IndexUrl != "" {
 				pipCmd += " --index-url=" + g.Pip.IndexUrl
 			}
@@ -64,13 +60,17 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				pipCmd += " --extra-index-url=" + extraUrl
 			}
 
-			// Add debug commands to inspect directory structure
-			pipCmd += "; echo '=== DEBUG: Listing contents of " + pipCacheDir + " ===';"
-			pipCmd += " ls -la " + pipCacheDir + " || echo 'Directory " + pipCacheDir + " does not exist';"
-			pipCmd += " echo '=== DEBUG: Listing contents of /cache ===';"
-			pipCmd += " ls -la /cache || echo 'Directory /cache does not exist';"
-			pipCmd += " echo '=== DEBUG: Listing contents of root ===';"
-			pipCmd += " ls -la / || echo 'Cannot list root directory';"
+			// Then download all dependencies as source distributions to ensure cross-platform compatibility
+			// and avoid architecture-specific wheels that might break CI/cross-compilation
+			pipCmd += "; python3 -m pip download --no-binary=:all: --dest=" + pipCacheDir + " --requirement=" + requirementsFile
+
+			// Add custom index URLs for main dependencies if specified
+			if g.Pip.IndexUrl != "" {
+				pipCmd += " --index-url=" + g.Pip.IndexUrl
+			}
+			for _, extraUrl := range g.Pip.ExtraIndexUrls {
+				pipCmd += " --extra-index-url=" + extraUrl
+			}
 
 			in = worker.Run(
 				llb.Args([]string{"bash", "-c", pipCmd}),
