@@ -134,21 +134,31 @@ func getPrebuiltPackage(ctx context.Context, targetKey string, client gwclient.C
 	var pkgSt llb.State
 	var foundPrebuiltPkg bool
 
+	// Try target-specific package first.
 	targetSpecificName := targetKey + dalec.PreBuiltPkgSuffix
 	targetPkgSt, err := sOpt.GetContext(targetSpecificName, dalec.WithConstraints(opts...))
-
 	if err == nil && targetPkgSt != nil {
 		pkgSt = *targetPkgSt
 		foundPrebuiltPkg = true
 		frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Using pre-built package from %s context", targetSpecificName))
-	} else {
-		// Try generic package.
-		genericPkgSt, err := sOpt.GetContext(dalec.GenericPkg, dalec.WithConstraints(opts...))
-		if err == nil && genericPkgSt != nil {
-			pkgSt = *genericPkgSt
-			foundPrebuiltPkg = true
-			frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Using pre-built package from %s context", targetSpecificName))
-		}
+		return pkgSt, foundPrebuiltPkg
+	}
+
+	// Try generic package.
+	genericPkgSt, err := sOpt.GetContext(dalec.GenericPkg, dalec.WithConstraints(opts...))
+	if err == nil && genericPkgSt != nil {
+		pkgSt = *genericPkgSt
+		foundPrebuiltPkg = true
+		frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Fallback to generic package from %s context", targetSpecificName))
+	}
+
+	// If attempts failed for retrieving a pre-built package from the build context, surface the error up
+	// when the state gets marshalled.
+	if err != nil {
+		return llb.Scratch().Async(func(ctx context.Context, _ llb.State, _ *llb.Constraints) (llb.State, error) {
+			frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Errored on checking context for pre-built package for %s: %v", targetKey, err))
+			return pkgSt, fmt.Errorf("error when retrieving pre-built package for %s: %w", targetKey, err)
+		}), false
 	}
 
 	return pkgSt, foundPrebuiltPkg
