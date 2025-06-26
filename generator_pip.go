@@ -8,8 +8,7 @@ import (
 )
 
 const (
-	pipCacheDir = "/cache/pip-cache"
-	pipMountDir = "/cache"
+	pipCacheDir = "/cache"
 )
 
 func (s *Source) isPip() bool {
@@ -81,7 +80,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
-			).AddMount(pipMountDir, in)
+			).AddMount(pipCacheDir, in)
 		}
 		return in
 	}
