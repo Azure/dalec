@@ -132,24 +132,22 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 // Examples of target keys include "mariner2", "azlinux3", "windowscross", and "bookworm".
 func getPrebuiltPackage(ctx context.Context, targetKey string, client gwclient.Client, opts []llb.ConstraintsOpt, sOpt dalec.SourceOpts) (llb.State, bool) {
 	var pkgSt llb.State
-	var foundPrebuiltPkg bool
 
 	// Try target-specific package first.
 	targetSpecificName := targetKey + dalec.PreBuiltPkgSuffix
 	targetPkgSt, err := sOpt.GetContext(targetSpecificName, dalec.WithConstraints(opts...))
 	if err == nil && targetPkgSt != nil {
 		pkgSt = *targetPkgSt
-		foundPrebuiltPkg = true
 		frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Using pre-built package from %s context", targetSpecificName))
-		return pkgSt, foundPrebuiltPkg
+		return pkgSt, true
 	}
 
 	// Try generic package.
 	genericPkgSt, err := sOpt.GetContext(dalec.GenericPkg, dalec.WithConstraints(opts...))
 	if err == nil && genericPkgSt != nil {
 		pkgSt = *genericPkgSt
-		foundPrebuiltPkg = true
 		frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Fallback to generic package from %s context", targetSpecificName))
+		return pkgSt, true
 	}
 
 	// If attempts failed for retrieving a pre-built package from the build context, surface the error up
@@ -161,7 +159,7 @@ func getPrebuiltPackage(ctx context.Context, targetKey string, client gwclient.C
 		}), false
 	}
 
-	return pkgSt, foundPrebuiltPkg
+	return pkgSt, false
 }
 
 func HandlePackage(cfg DistroConfig) gwclient.BuildFunc {
