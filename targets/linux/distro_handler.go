@@ -99,12 +99,7 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			// Pre-built packages can be provided via the build context by providing one of these package name formats:
-			// 1. {targetKey}-pkg - Target specific package context (e.g. mariner2-pkg, azlinux3-pkg, windowscross-pkg, bookworm-pkg, etc.)
-			// 2. pkg - Generic package for any package type.
-			//
-			// Target specific package will take precedence over the generic package.
-			pkgSt, foundPrebuiltPkg := getPrebuiltPackageName(ctx, targetKey, client, opts, sOpt)
+			pkgSt, foundPrebuiltPkg := getPrebuiltPackage(ctx, targetKey, client, opts, sOpt)
 
 			// Pre-built package wasn't found so we need to build it.
 			if !foundPrebuiltPkg {
@@ -131,7 +126,11 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 	}
 }
 
-func getPrebuiltPackageName(ctx context.Context, targetKey string, client gwclient.Client, opts []llb.ConstraintsOpt, sOpt dalec.SourceOpts) (llb.State, bool) {
+// getPrebuiltPackage retrieves a package based on the target environment.
+// Target-specific packages (e.g., "{targetKey}-pkg") are prioritized over generic packages ("pkg").
+// This ensures compatibility with the build context and optimizes functionality for specific environments.
+// Examples of target keys include "mariner2", "azlinux3", "windowscross", and "bookworm".
+func getPrebuiltPackage(ctx context.Context, targetKey string, client gwclient.Client, opts []llb.ConstraintsOpt, sOpt dalec.SourceOpts) (llb.State, bool) {
 	var pkgSt llb.State
 	var foundPrebuiltPkg bool
 
