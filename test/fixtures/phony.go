@@ -15,6 +15,7 @@ import (
 var (
 	goModCache   = llb.AddMount("/go/pkg/mod", llb.Scratch(), llb.AsPersistentCacheDir("/go/pkg/mod", llb.CacheMountShared))
 	goBuildCache = llb.AddMount("/root/.cache/go-build", llb.Scratch(), llb.AsPersistentCacheDir("/root/.cache/go-build", llb.CacheMountShared))
+	pipCache     = llb.AddMount("/root/.cache/pip", llb.Scratch(), llb.AsPersistentCacheDir("/root/.cache/pip", llb.CacheMountShared))
 )
 
 func PhonyFrontend(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, error) {
@@ -35,6 +36,7 @@ func PhonyFrontend(ctx context.Context, gwc gwclient.Client) (*gwclient.Result, 
 			llb.AddEnv("CGO_ENABLED", "0"),
 			goModCache,
 			goBuildCache,
+			pipCache,
 			llb.Dir("/build/src"),
 			llb.AddMount("/build/src", *bctx, llb.Readonly),
 		).
