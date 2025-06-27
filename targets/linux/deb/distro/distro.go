@@ -30,6 +30,7 @@ type Config struct {
 	AptCachePrefix string
 
 	BuilderPackages    []string
+	BasePackages       []string
 	RepoPlatformConfig *dalec.RepoPlatformConfig
 
 	DefaultOutputImage string

@@ -21,7 +21,8 @@ var (
 		VersionID:          bullseyeVersionID,
 		ContextRef:         BullseyeWorkerContextName,
 		DefaultOutputImage: bullseyeRef,
-		BuilderPackages:    basePackages,
+		BuilderPackages:    builderPackages,
+		BasePackages:       basePackages,
 
 		// Ubuntu typically has backports repos already in it but Debian does not.
 		// Without this the go modules test will fail since there is no viable
