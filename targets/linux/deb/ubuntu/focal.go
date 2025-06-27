@@ -20,6 +20,7 @@ var (
 		VersionID:          focalVersionID,
 		ContextRef:         FocalWorkerContextName,
 		DefaultOutputImage: focalRef,
-		BuilderPackages:    basePackages,
+		BuilderPackages:    builderPackages,
+		BasePackages:       basePackages,
 	}
 )

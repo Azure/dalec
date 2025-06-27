@@ -95,9 +95,11 @@ if ! command -v aptitude > /dev/null; then
 fi
 
 cleanup() {
+	exit_code=$?
 	if [ "${needs_cleanup}" = "1" ]; then
 		apt remove -y aptitude
 	fi
+	exit $exit_code
 }
 
 trap cleanup EXIT
