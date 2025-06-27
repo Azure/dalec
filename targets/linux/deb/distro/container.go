@@ -68,7 +68,17 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 			return llb.Scratch(), err
 		}
 
-		debSt = debSt.File(llb.Copy(basePkg, "/", "/", dalec.WithDirContentsOnly()))
+		// Update the base image to include the base packages.
+		// This may include things that are neccessary to even install the debSt package.
+		// So this must be done separately from the debSt package.
+		opts := append(opts, dalec.ProgressGroup("Install base image packages"))
+		baseImg = baseImg.Run(
+			dalec.WithConstraints(opts...),
+			llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
+			dalec.WithMountedAptCache(c.AptCachePrefix),
+			InstallLocalPkg(basePkg, true, opts...),
+			dalec.WithMountedAptCache(c.AptCachePrefix),
+		).Root()
 	}
 
 	return baseImg.Run(
