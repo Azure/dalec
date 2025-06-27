@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/Azure/dalec/targets/linux/deb/distro"
 	"github.com/Azure/dalec/targets/linux/deb/ubuntu"
 	"github.com/moby/buildkit/client/llb"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -137,40 +139,71 @@ func TestJammy(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.JammyDefaultTargetKey, ubuntu.JammyConfig,
+	testConf := debLinuxTestConfigFor(ubuntu.JammyDefaultTargetKey, ubuntu.JammyConfig,
 		withPackageOverride("rust", "rust-all"),
 		withPackageOverride("bazel", noPackageAvailable),
-	))
+	)
+
+	testLinuxDistro(ctx, t, testConf)
+	testUbuntuBaseDependencies(t, testConf.Target)
 }
 
 func TestNoble(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.NobleDefaultTargetKey, ubuntu.NobleConfig,
+	testConf := debLinuxTestConfigFor(ubuntu.NobleDefaultTargetKey, ubuntu.NobleConfig,
 		withPackageOverride("rust", "rust-all"),
 		withPackageOverride("bazel", "bazel-bootstrap"),
-	))
+	)
+	testLinuxDistro(ctx, t, testConf)
+	testUbuntuBaseDependencies(t, testConf.Target)
 }
 
 func TestFocal(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.FocalDefaultTargetKey, ubuntu.FocalConfig,
+	testConf := debLinuxTestConfigFor(ubuntu.FocalDefaultTargetKey, ubuntu.FocalConfig,
 		withPackageOverride("golang", "golang-1.22"),
 		withPackageOverride("rust", "rust-all"),
 		withPackageOverride("bazel", noPackageAvailable),
-	))
+	)
+
+	testLinuxDistro(ctx, t, testConf)
+	testUbuntuBaseDependencies(t, testConf.Target)
 }
 
 func TestBionic(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testLinuxDistro(ctx, t, debLinuxTestConfigFor(ubuntu.BionicDefaultTargetKey, ubuntu.BionicConfig,
+	testConf := debLinuxTestConfigFor(ubuntu.BionicDefaultTargetKey, ubuntu.BionicConfig,
 		withPackageOverride("golang", "golang-1.18"),
 		withPackageOverride("rust", "rust-all"),
 		withPackageOverride("bazel", noPackageAvailable),
-	))
+	)
+
+	testLinuxDistro(ctx, t, testConf)
+	testUbuntuBaseDependencies(t, testConf.Target)
+}
+
+func testUbuntuBaseDependencies(t *testing.T, target targetConfig) {
+	ctx := startTestSpan(baseCtx, t)
+	spec := newSimpleSpec()
+	spec.Tests = []*dalec.TestSpec{
+		{
+			Files: map[string]dalec.FileCheckOutput{
+				"/etc/ssl/certs": {
+					Permissions: 0755,
+					IsDir:       true,
+				},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(target.Container))
+		solveT(ctx, t, client, req)
+	})
 }

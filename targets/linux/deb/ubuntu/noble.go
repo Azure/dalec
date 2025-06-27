@@ -20,6 +20,7 @@ var (
 		VersionID:          nobleVersionID,
 		ContextRef:         NobleWorkerContextName,
 		DefaultOutputImage: nobleRef,
-		BuilderPackages:    basePackages,
+		BuilderPackages:    builderPackages,
+		BasePackages:       basePackages,
 	}
 )

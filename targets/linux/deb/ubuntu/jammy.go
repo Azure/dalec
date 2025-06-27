@@ -20,6 +20,7 @@ var (
 		VersionID:          JammyVersionID,
 		ContextRef:         JammyWorkerContextName,
 		DefaultOutputImage: jammyRef,
-		BuilderPackages:    basePackages,
+		BuilderPackages:    builderPackages,
+		BasePackages:       basePackages,
 	}
 )
