@@ -139,7 +139,6 @@ func getPrebuiltPackage(ctx context.Context, targetKey string, client gwclient.C
 	if err != nil {
 		return llb.Scratch().Async(func(ctx context.Context, _ llb.State, _ *llb.Constraints) (llb.State, error) {
 			// If attempts failed for retrieving a pre-built package from the build context, surface the error up when the state gets marshalled.
-			frontend.Warn(ctx, client, llb.Scratch(), fmt.Sprintf("Async error handler triggered for target-specific package: %v", err))
 			return pkgSt, fmt.Errorf("error when retrieving target-specified package for %s: %w", targetKey, err)
 		}), false
 	}
@@ -154,7 +153,6 @@ func getPrebuiltPackage(ctx context.Context, targetKey string, client gwclient.C
 	if err != nil {
 		return llb.Scratch().Async(func(ctx context.Context, _ llb.State, _ *llb.Constraints) (llb.State, error) {
 			// If attempts failed for retrieving a pre-built package from the build context, surface the error up when the state gets marshalled.
-			frontend.Warn(ctx, client, llb.Scratch(), fmt.Sprintf("Async error handler triggered for generic package: %v", err))
 			return pkgSt, fmt.Errorf("error when retrieving generic package for %s: %w", targetKey, err)
 		}), false
 	}
