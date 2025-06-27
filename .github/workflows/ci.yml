@@ -16,8 +16,11 @@ on:
       - 'CODEOWNERS'
       - 'LICENSE'
       - '.github/workflows/retag.yml'
-      - '.github/workflows/retag/images.yml'
+      - '.github/workflows/retag/**'
       - 'cmd/retagger/**'
+      - 'cmd/worker-image-matrix/**'
+      - '.github/workflows/worker-images/**'
+      - '.github/workflows/worker-images.yml'
 
   push:
     branches:
@@ -30,8 +33,11 @@ on:
       - 'CODEOWNERS'
       - 'LICENSE'
       - '.github/workflows/retag.yml'
-      - '.github/workflows/retag/images.yml'
+      - '.github/workflows/retag/**'
       - 'cmd/retagger/**'
+      - 'cmd/worker-image-matrix/**'
+      - '.github/workflows/worker-images/**'
+      - '.github/workflows/worker-images.yml'
 
 permissions:
   contents: read
@@ -108,25 +114,10 @@ jobs:
           go-version: '1.23'
           cache: false
 
-
-      - name: Configure dockerd
-        run: |
-          set -ex -o pipefail
-
-          docker ps -a
-          docker images
-
-          sudo mkdir -p /etc/docker
-          test ! -f /etc/docker/daemon.json && echo '{}' | sudo tee /etc/docker/daemon.json
-
-          tmp="$(mktemp)"
-          jq '.features["containerd-snapshotter"] = true' /etc/docker/daemon.json | tee "${tmp}"
-          sudo cp "${tmp}" /etc/docker/daemon.json
-          rm "${tmp}"
-
-          sudo systemctl restart docker
       - name: checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: ./.github/actions/enable-containerd
 
       - name: Setup jaeger
         run: |
