@@ -46,6 +46,31 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 	debug := llb.Scratch().File(llb.Mkfile("debug", 0o644, []byte(`debug=2`)), opts...)
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))
 
+	// If we have base packages to install, create a meta-package to install them.
+	if len(c.BasePackages) > 0 {
+		runtimePkgs := make(map[string]dalec.PackageConstraints, len(c.BasePackages))
+		for _, pkgName := range c.BasePackages {
+			runtimePkgs[pkgName] = dalec.PackageConstraints{}
+		}
+		basePkgSpec := &dalec.Spec{
+			Name:        "dalec-deb-base-packages",
+			Packager:    "dalec",
+			Description: "Base Packages for Debian-based Distros",
+			Version:     "0.1",
+			Revision:    "1",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: runtimePkgs,
+			},
+		}
+
+		basePkg, err := c.BuildPkg(ctx, client, worker, sOpt, basePkgSpec, targetKey)
+		if err != nil {
+			return llb.Scratch(), err
+		}
+
+		debSt = debSt.File(llb.Copy(basePkg, "/", "/", dalec.WithDirContentsOnly()))
+	}
+
 	return baseImg.Run(
 		dalec.WithConstraints(opts...),
 		withRepos,

@@ -20,6 +20,7 @@ var (
 		VersionID:          bionicVersionID,
 		ContextRef:         BionicWorkerContextName,
 		DefaultOutputImage: bionicRef,
-		BuilderPackages:    basePackages,
+		BuilderPackages:    builderPackages,
+		BasePackages:       basePackages,
 	}
 )

@@ -20,6 +20,7 @@ var (
 		VersionID:          bookwormVersionID,
 		ContextRef:         BookwormWorkerContextName,
 		DefaultOutputImage: bookwormRef,
-		BuilderPackages:    basePackages,
+		BuilderPackages:    builderPackages,
+		BasePackages:       basePackages,
 	}
 )
