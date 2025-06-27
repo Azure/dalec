@@ -250,6 +250,16 @@ func TestSourceValidation(t *testing.T) {
 			},
 		},
 		{
+			title:     "has valid NodeMod generator",
+			expectErr: false,
+			src: Source{
+				Inline: &SourceInline{
+					File: &SourceInlineFile{},
+				},
+				Generate: []*SourceGenerator{{NodeMod: &GeneratorNodeMod{}}},
+			},
+		},
+		{
 			title:     "docker images with cmd source must specify a path to extract",
 			expectErr: true,
 			src: Source{

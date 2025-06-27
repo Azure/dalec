@@ -82,21 +82,29 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
-	sorted := dalec.SortMapKeys(sources)
-	for _, k := range sorted {
-		st := sources[k]
-		if dalec.SourceIsDir(spec.Sources[k]) {
-			st = st.With(sourceTar(worker, k, withPG("Tar source: "+k)...))
-		}
-		out = append(out, st)
-	}
-
 	if gomodSt != nil {
 		out = append(out, gomodSt.With(sourceTar(worker, gomodsName, withPG("Tar gomod deps")...)))
 	}
 
 	if cargohomeSt != nil {
 		out = append(out, cargohomeSt.With(sourceTar(worker, cargohomeName, withPG("Tar cargohome deps")...)))
+	}
+
+	srcsWithNodeMods, err := spec.NodeModDeps(sOpt, worker, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error preparing node deps")
+	}
+
+	sorted := dalec.SortMapKeys(sources)
+	for _, k := range sorted {
+		st := sources[k]
+		if _, ok := srcsWithNodeMods[k]; ok {
+			st = srcsWithNodeMods[k]
+		}
+		if dalec.SourceIsDir(spec.Sources[k]) {
+			st = st.With(sourceTar(worker, k, withPG("Tar source: "+k)...))
+		}
+		out = append(out, st)
 	}
 
 	scriptSt := buildScriptSourceState(spec)
