@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/dalec/sessionutil/socketprovider"
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
@@ -257,6 +258,8 @@ type TestRunnerConfig struct {
 	// This is useful particularly if you need to inspect the solve statuses.
 	SolveStatusFn func(*client.SolveStatus)
 	SolveOptFns   []func(*client.SolveOpt)
+	// SocketProxies is the list of sockets that need to be forwarded into the build.
+	SocketProxies []socketprovider.ProxyConfig
 }
 
 type TestRunnerOpt func(*TestRunnerConfig)
@@ -313,6 +316,12 @@ func (b *BuildxEnv) RunTestOptsFirst(ctx context.Context, t *testing.T, opts []T
 	b.RunTest(ctx, t, f, opts...)
 }
 
+func WithSocketProxies(proxies ...socketprovider.ProxyConfig) TestRunnerOpt {
+	return func(cfg *TestRunnerConfig) {
+		cfg.SocketProxies = append(cfg.SocketProxies, proxies...)
+	}
+}
+
 func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts ...TestRunnerOpt) {
 	var cfg TestRunnerConfig
 
@@ -349,6 +358,7 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	var so client.SolveOpt
 	withProjectRoot(t, &so)
 	withResolveLocal(&so)
+	withSocketProxies(t, cfg.SocketProxies)(&so)
 
 	err = withSourcePolicy(&so)
 	assert.NilError(t, err)
@@ -490,4 +500,17 @@ func withSourcePolicy(so *client.SolveOpt) error {
 
 	so.SourcePolicy = &pol
 	return nil
+}
+
+func withSocketProxies(t *testing.T, proxies []socketprovider.ProxyConfig) func(*client.SolveOpt) {
+	return func(so *client.SolveOpt) {
+		t.Helper()
+		if len(proxies) == 0 {
+			return
+		}
+
+		handler, err := socketprovider.NewProxyHandler(proxies)
+		assert.NilError(t, err)
+		so.Session = append(so.Session, handler)
+	}
 }

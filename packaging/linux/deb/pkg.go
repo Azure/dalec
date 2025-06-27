@@ -148,7 +148,7 @@ func BuildDeb(worker llb.State, spec *dalec.Spec, srcPkg llb.State, distroVersio
 					dalec.WithCacheDirConstraints(opts...),
 				}
 				for _, cache := range spec.Build.Caches {
-					cache.ToRunOption(distroVersionID, opts...).SetRunOption(ei)
+					cache.ToRunOption(worker, distroVersionID, opts...).SetRunOption(ei)
 				}
 			}),
 		).AddMount("/tmp/out", llb.Scratch())
