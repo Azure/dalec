@@ -64,7 +64,7 @@ func (w *rulesWrapper) Envs() fmt.Stringer {
 
 	if w.Spec.HasPips() {
 		// Set PIP environment variables to point to our prepared pip packages
-		// Use --break-system-packages since we're in an isolated build container
+		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
 		fmt.Fprintf(b, "export %s := $(PWD)/%s\n", "PIP_FIND_LINKS", pipName)
 		fmt.Fprintf(b, "export %s := $(PWD)/%s:${PYTHONPATH}\n", "PYTHONPATH", pipName)
 		fmt.Fprintf(b, "export %s := 1\n", "PIP_BREAK_SYSTEM_PACKAGES")

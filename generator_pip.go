@@ -46,13 +46,11 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				requirementsFile = "requirements.txt"
 			}
 
-			// Build pip download command to cache dependencies
 			pipCmd := "set -e; "
 
 			// First, download essential build dependencies that are needed for source builds
 			pipCmd += "python3 -m pip download --dest=" + pipCacheDir + " setuptools wheel"
 
-			// Add custom index URLs for build deps if specified
 			if g.Pip.IndexUrl != "" {
 				pipCmd += " --index-url=" + g.Pip.IndexUrl
 			}
@@ -60,8 +58,6 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 				pipCmd += " --extra-index-url=" + extraUrl
 			}
 
-			// Then download all dependencies as source distributions to ensure cross-platform compatibility
-			// and avoid architecture-specific wheels that might break CI/cross-compilation
 			pipCmd += "; python3 -m pip download --no-binary=:all: --dest=" + pipCacheDir + " --requirement=" + requirementsFile
 
 			// Add custom index URLs for main dependencies if specified
