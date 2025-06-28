@@ -3,14 +3,13 @@ package test
 import (
 	"bufio"
 	"bytes"
-	_ "embed"
-	"io"
-	"io/fs"
-
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -165,6 +164,12 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 				t.Fatalf("expected exit error, got %T: %v", errors.Unwrap(err), err)
 			}
 		})
+	})
+
+	t.Run("target-prebuilt-packages", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testPrebuiltPackages(ctx, t, testConfig)
 	})
 
 	t.Run("test-dalec-empty-artifacts", func(t *testing.T) {
@@ -1206,7 +1211,6 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-change-perm", 0o755); err != nil {
 				t.Fatal(err)
 			}
-
 		})
 	})
 
@@ -3089,5 +3093,88 @@ int main() {
 		spec := newSpec()
 		spec.Artifacts.DisableAutoRequires = true
 		check(ctx, t, spec)
+	})
+}
+
+func testPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinuxConfig) {
+	t.Run("Use pre-built packages from build context", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		preBuiltSpec := &dalec.Spec{
+			Name:        "test-prebuilt-package",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Test using pre-built packages",
+			Sources: map[string]dalec.Source{
+				"hello": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/bin/sh\necho 'Hello from pre-built package'",
+							Permissions: 0o755,
+						},
+					},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"hello": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Test that binary from pre-built package works",
+					Steps: []dalec.TestStep{
+						{
+							Command: "/usr/bin/hello",
+							Stdout: dalec.CheckOutput{
+								Contains: []string{"Hello from pre-built package"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			// Build the package which does not contain the unique marker file.
+			pkgSr := newSolveRequest(withSpec(ctx, t, preBuiltSpec), withBuildTarget(testConfig.Target.Package))
+			pkgRes := solveT(ctx, t, client, pkgSr)
+			pkgRef, err := pkgRes.SingleRef()
+			assert.NilError(t, err)
+			pkgSt, _ := pkgRef.ToState()
+
+			// Update the spec to include a unique marker file.
+			//
+			// If the marker file is present in the later container check,
+			// it means the pre-built package was not used and was rebuilt
+			// with this updated spec.
+			preBuiltSpec.Artifacts.DataDirs = map[string]dalec.ArtifactConfig{
+				"/etc/marker.txt": {},
+			}
+
+			// Build the container and pass the pre-built package as a dependency.
+			containerSr := newSolveRequest(
+				withSpec(ctx, t, preBuiltSpec),
+				withBuildTarget(testConfig.Target.Container),
+				withBuildContext(ctx, t, dalec.GenericPkg, pkgSt),
+			)
+			containerRes := solveT(ctx, t, client, containerSr)
+			containerRef, err := containerRes.SingleRef()
+			assert.NilError(t, err)
+
+			// Read the contents of the package to ensure it does not have the marker file.
+			contents, err := containerRef.ReadFile(ctx, gwclient.ReadRequest{
+				Filename: "/etc/marker.txt",
+			})
+			// The marker file should not be present in the container,
+			// as it was not part of the pre-built package.
+			assert.Assert(t, contents == nil, "marker file should not be present in the container")
+			assert.ErrorContains(t, err, "open /etc/marker.txt: no such file or directory")
+		})
 	})
 }

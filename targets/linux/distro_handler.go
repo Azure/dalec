@@ -90,17 +90,24 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			pg := dalec.ProgressGroup(spec.Name)
-			pc := dalec.Platform(platform)
+			var opts []llb.ConstraintsOpt
+			opts = append(opts, dalec.ProgressGroup(spec.Name))
+			opts = append(opts, dalec.Platform(platform))
 
-			worker, err := c.Worker(sOpt, pg, pc)
+			worker, err := c.Worker(sOpt, opts...)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			deb, err := c.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, pg, pc)
-			if err != nil {
-				return nil, nil, err
+			pkgSt, foundPrebuiltPkg := getPrebuiltPackage(ctx, targetKey, client, opts, sOpt)
+
+			// Pre-built package wasn't found so we need to build it.
+			if !foundPrebuiltPkg {
+				var err error
+				pkgSt, err = c.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, opts...)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 
 			img, err := BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
@@ -108,15 +115,54 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 				return nil, nil, err
 			}
 
-			ctr, err := c.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, deb, pg, pc)
+			ctr, err := c.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, pkgSt, opts...)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			ref, err := c.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, pg, pc)
+			ref, err := c.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, opts...)
 			return ref, img, err
 		})
 	}
+}
+
+// getPrebuiltPackage retrieves a package based on the target environment.
+// Target-specific packages (e.g., "{targetKey}-pkg") are prioritized over generic packages ("pkg").
+// This ensures compatibility with the build context and optimizes functionality for specific environments.
+// Examples of target keys include "mariner2", "azlinux3", "windowscross", and "bookworm".
+func getPrebuiltPackage(ctx context.Context, targetKey string, client gwclient.Client, opts []llb.ConstraintsOpt, sOpt dalec.SourceOpts) (llb.State, bool) {
+	var pkgSt llb.State
+
+	// Try target-specific package first.
+	targetSpecificName := targetKey + dalec.PreBuiltPkgSuffix
+	targetPkgSt, err := sOpt.GetContext(targetSpecificName, dalec.WithConstraints(opts...))
+	if err != nil {
+		return llb.Scratch().Async(func(ctx context.Context, _ llb.State, _ *llb.Constraints) (llb.State, error) {
+			// If attempts failed for retrieving a pre-built package from the build context, surface the error up when the state gets marshalled.
+			return pkgSt, fmt.Errorf("error when retrieving target-specified package for %s: %w", targetKey, err)
+		}), false
+	}
+	if targetPkgSt != nil {
+		pkgSt = *targetPkgSt
+		frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Using target-specific package from %s context", targetSpecificName))
+		return pkgSt, true
+	}
+
+	// Try generic package.
+	genericPkgSt, err := sOpt.GetContext(dalec.GenericPkg, dalec.WithConstraints(opts...))
+	if err != nil {
+		return llb.Scratch().Async(func(ctx context.Context, _ llb.State, _ *llb.Constraints) (llb.State, error) {
+			// If attempts failed for retrieving a pre-built package from the build context, surface the error up when the state gets marshalled.
+			return pkgSt, fmt.Errorf("error when retrieving generic package for %s: %w", targetKey, err)
+		}), false
+	}
+	if genericPkgSt != nil {
+		pkgSt = *genericPkgSt
+		frontend.Warn(ctx, client, pkgSt, fmt.Sprintf("Fallback to using generic package from %s context", targetSpecificName))
+		return pkgSt, true
+	}
+
+	return pkgSt, false
 }
 
 func HandlePackage(cfg DistroConfig) gwclient.BuildFunc {
@@ -151,7 +197,6 @@ func HandlePackage(cfg DistroConfig) gwclient.BuildFunc {
 			res, err := client.Solve(ctx, gwclient.SolveRequest{
 				Definition: def.ToPB(),
 			})
-
 			if err != nil {
 				return nil, nil, err
 			}
