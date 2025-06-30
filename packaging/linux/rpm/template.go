@@ -16,6 +16,9 @@ import (
 const (
 	gomodsName      = "__gomods"
 	cargohomeName   = "__cargohome"
+	nodeModsName    = "__nodemods-cache"
+	yarnCacheDir    = nodeModsName + "/yarn-dalec-cache"
+	npmCacheDir     = nodeModsName + "/npm-dalec-cache"
 	buildScriptName = "build.sh"
 )
 
@@ -331,6 +334,11 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 		sourceIdx += 1
 	}
 
+	if w.Spec.HasNodeMods() {
+		fmt.Fprintf(b, "Source%d: %s.tar.gz\n", sourceIdx, nodeModsName)
+		sourceIdx += 1
+	}
+
 	if len(w.Spec.Build.Steps) > 0 {
 		fmt.Fprintf(b, "Source%d: %s\n", sourceIdx, buildScriptName)
 	}
@@ -367,20 +375,19 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 	// Sort keys for consistent output
 	keys := dalec.SortMapKeys(w.Spec.Sources)
 
-	prepareGomods := sync.OnceFunc(func() {
-		if !w.Spec.HasGomods() {
-			return
+	prepareGenerators := sync.OnceFunc(func() {
+		if w.Spec.HasGomods() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", gomodsName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
 		}
-		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", gomodsName)
-		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", gomodsName, gomodsName)
-	})
-
-	prepareCargohomes := sync.OnceFunc(func() {
-		if !w.Spec.HasCargohomes() {
-			return
+		if w.Spec.HasNodeMods() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", nodeModsName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", nodeModsName, nodeModsName)
 		}
-		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", cargohomeName)
-		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", cargohomeName, cargohomeName)
+		if w.Spec.HasCargohomes() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", cargohomeName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", cargohomeName, cargohomeName)
+		}
 	})
 
 	// Extract all the sources from the rpm source dir
@@ -395,8 +402,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", key)
 		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", key, key)
 	}
-	prepareGomods()
-	prepareCargohomes()
+	prepareGenerators()
 
 	// Apply patches to all sources.
 	// Note: These are applied based on the key sorting algorithm (lexicographic).
