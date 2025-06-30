@@ -389,7 +389,7 @@ type Source struct {
 	// Generators are used to generate additional sources from this source.
 	// As an example the `gomod` generator can be used to generate a go module cache from a go source.
 	// How a generator operates is dependent on the actual generator.
-	// Generators may also cauuse modifications to the build environment.
+	// Generators may also cause modifications to the build environment.
 	//
 	// Currently supported generators are: "gomod", "cargohome", and "pip".
 	// The "gomod" generator will generate a go module cache from the source.
