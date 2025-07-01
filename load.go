@@ -361,7 +361,15 @@ func (s *Spec) UnmarshalYAML(dt []byte) error {
 
 	// Remove extension nodes from the main AST and store them so we can unmarshal
 	// them separately.
-	body := parsed.Docs[0].Body.(*ast.MappingNode)
+	b := parsed.Docs[0].Body
+	body, ok := b.(*ast.MappingNode)
+	if !ok {
+		if _, ok := parsed.Docs[0].Body.(*ast.NullNode); ok {
+			return nil
+		}
+		return fmt.Errorf("unexpected type %T where *ast.MappingNode expected", b)
+	}
+
 	var extNodes []*ast.MappingValueNode
 	for i := 0; i < len(body.Values); i++ {
 		node := body.Values[i]
