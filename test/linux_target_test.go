@@ -1074,6 +1074,75 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("node npm generator", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-build-with-nodenpm-generator",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing container target with node npm generator",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Generate: []*dalec.SourceGenerator{
+						{
+							NodeMod: &dalec.GeneratorNodeMod{},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"package.json": {Contents: npmPackageJson},
+								"npm.lock":     {Contents: npmPackageLockJson},
+								"index.js":     {Contents: IndexJS},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					testConfig.GetPackage("npm"): {},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{Command: "[ -f ./src/package.json ]"},
+					{Command: "[ -f ./src/npm.lock ]"},
+					{Command: "[ -f ./src/index.js ]"},
+					{Command: "cd ./src; npm start > result.txt"},
+				},
+			},
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src/result.txt": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check npm result",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/bin/result.txt": {
+							CheckOutput: dalec.CheckOutput{
+								Contains: []string{"Lodash chunk: [ [ 1, 2 ], [ 3, 4 ] ]"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
+		})
+	})
+
 	t.Run("test directory creation", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)

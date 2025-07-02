@@ -151,6 +151,7 @@ func TestTemplateSources(t *testing.T) {
 				t.Fatalf("unexpected sources: expected %q, got: %q", expected, s2)
 			}
 		})
+
 	})
 
 	t.Run("multiple sources", func(t *testing.T) {

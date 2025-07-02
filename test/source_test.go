@@ -477,6 +477,55 @@ gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c h1:dUUwHk2QECo/6vqA44rthZ8ie
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 `
 
+const npmPackageJson = `
+{
+  "name": "npm-test",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "lodash": "^4.17.21"
+  }
+}
+`
+
+const npmPackageLockJson = `
+{
+  "name": "npm-test",
+  "version": "1.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "npm-test",
+      "version": "1.0.0",
+      "license": "MIT",
+      "dependencies": {
+        "lodash": "^4.17.21"
+      }
+    },
+    "node_modules/lodash": {
+      "version": "4.17.21",
+      "resolved": "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz",
+      "integrity": "sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==",
+      "license": "MIT"
+    }
+  }
+}
+`
+
+const IndexJS = `
+const _ = require('lodash');
+console.log('Lodash chunk:', _.chunk([1,2,3,4], 2));
+`
+
 func TestSourceWithGomod(t *testing.T) {
 	t.Parallel()
 
@@ -715,7 +764,7 @@ checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 	cargoFixtureMain = `
 fn main() {
     use once_cell::sync::Lazy;
-    
+
     static GREETING: Lazy<String> = Lazy::new(|| "Hello from Rust with Cargo!".to_string());
     println!("{}", *GREETING);
 }
