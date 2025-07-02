@@ -384,7 +384,7 @@ type Source struct {
 	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
 	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
 
-	// Generate is the list generators to run on the source.
+	// Generate specifies a list of dependency generators to apply to a given source.
 	//
 	// Generators are used to generate additional sources from this source.
 	// As an example the `gomod` generator can be used to generate a go module cache from a go source.
