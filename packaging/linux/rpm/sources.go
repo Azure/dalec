@@ -47,6 +47,14 @@ func buildScript(spec *dalec.Spec) string {
 		fmt.Fprintln(b, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 
+	if spec.HasPips() {
+		// Set PIP environment variables to point to our prepared pip packages
+		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
+		fmt.Fprintln(b, "export PIP_FIND_LINKS=\"$(pwd)/"+pipCacheName+"\"")
+		fmt.Fprintln(b, "export PYTHONPATH=\"$(pwd)/"+pipCacheName+":${PYTHONPATH}\"")
+		fmt.Fprintln(b, "export PIP_BREAK_SYSTEM_PACKAGES=1")
+	}
+
 	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
 		v := t.Env[k]
@@ -82,6 +90,11 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
+	pipSt, err := spec.PipDeps(sOpt, worker, withPG("Add pip sources")...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding pip sources")
+	}
+
 	sorted := dalec.SortMapKeys(sources)
 	for _, k := range sorted {
 		st := sources[k]
@@ -97,6 +110,10 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 
 	if cargohomeSt != nil {
 		out = append(out, cargohomeSt.With(sourceTar(worker, cargohomeName, withPG("Tar cargohome deps")...)))
+	}
+
+	if pipSt != nil {
+		out = append(out, pipSt.With(sourceTar(worker, pipCacheName, withPG("Tar pip deps")...)))
 	}
 
 	scriptSt := buildScriptSourceState(spec)
