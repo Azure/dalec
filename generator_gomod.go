@@ -2,11 +2,13 @@ package dalec
 
 import (
 	"bytes"
+	goerrors "errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
 )
 
@@ -16,6 +18,29 @@ const (
 	// It is exported only for testing purposes.
 	GomodCacheKey = "dalec-gomod-proxy-cache"
 )
+
+func (g *GeneratorGomod) processBuildArgs(args map[string]string, allowArg func(key string) bool) error {
+	var errs []error
+	lex := shell.NewLex('\\')
+	// force the shell lexer to skip unresolved env vars so they aren't
+	// replaced with ""
+	lex.SkipUnsetEnv = true
+
+	for host, auth := range g.Auth {
+		subbed, err := expandArgs(lex, host, args, allowArg)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		g.Auth[subbed] = auth
+		if subbed != host {
+			delete(g.Auth, host)
+		}
+	}
+
+	return goerrors.Join(errs...)
+}
 
 func (s *Source) isGomod() bool {
 	for _, gen := range s.Generate {
@@ -36,7 +61,7 @@ func (s *Spec) HasGomods() bool {
 	return false
 }
 
-func withGomod(g *SourceGenerator, srcSt, worker llb.State, credHelper llb.RunOption, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
+func withGomod(g *SourceGenerator, srcSt, worker llb.State, subPath string, credHelper llb.RunOption, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		const (
 			workDir                      = "/work/src"
@@ -44,7 +69,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, credHelper llb.RunOp
 			gomodDownloadWrapperBasename = "go_mod_download.sh"
 		)
 
-		joinedWorkDir := filepath.Join(workDir, g.Subpath)
+		joinedWorkDir := filepath.Join(workDir, subPath, g.Subpath)
 		srcMount := llb.AddMount(workDir, srcSt)
 
 		paths := g.Gomod.Paths
@@ -130,7 +155,7 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State 
 
 	fmt.Fprintf(&script, "go env -w GOPRIVATE=%s", strings.Join(goPrivate, ","))
 	script.WriteRune('\n')
-	fmt.Fprintln(&script, "cat go.mod && go mod download")
+	fmt.Fprintln(&script, "[ -f go.mod ]; go mod download")
 	return llb.Scratch().File(llb.Mkfile(scriptPath, 0o755, script.Bytes()))
 }
 
@@ -155,7 +180,7 @@ func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
 				continue
 			}
 
-			if auth.SSH != nil && auth.SSH.ID != "" {
+			if auth.SSH != nil {
 				llb.AddSSHSocket(llb.SSHID(auth.SSH.ID)).SetRunOption(ei)
 
 				llb.AddEnv(
@@ -211,7 +236,7 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 		opts := append(opts, ProgressGroup("Fetch go module dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
-				in = in.With(withGomod(gen, patched[key], worker, credHelperRunOpt, opts...))
+				in = in.With(withGomod(gen, patched[key], worker, key, credHelperRunOpt, opts...))
 			}
 			return in
 		})

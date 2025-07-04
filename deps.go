@@ -161,23 +161,25 @@ func (r *PackageRepositoryConfig) fillDefaults() {
 	}
 
 	for i, src := range r.Config {
-		fillDefaults(&src)
-		r.Config[i] = src
+		s := &src
+		s.fillDefaults()
+		r.Config[i] = *s
 	}
 
 	for i, src := range r.Keys {
-		fillDefaults(&src)
+		s := &src
+		s.fillDefaults()
 
-		// Default to 0644 permissions for gpg keys. This is because apt will will only import
+		// Default to 0644 permissions for gpg keys. This is because apt will only import
 		// keys with a particular permission set.
-		if src.HTTP != nil {
-			src.HTTP.Permissions = 0644
+		if s.HTTP != nil {
+			s.HTTP.Permissions = 0644
 		}
-		r.Keys[i] = src
+		r.Keys[i] = *s
 	}
 
 	for i, mount := range r.Data {
-		mount.fillDefaults()
+		mount.fillDefaults(nil)
 		r.Data[i] = mount
 	}
 }
@@ -210,7 +212,7 @@ func (r *PackageRepositoryConfig) validate() error {
 		}
 	}
 	for _, mnt := range r.Data {
-		if err := mnt.validate("/"); err != nil {
+		if err := mnt.validate(); err != nil {
 			errs = append(errs, errors.Wrapf(err, "data mount path %s", mnt.Dest))
 		}
 	}

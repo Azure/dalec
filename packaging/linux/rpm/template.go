@@ -304,11 +304,7 @@ func (w *specWrapper) Sources() (fmt.Stringer, error) {
 			ref += ".tar.gz"
 		}
 
-		doc, err := src.Doc(name)
-		if err != nil {
-			return nil, fmt.Errorf("error getting doc for source %s: %w", name, err)
-		}
-
+		doc := src.Doc(name)
 		scanner := bufio.NewScanner(doc)
 		for scanner.Scan() {
 			fmt.Fprintf(b, "# %s\n", scanner.Text())
@@ -392,8 +388,7 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 			continue
 		}
 		// This is a directory source so it needs to be untarred into the rpm build dir.
-		fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", key)
-		fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", key, key)
+		fmt.Fprintf(b, "tar -C \"%%{_builddir}/\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", key)
 	}
 	prepareGomods()
 	prepareCargohomes()

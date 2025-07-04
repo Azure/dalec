@@ -93,16 +93,7 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		pg := llb.ProgressGroup(identity.NewID(), "Test: "+path.Join(target, test.Name), false)
 
 		for _, sm := range test.Mounts {
-			st, err := sm.Spec.AsMount(internalMountSourceName, sOpt, pg, dalec.Platform(platform))
-			if err != nil {
-				return err
-			}
-
-			if dalec.SourceIsDir(sm.Spec) {
-				opts = append(opts, llb.AddMount(sm.Dest, st, llb.SourcePath(sm.Spec.Path)))
-			} else {
-				opts = append(opts, llb.AddMount(sm.Dest, st, llb.SourcePath(internalMountSourceName)))
-			}
+			opts = append(opts, sm.ToRunOption(sOpt, pg))
 		}
 
 		opts = append(opts, pg)
