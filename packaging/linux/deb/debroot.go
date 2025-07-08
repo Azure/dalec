@@ -301,7 +301,7 @@ func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		// Use --break-system-packages since we're in an isolated build container
 		fmt.Fprintf(buf, `export PIP_FIND_LINKS="$(pwd)/%s"`, pipName)
 		fmt.Fprint(buf, "\n")
-		fmt.Fprintf(buf, `export PYTHONPATH="$(pwd)/%s:${PYTHONPATH}"`, pipName)
+		fmt.Fprintf(buf, `export PYTHONPATH="$(pwd)/%s/python/site-packages:$(pwd)/%s:${PYTHONPATH}"`, pipName, pipName)
 		fmt.Fprint(buf, "\n")
 		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
@@ -372,7 +372,7 @@ func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		// Set PIP environment variables to point to our prepared pip packages
 		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
 		fmt.Fprintln(buf, "export PIP_FIND_LINKS=\"$(pwd)/"+pipName+"\"")
-		fmt.Fprintln(buf, "export PYTHONPATH=\"$(pwd)/"+pipName+":${PYTHONPATH}\"")
+		fmt.Fprintln(buf, "export PYTHONPATH=\"$(pwd)/"+pipName+"/python/site-packages:$(pwd)/"+pipName+":${PYTHONPATH}\"")
 		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 

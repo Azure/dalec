@@ -254,7 +254,7 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 		// Set PIP environment variables to point to our prepared pip packages
 		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
 		fmt.Fprintln(buf, "export PIP_FIND_LINKS=\"$(pwd)/"+pipName+"\"")
-		fmt.Fprintln(buf, "export PYTHONPATH=\"$(pwd)/"+pipName+":${PYTHONPATH}\"")
+		fmt.Fprintln(buf, "export PYTHONPATH=\"$(pwd)/"+pipName+"/python/site-packages:$(pwd)/"+pipName+":${PYTHONPATH}\"")
 		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 

@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	pipCacheDir = "/cache"
+	pipCacheDir        = "/cache"
+	pipSitePackagesDir = "/python/site-packages"
 )
 
 func (s *Source) isPip() bool {
@@ -48,6 +49,9 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 			pipCmd := "set -e; "
 
+			// Create the site-packages directory structure
+			pipCmd += "mkdir -p " + pipSitePackagesDir + "; "
+
 			// First, download essential build dependencies that are needed for source builds
 			pipCmd += "python3 -m pip download --dest=" + pipCacheDir + " setuptools wheel"
 
@@ -67,6 +71,10 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			for _, extraUrl := range g.Pip.ExtraIndexUrls {
 				pipCmd += " --extra-index-url=" + extraUrl
 			}
+
+			// Install packages to site-packages directory for easy access during build
+			pipCmd += "; python3 -m pip install --no-deps --no-build-isolation --target=" + pipSitePackagesDir +
+				" --find-links=" + pipCacheDir + " --no-index --requirement=" + requirementsFile
 
 			in = worker.Run(
 				llb.Args([]string{"bash", "-c", pipCmd}),

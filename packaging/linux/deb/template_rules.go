@@ -66,7 +66,7 @@ func (w *rulesWrapper) Envs() fmt.Stringer {
 		// Set PIP environment variables to point to our prepared pip packages
 		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
 		fmt.Fprintf(b, "export %s := $(PWD)/%s\n", "PIP_FIND_LINKS", pipName)
-		fmt.Fprintf(b, "export %s := $(PWD)/%s:${PYTHONPATH}\n", "PYTHONPATH", pipName)
+		fmt.Fprintf(b, "export %s := $(PWD)/%s/python/site-packages:$(PWD)/%s:${PYTHONPATH}\n", "PYTHONPATH", pipName, pipName)
 		fmt.Fprintf(b, "export %s := 1\n", "PIP_BREAK_SYSTEM_PACKAGES")
 	}
 
