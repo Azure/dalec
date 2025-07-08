@@ -862,6 +862,19 @@
 			"description": "GeneratorGomod is used to generate a go module cache from go module sources"
 		},
 		"GeneratorNodeMod": {
+			"properties": {
+				"paths": {
+					"items": {
+						"type": [
+							"string"
+						]
+					},
+					"type": [
+						"array"
+					],
+					"description": "Paths is the list of paths to run the generator on. Used to generate multi-module in a single source."
+				}
+			},
 			"additionalProperties": {
 				"not": {}
 			},
