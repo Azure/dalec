@@ -23,11 +23,6 @@ func Sources(ctx context.Context, client gwclient.Client) (*gwclient.Result, err
 			return nil, nil, err
 		}
 
-		for k, v := range sources {
-			st := llb.Scratch().File(llb.Copy(v, "/", k))
-			sources[k] = st
-		}
-
 		def, err := dalec.MergeAtPath(llb.Scratch(), dalec.SortedMapValues(sources), "/").Marshal(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -75,14 +70,6 @@ func PatchedSources(ctx context.Context, client gwclient.Client) (*gwclient.Resu
 		}
 
 		sources = dalec.PatchSources(worker, spec, sources, pc)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		for k, v := range sources {
-			st := llb.Scratch().File(llb.Copy(v, "/", k))
-			sources[k] = st
-		}
 
 		def, err := dalec.MergeAtPath(llb.Scratch(), dalec.SortedMapValues(sources), "/").Marshal(ctx)
 		if err != nil {
