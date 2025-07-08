@@ -26,26 +26,27 @@ func (s *Spec) HasNodeMods() bool {
 	return false
 }
 
-func withNodeMod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
-	return func(in llb.State) llb.State {
-		workDir := "/work/src"
-		joinedWorkDir := filepath.Join(workDir, g.Subpath)
-		srcMount := llb.AddMount(workDir, srcSt)
-		installCmd := "npm install"
-		// Run install in a new state, mounting the source
-		installed := worker.Run(
+func withNodeMod(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) llb.State {
+	workDir := "/work/src"
+	joinedWorkDir := filepath.Join(workDir, g.Subpath)
+	srcMount := llb.AddMount(workDir, srcSt)
+	installCmd := "npm install"
+
+	paths := g.NodeMod.Paths
+	if g.NodeMod.Paths == nil {
+		paths = []string{"."}
+	}
+
+	result := srcSt
+	for _, path := range paths {
+		result = worker.Run(
 			ShArgs(installCmd),
-			llb.Dir(joinedWorkDir),
+			llb.Dir(filepath.Join(joinedWorkDir, path)),
 			srcMount,
 			WithConstraints(opts...),
-		).AddMount(filepath.Join(joinedWorkDir, "node_modules"), in)
-
-		// Merge node_modules from installed state into srcSt
-		merged := srcSt.File(
-			llb.Copy(installed, "/", filepath.Join(g.Subpath, "node_modules"), &llb.CopyInfo{CreateDestPath: true}),
-		)
-		return merged
+		).AddMount(workDir, result)
 	}
+	return result
 }
 
 func (s *Spec) nodeModSources() map[string]Source {
@@ -79,7 +80,7 @@ func (s *Spec) NodeModDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constr
 
 	result := make(map[string]llb.State)
 	sorted := SortMapKeys(patched)
-	opts = append(opts, ProgressGroup("Fetch node module dependencies for source: all before: "))
+	opts = append(opts, ProgressGroup("Fetch node module dependencies for sources"))
 	for _, key := range sorted {
 		src := s.Sources[key]
 		merged := patched[key]
@@ -87,7 +88,7 @@ func (s *Spec) NodeModDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constr
 			if gen.NodeMod == nil {
 				continue
 			}
-			merged = withNodeMod(gen, patched[key], worker, opts...)(merged)
+			merged = withNodeMod(gen, merged, worker, opts...)
 		}
 		result[key] = merged
 	}

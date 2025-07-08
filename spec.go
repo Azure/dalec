@@ -412,7 +412,10 @@ type GeneratorCargohome struct {
 }
 
 // GeneratorNodeMod is used to generate a node module cache for Yarn or npm.
-type GeneratorNodeMod struct{}
+type GeneratorNodeMod struct {
+	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
+	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
+}
 
 // SourceGenerator holds the configuration for a source generator.
 // This can be used inside of a [Source] to generate additional sources from the given source.

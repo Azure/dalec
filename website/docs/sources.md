@@ -429,9 +429,60 @@ sources:
         url: https://github.com/cpuguy83/go-md2man.git
         commit: v2.1.0
     generate:
-        subpath: "" # path inside the source to use as the root for the generator
+      - subpath: "" # path inside the source to use as the root for the generator
         cargohome: {} # Generates a cargo home cache to cache dependencies
 ```
+
+### NodeMod
+
+Similar to that of the `gomod` generator, we can generate `node_modules` dependencies for javascript projects. The `nodemod` generator manages node module dependencies for all sources that specify it in the spec. It is expected that the build dependencies include npm and Node.js suitable for fetching node module dependencies.
+
+Adding a nodemod generator to 1 or more sources causes the following to occur automatically:
+
+1. Fetch all node module dependencies for *all* sources in the spec that specify the generator
+2. Installs node_modules for each specified path within the source
+3. Makes the installed dependencies available during the build process
+
+```yaml
+sources:
+  my-node-app:
+    git:
+        url: https://github.com/<fake-org>/my-node-app.git
+        commit: v1.0.0
+    generate:
+      - subpath: "" # path inside the source to use as the root for the generator
+        nodemod: {} # Generates node_modules to cache dependencies
+```
+
+The `nodemod` generator also supports generating dependencies for multiple package.json files in a single source. The `paths` field is a list of paths where the generator should run `npm install`. Assuming `src` looks like this:
+
+```
+.
+├── frontend
+│   ├── package.json
+│   ├── package-lock.json
+│   └── src/
+└── backend
+    ├── package.json
+    ├── package-lock.json
+    └── server.js
+```
+
+The dalec spec will look like this:
+
+```yaml
+sources:
+  src:
+    path: ./
+    context: {}
+    generate:
+      - nodemod:
+          paths:
+            - frontend
+            - backend
+```
+
+This will run `npm install` in both the `frontend` and `backend` directories, ensuring that each has its dependencies installed in the appropriate `node_modules` directory.
 
 ## Patches
 
