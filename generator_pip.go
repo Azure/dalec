@@ -73,7 +73,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			}
 
 			// Install packages to site-packages directory for easy access during build
-			pipCmd += "; python3 -m pip install --no-deps --no-build-isolation --target=" + pipSitePackagesDir +
+			pipCmd += "; python3 -m pip install --no-deps --target=" + pipSitePackagesDir +
 				" --find-links=" + pipCacheDir + " --no-index --requirement=" + requirementsFile
 
 			in = worker.Run(

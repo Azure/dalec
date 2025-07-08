@@ -880,6 +880,29 @@
 			],
 			"description": "GeneratorGomod is used to generate a go module cache from go module sources"
 		},
+		"GeneratorNodeMod": {
+			"properties": {
+				"paths": {
+					"items": {
+						"type": [
+							"string"
+						]
+					},
+					"type": [
+						"array"
+					],
+					"description": "Paths is the list of paths to run the generator on. Used to generate multi-module in a single source."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			],
+			"description": "GeneratorNodeMod is used to generate a node module cache for Yarn or npm."
+		},
 		"GeneratorPip": {
 			"properties": {
 				"extra_index_urls": {
@@ -926,29 +949,6 @@
 				"object",
 				"null"
 			]
-		},
-		"GeneratorNodeMod": {
-			"properties": {
-				"paths": {
-					"items": {
-						"type": [
-							"string"
-						]
-					},
-					"type": [
-						"array"
-					],
-					"description": "Paths is the list of paths to run the generator on. Used to generate multi-module in a single source."
-				}
-			},
-			"additionalProperties": {
-				"not": {}
-			},
-			"type": [
-				"object",
-				"null"
-			],
-			"description": "GeneratorNodeMod is used to generate a node module cache for Yarn or npm."
 		},
 		"GitAuth": {
 			"properties": {
@@ -1606,13 +1606,13 @@
 					"$ref": "#/$defs/GeneratorGomod",
 					"description": "Gomod is the go module generator."
 				},
-				"pip": {
-					"$ref": "#/$defs/GeneratorPip",
-					"description": "Pip is the pip generator."
-				},
 				"nodemod": {
 					"$ref": "#/$defs/GeneratorNodeMod",
 					"description": "NodeMod is the generic node module generator for npm."
+				},
+				"pip": {
+					"$ref": "#/$defs/GeneratorPip",
+					"description": "Pip is the pip generator."
 				},
 				"subpath": {
 					"type": [
