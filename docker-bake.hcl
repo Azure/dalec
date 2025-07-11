@@ -78,6 +78,12 @@ target "runc-azlinux" {
     tags = tgt == "container" ? ["runc:mariner2"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
+    cache-from = [
+      {
+        type = "gha"
+        scope = "main.${distro}/worker"
+      }
+    ]
 }
 
 target "runc-jammy" {
@@ -101,6 +107,12 @@ target "runc-jammy" {
     tags = tgt == "container" ? ["runc:jammy"] : []
     // only output non-container targets to the fs
     output = tgt != "container" ? ["_output"] : []
+    cache-from = [
+      {
+        type = "gha"
+        scope = "main.jammy/worker"
+      }
+    ]
 }
 
 target "runc-test" {
@@ -176,6 +188,12 @@ dependencies:
     }
     target = "${distro}/container/depsonly"
     tags = ["local/dalec/deps-only:${distro}"]
+    cache-from = [
+      {
+        type = "gha"
+        scope = "main.${distro}/worker"
+      }
+    ]
 }
 
 target "test-deps-only" {

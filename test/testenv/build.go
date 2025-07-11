@@ -4,11 +4,15 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"sync"
 	"testing"
 
+	"github.com/Azure/dalec/internal/plugins"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -208,4 +212,50 @@ func lookupProjectRoot(cur string) (string, error) {
 	}
 
 	return cur, nil
+}
+
+var ciLoadCacheOptions = sync.OnceValue(func() (out []client.CacheOptionsEntry) {
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		// not running in a github action, nothing to do
+		return
+	}
+
+	// token and url are required for the cache to work.
+	// These need to be exposed as environment variables in the GitHub Actions workflow.
+	// See the crazy-max/ghaction-github-runtime@v3 action.
+	token := os.Getenv("ACTIONS_RUNTIME_TOKEN")
+	if token == "" {
+		fmt.Fprintln(os.Stderr, "::warning::GITHUB_ACTIONS_RUNTIME_TOKEN is not set, skipping cache export")
+		return nil
+	}
+
+	url := os.Getenv("ACTIONS_CACHE_URL")
+	if url == "" {
+		fmt.Fprintln(os.Stderr, "::warning::ACTIONS_CACHE_URL is not set, skipping cache export")
+		return nil
+	}
+
+	// Unfortunately we need to load all the caches because at this level we do
+	// not know what the build target will be since that will be done at the
+	// gateway client level, where we can't set cache imports.
+	filter := func(r *plugins.Registration) bool {
+		return r.Type != plugins.TypeBuildTarget
+	}
+
+	for _, r := range plugins.Graph(filter) {
+		target := path.Join(r.ID, "worker")
+		out = append(out, client.CacheOptionsEntry{
+			Type: "gha",
+			Attrs: map[string]string{
+				"scope": "main." + target,
+				"token": token,
+				"url":   url,
+			},
+		})
+	}
+	return out
+})
+
+func withCICache(opts *client.SolveOpt) {
+	opts.CacheImports = append(opts.CacheImports, ciLoadCacheOptions()...)
 }
