@@ -1115,8 +1115,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					{Command: "[ -d ./src ]"},
 					{Command: "[ -f ./src/main.py ]"},
 					{Command: "[ -f ./src/requirements.txt ]"},
-					{Command: "[ -d \"${PIP_FIND_LINKS}\" ]"},
-					{Command: "cd ./src && python3 -m pip install --no-index --find-links \"${PIP_FIND_LINKS}\" -r requirements.txt"},
+					{Command: "[ -d ./src/site-packages ]"},
+					{Command: "cd ./src && python3 -c \"import sys; sys.path.insert(0, './site-packages'); import certifi; print('certifi imported successfully')\""},
 				},
 			},
 		}

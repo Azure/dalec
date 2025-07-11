@@ -48,10 +48,9 @@ func buildScript(spec *dalec.Spec) string {
 	}
 
 	if spec.HasPips() {
-		// Set PIP environment variables to point to our prepared pip packages
+		// Set PIP environment variables to point to our prepared pip packages in each source's site-packages
 		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
-		fmt.Fprintln(b, "export PIP_FIND_LINKS=\"$(pwd)/"+pipCacheName+"\"")
-		fmt.Fprintln(b, "export PYTHONPATH=\"$(pwd)/"+pipCacheName+"/python/site-packages:$(pwd)/"+pipCacheName+":${PYTHONPATH}\"")
+		fmt.Fprintln(b, "export PYTHONPATH=\"$(find . -name 'site-packages' -type d | tr '\\n' ':')${PYTHONPATH}\"")
 		fmt.Fprintln(b, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 
@@ -90,7 +89,7 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
-	pipSt, err := spec.PipDeps(sOpt, worker, withPG("Add pip sources")...)
+	pipSources, err := spec.PipDeps(sOpt, worker, withPG("Add pip sources")...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error adding pip sources")
 	}
@@ -103,10 +102,6 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		out = append(out, cargohomeSt.With(sourceTar(worker, cargohomeName, withPG("Tar cargohome deps")...)))
 	}
 
-	if pipSt != nil {
-		out = append(out, pipSt.With(sourceTar(worker, pipCacheName, withPG("Tar pip deps")...)))
-	}
-
 	srcsWithNodeMods, err := spec.NodeModDeps(sOpt, worker, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error preparing node deps")
@@ -117,6 +112,9 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		st := sources[k]
 		if _, ok := srcsWithNodeMods[k]; ok {
 			st = srcsWithNodeMods[k]
+		}
+		if _, ok := pipSources[k]; ok {
+			st = pipSources[k]
 		}
 		if dalec.SourceIsDir(spec.Sources[k]) {
 			st = st.With(sourceTar(worker, k, withPG("Tar source: "+k)...))

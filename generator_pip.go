@@ -7,11 +7,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	pipCacheDir        = "/cache"
-	pipSitePackagesDir = "/python/site-packages"
-)
-
 func (s *Source) isPip() bool {
 	for _, gen := range s.Generate {
 		if gen.Pip != nil {
@@ -30,61 +25,59 @@ func (s *Spec) HasPips() bool {
 	return false
 }
 
-func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
-	return func(in llb.State) llb.State {
-		workDir := "/work/src"
-		joinedWorkDir := filepath.Join(workDir, g.Subpath)
-		srcMount := llb.AddMount(workDir, srcSt)
+func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) llb.State {
+	workDir := "/work/src"
+	joinedWorkDir := filepath.Join(workDir, g.Subpath)
+	srcMount := llb.AddMount(workDir, srcSt)
 
-		paths := g.Pip.Paths
-		if g.Pip.Paths == nil {
-			paths = []string{"."}
-		}
-
-		for _, path := range paths {
-			requirementsFile := g.Pip.RequirementsFile
-			if requirementsFile == "" {
-				requirementsFile = "requirements.txt"
-			}
-
-			pipCmd := "set -e; "
-
-			// Create the site-packages directory structure
-			pipCmd += "mkdir -p " + pipSitePackagesDir + "; "
-
-			// First, download essential build dependencies that are needed for source builds
-			pipCmd += "python3 -m pip download --dest=" + pipCacheDir + " setuptools wheel"
-
-			if g.Pip.IndexUrl != "" {
-				pipCmd += " --index-url=" + g.Pip.IndexUrl
-			}
-			for _, extraUrl := range g.Pip.ExtraIndexUrls {
-				pipCmd += " --extra-index-url=" + extraUrl
-			}
-
-			pipCmd += "; python3 -m pip download --no-binary=:all: --dest=" + pipCacheDir + " --requirement=" + requirementsFile
-
-			// Add custom index URLs for main dependencies if specified
-			if g.Pip.IndexUrl != "" {
-				pipCmd += " --index-url=" + g.Pip.IndexUrl
-			}
-			for _, extraUrl := range g.Pip.ExtraIndexUrls {
-				pipCmd += " --extra-index-url=" + extraUrl
-			}
-
-			// Install packages to site-packages directory for easy access during build
-			pipCmd += "; python3 -m pip install --no-deps --target=" + pipSitePackagesDir +
-				" --find-links=" + pipCacheDir + " --no-index --requirement=" + requirementsFile
-
-			in = worker.Run(
-				llb.Args([]string{"bash", "-c", pipCmd}),
-				llb.Dir(filepath.Join(joinedWorkDir, path)),
-				srcMount,
-				WithConstraints(opts...),
-			).AddMount(pipCacheDir, in)
-		}
-		return in
+	paths := g.Pip.Paths
+	if g.Pip.Paths == nil {
+		paths = []string{"."}
 	}
+
+	result := srcSt
+	for _, path := range paths {
+		requirementsFile := g.Pip.RequirementsFile
+		if requirementsFile == "" {
+			requirementsFile = "requirements.txt"
+		}
+
+		pipCmd := "set -e; "
+
+		// Create the site-packages directory within the source
+		pipCmd += "mkdir -p site-packages; "
+
+		// First, download essential build dependencies that are needed for source builds
+		pipCmd += "python3 -m pip download --dest=/tmp/pip-cache setuptools wheel"
+
+		if g.Pip.IndexUrl != "" {
+			pipCmd += " --index-url=" + g.Pip.IndexUrl
+		}
+		for _, extraUrl := range g.Pip.ExtraIndexUrls {
+			pipCmd += " --extra-index-url=" + extraUrl
+		}
+
+		pipCmd += "; python3 -m pip download --no-binary=:all: --dest=/tmp/pip-cache --requirement=" + requirementsFile
+
+		// Add custom index URLs for main dependencies if specified
+		if g.Pip.IndexUrl != "" {
+			pipCmd += " --index-url=" + g.Pip.IndexUrl
+		}
+		for _, extraUrl := range g.Pip.ExtraIndexUrls {
+			pipCmd += " --extra-index-url=" + extraUrl
+		}
+
+		// Install packages to site-packages directory within the source
+		pipCmd += "; python3 -m pip install --no-deps --target=site-packages --find-links=/tmp/pip-cache --no-index --requirement=" + requirementsFile
+
+		result = worker.Run(
+			llb.Args([]string{"bash", "-c", pipCmd}),
+			llb.Dir(filepath.Join(joinedWorkDir, path)),
+			srcMount,
+			WithConstraints(opts...),
+		).AddMount(workDir, result)
+	}
+	return result
 }
 
 func (s *Spec) pipSources() map[string]Source {
@@ -97,16 +90,15 @@ func (s *Spec) pipSources() map[string]Source {
 	return sources
 }
 
-// PipDeps returns an [llb.State] containing all the pip dependencies for the spec
+// PipDeps returns a map[string]llb.State containing all the pip dependencies for the spec
 // for any sources that have a pip generator specified.
-// It fetches the patched sources and applies the pip generators to them.
-func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.ConstraintsOpt) (*llb.State, error) {
+// If there are no sources with a pip generator, this will return nil.
+// The returned states have site-packages installed for each relevant source, using sources as input.
+func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
 	sources := s.pipSources()
 	if len(sources) == 0 {
 		return nil, nil
 	}
-
-	deps := llb.Scratch()
 
 	// Get the patched sources for the Python projects
 	// This is needed in case a patch includes changes to requirements.txt
@@ -118,21 +110,19 @@ func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constraint
 		return nil, errors.Wrap(err, "failed to get patched sources")
 	}
 
+	result := make(map[string]llb.State)
 	sorted := SortMapKeys(patched)
-
+	opts = append(opts, ProgressGroup("Fetch pip dependencies for sources"))
 	for _, key := range sorted {
 		src := s.Sources[key]
-
-		opts := append(opts, ProgressGroup("Download pip dependencies for source: "+key))
-		deps = deps.With(func(in llb.State) llb.State {
-			for _, gen := range src.Generate {
-				if gen.Pip != nil {
-					in = in.With(withPip(gen, patched[key], worker, opts...))
-				}
+		merged := patched[key]
+		for _, gen := range src.Generate {
+			if gen.Pip == nil {
+				continue
 			}
-			return in
-		})
+			merged = withPip(gen, merged, worker, opts...)
+		}
+		result[key] = merged
 	}
-
-	return &deps, nil
+	return result, nil
 }

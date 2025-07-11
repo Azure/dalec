@@ -64,7 +64,6 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 const (
 	gomodsName    = "__gomods"
 	cargohomeName = "__cargohome"
-	pipName       = "__pip"
 )
 
 func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
@@ -84,11 +83,6 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
-	pipSt, err := spec.PipDeps(sOpt, worker, opts...)
-	if err != nil {
-		return nil, errors.Wrap(err, "error adding pip sources")
-	}
-
 	srcsWithNodeMods, err := spec.NodeModDeps(sOpt, worker, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error preparing node deps")
@@ -99,16 +93,22 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		out[key] = srcsWithNodeMods[key]
 	}
 
+	pipSources, err := spec.PipDeps(sOpt, worker, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding pip sources")
+	}
+
+	sorted = dalec.SortMapKeys(pipSources)
+	for _, key := range sorted {
+		out[key] = pipSources[key]
+	}
+
 	if gomodSt != nil {
 		out[gomodsName] = *gomodSt
 	}
 
 	if cargohomeSt != nil {
 		out[cargohomeName] = *cargohomeSt
-	}
-
-	if pipSt != nil {
-		out[pipName] = *pipSt
 	}
 
 	return out, nil
@@ -251,10 +251,9 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 	}
 
 	if spec.HasPips() {
-		// Set PIP environment variables to point to our prepared pip packages
+		// Set PYTHONPATH to all site-packages directories in all sources
 		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
-		fmt.Fprintln(buf, "export PIP_FIND_LINKS=\"$(pwd)/"+pipName+"\"")
-		fmt.Fprintln(buf, "export PYTHONPATH=\"$(pwd)/"+pipName+"/python/site-packages:$(pwd)/"+pipName+":${PYTHONPATH}\"")
+		fmt.Fprintln(buf, "export PYTHONPATH=\"$(find . -name 'site-packages' -type d | tr '\\n' ':')${PYTHONPATH}\"")
 		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 

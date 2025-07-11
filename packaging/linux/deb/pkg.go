@@ -17,9 +17,6 @@ const (
 	// Unique name that would not normally be in the spec
 	// This will get used to create the source tar for cargo deps
 	cargohomeName = "xxxdalecCargoHomeInternal"
-	// Unique name that would not normally be in the spec
-	// This will get used to create the source tar for pip deps
-	pipName = "xxxdalecPipInternal"
 )
 
 func mountSources(sources map[string]llb.State, dir string, mod func(string) string) llb.RunOption {
@@ -99,7 +96,7 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 		return llb.Scratch(), errors.Wrap(err, "error preparing cargohome deps")
 	}
 
-	pipSt, err := spec.PipDeps(sOpt, worker, opts...)
+	pipSources, err := spec.PipDeps(sOpt, worker, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error preparing pip deps")
 	}
@@ -114,16 +111,16 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 		sources[key] = srcsWithNodeMods[key]
 	}
 
+	for _, key := range dalec.SortMapKeys(pipSources) {
+		sources[key] = pipSources[key]
+	}
+
 	if gomodSt != nil {
 		sources[gomodsName] = *gomodSt
 	}
 
 	if cargohomeSt != nil {
 		sources[cargohomeName] = *cargohomeSt
-	}
-
-	if pipSt != nil {
-		sources[pipName] = *pipSt
 	}
 
 	patches := createPatches(spec, sources, worker, dr, opts...)

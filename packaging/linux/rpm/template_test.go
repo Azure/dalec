@@ -164,16 +164,8 @@ func TestTemplateSources(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			s2 := out2.String()
-			// trim last newline from the first output since that has shifted
-			s3 := s[:len(s)-1]
-			if !strings.HasPrefix(s2, s3) {
-				t.Fatalf("expected output to start with %q, got %q", s3, out2.String())
-			}
-
-			s2 = strings.TrimPrefix(out2.String(), s3)
-			expected := "Source1: " + pipCacheName + ".tar.gz\n\n"
-			if s2 != expected {
-				t.Fatalf("unexpected sources: expected %q, got: %q", expected, s2)
+			if s2 != s {
+				t.Fatalf("expected no additional sources for pip, got: %q", s2)
 			}
 		})
 
@@ -264,10 +256,11 @@ func TestTemplateSources(t *testing.T) {
 			s = s[len(expected):]
 		}
 
-		// Now we should have entries for gomods, cargohome, and pip.
+		// Now we should have entries for gomods and cargohome.
 		// Note there are 2 gomod sources but they should be combined into one entry.
+		// Pip no longer creates a separate cache source.
 
-		expected := "Source7: " + gomodsName + ".tar.gz\nSource8: " + cargohomeName + ".tar.gz\nSource9: " + pipCacheName + ".tar.gz\n\n"
+		expected := "Source7: " + gomodsName + ".tar.gz\nSource8: " + cargohomeName + ".tar.gz\n\n"
 		if s != expected {
 			t.Fatalf("generators: unexpected sources: expected %q, got: %q", expected, s)
 		}
