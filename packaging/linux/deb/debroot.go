@@ -297,10 +297,7 @@ func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	}
 
 	if spec.HasPips() {
-		// Set PYTHONPATH to all site-packages directories in all sources
 		// Use --break-system-packages since we're in an isolated build container
-		fmt.Fprintf(buf, `export PYTHONPATH="$(find . -name 'site-packages' -type d | tr '\n' ':')${PYTHONPATH}"`)
-		fmt.Fprint(buf, "\n")
 		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 	return buf.Bytes()
@@ -347,31 +344,6 @@ func createPatchScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
 	writeScriptHeader(buf, cfg)
-
-	// Add environment setup for generators (similar to RPM buildScript)
-	if spec.HasGomods() {
-		// Older go versions did not have support for the `GOMODCACHE` var
-		// This is a hack to try and make the build work by linking the go modules
-		// we've already fetched into to module dir under $GOPATH
-		// The default GOMODCACHE value is ${GOPATH}/pkg/mod.
-		fmt.Fprintf(buf, `test -n "$(go env GOMODCACHE)" || (GOPATH="$(go env GOPATH)"; mkdir -p "${GOPATH}/pkg" && ln -s "$(pwd)/%s" "${GOPATH}/pkg/mod")`, gomodsName)
-		// Above command does not have a newline due to quoting issues, so add that here.
-		fmt.Fprint(buf, "\n")
-
-		fmt.Fprintln(buf, "export GOMODCACHE=\"$(pwd)/"+gomodsName+"\"")
-	}
-
-	if spec.HasCargohomes() {
-		// Set CARGO_HOME to point to our prepared cargo cache
-		fmt.Fprintln(buf, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
-	}
-
-	if spec.HasPips() {
-		// Set PYTHONPATH to all site-packages directories in all sources
-		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
-		fmt.Fprintln(buf, "export PYTHONPATH=\"$(find . -name 'site-packages' -type d | tr '\\n' ':')${PYTHONPATH}\"")
-		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
-	}
 
 	sorted := dalec.SortMapKeys(spec.Build.Env)
 	for _, k := range sorted {

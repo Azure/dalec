@@ -251,9 +251,7 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 	}
 
 	if spec.HasPips() {
-		// Set PYTHONPATH to all site-packages directories in all sources
 		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
-		fmt.Fprintln(buf, "export PYTHONPATH=\"$(find . -name 'site-packages' -type d | tr '\\n' ':')${PYTHONPATH}\"")
 		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 

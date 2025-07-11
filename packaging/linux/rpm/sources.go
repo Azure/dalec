@@ -48,9 +48,7 @@ func buildScript(spec *dalec.Spec) string {
 	}
 
 	if spec.HasPips() {
-		// Set PIP environment variables to point to our prepared pip packages in each source's site-packages
 		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
-		fmt.Fprintln(b, "export PYTHONPATH=\"$(find . -name 'site-packages' -type d | tr '\\n' ':')${PYTHONPATH}\"")
 		fmt.Fprintln(b, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 
