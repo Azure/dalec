@@ -903,6 +903,53 @@
 			],
 			"description": "GeneratorNodeMod is used to generate a node module cache for Yarn or npm."
 		},
+		"GeneratorPip": {
+			"properties": {
+				"extra_index_urls": {
+					"items": {
+						"type": [
+							"string"
+						]
+					},
+					"type": [
+						"array"
+					],
+					"description": "ExtraIndexUrls specifies additional PyPI index URLs"
+				},
+				"index_url": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "IndexUrl specifies a custom PyPI index URL"
+				},
+				"paths": {
+					"items": {
+						"type": [
+							"string"
+						]
+					},
+					"type": [
+						"array"
+					],
+					"description": "Paths is the list of paths to run the generator on. Used to generate multi-module in a single source."
+				},
+				"requirements_file": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "RequirementsFile is the name of the requirements file (default: \"requirements.txt\")"
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			]
+		},
 		"GitAuth": {
 			"properties": {
 				"header": {
@@ -1416,7 +1463,7 @@
 					"type": [
 						"array"
 					],
-					"description": "Generate is the list generators to run on the source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `gomod` generator can be used to generate a go module cache from a go source.\nHow a generator operates is dependent on the actual generator.\nGenerators may also cauuse modifications to the build environment.\n\nCurrently only two generators are supported: \"gomod\" and \"cargohome\".\nThe \"gomod\" generator will generate a go module cache from the source.\nThe \"cargohome\" generator will generate a cargo home from the source."
+					"description": "Generate specifies a list of dependency generators to apply to a given source.\n\nGenerators are used to generate additional sources from this source.\nAs an example the `gomod` generator can be used to generate a go module cache from a go source.\nHow a generator operates is dependent on the actual generator.\nGenerators may also cause modifications to the build environment.\n\nCurrently supported generators are: \"gomod\", \"cargohome\", and \"pip\".\nThe \"gomod\" generator will generate a go module cache from the source.\nThe \"cargohome\" generator will generate a cargo home from the source.\nThe \"pip\" generator will generate a pip cache from the source."
 				},
 				"git": {
 					"$ref": "#/$defs/SourceGit"
@@ -1547,6 +1594,7 @@
 			"required": [
 				"gomod",
 				"cargohome",
+				"pip",
 				"nodemod"
 			],
 			"properties": {
@@ -1561,6 +1609,10 @@
 				"nodemod": {
 					"$ref": "#/$defs/GeneratorNodeMod",
 					"description": "NodeMod is the generic node module generator for npm."
+				},
+				"pip": {
+					"$ref": "#/$defs/GeneratorPip",
+					"description": "Pip is the pip generator."
 				},
 				"subpath": {
 					"type": [

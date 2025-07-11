@@ -1074,6 +1074,59 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		})
 	})
 
+	t.Run("pip", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-build-with-pip",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing container target with pip",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Generate: []*dalec.SourceGenerator{
+						{
+							Pip: &dalec.GeneratorPip{},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"main.py":          {Contents: pipFixtureMain},
+								"requirements.txt": {Contents: pipFixtureRequirements},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					testConfig.GetPackage("python3"):     {},
+					testConfig.GetPackage("python3-pip"): {},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{Command: "[ -d ./src ]"},
+					{Command: "[ -f ./src/main.py ]"},
+					{Command: "[ -f ./src/requirements.txt ]"},
+					{Command: "[ -d ./src/site-packages ]"},
+					{Command: "cd ./src && python3 -c \"import sys; sys.path.insert(0, './site-packages'); import certifi; print('certifi imported successfully')\""},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(testConfig.Target.Container), withSpec(ctx, t, spec))
+			solveT(ctx, t, client, req)
+		})
+	})
+
 	t.Run("node npm generator", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
@@ -2407,7 +2460,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 
 	t.Run("positive test", func(t *testing.T) {
 		t.Parallel()
-		ctx := startTestSpan(ctx, t)
+		ctx := startTestSpan(baseCtx, t)
 
 		spec := &dalec.Spec{
 			Name:        "test-package-tests",

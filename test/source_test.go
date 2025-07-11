@@ -1146,3 +1146,18 @@ func TestPatchSources_ConflictingPatches(t *testing.T) {
 		}
 	})
 }
+
+const pipFixtureRequirements = `certifi==2023.7.22
+`
+
+const pipFixtureMain = `#!/usr/bin/env python3
+import certifi
+
+def main():
+    print("Hello from Python with pip dependencies!")
+    print(f"Certifi version: {certifi.__version__}")
+    print(f"Certifi provides certificates: {len(certifi.where()) > 0}")
+
+if __name__ == "__main__":
+    main()
+`

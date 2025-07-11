@@ -96,6 +96,11 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 		return llb.Scratch(), errors.Wrap(err, "error preparing cargohome deps")
 	}
 
+	pipSources, err := spec.PipDeps(sOpt, worker, opts...)
+	if err != nil {
+		return llb.Scratch(), errors.Wrap(err, "error preparing pip deps")
+	}
+
 	srcsWithNodeMods, err := spec.NodeModDeps(sOpt, worker, opts...)
 	if err != nil {
 		return llb.Scratch(), errors.Wrap(err, "error preparing node deps")
@@ -104,6 +109,10 @@ func SourcePackage(ctx context.Context, sOpt dalec.SourceOpts, worker llb.State,
 
 	for _, key := range sorted {
 		sources[key] = srcsWithNodeMods[key]
+	}
+
+	for _, key := range dalec.SortMapKeys(pipSources) {
+		sources[key] = pipSources[key]
 	}
 
 	if gomodSt != nil {

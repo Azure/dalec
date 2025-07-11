@@ -93,6 +93,16 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		out[key] = srcsWithNodeMods[key]
 	}
 
+	pipSources, err := spec.PipDeps(sOpt, worker, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding pip sources")
+	}
+
+	sorted = dalec.SortMapKeys(pipSources)
+	for _, key := range sorted {
+		out[key] = pipSources[key]
+	}
+
 	if gomodSt != nil {
 		out[gomodsName] = *gomodSt
 	}
@@ -238,6 +248,11 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 
 	if spec.HasCargohomes() {
 		fmt.Fprintln(buf, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
+	}
+
+	if spec.HasPips() {
+		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
+		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
 	}
 
 	for i, step := range spec.Build.Steps {
