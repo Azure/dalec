@@ -23,7 +23,6 @@ const (
 //
 // Other, cache types may be added in the future, such as:
 // - rust compiler cache
-// - bazel cache
 // ...
 type CacheConfig struct {
 	// Dir specifies a generic cache directory configuration.

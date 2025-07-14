@@ -617,8 +617,9 @@ func validatePatch(patch PatchSpec, patchSrc Source) error {
 }
 
 func (g *SourceGenerator) Validate() error {
-	if g.Gomod == nil && g.Cargohome == nil && g.NodeMod == nil {
-		// Gomod, Cargohome and NodeMod are the only valid generator types
+	if g.Gomod == nil && g.Cargohome == nil && g.Pip == nil && g.NodeMod == nil {
+		// Gomod, Cargohome, Pip, and NodeMod are the only valid generator types
+		// An empty generator is invalid
 		return fmt.Errorf("no generator type specified")
 	}
 	return nil

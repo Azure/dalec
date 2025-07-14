@@ -82,6 +82,11 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
+	pipSources, err := spec.PipDeps(sOpt, worker, withPG("Add pip sources")...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding pip sources")
+	}
+
 	if gomodSt != nil {
 		out = append(out, gomodSt.With(sourceTar(worker, gomodsName, withPG("Tar gomod deps")...)))
 	}
@@ -100,6 +105,9 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		st := sources[k]
 		if _, ok := srcsWithNodeMods[k]; ok {
 			st = srcsWithNodeMods[k]
+		}
+		if _, ok := pipSources[k]; ok {
+			st = pipSources[k]
 		}
 		if dalec.SourceIsDir(spec.Sources[k]) {
 			st = st.With(sourceTar(worker, k, withPG("Tar source: "+k)...))

@@ -152,6 +152,23 @@ func TestTemplateSources(t *testing.T) {
 			}
 		})
 
+		t.Run("with pip", func(t *testing.T) {
+			src := w.Spec.Sources["src1"]
+			src.Generate = []*dalec.SourceGenerator{
+				{Pip: &dalec.GeneratorPip{}},
+			}
+			w.Spec.Sources["src1"] = src
+
+			out2, err := w.Sources()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			s2 := out2.String()
+			if s2 != s {
+				t.Fatalf("expected no additional sources for pip, got: %q", s2)
+			}
+		})
+
 	})
 
 	t.Run("multiple sources", func(t *testing.T) {
@@ -196,6 +213,14 @@ func TestTemplateSources(t *testing.T) {
 						{Cargohome: &dalec.GeneratorCargohome{}},
 					},
 				},
+				"src7": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{},
+					},
+					Generate: []*dalec.SourceGenerator{
+						{Pip: &dalec.GeneratorPip{}},
+					},
+				},
 			},
 		}}
 
@@ -231,12 +256,13 @@ func TestTemplateSources(t *testing.T) {
 			s = s[len(expected):]
 		}
 
-		// Now we should have one more entry for gomods.
+		// Now we should have entries for gomods and cargohome.
 		// Note there are 2 gomod sources but they should be combined into one entry.
+		// Pip no longer creates a separate cache source.
 
-		expected := "Source6: " + gomodsName + ".tar.gz\nSource7: " + cargohomeName + ".tar.gz\n\n"
+		expected := "Source7: " + gomodsName + ".tar.gz\nSource8: " + cargohomeName + ".tar.gz\n\n"
 		if s != expected {
-			t.Fatalf("gomod: unexpected sources: expected %q, got: %q", expected, s)
+			t.Fatalf("generators: unexpected sources: expected %q, got: %q", expected, s)
 		}
 		s = s[len(expected):]
 		if s != "" {

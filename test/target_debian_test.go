@@ -13,7 +13,12 @@ func TestBookworm(t *testing.T) {
 	t.Parallel()
 
 	ctx := startTestSpan(baseCtx, t)
-	testConf := debLinuxTestConfigFor(debian.BookwormDefaultTargetKey, debian.BookwormConfig, withPackageOverride("rust", "rust-all"), withPackageOverride("bazel", "bazel-bootstrap"))
+	testConf := debLinuxTestConfigFor(
+		debian.BookwormDefaultTargetKey,
+		debian.BookwormConfig,
+		withPackageOverride("rust", "rust-all"),
+		withPackageOverride("bazel", "bazel-bootstrap"),
+	)
 
 	testLinuxDistro(ctx, t, testConf)
 	testDebianBaseDependencies(t, testConf.Target)

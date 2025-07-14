@@ -93,6 +93,16 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		out[key] = srcsWithNodeMods[key]
 	}
 
+	pipSources, err := spec.PipDeps(sOpt, worker, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "error adding pip sources")
+	}
+
+	sorted = dalec.SortMapKeys(pipSources)
+	for _, key := range sorted {
+		out[key] = pipSources[key]
+	}
+
 	if gomodSt != nil {
 		out[gomodsName] = *gomodSt
 	}

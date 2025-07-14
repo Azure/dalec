@@ -582,6 +582,59 @@ echo "$BAR" > bar.txt
 		})
 	})
 
+	t.Run("pip", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		spec := &dalec.Spec{
+			Name:        "test-build-with-pip",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing container target",
+			Sources: map[string]dalec.Source{
+				"src": {
+					Generate: []*dalec.SourceGenerator{
+						{
+							Pip: &dalec.GeneratorPip{},
+						},
+					},
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"main.py":          {Contents: pipFixtureMain},
+								"requirements.txt": {Contents: pipFixtureRequirements},
+							},
+						},
+					},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Build: map[string]dalec.PackageConstraints{
+					"python3":     {},
+					"python3-pip": {},
+				},
+			},
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					{Command: "[ -d ./src/site-packages ]"},
+					{Command: "[ -d ./src ]"},
+					{Command: "[ -f ./src/main.py ]"},
+					{Command: "[ -f ./src/requirements.txt ]"},
+					{Command: "cd ./src && python3 -m pip list"},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+			req := newSolveRequest(withBuildTarget(tcfg.Container), withSpec(ctx, t, spec), withWindowsAmd64)
+			solveT(ctx, t, client, req)
+		})
+	})
+
 	t.Run("node npm generator", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
