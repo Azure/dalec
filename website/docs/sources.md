@@ -337,7 +337,7 @@ Build sources are considered to be "directory" sources.
 ## Generators
 
 Generators are used to generate a source from another source.
-Currently the generators supported are `gomod`, `cargohome`, and `pip`.
+Currently the generators supported are `gomod`, `cargohome`, `pip`, and `nodemod`.
 
 ### Gomod
 
@@ -440,9 +440,8 @@ The `pip` generator manages a single pip cache for all sources that specify it i
 Adding a pip generator to 1 or more sources causes the following to occur automatically:
 
 1. Fetch all pip dependencies for *all* sources in the spec that specify the generator
-2. Keeps a single pip cache directory for all Python package deps.
-3. Adds the pip cache directory as a source which gets included in source packages like a normal source.
-4. Adds the `PIP_CACHE_DIR` environment variable to the build environment.
+2. Installs pip dependencies for each specified path within the source
+3. Makes the installed dependencies available during the build process
 
 ```yaml
 sources:
