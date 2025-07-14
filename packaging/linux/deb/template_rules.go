@@ -66,7 +66,6 @@ func (w *rulesWrapper) Envs() fmt.Stringer {
 		// Set PYTHONPATH to all site-packages directories in all sources
 		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
 		fmt.Fprintf(b, "export %s := $(shell find . -name 'site-packages' -type d | tr '\\n' ':')${PYTHONPATH}\n", "PYTHONPATH")
-		fmt.Fprintf(b, "export %s := 1\n", "PIP_BREAK_SYSTEM_PACKAGES")
 	}
 
 	return b

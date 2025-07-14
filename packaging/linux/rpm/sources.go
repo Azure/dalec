@@ -47,11 +47,6 @@ func buildScript(spec *dalec.Spec) string {
 		fmt.Fprintln(b, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 
-	if spec.HasPips() {
-		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
-		fmt.Fprintln(b, "export PIP_BREAK_SYSTEM_PACKAGES=1")
-	}
-
 	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
 		v := t.Env[k]

@@ -296,10 +296,6 @@ func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		fmt.Fprint(buf, "\n")
 	}
 
-	if spec.HasPips() {
-		// Use --break-system-packages since we're in an isolated build container
-		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
-	}
 	return buf.Bytes()
 }
 

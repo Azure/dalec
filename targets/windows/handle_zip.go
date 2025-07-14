@@ -250,11 +250,6 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 		fmt.Fprintln(buf, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 
-	if spec.HasPips() {
-		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
-		fmt.Fprintln(buf, "export PIP_BREAK_SYSTEM_PACKAGES=1")
-	}
-
 	for i, step := range spec.Build.Steps {
 		fmt.Fprintln(buf, "(")
 
