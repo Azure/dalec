@@ -78,7 +78,7 @@ func resolveConfig(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec,
 	return &img, nil
 }
 
-func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.RunOption, error) {
+func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) llb.RunOption {
 	opts = append(opts, dalec.ProgressGroup("Prepare custom repos"))
 
 	repoConfig := cfg.RepoPlatformConfig
@@ -86,22 +86,11 @@ func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.
 		repoConfig = defaultRepoConfig
 	}
 
-	withRepos, err := dalec.WithRepoConfigs(repos, repoConfig, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
+	withRepos := dalec.WithRepoConfigs(repos, repoConfig, sOpt, opts...)
+	withData := dalec.WithRepoData(repos, sOpt, opts...)
+	keyMounts, _ := dalec.GetRepoKeys(repos, repoConfig, sOpt, opts...)
 
-	withData, err := dalec.WithRepoData(repos, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	keyMounts, _, err := dalec.GetRepoKeys(repos, repoConfig, sOpt, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	return dalec.WithRunOptions(withRepos, withData, keyMounts), nil
+	return dalec.WithRunOptions(withRepos, withData, keyMounts)
 }
 
 func (cfg *Config) Handle(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {

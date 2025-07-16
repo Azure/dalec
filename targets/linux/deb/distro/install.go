@@ -164,10 +164,7 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 			repos := dalec.GetExtraRepos(d.ExtraRepos, "build")
 			repos = append(repos, spec.GetBuildRepos(targetKey)...)
 
-			customRepos, err := d.RepoMounts(repos, sOpt, opts...)
-			if err != nil {
-				return in, err
-			}
+			customRepos := d.RepoMounts(repos, sOpt, opts...)
 
 			return in.Run(
 				dalec.WithConstraints(opts...),
@@ -186,22 +183,17 @@ func (d *Config) InstallTestDeps(sOpt dalec.SourceOpts, targetKey string, spec *
 	}
 
 	return func(in llb.State) llb.State {
-		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
-			repos := dalec.GetExtraRepos(d.ExtraRepos, "test")
-			repos = append(repos, spec.GetTestRepos(targetKey)...)
+		repos := dalec.GetExtraRepos(d.ExtraRepos, "test")
+		repos = append(repos, spec.GetTestRepos(targetKey)...)
 
-			withRepos, err := d.RepoMounts(repos, sOpt, opts...)
-			if err != nil {
-				return in, err
-			}
+		withRepos := d.RepoMounts(repos, sOpt, opts...)
 
-			opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
-			return in.Run(
-				dalec.WithConstraints(opts...),
-				AptInstall(deps, opts...),
-				withRepos,
-				dalec.WithMountedAptCache(d.AptCachePrefix),
-			).Root(), nil
-		})
+		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
+		return in.Run(
+			dalec.WithConstraints(opts...),
+			AptInstall(deps, opts...),
+			withRepos,
+			dalec.WithMountedAptCache(d.AptCachePrefix),
+		).Root()
 	}
 }

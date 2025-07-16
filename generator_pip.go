@@ -25,59 +25,61 @@ func (s *Spec) HasPips() bool {
 	return false
 }
 
-func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) llb.State {
-	workDir := "/work/src"
-	joinedWorkDir := filepath.Join(workDir, g.Subpath)
-	srcMount := llb.AddMount(workDir, srcSt)
-
-	paths := g.Pip.Paths
-	if g.Pip.Paths == nil {
-		paths = []string{"."}
+func (p *GeneratorPip) flags(withReq bool) string {
+	var cmd string
+	if p.IndexUrl != "" {
+		cmd += " --index-url=" + p.IndexUrl
 	}
 
-	result := srcSt
-	for _, path := range paths {
-		requirementsFile := g.Pip.RequirementsFile
-		if requirementsFile == "" {
-			requirementsFile = "requirements.txt"
-		}
-
-		pipCmd := "set -e; "
-
-		// Create the site-packages directory within the source
-		pipCmd += "mkdir -p site-packages; "
-
-		// First, download essential build dependencies that are needed for source builds
-		pipCmd += "python3 -m pip download --dest=/tmp/pip-cache setuptools wheel"
-
-		if g.Pip.IndexUrl != "" {
-			pipCmd += " --index-url=" + g.Pip.IndexUrl
-		}
-		for _, extraUrl := range g.Pip.ExtraIndexUrls {
-			pipCmd += " --extra-index-url=" + extraUrl
-		}
-
-		pipCmd += "; python3 -m pip download --no-binary=:all: --dest=/tmp/pip-cache --requirement=" + requirementsFile
-
-		// Add custom index URLs for main dependencies if specified
-		if g.Pip.IndexUrl != "" {
-			pipCmd += " --index-url=" + g.Pip.IndexUrl
-		}
-		for _, extraUrl := range g.Pip.ExtraIndexUrls {
-			pipCmd += " --extra-index-url=" + extraUrl
-		}
-
-		// Install packages to site-packages directory within the source
-		pipCmd += "; python3 -m pip install --no-deps --target=site-packages --find-links=/tmp/pip-cache --no-index --requirement=" + requirementsFile
-
-		result = worker.Run(
-			llb.Args([]string{"bash", "-c", pipCmd}),
-			llb.Dir(filepath.Join(joinedWorkDir, path)),
-			srcMount,
-			WithConstraints(opts...),
-		).AddMount(workDir, result)
+	for _, extraUrl := range p.ExtraIndexUrls {
+		cmd += " --extra-index-url=" + extraUrl
 	}
-	return result
+
+	const defaultReqFile = "requirements.txt"
+	requirementsFile := p.RequirementsFile
+	if requirementsFile == "" {
+		requirementsFile = defaultReqFile
+	}
+
+	if withReq {
+		cmd += " --requirement=" + requirementsFile
+	}
+
+	return cmd
+}
+
+func withPip(g *SourceGenerator, worker llb.State, name string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	return func(in llb.State) llb.State {
+		paths := g.Pip.Paths
+		if g.Pip.Paths == nil {
+			paths = []string{"."}
+		}
+
+		pkgs := make([]llb.State, 0, len(paths))
+
+		for _, path := range paths {
+			base := filepath.Join("/work", name, g.Subpath, path)
+			pkgPath := filepath.Join(base, "site-packages")
+
+			downloaded := worker.Run(
+				ShArgs("python3 -m pip download --no-binary=:all: --dest="+pkgPath+g.Pip.flags(true)),
+				llb.Dir(base),
+				WithConstraints(opts...),
+			).AddMount("/work", in)
+
+			// TODO: I think this is not right since this will build binaries for the host system
+			// but we only want source code here.
+			st := worker.Run(
+				ShArgs("python3 -m pip install --no-index --find-links="+pkgPath+" --no-deps --target="+pkgPath+g.Pip.flags(true)),
+				llb.Dir(base),
+				WithConstraints(opts...),
+			).AddMount("/work", downloaded)
+
+			pkgs = append(pkgs, st)
+		}
+
+		return MergeAtPath(llb.Scratch(), pkgs, "/")
+	}
 }
 
 func (s *Spec) pipSources() map[string]Source {
@@ -120,7 +122,7 @@ func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constraint
 			if gen.Pip == nil {
 				continue
 			}
-			merged = withPip(gen, merged, worker, opts...)
+			merged = merged.With(withPip(gen, worker, key, opts...))
 		}
 		result[key] = merged
 	}

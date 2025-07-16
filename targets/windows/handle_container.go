@@ -147,10 +147,7 @@ func handleContainer(ctx context.Context, client gwclient.Client) (*gwclient.Res
 		if platform == nil {
 			platform = &defaultPlatform
 		}
-		baseImage, err := bi.ToState(sOpt, pg, llb.Platform(*platform))
-		if err != nil {
-			return nil, nil, nil, err
-		}
+		baseImage := bi.ToState(sOpt, pg, llb.Platform(*platform))
 		out := baseImage.
 			File(llb.Copy(bin, "/", windowsSystemDir)).
 			With(copySymlinks(spec.GetImagePost(targetKey)))
