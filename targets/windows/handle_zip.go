@@ -64,6 +64,7 @@ func handleZip(ctx context.Context, client gwclient.Client) (*gwclient.Result, e
 const (
 	gomodsName    = "__gomods"
 	cargohomeName = "__cargohome"
+	pipDepsName   = "__pipdeps"
 )
 
 func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
@@ -93,14 +94,9 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 		out[key] = srcsWithNodeMods[key]
 	}
 
-	pipSources, err := spec.PipDeps(sOpt, worker, opts...)
+	pipDepsSt, err := spec.PipDeps(sOpt, worker, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error adding pip sources")
-	}
-
-	sorted = dalec.SortMapKeys(pipSources)
-	for _, key := range sorted {
-		out[key] = pipSources[key]
 	}
 
 	if gomodSt != nil {
@@ -109,6 +105,10 @@ func specToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts,
 
 	if cargohomeSt != nil {
 		out[cargohomeName] = *cargohomeSt
+	}
+
+	if pipDepsSt != nil {
+		out[pipDepsName] = *pipDepsSt
 	}
 
 	return out, nil
@@ -248,6 +248,25 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 
 	if spec.HasCargohomes() {
 		fmt.Fprintln(buf, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
+	}
+
+	if spec.HasPips() {
+		// Set up pip environment and install dependencies during build
+		fmt.Fprintln(buf, "# Set up pip environment")
+		fmt.Fprintln(buf, "export PIP_CACHE_DIR=\"$(pwd)/"+pipDepsName+"\"")
+		fmt.Fprintln(buf, "export PYTHONPATH=\"$(pwd)/site-packages:${PYTHONPATH}\"")
+		fmt.Fprintln(buf, "mkdir -p site-packages")
+		fmt.Fprintln(buf, "")
+		fmt.Fprintln(buf, "# Install pip dependencies from cache")
+		fmt.Fprintln(buf, "for reqfile in $(find . -name 'requirements*.txt' -o -name 'pyproject.toml' -o -name 'setup.py'); do")
+		fmt.Fprintln(buf, "  if [ -f \"$reqfile\" ]; then")
+		fmt.Fprintln(buf, "    case \"$reqfile\" in")
+		fmt.Fprintln(buf, "      *.txt) python3 -m pip install --target=site-packages --find-links=\"${PIP_CACHE_DIR}\" --no-index --requirement=\"$reqfile\" ;;")
+		fmt.Fprintln(buf, "      *) python3 -m pip install --target=site-packages --find-links=\"${PIP_CACHE_DIR}\" --no-index . ;;")
+		fmt.Fprintln(buf, "    esac")
+		fmt.Fprintln(buf, "  fi")
+		fmt.Fprintln(buf, "done")
+		fmt.Fprintln(buf, "")
 	}
 
 	for i, step := range spec.Build.Steps {

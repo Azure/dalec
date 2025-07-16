@@ -16,6 +16,7 @@ import (
 const (
 	gomodsName      = "__gomods"
 	cargohomeName   = "__cargohome"
+	pipDepsName     = "__pipdeps"
 	buildScriptName = "build.sh"
 )
 
@@ -375,6 +376,10 @@ func (w *specWrapper) PrepareSources() (fmt.Stringer, error) {
 		if w.Spec.HasCargohomes() {
 			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", cargohomeName)
 			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", cargohomeName, cargohomeName)
+		}
+		if w.Spec.HasPips() {
+			fmt.Fprintf(b, "mkdir -p \"%%{_builddir}/%s\"\n", pipDepsName)
+			fmt.Fprintf(b, "tar -C \"%%{_builddir}/%s\" -xzf \"%%{_sourcedir}/%s.tar.gz\"\n", pipDepsName, pipDepsName)
 		}
 	})
 

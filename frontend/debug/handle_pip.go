@@ -37,22 +37,16 @@ func Pip(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) 
 				Run(llb.Shlex("python3 -m pip --version")).Root()
 		}
 
-		pipSources, err := spec.PipDeps(sOpt, worker, dalec.Platform(platform))
+		pipDeps, err := spec.PipDeps(sOpt, worker, dalec.Platform(platform))
 		if err != nil {
 			return nil, nil, err
 		}
 
 		var st llb.State
-		if len(pipSources) == 0 {
+		if pipDeps == nil {
 			st = llb.Scratch()
 		} else {
-			// Merge all pip sources into a single state for debugging
-			states := make([]llb.State, 0, len(pipSources))
-			for k, v := range pipSources {
-				subSt := llb.Scratch().File(llb.Copy(v, "/", k))
-				states = append(states, subSt)
-			}
-			st = dalec.MergeAtPath(llb.Scratch(), states, "/")
+			st = *pipDeps
 		}
 
 		def, err := st.Marshal(ctx)

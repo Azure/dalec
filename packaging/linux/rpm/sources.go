@@ -47,6 +47,25 @@ func buildScript(spec *dalec.Spec) string {
 		fmt.Fprintln(b, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
 	}
 
+	if spec.HasPips() {
+		// Set up pip environment and install dependencies during build
+		fmt.Fprintln(b, "# Set up pip environment")
+		fmt.Fprintln(b, "export PIP_CACHE_DIR=\"$(pwd)/"+pipDepsName+"\"")
+		fmt.Fprintln(b, "export PYTHONPATH=\"$(pwd)/site-packages:${PYTHONPATH}\"")
+		fmt.Fprintln(b, "mkdir -p site-packages")
+		fmt.Fprintln(b, "")
+		fmt.Fprintln(b, "# Install pip dependencies from cache")
+		fmt.Fprintln(b, "for reqfile in $(find . -name 'requirements*.txt' -o -name 'pyproject.toml' -o -name 'setup.py'); do")
+		fmt.Fprintln(b, "  if [ -f \"$reqfile\" ]; then")
+		fmt.Fprintln(b, "    case \"$reqfile\" in")
+		fmt.Fprintln(b, "      *.txt) python3 -m pip install --target=site-packages --find-links=\"${PIP_CACHE_DIR}\" --no-index --requirement=\"$reqfile\" ;;")
+		fmt.Fprintln(b, "      *) python3 -m pip install --target=site-packages --find-links=\"${PIP_CACHE_DIR}\" --no-index . ;;")
+		fmt.Fprintln(b, "    esac")
+		fmt.Fprintln(b, "  fi")
+		fmt.Fprintln(b, "done")
+		fmt.Fprintln(b, "")
+	}
+
 	envKeys := dalec.SortMapKeys(t.Env)
 	for _, k := range envKeys {
 		v := t.Env[k]
@@ -82,7 +101,7 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		return nil, errors.Wrap(err, "error adding cargohome sources")
 	}
 
-	pipSources, err := spec.PipDeps(sOpt, worker, withPG("Add pip sources")...)
+	pipDepsSt, err := spec.PipDeps(sOpt, worker, withPG("Add pip sources")...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error adding pip sources")
 	}
@@ -95,6 +114,10 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		out = append(out, cargohomeSt.With(sourceTar(worker, cargohomeName, withPG("Tar cargohome deps")...)))
 	}
 
+	if pipDepsSt != nil {
+		out = append(out, pipDepsSt.With(sourceTar(worker, pipDepsName, withPG("Tar pip deps")...)))
+	}
+
 	srcsWithNodeMods, err := spec.NodeModDeps(sOpt, worker, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "error preparing node deps")
@@ -105,9 +128,6 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 		st := sources[k]
 		if _, ok := srcsWithNodeMods[k]; ok {
 			st = srcsWithNodeMods[k]
-		}
-		if _, ok := pipSources[k]; ok {
-			st = pipSources[k]
 		}
 		if dalec.SourceIsDir(spec.Sources[k]) {
 			st = st.With(sourceTar(worker, k, withPG("Tar source: "+k)...))
