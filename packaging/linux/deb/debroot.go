@@ -341,6 +341,25 @@ func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
 	writeScriptHeader(buf, cfg)
 
+	if spec.HasPips() {
+		// Set up pip environment and install dependencies during build
+		fmt.Fprintln(buf, "# Set up pip environment")
+		fmt.Fprintf(buf, "export PIP_CACHE_DIR=\"$(pwd)/%s\"\n", pipDepsName)
+		fmt.Fprintln(buf, "export PYTHONPATH=\"$(pwd)/site-packages:${PYTHONPATH}\"")
+		fmt.Fprintln(buf, "mkdir -p site-packages")
+		fmt.Fprintln(buf, "")
+		fmt.Fprintln(buf, "# Install pip dependencies from cache")
+		fmt.Fprintln(buf, "for reqfile in $(find . -name 'requirements*.txt' -o -name 'pyproject.toml' -o -name 'setup.py'); do")
+		fmt.Fprintln(buf, "  if [ -f \"$reqfile\" ]; then")
+		fmt.Fprintln(buf, "    case \"$reqfile\" in")
+		fmt.Fprintln(buf, "      *.txt) python3 -m pip install --target=site-packages --find-links=\"${PIP_CACHE_DIR}\" --no-index --requirement=\"$reqfile\" ;;")
+		fmt.Fprintln(buf, "      *) python3 -m pip install --target=site-packages --find-links=\"${PIP_CACHE_DIR}\" --no-index . ;;")
+		fmt.Fprintln(buf, "    esac")
+		fmt.Fprintln(buf, "  fi")
+		fmt.Fprintln(buf, "done")
+		fmt.Fprintln(buf, "")
+	}
+
 	sorted := dalec.SortMapKeys(spec.Build.Env)
 	for _, k := range sorted {
 		v := spec.Build.Env[k]

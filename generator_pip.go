@@ -35,7 +35,10 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 		paths = []string{"."}
 	}
 
-	result := srcSt
+	// Create a cache directory for pip packages
+	result := llb.Scratch()
+	cacheDir := "/pip-cache"
+
 	for _, path := range paths {
 		requirementsFile := g.Pip.RequirementsFile
 		if requirementsFile == "" {
@@ -44,11 +47,11 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 
 		pipCmd := "set -e; "
 
-		// Create the site-packages directory within the source
-		pipCmd += "mkdir -p site-packages; "
+		// Create the cache directory
+		pipCmd += "mkdir -p " + cacheDir + "; "
 
 		// First, download essential build dependencies that are needed for source builds
-		pipCmd += "python3 -m pip download --dest=/tmp/pip-cache setuptools wheel"
+		pipCmd += "python3 -m pip download --dest=" + cacheDir + " setuptools wheel"
 
 		if g.Pip.IndexUrl != "" {
 			pipCmd += " --index-url=" + g.Pip.IndexUrl
@@ -57,7 +60,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			pipCmd += " --extra-index-url=" + extraUrl
 		}
 
-		pipCmd += "; python3 -m pip download --no-binary=:all: --dest=/tmp/pip-cache --requirement=" + requirementsFile
+		pipCmd += "; python3 -m pip download --no-binary=:all: --dest=" + cacheDir + " --requirement=" + requirementsFile
 
 		// Add custom index URLs for main dependencies if specified
 		if g.Pip.IndexUrl != "" {
@@ -67,15 +70,13 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.Constraint
 			pipCmd += " --extra-index-url=" + extraUrl
 		}
 
-		// Install packages to site-packages directory within the source
-		pipCmd += "; python3 -m pip install --no-deps --target=site-packages --find-links=/tmp/pip-cache --no-index --requirement=" + requirementsFile
-
+		// Just download the packages, don't install them
 		result = worker.Run(
 			llb.Args([]string{"bash", "-c", pipCmd}),
 			llb.Dir(filepath.Join(joinedWorkDir, path)),
 			srcMount,
 			WithConstraints(opts...),
-		).AddMount(workDir, result)
+		).AddMount(cacheDir, result)
 	}
 	return result
 }
@@ -90,11 +91,11 @@ func (s *Spec) pipSources() map[string]Source {
 	return sources
 }
 
-// PipDeps returns a map[string]llb.State containing all the pip dependencies for the spec
+// PipDeps returns an llb.State containing all the pip dependencies for the spec
 // for any sources that have a pip generator specified.
 // If there are no sources with a pip generator, this will return nil.
-// The returned states have site-packages installed for each relevant source, using sources as input.
-func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.ConstraintsOpt) (map[string]llb.State, error) {
+// The returned state contains a merged cache of all downloaded pip packages.
+func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.ConstraintsOpt) (*llb.State, error) {
 	sources := s.pipSources()
 	if len(sources) == 0 {
 		return nil, nil
@@ -110,7 +111,8 @@ func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constraint
 		return nil, errors.Wrap(err, "failed to get patched sources")
 	}
 
-	result := make(map[string]llb.State)
+	// Create a unified cache containing all pip packages
+	var cacheStates []llb.State
 	sorted := SortMapKeys(patched)
 	opts = append(opts, ProgressGroup("Fetch pip dependencies for sources"))
 	for _, key := range sorted {
@@ -120,9 +122,16 @@ func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constraint
 			if gen.Pip == nil {
 				continue
 			}
-			merged = withPip(gen, merged, worker, opts...)
+			cacheState := withPip(gen, merged, worker, opts...)
+			cacheStates = append(cacheStates, cacheState)
 		}
-		result[key] = merged
 	}
-	return result, nil
+
+	if len(cacheStates) == 0 {
+		return nil, nil
+	}
+
+	// Merge all cache states into a single state
+	merged := MergeAtPath(llb.Scratch(), cacheStates, "/")
+	return &merged, nil
 }

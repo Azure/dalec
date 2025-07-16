@@ -63,9 +63,9 @@ func (w *rulesWrapper) Envs() fmt.Stringer {
 	}
 
 	if w.Spec.HasPips() {
-		// Set PYTHONPATH to all site-packages directories in all sources
-		// Use --break-system-packages to fix PEP 668 externally-manage environment protection
-		fmt.Fprintf(b, "export %s := $(shell find . -name 'site-packages' -type d | tr '\\n' ':')${PYTHONPATH}\n", "PYTHONPATH")
+		// Set up pip environment for build-time installation
+		fmt.Fprintf(b, "export %s := $(PWD)/%s\n", "PIP_CACHE_DIR", pipDepsName)
+		fmt.Fprintf(b, "export %s := $(PWD)/site-packages:${PYTHONPATH}\n", "PYTHONPATH")
 	}
 
 	return b
