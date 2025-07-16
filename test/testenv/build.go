@@ -132,7 +132,7 @@ func withDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.Sol
 	return nil
 }
 
-func displaySolveStatus(ctx context.Context, t *testing.T) (chan *client.SolveStatus, <-chan struct{}) {
+func displaySolveStatus(ctx context.Context, t *testing.T) chan *client.SolveStatus {
 	ch := make(chan *client.SolveStatus)
 	done := make(chan struct{})
 
@@ -146,14 +146,14 @@ func displaySolveStatus(ctx context.Context, t *testing.T) (chan *client.SolveSt
 		t.Fatal(err)
 	}
 
-	go func() {
-		defer close(done)
-
-		_, err := display.UpdateFrom(ctx, ch)
-		if err != nil {
-			t.Log(err)
-		}
+	t.Cleanup(func() {
 		defer f.Close()
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-done:
+		}
 
 		_, err = f.Seek(0, io.SeekStart)
 		if err != nil {
@@ -168,9 +168,18 @@ func displaySolveStatus(ctx context.Context, t *testing.T) (chan *client.SolveSt
 		if err := scanner.Err(); err != nil {
 			t.Log(err)
 		}
+	})
+
+	go func() {
+		defer close(done)
+
+		_, err := display.UpdateFrom(ctx, ch)
+		if err != nil {
+			t.Log(err)
+		}
 	}()
 
-	return ch, done
+	return ch
 }
 
 // withProjectRoot adds the current project root as the build context for the solve request.
