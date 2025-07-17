@@ -541,6 +541,12 @@ sources:
 
 This will run `npm install` in both the `frontend` and `backend` directories, ensuring that each has its dependencies installed in the appropriate `node_modules` directory.
 
+::: note
+The `nodemod` generator uses `npm` under the hood to fetch dependencies.
+Depending on the dependencies being fetched, this may result in platform-specific binaries being included in the source
+which makes the produced source packages impure and not portable across different CPU architectures.
+:::
+
 ## Patches
 
 Dalec supports applying patches to sources. Patches must be specified in the
