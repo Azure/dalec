@@ -147,7 +147,7 @@ func (b *BuildxEnv) dialStdio(ctx context.Context) error {
 		out := &connCloseWrapper{
 			Conn: c2,
 			close: sync.OnceFunc(func() {
-				// Send 2 interupt signals to the process to ensure it exits gracefully
+				// Send 2 interrupt signals to the process to ensure it exits gracefully
 				// This is how buildx/docker plugins handle termination
 
 				cmd.Process.Signal(os.Interrupt) //nolint:errcheck // We don't care about this error, we are going to send another one anyway

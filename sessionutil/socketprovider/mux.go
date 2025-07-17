@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// Mux is a hack to be able to use buildkit's ssh forwarding with things that are not neccessarily ssh agents.
+// Mux is a hack to be able to use buildkit's ssh forwarding with things that are not necessarily ssh agents.
 // By default all requests are forwarded to an underlying ssh agent service, but you may register other handlers
 // that will be used based on the request ID.
 //

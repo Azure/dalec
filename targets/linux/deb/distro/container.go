@@ -69,7 +69,7 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 		}
 
 		// Update the base image to include the base packages.
-		// This may include things that are neccessary to even install the debSt package.
+		// This may include things that are necessary to even install the debSt package.
 		// So this must be done separately from the debSt package.
 		opts := append(opts, dalec.ProgressGroup("Install base image packages"))
 		baseImg = baseImg.Run(

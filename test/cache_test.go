@@ -263,7 +263,7 @@ genrule(
 
 	t.Run("remote", func(t *testing.T) {
 		if bzlPkg == "bazel-bootstrap" {
-			// bazel-bootstrap is a minimial bazel package that does not support remote caching
+			// bazel-bootstrap is a minimal bazel package that does not support remote caching
 			t.Skip("bazel remote cache not available for bazel-bootstrap")
 		}
 

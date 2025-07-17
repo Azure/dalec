@@ -19,7 +19,7 @@ const (
 )
 
 // consoleFormatter writes annotations using the github actions console format
-// It creates a gruop for each test.
+// It creates a group for each test.
 // Note, the console format does not support nested groupings, so subtests are in their own group.
 //
 // See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions

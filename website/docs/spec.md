@@ -83,7 +83,7 @@ Any field at the top-level that begins with `x-` will be ignored by Dalec. This 
 
 ### Additional metadata
 
-#### conflics
+#### conflicts
 
 The `conflicts` field is used to define the packages that conflict with this package. This is an optional field.
 This is required when this package provides one or more files that are provided by another package.
