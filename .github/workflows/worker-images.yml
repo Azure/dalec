@@ -72,7 +72,7 @@ jobs:
 
           tag="${{ github.ref_name }}"
           tag="${tag//\//-}" # Replace slashes with dashes
-          echo "IMAGE_REPO=${{ steps.source-policy.outputs.formatted-repo }}/${{ matrix.target }}:tag"  >> $GITHUB_ENV
+          echo "IMAGE_REPO=${{ steps.source-policy.outputs.formatted-repo }}/${{ matrix.target }}:${tag}"  >> $GITHUB_ENV
       - if: ${{ github.event_name == 'pull_request' }}
         name: Setup up (PR)
         run: |
