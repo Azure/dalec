@@ -359,7 +359,7 @@ sources:
         url: https://github.com/cpuguy83/go-md2man.git
         commit: v2.1.0
     generate:
-        subpath: "" # path inside the source to use as the root for the generator
+      - subpath: "" # path inside the source to use as the root for the generator
         gomod: {} # Generates a go module cache to cache dependencies
 ```
 
@@ -450,7 +450,7 @@ sources:
         url: https://github.com/example/python-app.git
         commit: v1.0.0
     generate:
-        subpath: "" # path inside the source to use as the root for the generator
+      - subpath: "" # path inside the source to use as the root for the generator
         pip: {} # Generates a pip cache to cache dependencies
 ```
 

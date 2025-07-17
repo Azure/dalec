@@ -439,16 +439,16 @@ type SourceGenerator struct {
 	Subpath string `yaml:"subpath,omitempty" json:"subpath,omitempty"`
 
 	// Gomod is the go module generator.
-	Gomod *GeneratorGomod `yaml:"gomod" json:"gomod"`
+	Gomod *GeneratorGomod `yaml:"gomod,omitempty" json:"gomod,omitempty" jsonschema:"oneof_required=gomod"`
 
 	// Cargohome is the cargo home generator.
-	Cargohome *GeneratorCargohome `yaml:"cargohome" json:"cargohome"`
+	Cargohome *GeneratorCargohome `yaml:"cargohome,omitempty" json:"cargohome,omitempty" jsonschema:"oneof_required=cargohome"`
 
 	// Pip is the pip generator.
-	Pip *GeneratorPip `yaml:"pip" json:"pip"`
+	Pip *GeneratorPip `yaml:"pip,omitempty" json:"pip,omitempty" jsonschema:"oneof_required=pip"`
 
 	// NodeMod is the generic node module generator for npm.
-	NodeMod *GeneratorNodeMod `yaml:"nodemod" json:"nodemod"`
+	NodeMod *GeneratorNodeMod `yaml:"nodemod,omitempty" json:"nodemod,omitempty" jsonschema:"oneof_required=nodemod"`
 }
 
 // ArtifactBuild configures a group of steps that are run sequentially along with their outputs to build the artifact(s).
