@@ -1591,12 +1591,6 @@
 			]
 		},
 		"SourceGenerator": {
-			"required": [
-				"gomod",
-				"cargohome",
-				"pip",
-				"nodemod"
-			],
 			"properties": {
 				"cargohome": {
 					"$ref": "#/$defs/GeneratorCargohome",
@@ -1628,6 +1622,32 @@
 			"type": [
 				"object",
 				"null"
+			],
+			"oneOf": [
+				{
+					"required": [
+						"gomod"
+					],
+					"title": "gomod"
+				},
+				{
+					"required": [
+						"cargohome"
+					],
+					"title": "cargohome"
+				},
+				{
+					"required": [
+						"pip"
+					],
+					"title": "pip"
+				},
+				{
+					"required": [
+						"nodemod"
+					],
+					"title": "nodemod"
+				}
 			],
 			"description": "SourceGenerator holds the configuration for a source generator."
 		},
