@@ -260,7 +260,7 @@ sources:
 
 ```
 
-You can also mount other sources in invidual steps:
+You can also mount other sources in individual steps:
 
 ```yaml
 sources:

@@ -232,7 +232,7 @@ func (ts *TestState) customScript(s Script) llb.StateOption {
 }
 
 // startSSHServer starts an sshd instance in a container hosting the git repo.
-// It runs asynchonously and checks the connection after starting the server.
+// It runs asynchronously and checks the connection after starting the server.
 func (ts *TestState) StartSSHServer(gitHost llb.State) <-chan error {
 	t := ts.T
 

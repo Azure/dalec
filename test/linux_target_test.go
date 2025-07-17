@@ -2735,7 +2735,7 @@ func testDisableStrip(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 			//
 			// Note: The test is specifically using ppc64le as GOARCH
 			// because it seems alma/rockylinux do not error ons trip except for ppc64le.
-			// Even this is a stretch as that does not even work as expected at verison < v9.
+			// Even this is a stretch as that does not even work as expected at version < v9.
 			{
 				Command: `cd src; if [ "${TARGETARCH}" = "ppc64le" ]; then export GOARCH=amd64; else export GOARCH=ppc64le; fi; go build -o ../bad-executable main.go`,
 			},

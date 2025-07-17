@@ -175,7 +175,7 @@ targets:
 
 For more details on how Artifacts are structured and configured, see the [Artifacts](artifacts.md) documentation.
 
-### Target defined package metdata
+### Target defined package metadata
 
 `conflicts`, `replaces`, and `provides` can be defined at the target level in addition to the [globalspec level](spec.md#additional-metadata).
 This allows you to define package metadata that is specific to a target.
@@ -241,7 +241,7 @@ following env vars set by default:
 - `GOOS=windows` - ensures that by default `go build` produces a Windows binary
 
 This can be overridden in your spec by either setting them in the `env` section
-or in the actual build step script, which may be neccessary if you need to
+or in the actual build step script, which may be necessary if you need to
 build tooling or other things first.
 
 ```yaml

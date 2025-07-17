@@ -40,7 +40,7 @@ Supported sharing modes are:
 By default, dalec will namespace these directories with a key tied to the OS and
 CPU architecture which is prepended to the key you provide. This is to help
 prevent common issues one would see for specific use-cases such as storing
-incrmental compiler caches.
+incremental compiler caches.
 You can disable this behavior by setting the `no_auto_namespace` option to `true`.
 
 ```yaml
@@ -122,7 +122,7 @@ which is provided by a buildkit client and forward it into the build environment
 bazelrc.
 
 :::note
-If using docker buildx, you will need to set `--ssh socket=<path>,raw=true`, which requires buildx vesion 0.25.0 or later.
+If using docker buildx, you will need to set `--ssh socket=<path>,raw=true`, which requires buildx version 0.25.0 or later.
 
 DALEC provides a (go) library to help with this in the `sessionutil/socketprovider` package that you can use with a custom buildkit client integration.
 These are generic and not specific to dalec or bazel caching, so they must be configured based on your needs.

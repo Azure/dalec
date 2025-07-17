@@ -12,7 +12,7 @@ import (
 	"github.com/Azure/dalec/test/cmd/git_repo/passwd"
 )
 
-var errUsage = errors.New(`usage:  host [dirctory] [ip] [port]`)
+var errUsage = errors.New(`usage:  host [directory] [ip] [port]`)
 
 func main() {
 	if err := run(); err != nil {

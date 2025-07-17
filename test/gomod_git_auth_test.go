@@ -177,7 +177,7 @@ go {{ .ModFileGoVersion }}
 
 		// In order to simulate real-life SSH auth scenarios, we generate a
 		// keypair. Buildkit handles SSH auth by forwarding an SSH agent socket
-		// to privide the private key upon request. We start an agent here to
+		// to provide the private key upon request. We start an agent here to
 		// serve the private key.
 		pubkey, privkey := generateKeyPair(t)
 		agentErrChan := startSSHAgent(t, privkey, sockaddr)
