@@ -42,7 +42,9 @@ func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, w
 	installOpts = append(installOpts, importRepos...)
 	installOpts = append(installOpts, []DnfInstallOpt{
 		DnfNoGPGCheck,
-		dnfInstallWithConstraints(opts)}...)
+		IncludeDocs(spec.GetArtifacts(targetKey).HasDocs()),
+		dnfInstallWithConstraints(opts),
+	}...)
 
 	baseMountPath := rpmMountDir + "-base"
 	basePkgs := llb.Scratch().File(llb.Mkdir("/RPMS", 0o755))

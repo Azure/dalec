@@ -384,10 +384,11 @@ func (s *Spec) UnmarshalYAML(dt []byte) error {
 		extNodes = append(extNodes, node)
 	}
 
-	parsed, err = parser.ParseBytes([]byte(parsed.String()), parser.ParseComments)
+	p, err := parser.ParseBytes([]byte(parsed.String()), parser.ParseComments)
 	if err != nil {
-		return errors.Wrapf(err, "error parsing yaml: \n%s", parsed.String())
+		return errors.Wrapf(err, "error parsing yaml: \n%s", parsed)
 	}
+	parsed = p
 
 	// Use an internal type to avoid infinite recursion of UnmarshalYAML.
 	type internalSpec Spec

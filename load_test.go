@@ -2032,3 +2032,18 @@ func TestArtifactBuildValidation(t *testing.T) {
 		})
 	}
 }
+
+func FuzzLoad(f *testing.F) {
+	// Add some initial test cases
+	f.Add("name: test\n")
+	f.Add("name: test\nversion: 1.0.0\n")
+	f.Add("name: test\nversion: 1.0.0\ntargets:\n  foo:\n    image:\n      base: busybox:latest\n")
+
+	// Fuzz the LoadSpec function
+	f.Fuzz(func(t *testing.T, data string) {
+		_, err := LoadSpec([]byte(data))
+		if err != nil {
+			t.Skip() // Skip if the data is not valid YAML
+		}
+	})
+}

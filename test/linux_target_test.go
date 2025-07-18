@@ -1986,17 +1986,18 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 			Description: "A basic package for various testing uses",
 			License:     "MIT",
 			Sources: map[string]dalec.Source{
-				"version.txt": {
+				"dalec-test-version": {
 					Inline: &dalec.SourceInline{
 						File: &dalec.SourceInlineFile{
-							Contents: "version: " + version,
+							Contents:    "#!/usr/bin/env bash\necho version: " + version,
+							Permissions: 0o755,
 						},
 					},
 				},
 			},
 			Artifacts: dalec.Artifacts{
-				Docs: map[string]dalec.ArtifactConfig{
-					"version.txt": {},
+				Binaries: map[string]dalec.ArtifactConfig{
+					"dalec-test-version": {},
 				},
 			},
 		}
@@ -2031,7 +2032,7 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
 					{
-						Command: fmt.Sprintf(`set -x; [ "$(cat /usr/share/doc/%s/version.txt)" = "version: %s" ]`, pkgName, expectVersion),
+						Command: fmt.Sprintf(`set -x; [ "$(dalec-test-version)" = "version: %s" ]`, expectVersion),
 					},
 				},
 			},
