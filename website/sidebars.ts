@@ -16,8 +16,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Getting Started',
       items: [
-        'intro',
-        'build',
+        'overview',
         'quickstart',
         'container-only-builds',
         'virtual-packages',

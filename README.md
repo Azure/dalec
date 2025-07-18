@@ -1,8 +1,15 @@
 # Dalec
 
-Dalec is a project aimed at providing a declarative format for building system packages and containers from those packages.
+## What is Dalec?
 
-Our goal is to provide a secure way to build packages and containers, with a focus on supply chain security.
+Dalec is a [Docker Buildkit frontend](https://docs.docker.com/build/buildkit/frontend/) that translates declarative YAML specifications into build instructions. Think of it as a specialized compiler that takes your package configuration and produces packages and containers across multiple Linux distributions and Windows.
+
+## Why Use Dalec?
+
+- **Unified Build Process**: Write once, build for multiple targets (Debian, Ubuntu, Azure Linux, Rocky Linux, etc.)
+- **Supply Chain Security**: Built-in support for SBOMs, provenance attestations, and package signing
+- **Docker-Native**: Leverages Docker Buildkit's caching, parallelization, and security features
+- **Cross-Platform**: Build packages for different architectures and operating systems
 
 ## Features
 
