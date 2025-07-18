@@ -2,82 +2,84 @@
 title: Dependencies
 ---
 
-`PackageDependencies` specifies dependency information for a particular package.  This includes dependencies for runtime, which will be installed along with the package by the package manager, as well as any dependencies needed to build and/or test the resulting package. Configuration for any additional package repositories which are required may also be added here.
+Dependencies specify which packages are needed at different stages of the build and runtime process.
 
-### Fields
+## Dependency Types
 
-- **Build**: The list of packages required to build the package.
-    ```yaml
-    build:
-      package_name:
-          version: [">=1.0.0", "<2.0.0"]
-          arch: ["amd64", "arm64"]
-    ```
+### Build Dependencies
 
-- **Runtime**: The list of packages required to install/run the package.
-    ```yaml
-    runtime:
-      package_name:
-          version: [">=1.0.0", "<2.0.0"]
-          arch: ["amd64", "arm64"]
-    ```
+Packages required to build your package:
 
-- **Recommends**: The list of packages recommended to install with the generated package.
-    ```yaml
-    recommends:
-      package_name:
-          version: [">=1.0.0", "<2.0.0"]
-          arch: ["amd64", "arm64"]
-    ```
-
-:::note
-Each of the above fields is a list of [PackageConstraints](https://pkg.go.dev/github.com/Azure/dalec#PackageConstraints).
-:::
-
-- **Test**: Lists and extra packages required for running tests. These are only installed for tests which have steps that require running a command in the built container. See [TestSpec](https://pkg.go.dev/github.com/Azure/dalec#TestSpec) for more information
-    ```yaml
-    test:
-      - package_name_1
-      - package_name_2
-    ```
-
-- **ExtraRepos**: Used to inject extra package repositories that may be used to satisfy package dependencies in various stages. 
-    ```yaml
-    extra_repos:
-      - keys:
-          mykey:
-            http:
-              URL: "https://example.com/mykey.gpg"
-              permissions: 0644
-        config: 
-          myrepo:
-            http:
-              url: "https://example.com/myrepo.list"
-        data: 
-          - dest: "/path/to/dest"
-            spec: source
-        envs: ["build", "test", "install"] 
-    ```
-    See [repositories](repositories.md) for more details on repository configs.
-
-### Example
 ```yaml
 dependencies:
   build:
     gcc:
       version: [">=9.0.0"]
       arch: ["amd64"]
+    golang:  # Simple form without constraints
+```
+
+### Runtime Dependencies
+
+Packages required when your package is installed and running:
+
+```yaml
+dependencies:
   runtime:
     libc6:
       version: [">=2.29"]
+    libssl3:  # Simple form
+```
+
+### Recommended Packages
+
+Packages that enhance functionality but aren't required:
+
+```yaml
+dependencies:
   recommends:
     curl:
       version: [">=7.68.0"]
+    wget:
+```
+
+### Test Dependencies
+
+Packages needed only for running tests:
+
+```yaml
+dependencies:
   test:
     - bats
+    - pytest
+    - nodejs
+```
+
+## Package Constraints
+
+You can specify version and architecture constraints for dependencies:
+
+```yaml
+dependencies:
+  build:
+    gcc:
+      version: [">=9.0.0", "<12.0.0"]  # Version range
+      arch: ["amd64", "arm64"]         # Specific architectures
+  runtime:
+    simple-package:  # No constraints - any version/arch
+```
+
+**Version operators:** `>=`, `>`, `<=`, `<`, `=`, `!=`
+
+## Extra Repositories
+
+Add custom package repositories to satisfy dependencies:
+
+```yaml
+dependencies:
   extra_repos:
     - keys:
-        mykey: 
+        mykey:
           http:
             url: "https://example.com/mykey.gpg"
             permissions: 0644
@@ -85,13 +87,70 @@ dependencies:
         myrepo:
           http:
             url: "https://example.com/myrepo.list"
-      # this assumes that a build context named `my-local-repo` containing a local repository will be passed 
-      # to the Dalec build.
-      # /opt/repo can now be referenced as a local repository in a repository config imported to dalec
+      data:
+        - dest: "/opt/repo"
+          spec:
+            context:
+              name: "my-local-repo"
+      envs: ["build", "test", "install"]  # When to use this repo
+```
+
+See [Repositories](repositories.md) for detailed repository configuration.
+
+## Complete Example
+
+```yaml
+dependencies:
+  build:
+    gcc:
+      version: [">=9.0.0"]
+      arch: ["amd64"]
+    golang:
+    make:
+
+  runtime:
+    libc6:
+      version: [">=2.29"]
+    openssl:
+
+  recommends:
+    curl:
+      version: [">=7.68.0"]
+
+  test:
+    - bats
+    - python3
+
+  extra_repos:
+    - keys:
+        mykey:
+          http:
+            url: "https://example.com/mykey.gpg"
+            permissions: 0644
+      config:
+        myrepo:
+          http:
+            url: "https://example.com/myrepo.list"
       data:
         - dest: "/opt/repo"
           spec:
             context:
               name: "my-local-repo"
       envs: ["build", "install"]
+```
+
+## Target-Specific Dependencies
+
+Dependencies can be overridden per target. See [Targets](targets.md) for more information:
+
+```yaml
+dependencies:
+  build:
+    - gcc  # Global build dependency
+
+targets:
+  mariner2:
+    dependencies:
+      build:
+        - clang  # Override for mariner2 target only
 ```
