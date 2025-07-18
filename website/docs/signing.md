@@ -31,7 +31,7 @@ operation:
 ```yaml
 name: my-package
 targets: # Distro specific build requirements
-  mariner2:
+  azlinux3:
     package_config:
       signer:
         image: "ref/to/signing:image"
@@ -40,8 +40,9 @@ targets: # Distro specific build requirements
 
 At this time, these targets can leverage package signing:
 
-- `windowscross/zip`
 - `mariner2/rpm`
+- `azlinux3/rpm`
+- `windowscross/zip`
 - `windowscross/container`
 
 For container targets, only the artifacts within the container get signed.
@@ -60,7 +61,7 @@ additional tooling necessary to carry out the signing operation.
 1. The `llb.State` corresponding the artifacts to be signed will be
 provided as the build context.
 1. Dalec will provide the value of `dalec.target` to the frontend as a
-`FrontendOpt`. In the above example, this will be `mariner2`.
+`FrontendOpt`. In the above example, this will be `azlinux3`.
 1. The response from the frontend will contain an `llb.State` that is
 identical to the input `llb.State` in every way *except* that the
 desired artifacts will be signed.
@@ -83,9 +84,11 @@ package_config:
 Signing artifacts may require passing through build-time customizations.
 This can be done through 3 mechanisms:
 
-1. [Secrets](#secrets)
-2. [Named contexts](#named-contexts)
-3. [Build arguments](#build-arguments)
+- [Signing Packages](#signing-packages)
+  - [Build Time customization](#build-time-customization)
+    - [Secrets](#secrets)
+    - [Named Contexts](#named-contexts)
+    - [Build Arguments](#build-arguments)
 
 With all methods of build-time customization, the signer needs to be coded
 such that it is going to consume the customizations that are passed in, as such
@@ -146,7 +149,7 @@ a string-to-string mapping like so:
 
 ```yaml
 targets: # Distro specific build requirements
-  mariner2:
+  azlinux3:
     package_config:
       signer:
         image: "ref/to/signing:image"
@@ -166,7 +169,7 @@ args:
   SOME_OTHER_SIGNING_ARG: "default_value"
 
 targets: # Distro specific build requirements
-  mariner2:
+  azlinux3:
     package_config:
       signer:
         image: "ref/to/signing:image"

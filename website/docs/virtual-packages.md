@@ -28,7 +28,7 @@ dependencies:
 Build the package:
 
 ```shell
-docker build -t my-package-image:1.0.0 --target=azl3 -f my-package.yml .
+docker build -t my-package-image:1.0.0 --target=azlinux3 -f my-package.yml .
 ```
 
 This creates a [`scratch`](https://hub.docker.com/_/scratch/) container with only the virtual package and its dependencies installed.
@@ -58,7 +58,7 @@ dependencies:
     my-package-bar:
 
 targets:
-  azl3:
+  azlinux3:
     image:
       base: mcr.microsoft.com/azurelinux/base/core:3.0
 ```
@@ -94,7 +94,7 @@ Override image settings for specific targets:
 
 ```yaml
 targets:
-  azl3:
+  azlinux3:
     image:
       entrypoint: /bin/bash
       base: mcr.microsoft.com/azurelinux/base/core:3.0

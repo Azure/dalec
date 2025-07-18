@@ -91,7 +91,7 @@ Key sections explained:
 ### Build an RPM package
 
 ```shell
-docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=azl3/rpm --output=_output .
+docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=azlinux3/rpm --output=_output .
 ```
 
 This creates `RPM` and `SRPM` directories in `_output/` with the built packages.
@@ -99,7 +99,7 @@ This creates `RPM` and `SRPM` directories in `_output/` with the built packages.
 ### Build a container image
 
 ```shell
-docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=azl3 .
+docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=azlinux3 .
 ```
 
 This produces a container image named `go-md2man:2.0.3`.

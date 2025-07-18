@@ -49,7 +49,7 @@ Specify different dependencies for different targets:
 
 ```yaml
 targets:
-  azl3:
+  azlinux3:
     dependencies:
       build:
         golang:
@@ -65,9 +65,9 @@ Use custom builder images for extensibility:
 
 ```yaml
 targets:
-  azl3:
+  azlinux3:
     frontend:
-      image: docker.io/my/custom:azl3
+      image: docker.io/my/custom:azlinux3
 ```
 
 ## Dependencies
@@ -85,7 +85,7 @@ Please note that dependencies under a target will override dependencies at the r
 
 ```yaml
 targets:
-  azl3:
+  azlinux3:
     dependencies:
       build:
         - golang
@@ -99,9 +99,9 @@ This method allows for the use of a single spec file for all targets, employing 
 
 ```yaml
 targets:
-  azl3:
+  azlinux3:
     frontend:
-      image: docker.io/my/custom:azl3
+      image: docker.io/my/custom:azlinux3
 ```
 
 ### Target-Specific Artifacts
@@ -132,7 +132,7 @@ Define target-specific package metadata:
 
 ```yaml
 targets:
-  azl3:
+  azlinux3:
     package:
       conflicts:
         - "foo"
@@ -150,7 +150,7 @@ targets:
 When you need additional packages in the worker image, output the worker image first:
 
 ```shell
-docker build --target=azl3/worker -t my-custom-worker .
+docker build --target=azlinux3/worker -t my-custom-worker .
 ```
 
 Then customize it and use it via source policies or named build contexts.
@@ -161,10 +161,10 @@ Override worker images using `--build-context`:
 
 ```shell
 # Method 1: Override the base image directly
-docker build --build-context mcr.microsoft.com/azurelinix/base/core:3.0=my-custom-image .
+docker build --build-context mcr.microsoft.com/azurelinux/base/core:3.0=my-custom-image .
 
 # Method 2: Use named context
-docker build --build-context dalec-azl3-worker=my-custom-image .
+docker build --build-context dalec-azlinux3-worker=my-custom-image .
 ```
 
 Target-specific context names:

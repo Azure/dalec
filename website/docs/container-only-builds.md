@@ -30,7 +30,7 @@ image:
 Build the container:
 
 ```shell
-docker build -f my-minimal-image.yml --target=azl3 -t my-minimal-image:0.1.0 .
+docker build -f my-minimal-image.yml --target=azlinux3 -t my-minimal-image:0.1.0 .
 ```
 
 This produces a minimal image built from `scratch` containing:
@@ -39,4 +39,4 @@ This produces a minimal image built from `scratch` containing:
 - Essential packages like `prebuilt-ca-certificates` and `tzdata`
 - Dependencies of the specified packages
 
-The `--target=azl3` flag tells Dalec to use Azure Linux 3 repositories for package installation, even though the final image starts from scratch.
+The `--target=azlinux3` flag tells Dalec to use Azure Linux 3 repositories for package installation, even though the final image starts from scratch.
