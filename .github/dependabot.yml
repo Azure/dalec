@@ -25,14 +25,14 @@ updates:
   - package-ecosystem: docker
     directory: /test/fixtures/nested
     schedule:
-      interval: daily
+      interval: weekly
 
   - package-ecosystem: gomod
     directory: /website
     schedule:
-      interval: daily
+      interval: weekly
 
   - package-ecosystem: npm
     directory: /website
     schedule:
-      interval: daily
+      interval: weekly
