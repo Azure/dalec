@@ -48,6 +48,7 @@ func main() {
 
 func website(ctx context.Context, client *dagger.Client, port int) error {
 	defer client.Close()
+	client = client.Pipeline("website")
 
 	docsDir, err := gofsToDagger(client)
 	if err != nil {
@@ -56,7 +57,7 @@ func website(ctx context.Context, client *dagger.Client, port int) error {
 
 	base := client.Container().From("docker.io/library/node:22-bookworm")
 
-	err = base.
+	_, err = base.
 		WithDirectory("/website", docsDir).
 		WithWorkdir("/website").
 		WithMountedCache("/website/node_modules", client.CacheVolume("node_modules")).

@@ -15,9 +15,6 @@
 .env.test.local
 .env.production.local
 
-# Build artifacts
-website
-
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
