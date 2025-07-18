@@ -48,24 +48,24 @@ func main() {
 
 func website(ctx context.Context, client *dagger.Client, port int) error {
 	defer client.Close()
-	client = client.Pipeline("website")
 
 	docsDir, err := gofsToDagger(client)
 	if err != nil {
 		return errors.Wrap(err, "failed to create docs directory")
 	}
 
-	base := client.Container().From("docker.io/library/node:22-bookworm")
+	base := client.Container().From("docker.io/library/node:24-bookworm")
 
-	_, err = base.
+	err = base.
 		WithDirectory("/website", docsDir).
 		WithWorkdir("/website").
 		WithMountedCache("/website/node_modules", client.CacheVolume("node_modules")).
 		WithMountedCache("/root/.npm", client.CacheVolume("node-docusaurus-root")).
 		WithExec([]string{"npm", "install"}).
-		// Set the port in the container as well just so the port in the logs matches.
-		WithExec([]string{"yarn", "start", "--host=0.0.0.0", "--port=" + strconv.Itoa(port)}).
-		AsService().
+		AsService(dagger.ContainerAsServiceOpts{
+			// Set the port in the container as well just so the port in the logs matches.
+			Args: []string{"yarn", "start", "--host=0.0.0.0", "--port=" + strconv.Itoa(port)},
+		}).
 		Up(ctx, dagger.ServiceUpOpts{
 			Ports: []dagger.PortForward{
 				{Backend: port, Frontend: port},
