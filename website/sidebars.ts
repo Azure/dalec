@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Getting Started',
+      collapsed: false,
       items: [
         'overview',
         'quickstart',
@@ -25,6 +26,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Specifications',
+      collapsed: false,
       items: [
         'spec',
         'sources',
@@ -39,6 +41,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Features',
+      collapsed: false,
       items: [
         'signing',
         'editor-support',
