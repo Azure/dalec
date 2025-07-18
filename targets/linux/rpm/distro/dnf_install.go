@@ -43,6 +43,9 @@ type dnfInstallConfig struct {
 	allDeps bool
 
 	downloadDir string
+
+	// When true, don't omit docs from the installed RPMs.
+	includeDocs bool
 }
 
 type DnfInstallOpt func(*dnfInstallConfig)
@@ -78,6 +81,12 @@ func DnfDownloadAllDeps(dest string) DnfInstallOpt {
 	}
 }
 
+func IncludeDocs(v bool) DnfInstallOpt {
+	return func(cfg *dnfInstallConfig) {
+		cfg.includeDocs = v
+	}
+}
+
 func dnfInstallWithConstraints(opts []llb.ConstraintsOpt) DnfInstallOpt {
 	return func(cfg *dnfInstallConfig) {
 		cfg.constraints = opts
@@ -106,6 +115,10 @@ func dnfInstallFlags(cfg *dnfInstallConfig) string {
 
 	if cfg.downloadDir != "" {
 		cmdOpts += " --downloaddir " + cfg.downloadDir
+	}
+
+	if !cfg.includeDocs {
+		cmdOpts += " --setopt='tsflags=nodocs'"
 	}
 
 	return cmdOpts

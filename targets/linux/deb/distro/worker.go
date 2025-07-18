@@ -81,16 +81,6 @@ func (cfg *Config) Worker(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (ll
 			dalec.WithConstraints(opts...),
 			AptInstall(cfg.BuilderPackages, opts...),
 			dalec.WithMountedAptCache(cfg.AptCachePrefix),
-		).
-		// This file prevents installation of things like docs in ubuntu
-		// containers We don't want to exclude this because tests want to
-		// check things for docs in the build container. But we also don't
-		// want to remove this completely from the base worker image in the
-		// frontend because we usually don't want such things in the build
-		// environment. This is only needed because certain tests (which
-		// are using this customized builder image) are checking for files
-		// that are being excluded by this config file.
-		File(llb.Rm("/etc/dpkg/dpkg.cfg.d/excludes", llb.WithAllowNotFound(true)), opts...)
-
+		).Root()
 	return base, nil
 }
