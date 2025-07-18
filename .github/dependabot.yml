@@ -21,3 +21,18 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  - package-ecosystem: docker
+    directory: /test/fixtures/nested
+    schedule:
+      interval: daily
+
+  - package-ecosystem: gomod
+    directory: /website
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: daily
