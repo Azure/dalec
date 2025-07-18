@@ -17,7 +17,6 @@ of the produced image. The image field is an object with the following propertie
 - `stop_signal`: The stop signal for the image. This is an optional field. [stop signal section](#stop-signal)
 - `volumes`: The volumes for the image. This is an optional field. [volumes section](#volumes)
 
-
 :::note
 The `base` field is deprecated. Use the `bases` field instead.
 
@@ -216,4 +215,3 @@ image:
 ```
 
 This is always a map of the path to create the volume at and an empty object.
-
