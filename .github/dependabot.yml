@@ -31,8 +31,16 @@ updates:
     directory: /website
     schedule:
       interval: weekly
+    groups:
+      website-gomod-all:
+        patterns:
+        - "*"
 
   - package-ecosystem: npm
     directory: /website
     schedule:
       interval: weekly
+    groups:
+      website-npm-all:
+        patterns:
+        - "*"
