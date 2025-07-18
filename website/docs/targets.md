@@ -12,7 +12,6 @@ When executing a build with Docker these targets can be specified with the
 
 DALEC includes a number of built-in targets that you can either use in your spec.
 
-- `mariner2` - Azure Linux 2 (formerly CBL-Mariner)
 - `azlinux3` - Azure Linux 3
 - `bullseye` - Debian 11 (Bullseye) (v0.11)
 - `bookworm` - Debian 12 (Bookworm) (v0.11)
