@@ -89,12 +89,16 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 		// This file makes dpkg give more verbose output which can be useful when things go awry.
 		llb.AddMount("/etc/dpkg/dpkg.cfg.d/99-dalec-debug", debug, llb.SourcePath("debug"), llb.Readonly),
 		dalec.RunOptFunc(func(cfg *llb.ExecInfo) {
-			tmp := llb.Scratch().File(llb.Mkfile("tmp", 0o644, nil), opts...)
 			// Warning: HACK here
 			// The base ubuntu image has this `excludes` config file which prevents
 			// installation of a lot of things, including doc files.
 			// This is mounting over that file with an empty file so that our test suite
 			// passes (as it is looking at these files).
+			if !spec.GetArtifacts(targetKey).HasDocs() {
+				return
+			}
+
+			tmp := llb.Scratch().File(llb.Mkfile("tmp", 0o644, nil), opts...)
 			llb.AddMount("/etc/dpkg/dpkg.cfg.d/excludes", tmp, llb.SourcePath("tmp")).SetRunOption(cfg)
 		}),
 		InstallLocalPkg(debSt, true, opts...),

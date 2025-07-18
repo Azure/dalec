@@ -24,18 +24,19 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 			Description: "A basic package for various testing uses",
 			License:     "MIT",
 			Sources: map[string]dalec.Source{
-				"version.txt": {
+				"dalec-test-version": {
 					Inline: &dalec.SourceInline{
 						File: &dalec.SourceInlineFile{
-							Contents: "version: " + "0.0.1",
+							Contents:    "#!/usr/bin/env bash\necho \"version: 0.0.1\"",
+							Permissions: 0o755,
 						},
 					},
 				},
 			},
 
 			Artifacts: dalec.Artifacts{
-				Docs: map[string]dalec.ArtifactConfig{
-					"version.txt": {},
+				Binaries: map[string]dalec.ArtifactConfig{
+					"dalec-test-version": {},
 				},
 			},
 		}
@@ -84,7 +85,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 			Build: dalec.ArtifactBuild{
 				Steps: []dalec.BuildStep{
 					{
-						Command: `set -x; [ "$(cat /usr/share/doc/` + dep.Name + `/version.txt)" = "version: 0.0.1" ]`,
+						Command: `set -x; [ "$(dalec-test-version)" = "version: 0.0.1" ]`,
 					},
 				},
 			},
