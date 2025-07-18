@@ -1,36 +1,14 @@
 # Signing Packages
 
-:::note
-Available with Dalec release `v0.3.0` and later.
-:::
+Dalec can automatically sign packages using a custom signing frontend. Configure signing through the spec or build arguments.
 
-Packages can be automatically signed using Dalec. To do this, you will
-need to provide a signing frontend. There is an example in the test
-code `test/signer/main.go`. Once that signing image has been built and
-tagged, you need to tell dalec which signing image to use. You can do this
-in a few different ways:
+## Quick Start
 
-1. Provide the signing config in the spec, under
-   `targets.[target].package_config.signer` or `.package_config.signer`
-1. Provide the signing config via the `DALEC_SIGNING_CONFIG_PATH` build arg.
-   Otherwise, the signing config will be sought in the spec.
-1. The path name will be sough in the main (local) context, unless the build
-   arg `DALEC_SIGNING_CONFIG_CONTEXT_NAME` is provided, in which case the dalec
-   will seek the config in the context with the provided name *and at the
-   provided path*.
-
-Please note the order of precedence of the above-mentioned build args:
-1. Configs provided via a build context (whether local or custom) will always
-   take precedence over configs provided in the spec.
-1. The `DALEC_SKIP_SIGNING` build-arg takes precedence over all. If it is
-   truthy, no signing will take place.
-
-In most cases, you will add it to the spec directly to trigger the signing
-operation:
+Add signing configuration to your spec:
 
 ```yaml
 name: my-package
-targets: # Distro specific build requirements
+targets:
   azlinux3:
     package_config:
       signer:
@@ -38,143 +16,99 @@ targets: # Distro specific build requirements
         cmdline: "/signer"
 ```
 
-At this time, these targets can leverage package signing:
-
+**Supported targets:**
 - `mariner2/rpm`
 - `azlinux3/rpm`
 - `windowscross/zip`
 - `windowscross/container`
 
-For container targets, only the artifacts within the container get signed.
+For container targets, only artifacts within the container are signed.
 
-This will send the artifacts (`.rpm`, `.deb`, or `.exe`) to the
-signing frontend as the build context.
+## Configuration Methods
 
-Once a `signer` section has been added to the spec, signing will be automatic.
-In order to disable signing when building specs that have a `signer` section,
-use the build arg `DALEC_SKIP_SIGNING=1`.
+### 1. In Spec (Recommended)
 
-The contract between dalec and the signing image is:
-
-1. The signing image will contain both the signing frontend, and any
-additional tooling necessary to carry out the signing operation.
-1. The `llb.State` corresponding the artifacts to be signed will be
-provided as the build context.
-1. Dalec will provide the value of `dalec.target` to the frontend as a
-`FrontendOpt`. In the above example, this will be `azlinux3`.
-1. The response from the frontend will contain an `llb.State` that is
-identical to the input `llb.State` in every way *except* that the
-desired artifacts will be signed.
-
-A signer can also be configured at the root of the spec if there is no target
-specific customization required or you are only building for one target.
-
-Example:
+Target-specific configuration:
 
 ```yaml
-name: my-package
+targets:
+  azlinux3:
+    package_config:
+      signer:
+        image: "ref/to/signing:image"
+        cmdline: "/signer"
+```
+
+Global configuration (all targets):
+
+```yaml
 package_config:
   signer:
     image: "ref/to/signing:image"
     cmdline: "/signer"
 ```
 
-## Build Time customization
+### 2. Build Arguments
 
-Signing artifacts may require passing through build-time customizations.
-This can be done through 3 mechanisms:
+Use build arguments for external configuration:
 
-- [Signing Packages](#signing-packages)
-  - [Build Time customization](#build-time-customization)
-    - [Secrets](#secrets)
-    - [Named Contexts](#named-contexts)
-    - [Build Arguments](#build-arguments)
+- `DALEC_SIGNING_CONFIG_PATH` - Path to signing config file
+- `DALEC_SIGNING_CONFIG_CONTEXT_NAME` - Named context containing config
+- `DALEC_SKIP_SIGNING=1` - Disable signing
 
-With all methods of build-time customization, the signer needs to be coded
-such that it is going to consume the customizations that are passed in, as such
-all such customizations are signer specific.
+**Precedence order:**
+
+1. `DALEC_SKIP_SIGNING` (highest)
+2. Build context configs
+3. Spec configuration (lowest)
+
+## Build-Time Customization
 
 ### Secrets
 
-Secrets are passed through from the client (such as the docker CLI or buildx).
-These secrets are always available to the signer.
-see Docker's [secrets](https://docs.docker.com/build/building/secrets/)
-documentation for more details on on how secrets can be passed into a build
-using the docker CLI.
+Pass secrets from the Docker CLI to the signer:
 
-*Note*: The docker documentation is using Dockerfiles in their examples which
-are irrelevant for Dalec signing, however the CLI examples for how to pass in
-those secrets is useful.
+```bash
+docker buildx build --secret id=mysecret,src=./secret.txt
+```
 
-No changes to the spec yaml are required to use secrets with a signer, except
-that the signer itself needs to be setup to consume the secret(s).
+The signer must be configured to consume these secrets. No spec changes required.
 
 ### Named Contexts
 
-Named contexts are passed into the build by the client. All named contexts are
-available to the signer.
+Provide additional data to the signer:
 
-A named context is just like a regular
-[build context](https://docs.docker.com/build/building/context/) except that it
-is given a custom name where as the regular build context is specifically named
-`context`. In the scope of Dalec signing, the regular build context is the
-packages that Dalec is giving to the signer to sign.
-A named context can be used to provide extra data or configuration to the signer.
-
-Example usage with Docker:
-
-```console
-$ docker build --build-context my-signing-config=./signing-config-dir ...
+```bash
+docker buildx build --build-context signing-config=./config-dir
 ```
 
-Here `my-singing-config` is the name you want to give to the context which the
-signer may use to pull in the context. The `./signing-config-dir` is the data
-being given as the context, in this case a local directory. This could be a
-directory, a git ref, an HTTP url, etc. See the linked docker build context
-documentation above for more details on what can be specified.
-
-Multiple named contexts may be provided.
-
-No changes to the spec yaml are required to use named contexts with a signer,
-except that the signer itself needs to be setup to consume the named
-context(s).
+Multiple named contexts are supported. The signer accesses these by name.
 
 ### Build Arguments
 
-Build arguments are key/value pairs that can be supplied in the yaml spec which
-will be forwarded to the signer.
-
-Taking the original example above we can add build by adding an `args` with
-a string-to-string mapping like so:
-
-```yaml
-targets: # Distro specific build requirements
-  azlinux3:
-    package_config:
-      signer:
-        image: "ref/to/signing:image"
-        cmdline: "/signer"
-        args:
-            SOME_KEY: SOME_VALUE
-            SOME_OTHER_KEY: SOME_OTHER_VALUE
-```
-
-The values of these arguments can also be taken from the client using variable
-substitution like in other parts of the spec.
-To use variable substitution, the args must be declared at the root of the spec:
+Pass key-value pairs to the signer:
 
 ```yaml
 args:
-  SOME_SIGNING_ARG: ""
-  SOME_OTHER_SIGNING_ARG: "default_value"
+  SIGNING_KEY_ID: ""
+  CERT_PATH: "default_cert.pem"
 
-targets: # Distro specific build requirements
+targets:
   azlinux3:
     package_config:
       signer:
         image: "ref/to/signing:image"
         cmdline: "/signer"
         args:
-            SOME_KEY: "${SOME_SIGNING_ARG}"
-            SOME_OTHER_KEY: "${SOME_OTHER_SIGNING_ARG}"
+          KEY_ID: "${SIGNING_KEY_ID}"
+          CERTIFICATE: "${CERT_PATH}"
 ```
+
+## Signer Contract
+
+The signing frontend must follow this contract:
+
+1. **Image contains:** Signing frontend and required tooling
+2. **Input:** Artifacts to sign provided as build context
+3. **Target info:** Dalec provides target name (e.g., `azlinux3`) as `FrontendOpt`
+4. **Output:** Identical build context with signed artifacts
