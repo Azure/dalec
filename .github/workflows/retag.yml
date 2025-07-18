@@ -15,10 +15,11 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   retag:
+    permissions:
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)

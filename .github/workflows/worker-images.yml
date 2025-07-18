@@ -51,7 +51,6 @@ jobs:
 
   build-worker-images:
     permissions:
-      contents: read
       packages: write
     needs: load-matrix
     runs-on: ubuntu-22.04

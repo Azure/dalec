@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   tagList:
@@ -42,7 +41,11 @@ jobs:
         env:
           REF_NAME: ${{ github.ref_name }}
         shell: bash
+
   build:
+    permissions:
+      packages: write
+
     needs: tagList
     uses: ./.github/workflows/frontend-image.yml
     with:
