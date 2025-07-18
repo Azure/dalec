@@ -51,6 +51,7 @@ For more information, see [Virtual Packages](virtual-packages.md).
 ## Dalec Specification
 
 The Dalec spec is a YAML file that describes:
+
 - Package metadata (name, version, license, etc.)
 - Build and runtime dependencies
 - Source repositories and build steps
