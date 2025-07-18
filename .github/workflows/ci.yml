@@ -21,6 +21,7 @@ on:
       - 'cmd/worker-image-matrix/**'
       - '.github/workflows/worker-images/**'
       - '.github/workflows/worker-images.yml'
+      - '.github/workflows/dependabot.yml'
 
   push:
     branches:
