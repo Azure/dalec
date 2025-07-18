@@ -19,6 +19,11 @@ jobs:
     outputs:
       tags: ${{ steps.tags.outputs.OUTPUT_TAGS }}
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
+        with:
+          egress-policy: audit
+
       - name: Get image tag list
         id: tags
         run: |
