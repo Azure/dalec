@@ -190,9 +190,6 @@ func (a Artifacts) HasDocs() bool {
 	if len(a.Docs) > 0 {
 		return true
 	}
-	if len(a.Licenses) > 0 {
-		return true
-	}
 	if len(a.Manpages) > 0 {
 		return true
 	}
