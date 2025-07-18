@@ -24,11 +24,11 @@ image:
 ```
 
 Then, to build:
-`docker buildx build -f my-minimal-image.yml --target=mariner2 -t my-minimal-image:0.1.0 .`
+`docker buildx build -f my-minimal-image.yml --target=azlinux3 -t my-minimal-image:0.1.0 .`
 
 This will produce a minimal image from `scratch` with `curl`, `bash`, and just a few other essential packages such as `prebuilt-ca-certificates` and `tzdata`. 
 
-How does this work? Dalec will create a [Virtual Package](virtual-packages.md) which has only the specified runtime dependencies and install this in the target base image. This is where the `--target=mariner2` flag comes in. Even though the resulting image is from scratch, it will have the specified packages installed from mariner2 repos.
+How does this work? Dalec will create a [Virtual Package](virtual-packages.md) which has only the specified runtime dependencies and install this in the target base image. This is where the `--target=azlinux3` flag comes in. Even though the resulting image is from scratch, it will have the specified packages installed from azlinux3 repos.
 
 :::note
 Dalec needs to use the [buildx cli](https://github.com/docker/buildx#manual-download) in order to interact with a buildkit builder. In newer versions of docker, `docker build` is an alias for `docker buildx build`, and so the `docker buildx` command can be used interchangeably with `docker build`. However, if unsure or using an old version of docker, use `docker buildx` to ensure compatibility.

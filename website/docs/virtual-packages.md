@@ -26,7 +26,7 @@ dependencies:
 You can build it with:
 
 ```shell
-docker build -t my-package-image:1.0.0 --target=mariner2 -f my-package.yml .
+docker build -t my-package-image:1.0.0 --target=azlinux3 -f my-package.yml .
 ```
 
 :::tip
@@ -53,9 +53,9 @@ dependencies:
     - my-package-bar
 
 targets:
-  mariner2:
+  azlinux3:
     image:
-      base: mcr.microsoft.com/cbl-mariner/base/core:2.0
+      base: mcr.microsoft.com/azurelinux/base/core:3.0
 ```
 
 You can also set other image settings like entrypoint/cmd, environment variables, working directory, labels, and more. Below is an example that sets the entrypoint to `/bin/sh -c`.
@@ -83,7 +83,7 @@ Note how this is at the top level of the spec and not under a build target. This
 
 ```yaml
 targets:
-  mariner2:
+  azlinux3:
     image:
       entrypoint: /bin/sh -c
 ```

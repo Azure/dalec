@@ -75,7 +75,7 @@ Please note that dependencies under a target will override dependencies at the r
 
 ```yaml
 targets:
-  mariner2:
+  azlinux3:
     dependencies:
       build:
         - golang
@@ -89,9 +89,9 @@ This method allows for the use of a single spec file for all targets, employing 
 
 ```yaml
 targets:
-  mariner2:
+  azlinux3:
     frontend:
-      image: docker.io/my/custom:mariner2
+      image: docker.io/my/custom:azlinux3
 ```
 
 ## Advanced Customization
@@ -103,7 +103,7 @@ image that are not typically available in the base image. As an example, a
 package dependency may not be available in the default package repositories.
 
 You can have Dalec output an image with the target's worker image with
-`<target>/worker>` build target, e.g. `--target=mariner2/worker`. You can then
+`<target>/worker>` build target, e.g. `--target=azlinux3/worker`. You can then
 add any customizations and feed that back in via [source polices](#source-policies)
 or [named build contexts](#named-build-contexts).
 
@@ -128,12 +128,12 @@ which allows you to provide additional build contexts apart from the main build
 context in the form of `<name>=<ref>`. See the prior linked documentation for
 what can go into `<ref>`.
 
-In the `mariner2` target, Dalec looks for a named context called either
+In the `azlinux3` target, Dalec looks for a named context called either
 
-1. The actual base image used internally for mariner2
-  i. `--build-context mcr.microsoft.com/cbl-mariner/base/core:2.0=<new ref>`
-2. A build context named `dalec-mariner2-worker`
-  i. `--build-context dalec-mariner2-worker=<new ref>`
+1. The actual base image used internally for azlinux3
+  i. `--build-context mcr.microsoft.com/azurelinux/base/core:3.0=<new ref>`
+2. A build context named `dalec-azlinux3-worker`
+  i. `--build-context dalec-azlinux3-worker=<new ref>`
 
 If 1 is provided, then 2 is ignored.
 
@@ -141,7 +141,7 @@ This works the same way in the `azlinux3`:
 
 1. The actual base image used internally for azlinux3
   i. `--build-context mcr.microsoft.com/azurelinux/base/core:3.0=<new ref>`
-2. A build context named `dalec-mariner2-worker`
+2. A build context named `dalec-azlinux3-worker`
   i. `--build-context dalec-azlinux3-worker=<new ref>`
 
 ### Target Defined Artifacts
@@ -182,7 +182,7 @@ This allows you to define package metadata that is specific to a target.
 
 ```yaml
 targets:
-  mariner2:
+  azlinux3:
     package:
       conflicts:
         - "foo"

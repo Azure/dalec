@@ -195,7 +195,7 @@ Now that we have a spec file, we can build the package and container using `dock
 In this section, we'll go over how to actually *perform* a build with Dalec once the spec file as been written. Other applicable Docker commands (such as `--push` and others) will also apply to Dalec.
 
 :::note
-`mariner2` target here is an example. You can find more information about available targets in the [targets](targets.md) section.
+`azlinux3` target here is an example. You can find more information about available targets in the [targets](targets.md) section.
 :::
 
 :::tip
@@ -207,7 +207,7 @@ Remember that steps are independent of each other. You don't have to build an RP
 To build an RPM package only, we can use the following command:
 
 ```shell
-docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=mariner2/rpm --output=_output .
+docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=azlinux3/rpm --output=_output .
 ```
 
 This will create `RPM` and `SRPM` directories in the `_output` directory with the built RPM and SRPM packages respectively.
@@ -217,7 +217,7 @@ This will create `RPM` and `SRPM` directories in the `_output` directory with th
 To build a container, we can use the following command:
 
 ```shell
-docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=mariner2 .
+docker build -t go-md2man:2.0.3 -f docs/examples/go-md2man.yml --target=azlinux3 .
 ```
 
 This will produce a container image named `go-md2man:2.0.3`.
