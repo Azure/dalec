@@ -2,63 +2,73 @@
 title: Targets
 ---
 
-DALEC is designed to support building artifacts for a number of different
-systems.
-DALEC refers to these in the [spec](spec.md) as "targets".
-When executing a build with Docker these targets can be specified with the
-`--target=<target>` flag.
+Dalec supports building artifacts for multiple systems called "targets". Targets determine which Linux distribution, package format, and build environment to use.
 
 ## Available Targets
 
-DALEC includes a number of built-in targets that you can either use in your spec.
+Built-in targets you can use with `docker build --target=<target>`:
 
 - `mariner2` - Azure Linux 2 (formerly CBL-Mariner)
 - `azlinux3` - Azure Linux 3
-- `bullseye` - Debian 11 (Bullseye) (v0.11)
-- `bookworm` - Debian 12 (Bookworm) (v0.11)
-- `bionic` - Ubuntu 18.04 (Bionic) (v0.11)
-- `focal` - Ubuntu 20.04 (focal) (v0.11)
-- `jammy` - Ubuntu 22.04 (jammy) (v0.9)
-- `noble` - Ubuntu 24.04 (noble) (v0.11)
-- `windowscross` - Cross compile from Ubuntu Jammy to Windows
+- `bullseye` - Debian 11 (Bullseye)
+- `bookworm` - Debian 12 (Bookworm)
+- `bionic` - Ubuntu 18.04 (Bionic)
+- `focal` - Ubuntu 20.04 (Focal)
+- `jammy` - Ubuntu 22.04 (Jammy)
+- `noble` - Ubuntu 24.04 (Noble)
+- `windowscross` - Cross compile from Ubuntu 22.04 (Jammy) to Windows
 
-When specifying a "target" to `docker build --target=<target>` DALEC treats
-`<target>` as a route (much like an HTTP path) and each of the above mentioned
-targets have subroutes you can specfiy as well, e.g. `jammy/deb` to have DALEC
-build and output just the deb package. What subroutes are available depend on
-the underlying target implementation.
+### Target Subroutes
 
-To print a list of available build targets:
+Each target supports subroutes for specific outputs (e.g., `jammy/deb` for just the DEB package).
+
+List all available targets:
 
 ```shell
-$ docker buildx build --call targets --build-arg BUILDKIT_SYNTAX=ghcr.io/azure/dalec/frontend:latest - <<< "null"
+docker buildx build --call targets --build-arg BUILDKIT_SYNTAX=ghcr.io/azure/dalec/frontend:latest - <<< "null"
+```
+
+List targets for a specific spec:
+
+```shell
+docker buildx build --call targets -f ./path/to/spec .
 ```
 
 import TargetsCLIOut from './examples/targets.md'
 
 <details>
-<summary>DALEC targets list output</summary>
+<summary>Example targets list output</summary>
 <pre><TargetsCLIOut /></pre>
 </details>
 
-:::note
-The above command is passing in a "null" value as the build spec and telling
-buildkit to use the latest dalec version.
-This output can change depending on version or spec you provide.
-:::
+## Target-Specific Configuration
 
-To check the targets available for a specific spec you can just add `--call targets`
-to your normal `docker build` command:
+### Dependencies
 
-```shell
-$ docker buildx build --call targets -f ./path/to/spec .
+Specify different dependencies for different targets:
+
+```yaml
+targets:
+  azl3:
+    dependencies:
+      build:
+        golang:
 ```
 
-If the `--target=<val>` flag is set, the list of targets will be filtered based
-on `<val>`.
+:::note
+Target-level dependencies override root-level dependencies.
+:::
 
-Likewise if the spec file contains items in the `targets` section then the list
-of available targets will be filtered to just the targets in the spec.
+### Custom Builder Images
+
+Use custom builder images for extensibility:
+
+```yaml
+targets:
+  azl3:
+    frontend:
+      image: docker.io/my/custom:azl3
+```
 
 ## Dependencies
 
@@ -75,7 +85,7 @@ Please note that dependencies under a target will override dependencies at the r
 
 ```yaml
 targets:
-  mariner2:
+  azl3:
     dependencies:
       build:
         - golang
@@ -89,73 +99,14 @@ This method allows for the use of a single spec file for all targets, employing 
 
 ```yaml
 targets:
-  mariner2:
+  azl3:
     frontend:
-      image: docker.io/my/custom:mariner2
+      image: docker.io/my/custom:azl3
 ```
 
-## Advanced Customization
+### Target-Specific Artifacts
 
-### Worker images
-
-In some cases you may need to have additional things installed in the worker
-image that are not typically available in the base image. As an example, a
-package dependency may not be available in the default package repositories.
-
-You can have Dalec output an image with the target's worker image with
-`<target>/worker>` build target, e.g. `--target=mariner2/worker`. You can then
-add any customizations and feed that back in via [source polices](#source-policies)
-or [named build contexts](#named-build-contexts).
-
-
-### Source Policies
-
-`docker buildx build` has experimental support for providing a
-[source policy](https://docs.docker.com/build/building/variables/#experimental_buildkit_source_policy)
-which updates the base image ref used to create the worker image. This method
-will update any and all references to the matched image used for any part of
-the build. It also requires knowing the image(s) that are used ahead of time and
-creating the right set of match rules and potentially having to update this in
-the future if the worker image refs in Dalec change.
-
-A finer grained approach is to use [named build contexts](#named-build-contexts).
-
-### Named Build Contexts
-
-`docker buildx build` has a flag called `--build-context`
-([doc](https://docs.docker.com/reference/cli/docker/buildx/build/#build-context))
-which allows you to provide additional build contexts apart from the main build
-context in the form of `<name>=<ref>`. See the prior linked documentation for
-what can go into `<ref>`.
-
-In the `mariner2` target, Dalec looks for a named context called either
-
-1. The actual base image used internally for mariner2
-  i. `--build-context mcr.microsoft.com/cbl-mariner/base/core:2.0=<new ref>`
-2. A build context named `dalec-mariner2-worker`
-  i. `--build-context dalec-mariner2-worker=<new ref>`
-
-If 1 is provided, then 2 is ignored.
-
-This works the same way in the `azlinux3`:
-
-1. The actual base image used internally for azlinux3
-  i. `--build-context mcr.microsoft.com/azurelinux/base/core:3.0=<new ref>`
-2. A build context named `dalec-mariner2-worker`
-  i. `--build-context dalec-azlinux3-worker=<new ref>`
-
-### Target Defined Artifacts
-
-There are some situations where you may want to have multiple builds and for those different
-targets they may require different binaries to exist that are not globally applicable to all
-of the builds. For example, `windowscross` may require specific artifacts (binaries, docs,
-config files, etc.) that are not relevant to `azlinux3`, and vice versa.
-
-To address this you can define artifacts per target. Target-defined artifacts will override
-global (spec-defined) artifacts if there is a conflict. However, if a target does not define
-an artifact, it will inherit artifacts from the global spec.
-
-Here is an example:
+Define different artifacts for different targets:
 
 ```yaml
 targets:
@@ -173,31 +124,59 @@ targets:
           permissions: 0o755
 ```
 
-For more details on how Artifacts are structured and configured, see the [Artifacts](artifacts.md) documentation.
+Target artifacts override global artifacts but inherit unspecified ones. See [Artifacts](artifacts.md) for more details.
 
-### Target defined package metadata
+### Package Metadata
 
-`conflicts`, `replaces`, and `provides` can be defined at the target level in addition to the [globalspec level](spec.md#additional-metadata).
-This allows you to define package metadata that is specific to a target.
+Define target-specific package metadata:
 
 ```yaml
 targets:
-  mariner2:
+  azl3:
     package:
       conflicts:
         - "foo"
         - "bar"
       replaces:
-        - foo"
+        - "foo"
       provides:
         - "qux"
 ```
 
-## Special considerations
+## Advanced Customization
 
-### Windows
+### Custom Worker Images
 
-When using the `windowscross` target you will need to make sure that binaries use the `.exe` extension.
+When you need additional packages in the worker image, output the worker image first:
+
+```shell
+docker build --target=azl3/worker -t my-custom-worker .
+```
+
+Then customize it and use it via source policies or named build contexts.
+
+### Named Build Contexts
+
+Override worker images using `--build-context`:
+
+```shell
+# Method 1: Override the base image directly
+docker build --build-context mcr.microsoft.com/azurelinix/base/core:3.0=my-custom-image .
+
+# Method 2: Use named context
+docker build --build-context dalec-azl3-worker=my-custom-image .
+```
+
+Target-specific context names:
+
+- `dalec-mariner2-worker` for mariner2
+- `dalec-azlinux3-worker` for azlinux3
+
+## Windows Target Considerations
+
+### File Extensions
+
+Windows binaries must use the `.exe` extension:
 
 ```yaml
 build:
@@ -206,8 +185,9 @@ build:
         go build -o _output/bin/dalec_example.exe
 ```
 
-You can use the built-in `TARGETOS` build-arg to determine if the build is targeting Windows or not.
-Alternatively you can use the built-in `DALEC_TARGET` build-arg to determine the target being built.
+### Conditional Building
+
+Use built-in build arguments for conditional logic:
 
 ```yaml
 build:
@@ -222,6 +202,8 @@ build:
         fi
 ```
 
+Or use the target-specific variable:
+
 ```yaml
 build:
   env:
@@ -235,27 +217,15 @@ build:
         fi
 ```
 
-Since `windowscross` is intended for cross-compilation, the environment has the
-following env vars set by default:
+### Default Environment
 
-- `GOOS=windows` - ensures that by default `go build` produces a Windows binary
-
-This can be overridden in your spec by either setting them in the `env` section
-or in the actual build step script, which may be necessary if you need to
-build tooling or other things first.
+The `windowscross` target sets `GOOS=windows` by default for cross-compilation. Override if needed:
 
 ```yaml
 build:
   env:
-    GOOS: linux
+    GOOS: linux  # Override for building tools first
   steps:
     - command: |
         go build -o _output/bin/dalec_example
-```
-
-```yaml
-build:
-  steps:
-    - command: |
-        GOOS=linux go build -o _output/bin/dalec_example
 ```
