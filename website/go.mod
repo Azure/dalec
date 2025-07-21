@@ -3,7 +3,7 @@ module github.com/Azure/dalec/website
 go 1.23.0
 
 require (
-	dagger.io/dagger v0.18.12
+	dagger.io/dagger v0.18.14
 	github.com/pkg/errors v0.9.1
 )
 
