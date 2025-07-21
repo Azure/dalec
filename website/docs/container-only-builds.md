@@ -2,7 +2,7 @@
 title: Container-only builds
 ---
 
-Dalec can create minimal container images with only specific packages installed, without building from source code. This is useful for creating distroless images or minimal containers with just the runtime dependencies you need.
+Dalec can create minimal container images with only specific packages installed, without building from source code. This is useful for creating minimal container images with just the runtime dependencies you need.
 
 ## How it Works
 
@@ -16,7 +16,7 @@ name: my-minimal-image
 version: 0.1.0
 revision: 1
 license: MIT
-description: A minimal distroless image with only curl and shell access
+description: A minimal image with only curl and shell access
 
 dependencies:
   runtime:
@@ -40,3 +40,13 @@ This produces a minimal image built from `scratch` containing:
 - Dependencies of the specified packages
 
 The `--target=azlinux3` flag tells Dalec to use Azure Linux 3 repositories for package installation, even though the final image starts from scratch.
+
+:::tip
+
+Alternatively, you can omit creating a Dalec spec file by passing the dependencies directly in the command line. This is useful for quick builds without needing a spec file.
+
+```bash
+docker build -t my-minimal-image:0.1.0 --build-arg BUILDKIT_SYNTAX=ghcr.io/azure/dalec/frontend:latest --target=azlinux3/container/depsonly -<<<"$(jq -c '.dependencies.runtime = {"curl": {}, "bash": {}} | .image.entrypoint = "/bin/bash"' <<<"{}" )"
+```
+
+:::
