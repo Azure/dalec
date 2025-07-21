@@ -14,12 +14,6 @@ on:
       - '.github/workflows/worker-images/matrix.json'
       - '.github/workflows/worker-images.yml'
   workflow_dispatch:
-    inputs:
-      ref:
-        description: 'Git reference to build worker images for'
-        required: true
-        default: ''
-        type: string
 
 permissions:
   contents: read
@@ -36,13 +30,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout code
-        if: ${{ github.event_name != 'workflow_dispatch' }}
         uses:  actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Checkout code (workflow_dispatch)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        uses:  actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: ${{ github.event.inputs.ref }}
       - name: Set matrix
         id: set-matrix
         run: |
@@ -84,7 +72,11 @@ jobs:
 
           tag="${{ github.ref_name }}"
           tag="${tag//\//-}" # Replace slashes with dashes
-          echo "IMAGE_REPO=${{ steps.source-policy.outputs.formatted-repo }}/${{ matrix.target }}:${tag}"  >> $GITHUB_ENV
+          tag="${tag%.*}" # Trim off patch version if it exists
+
+          BASE_REPO="${{ steps.source-policy.outputs.formatted-repo }}/${{ matrix.target }}"
+          echo "BASE_REPO=${BASE_REPO}" >> $GITHUB_ENV
+          echo "IMAGE_REPO=${BASE_REPO}:${tag}" >> $GITHUB_ENV
       - if: ${{ github.event_name == 'pull_request' }}
         name: Setup up (PR)
         run: |
@@ -93,19 +85,33 @@ jobs:
 
           ref="localhost:5000/${IMAGE_REPO}"
           EXTRA_FLAGS="--set worker.cache-from=type=gha,scope=${MAIN_CACHE_SCOPE} --set worker.tags=${ref} --push"
+
+          # Because we sometimes add an extra ref for ":latest", let's also do that here to validate that it works
+          EXTRA_FLAGS+=" --set worker.tags=${ref}-latest"
+
           echo "EXTRA_FLAGS=${EXTRA_FLAGS}" >> $GITHUB_ENV
 
           docker run -d --net=host ghcr.io/${{ steps.source-policy.outputs.formatted-repo }}/dockerhub/mirror/library/registry:latest
-      - if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+      - if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
         name: Setup (tagged)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eux
 
           ref="ghcr.io/${IMAGE_REPO}"
 
+   
           # Don't need o care about cache-from in this case as this is the "prod" image, better to build it from scratch
           # Inline the cache with the image so others can use it as a cache-from for their own builds.
           EXTRA_FLAGS="--set worker.cache-to=type=inline,mode=max --set worker.tags=${ref} --push"
+
+          latest="$(gh release view --json tagName -q .tagName)"
+          if [ ${{ github.ref_name }} = "${latest}" ]; then
+            # If this is the latest release, we also tag it as "latest"
+            IMAGE_REPO_LATEST="${BASE_REPO}:latest"
+            EXTRA_FLAGS+=" --set worker.tags=ghcr.io/${IMAGE_REPO_LATEST}"
+          fi
 
           echo "EXTRA_FLAGS=${EXTRA_FLAGS}" >> $GITHUB_ENV
       - if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
