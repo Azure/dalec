@@ -3,14 +3,11 @@ package dalec
 
 import (
 	"encoding/json"
-	"io/fs"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/parser"
-	"github.com/moby/buildkit/client/llb"
-	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
@@ -199,167 +196,6 @@ type SymlinkTarget struct {
 	Group string `yaml:"group,omitempty" json:"group,omitempty"`
 }
 
-type SourceDockerImage struct {
-	Ref string   `yaml:"ref" json:"ref"`
-	Cmd *Command `yaml:"cmd,omitempty" json:"cmd,omitempty"`
-}
-
-type SourceGit struct {
-	URL        string  `yaml:"url" json:"url"`
-	Commit     string  `yaml:"commit" json:"commit"`
-	KeepGitDir bool    `yaml:"keepGitDir,omitempty" json:"keepGitDir,omitempty"`
-	Auth       GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
-}
-
-type GitAuth struct {
-	// Header is the name of the secret that contains the git auth header.
-	// when using git auth header based authentication.
-	// Note: This should not have the *actual* secret value, just the name of
-	// the secret which was specified as a build secret.
-	Header string `yaml:"header,omitempty" json:"header,omitempty"`
-	// Token is the name of the secret which contains a git auth token when using
-	// token based authentication.
-	// Note: This should not have the *actual* secret value, just the name of
-	// the secret which was specified as a build secret.
-	Token string `yaml:"token,omitempty" json:"token,omitempty"`
-	// SSH is the name of the secret which contains the ssh auth info when using
-	// ssh based auth.
-	// Note: This should not have the *actual* secret value, just the name of
-	// the secret which was specified as a build secret.
-	SSH string `yaml:"ssh,omitempty" json:"ssh,omitempty"`
-}
-
-type GomodGitAuth struct {
-	// Header is the name of the secret that contains the git auth header.
-	// when using git auth header based authentication.
-	// Note: This should not have the *actual* secret value, just the name of
-	// the secret which was specified as a build secret.
-	Header string `yaml:"header,omitempty" json:"header,omitempty"`
-	// Token is the name of the secret which contains a git auth token when using
-	// token based authentication.
-	// Note: This should not have the *actual* secret value, just the name of
-	// the secret which was specified as a build secret.
-	Token string `yaml:"token,omitempty" json:"token,omitempty"`
-	// SSH is a struct container the name of the ssh ID which contains the
-	// address of the ssh auth socket, plus the username to use for the git
-	// remote.
-	// Note: This should not have the *actual* socket address, just the name of
-	// the ssh ID which was specified as a build secret.
-	SSH *GomodGitAuthSSH `yaml:"ssh,omitempty" json:"ssh,omitempty"`
-}
-
-type GomodGitAuthSSH struct {
-	// ID is the name of the ssh socket to mount, as provided via the `--ssh`
-	// flag to `docker build`.
-	ID string `yaml:"id,omitempty" json:"id,omitempty"`
-	// Username is the username to use with this particular git remote. If none
-	// is provided, `git` will be inserted.
-	Username string `yaml:"username,omitempty" json:"username,omitempty"`
-}
-
-// LLBOpt returns an [llb.GitOption] which sets the auth header and token secret
-// values in LLB if they are set.
-func (a *GitAuth) LLBOpt() llb.GitOption {
-	return gitOptionFunc(func(gi *llb.GitInfo) {
-		if a == nil {
-			return
-		}
-
-		if a.Header != "" {
-			gi.AuthHeaderSecret = a.Header
-		}
-
-		if a.Token != "" {
-			gi.AuthTokenSecret = a.Token
-		}
-
-		if a.SSH != "" {
-			gi.MountSSHSock = a.SSH
-		}
-	})
-}
-
-// SourceHTTP is used to download a file from an HTTP(s) URL.
-type SourceHTTP struct {
-	// URL is the URL to download the file from.
-	URL string `yaml:"url" json:"url"`
-	// Digest is the digest of the file to download.
-	// This is used to verify the integrity of the file.
-	// Form: <algorithm>:<digest>
-	Digest digest.Digest `yaml:"digest,omitempty" json:"digest,omitempty"`
-	// Permissions is the octal file permissions to set on the file.
-	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
-}
-
-// SourceContext is used to generate a source from a build context. The path to
-// the build context is provided to the `Path` field of the owning `Source`.
-type SourceContext struct {
-	// Name is the name of the build context. By default, it is the magic name
-	// `context`, recognized by Docker as the default context.
-	Name string `yaml:"name,omitempty" json:"name,omitempty"`
-}
-
-// SourceInlineFile is used to specify the content of an inline source.
-type SourceInlineFile struct {
-	// Contents is the content.
-	Contents string `yaml:"contents,omitempty" json:"contents,omitempty"`
-	// Permissions is the octal file permissions to set on the file.
-	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
-	// UID is the user ID to set on the directory and all files and directories within it.
-	// UID must be greater than or equal to 0
-	UID int `yaml:"uid,omitempty" json:"uid,omitempty"`
-	// GID is the group ID to set on the directory and all files and directories within it.
-	// UID must be greater than or equal to 0
-	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
-}
-
-// SourceInlineDir is used by by [SourceInline] to represent a filesystem directory.
-type SourceInlineDir struct {
-	// Files is the list of files to include in the directory.
-	// The map key is the name of the file.
-	//
-	// Files with path separators in the key will be rejected.
-	Files map[string]*SourceInlineFile `yaml:"files,omitempty" json:"files,omitempty"`
-	// Permissions is the octal permissions to set on the directory.
-	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
-
-	// UID is the user ID to set on the directory and all files and directories within it.
-	// UID must be greater than or equal to 0
-	UID int `yaml:"uid,omitempty" json:"uid,omitempty"`
-	// GID is the group ID to set on the directory and all files and directories within it.
-	// UID must be greater than or equal to 0
-	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
-}
-
-// SourceInline is used to generate a source from inline content.
-type SourceInline struct {
-	// File is the inline file to generate.
-	// File is treated as a literal single file.
-	// [SourceIsDir] will return false when this is set.
-	// This is mutually exclusive with [Dir]
-	File *SourceInlineFile `yaml:"file,omitempty" json:"file,omitempty"`
-	// Dir creates a directory with the given files and directories.
-	// [SourceIsDir] will return true when this is set.
-	// This is mutually exclusive with [File]
-	Dir *SourceInlineDir `yaml:"dir,omitempty" json:"dir,omitempty"`
-}
-
-// Command is used to execute a command to generate a source from a docker image.
-type Command struct {
-	// Dir is the working directory to run the command in.
-	Dir string `yaml:"dir,omitempty" json:"dir,omitempty"`
-
-	// Mounts is the list of sources to mount into the build steps.
-	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
-
-	// Env is the list of environment variables to set for all commands in this step group.
-	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
-
-	// Steps is the list of commands to run to generate the source.
-	// Steps are run sequentially and results of each step should be cached.
-	Steps []*BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
-}
-
 // Source defines a source to be used in the build.
 // A source can be a local directory, a git repositoryt, http(s) URL, etc.
 type Source struct {
@@ -467,26 +303,6 @@ type ArtifactBuild struct {
 	// Caches is the list of caches to use for the build.
 	// These apply to all steps.
 	Caches []CacheConfig `yaml:"caches,omitempty" json:"caches,omitempty"`
-}
-
-// BuildStep is used to execute a command to build the artifact(s).
-type BuildStep struct {
-	// Command is the command to run to build the artifact(s).
-	// This will always be wrapped as /bin/sh -c "<command>", or whatever the equivalent is for the target distro.
-	Command string `yaml:"command" json:"command" jsonschema:"required"`
-	// Env is the list of environment variables to set for the command.
-	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
-
-	// Mounts is the list of sources to mount into the build step.
-	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
-}
-
-// SourceMount wraps a [Source] with a target mount point.
-type SourceMount struct {
-	// Dest is the destination directory to mount to
-	Dest string `yaml:"dest" json:"dest" jsonschema:"required"`
-	// Spec specifies the source to mount
-	Spec Source `yaml:"spec" json:"spec" jsonschema:"required"`
 }
 
 // Frontend encapsulates the configuration for a frontend to forward a build target to.

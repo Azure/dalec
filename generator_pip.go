@@ -25,9 +25,9 @@ func (s *Spec) HasPips() bool {
 	return false
 }
 
-func withPip(g *SourceGenerator, srcSt, worker llb.State, opts ...llb.ConstraintsOpt) llb.State {
+func withPip(g *SourceGenerator, srcSt, worker llb.State, path string, opts ...llb.ConstraintsOpt) llb.State {
 	workDir := "/work/src"
-	joinedWorkDir := filepath.Join(workDir, g.Subpath)
+	joinedWorkDir := filepath.Join(workDir, path, g.Subpath)
 	srcMount := llb.AddMount(workDir, srcSt)
 
 	paths := g.Pip.Paths
@@ -122,7 +122,7 @@ func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constraint
 			if gen.Pip == nil {
 				continue
 			}
-			cacheState := withPip(gen, merged, worker, opts...)
+			cacheState := withPip(gen, merged, worker, key, opts...)
 			cacheStates = append(cacheStates, cacheState)
 		}
 	}

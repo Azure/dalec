@@ -145,7 +145,5 @@ func ToSourcesLLB(worker llb.State, spec *dalec.Spec, sOpt dalec.SourceOpts, opt
 }
 
 func sourceTar(worker llb.State, key string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	return func(in llb.State) llb.State {
-		return dalec.Tar(worker, in, key+".tar.gz", opts...)
-	}
+	return dalec.AsTar(worker, key+".tar.gz", opts...)
 }

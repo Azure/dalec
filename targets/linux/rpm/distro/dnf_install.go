@@ -255,21 +255,16 @@ func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client,
 	}
 
 	return func(in llb.State) llb.State {
-		return in.Async(func(ctx context.Context, s llb.State, c *llb.Constraints) (llb.State, error) {
-			repoMounts, keyPaths, err := cfg.RepoMounts(repos, sOpt, opts...)
-			if err != nil {
-				return llb.Scratch(), err
-			}
-			importRepos := []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
+		repoMounts, keyPaths := cfg.RepoMounts(repos, sOpt, opts...)
+		importRepos := []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
 
-			opts = append(opts, dalec.ProgressGroup("Install build deps"))
-			installOpt, err := cfg.installBuildDepsPackage(s, targetKey, spec.Name, deps,
-				append(importRepos, dnfInstallWithConstraints(opts))...)(ctx, client, sOpt)
-			if err != nil {
-				return llb.Scratch(), err
-			}
+		opts = append(opts, dalec.ProgressGroup("Install build deps"))
+		installOpt, err := cfg.installBuildDepsPackage(in, targetKey, spec.Name, deps,
+			append(importRepos, dnfInstallWithConstraints(opts))...)(ctx, client, sOpt)
+		if err != nil {
+			return llb.Scratch()
+		}
 
-			return s.Run(installOpt, dalec.WithConstraints(opts...)).Root(), nil
-		})
+		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
 	}
 }

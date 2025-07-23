@@ -1116,7 +1116,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					{Command: "[ -f ./src/main.py ]"},
 					{Command: "[ -f ./src/requirements.txt ]"},
 					{Command: "[ -d ./src/site-packages ]"},
-					{Command: "cd ./src && python3 -c \"import sys; sys.path.insert(0, './site-packages'); import certifi; print('certifi imported successfully')\""},
+					{Command: "cd ./src; python3 -c \"import sys; sys.path.insert(0, './site-packages'); import certifi; print('certifi imported successfully')\""},
 				},
 			},
 		}

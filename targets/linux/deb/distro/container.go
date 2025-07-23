@@ -21,7 +21,7 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 
 	var baseImg llb.State
 	if bi != nil {
-		img, err := bi.ToState(sOpt, opts...)
+		img := bi.ToState(sOpt, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}
@@ -38,10 +38,7 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 	repos := dalec.GetExtraRepos(c.ExtraRepos, "install")
 	repos = append(repos, spec.GetInstallRepos(targetKey)...)
 
-	withRepos, err := c.RepoMounts(repos, sOpt, opts...)
-	if err != nil {
-		return llb.Scratch(), err
-	}
+	withRepos := c.RepoMounts(repos, sOpt, opts...)
 
 	debug := llb.Scratch().File(llb.Mkfile("debug", 0o644, []byte(`debug=2`)), opts...)
 	opts = append(opts, dalec.ProgressGroup("Install spec package"))

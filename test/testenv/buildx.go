@@ -335,24 +335,35 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	}
 
 	var (
-		ch   chan *client.SolveStatus
-		done <-chan struct{}
+		ch chan *client.SolveStatus
 	)
 
 	if cfg.SolveStatusFn != nil {
-		chDone := make(chan struct{})
-
 		ch = make(chan *client.SolveStatus, 1)
-		done = chDone
+		done := make(chan struct{})
 		go func() {
-			defer close(chDone)
-
-			for msg := range ch {
-				cfg.SolveStatusFn(msg)
+			defer close(done)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case msg, ok := <-ch:
+					cfg.SolveStatusFn(msg)
+					if !ok {
+						return
+					}
+				}
 			}
 		}()
+		t.Cleanup(func() {
+			// Make sure message processing is done before the test ends
+			select {
+			case <-ctx.Done():
+			case <-done:
+			}
+		})
 	} else {
-		ch, done = displaySolveStatus(ctx, t)
+		ch = displaySolveStatus(ctx, t)
 	}
 
 	var so client.SolveOpt
@@ -378,10 +389,6 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 		f(ctx, gwc)
 		return gwclient.NewResult(), nil
 	}, ch)
-
-	// Make sure the display goroutine has finished.
-	// Ensures there's no test output after the test has finished (which the test runner will complain about)
-	<-done
 
 	if err != nil {
 		t.Fatal(err)
