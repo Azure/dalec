@@ -683,7 +683,10 @@ func (w *indentWriter) Write(p []byte) (int, error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		w.w.Write([]byte("\t" + line + "\n"))
+		_, err := w.w.Write([]byte("\t" + line + "\n"))
+		if err != nil {
+			return total, err
+		}
 		total += len(line)
 	}
 

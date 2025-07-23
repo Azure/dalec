@@ -2,7 +2,6 @@ package dalec
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/moby/buildkit/client/llb"
@@ -68,5 +67,5 @@ func (src *SourceContext) processBuildArgs(lex *shell.Lex, args map[string]strin
 }
 
 func (src *SourceContext) doc(w io.Writer, _ string) {
-	fmt.Fprintln(w, "Generated from a local docker build context and is unreproducible.")
+	printDocLn(w, "Generated from a local docker build context and is unreproducible.")
 }

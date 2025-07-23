@@ -169,7 +169,7 @@ func (src *SourceGit) doc(w io.Writer, name string) {
 		panic(fmt.Errorf("could not parse git ref %q: %w", src.URL, err))
 	}
 
-	fmt.Fprintln(w, "Generated from a git repository:")
-	fmt.Fprintln(w, "	Remote:", ref.Remote)
-	fmt.Fprintln(w, "	Ref:", src.Commit)
+	printDocLn(w, "Generated from a git repository:")
+	printDocLn(w, "	Remote:", ref.Remote)
+	printDocLn(w, "	Ref:", src.Commit)
 }

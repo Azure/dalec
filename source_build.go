@@ -110,16 +110,15 @@ func (src *SourceBuild) processBuildArgs(lex *shell.Lex, args map[string]string,
 }
 
 func (src *SourceBuild) doc(w io.Writer, name string) {
-	fmt.Fprintln(w, "Generated from a docker build:")
-	fmt.Fprintln(w, "	Docker Build Target:", src.Target)
+	printDocLn(w, "Generated from a docker build:")
+	printDocLn(w, "	Docker Build Target:", src.Target)
 
 	src.Source.toIntercace().doc(&indentWriter{w}, name)
 
 	if len(src.Args) > 0 {
 		sorted := SortMapKeys(src.Args)
-		fmt.Fprintln(w, "	Build Args:")
 		for _, k := range sorted {
-			fmt.Fprintf(w, "		%s=%s\n", k, src.Args[k])
+			printDocf(w, "		%s=%s\n", k, src.Args[k])
 		}
 	}
 
@@ -127,5 +126,5 @@ func (src *SourceBuild) doc(w io.Writer, name string) {
 	if src.DockerfilePath != "" {
 		p = src.DockerfilePath
 	}
-	fmt.Fprintln(w, "	Dockerfile path in context:", p)
+	printDocLn(w, "	Dockerfile path in context:", p)
 }

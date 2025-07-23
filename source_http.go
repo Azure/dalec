@@ -2,7 +2,6 @@ package dalec
 
 import (
 	stderrors "errors"
-	"fmt"
 	"io"
 	"io/fs"
 
@@ -95,6 +94,6 @@ func (src *SourceHTTP) processBuildArgs(lex *shell.Lex, args map[string]string, 
 }
 
 func (src *SourceHTTP) doc(w io.Writer, name string) {
-	fmt.Fprintln(w, "Generated from a http(s) source:")
-	fmt.Fprintln(w, "	URL:", src.URL)
+	printDocLn(w, "Generated from a http(s) source:")
+	printDocLn(w, "	URL:", src.URL)
 }

@@ -520,13 +520,6 @@ func (opts fetchOptions) SetLocalOption(info *llb.LocalInfo) {
 	withFollowPath(opts.Path).SetLocalOption(info)
 }
 
-func (opts fetchOptions) mountOpts() (mOpts []llb.MountOption) {
-	if !isRoot(opts.Path) {
-		mOpts = append(mOpts, llb.SourcePath(opts.Path))
-	}
-	return
-}
-
 func mountFilters(opts fetchOptions) llb.StateOption {
 	// Here we don't want the normal source filters because this is going to be mounted, we can filter
 	// down to the requested path as part of a mount.
@@ -546,4 +539,19 @@ func mountFilters(opts fetchOptions) llb.StateOption {
 
 func (s *Source) fillDefaults() {
 	s.toIntercace().fillDefaults(s.Generate)
+}
+
+// doc writes should never error, so we panic if they do (and they won't because we are writing to a bytes.Buffer).
+func printDocLn(w io.Writer, args ...any) {
+	_, err := fmt.Fprintln(w, args...)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func printDocf(w io.Writer, format string, args ...any) {
+	_, err := fmt.Fprintf(w, format, args...)
+	if err != nil {
+		panic(err)
+	}
 }
