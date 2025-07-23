@@ -169,38 +169,34 @@ func (s *SourceInline) Doc(w io.Writer, name string) {
 }
 
 // Doc writes the information about the file to the writer.
-//
-//nolint:errcheck // ignore error check for simplicity, don't pass in a writer that can error on write.
 func (s *SourceInlineFile) Doc(w io.Writer, name string) {
-	fmt.Fprintln(w, `	cat << EOF > `+name+`
+	printDocLn(w, `	cat << EOF > `+name+`
 `+s.Contents+`
 	EOF`)
 
 	if s.UID != 0 {
-		fmt.Fprintln(w, `	chown `+strconv.Itoa(s.UID)+" "+name) //nolint:errcheck
+		printDocLn(w, `	chown `+strconv.Itoa(s.UID)+" "+name)
 	}
 	if s.GID != 0 {
-		fmt.Fprintln(w, `	chgrp `+strconv.Itoa(s.GID)+" "+name)
+		printDocLn(w, `	chgrp `+strconv.Itoa(s.GID)+" "+name)
 	}
 
 	perms := s.Permissions.Perm()
 	if perms == 0 {
 		perms = 0o644
 	}
-	fmt.Fprintf(w, "	chmod %o %s\n", perms.Perm(), name)
+	printDocf(w, "	chmod %o %s\n", perms.Perm(), name)
 }
 
 // Doc writes the information about the directory to the writer.
-//
-//nolint:errcheck // ignore error check for simplicity, don't pass in a writer that can error on write.
 func (s *SourceInlineDir) Doc(w io.Writer, name string) {
-	fmt.Fprintln(w, `	mkdir -p `+name)
+	printDocLn(w, `	mkdir -p `+name)
 
 	if s.UID != 0 {
-		fmt.Fprintln(w, `	chown `+strconv.Itoa(s.UID)+" "+name)
+		printDocLn(w, `	chown `+strconv.Itoa(s.UID)+" "+name)
 	}
 	if s.GID != 0 {
-		fmt.Fprintln(w, `	chgrp `+strconv.Itoa(s.GID)+" "+name)
+		printDocLn(w, `	chgrp `+strconv.Itoa(s.GID)+" "+name)
 	}
 
 	perms := s.Permissions.Perm()
@@ -214,7 +210,7 @@ func (s *SourceInlineDir) Doc(w io.Writer, name string) {
 		v.Doc(w, filepath.Join(name, k))
 	}
 
-	fmt.Fprintf(w, "	chmod %o %s\n", perms.Perm(), name)
+	printDocf(w, "	chmod %o %s\n", perms.Perm(), name)
 }
 
 func (s *SourceInline) toState(opts fetchOptions) llb.State {
@@ -315,6 +311,6 @@ func (s *SourceInline) processBuildArgs(lex *shell.Lex, args map[string]string, 
 }
 
 func (src *SourceInline) doc(w io.Writer, name string) {
-	fmt.Fprintln(w, "Generated from an inline source:")
+	printDocLn(w, "Generated from an inline source:")
 	src.Doc(w, name)
 }

@@ -317,40 +317,40 @@ func (src *SourceDockerImage) processBuildArgs(lex *shell.Lex, args map[string]s
 
 func (cmd *Command) doc(w io.Writer, name string) {
 	if len(cmd.Env) > 0 {
-		fmt.Fprintln(w, "	With the following environment variables set for all commands:")
+		printDocLn(w, "	With the following environment variables set for all commands:")
 
 		sorted := SortMapKeys(cmd.Env)
 		for _, k := range sorted {
-			fmt.Fprintf(w, "		%s=%s\n", k, cmd.Env[k])
+			printDocf(w, "		%s=%s\n", k, cmd.Env[k])
 		}
 	}
 	if cmd.Dir != "" {
-		fmt.Fprintln(w, "	Working Directory:", cmd.Dir)
+		printDocLn(w, "	Working Directory:", cmd.Dir)
 	}
 
-	fmt.Fprintln(w, "	Command(s):")
+	printDocLn(w, "	Command(s):")
 	for _, step := range cmd.Steps {
-		fmt.Fprintf(w, "		%s\n", step.Command)
+		printDocf(w, "		%s\n", step.Command)
 		if len(step.Env) > 0 {
-			fmt.Fprintln(w, "			With the following environment variables set for this command:")
+			printDocLn(w, "			With the following environment variables set for this command:")
 			sorted := SortMapKeys(step.Env)
 			for _, k := range sorted {
-				fmt.Fprintf(w, "				%s=%s\n", k, step.Env[k])
+				printDocf(w, "				%s=%s\n", k, step.Env[k])
 			}
 		}
 	}
 	if len(cmd.Mounts) > 0 {
-		fmt.Fprintln(w, "	With the following items mounted:")
+		printDocLn(w, "	With the following items mounted:")
 		for _, src := range cmd.Mounts {
-			fmt.Fprintln(w, "		Destination Path:", src.Dest)
+			printDocLn(w, "		Destination Path:", src.Dest)
 			src.Spec.toIntercace().doc(&indentWriter{w}, name)
 		}
 	}
 }
 
 func (src *SourceDockerImage) doc(w io.Writer, name string) {
-	fmt.Fprintln(w, "Generated from a docker image:")
-	fmt.Fprintln(w, "	Image:", src.Ref)
+	printDocLn(w, "Generated from a docker image:")
+	printDocLn(w, "	Image:", src.Ref)
 
 	if src.Cmd != nil {
 		src.Cmd.doc(&indentWriter{w}, name)

@@ -246,6 +246,7 @@ exit 0
 	}
 	if st == nil {
 		t.Fatal("gomod generator succeeded but return value was nil")
+		return nil, nil
 	}
 
 	def, err := st.Marshal(ctx)
@@ -813,6 +814,7 @@ func TestSourceInlineDir(t *testing.T) {
 func checkMkdir(t *testing.T, op *pb.FileOp, src *SourceInlineDir) {
 	if op == nil {
 		t.Fatal("expected dir op")
+		return
 	}
 
 	if len(op.Actions) != 1 {
@@ -822,6 +824,7 @@ func checkMkdir(t *testing.T, op *pb.FileOp, src *SourceInlineDir) {
 	mkdir := op.Actions[0].GetMkdir()
 	if mkdir == nil {
 		t.Fatalf("expected mkdir action: %v", op.Actions[0])
+		return
 	}
 
 	if mkdir.MakeParents {
@@ -851,6 +854,7 @@ func checkMkdir(t *testing.T, op *pb.FileOp, src *SourceInlineDir) {
 func checkMkfile(t *testing.T, op *pb.FileOp, src *SourceInlineFile, name string) {
 	if op == nil {
 		t.Fatal("expected file op")
+		return
 	}
 
 	if len(op.Actions) != 1 {
@@ -860,6 +864,7 @@ func checkMkfile(t *testing.T, op *pb.FileOp, src *SourceInlineFile, name string
 	mkfile := op.Actions[0].GetMkfile()
 	if mkfile == nil {
 		t.Fatalf("expected mkfile action: %v", op.Actions[0])
+		return
 	}
 
 	uid := mkfile.Owner.User.GetByID()
@@ -1153,11 +1158,13 @@ func checkFilter(t *testing.T, op *pb.FileOp, src *Source) {
 	t.Helper()
 	if op == nil {
 		t.Fatal("expected file op")
+		return
 	}
 
 	cpAction := op.Actions[0].GetCopy()
 	if cpAction == nil {
 		t.Fatal("expected copy action")
+		return
 	}
 
 	if cpAction.Dest != "/" {
