@@ -360,10 +360,16 @@ func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig
 
 	specWithCommand := func(cmd string) *dalec.Spec {
 		spec := newSimpleSpec()
-		spec.Dependencies = &dalec.PackageDependencies{}
-		spec.Dependencies.Build = map[string]dalec.PackageConstraints{
-			cfg.GetPackage("rust"): {},
+		spec.Dependencies = &dalec.PackageDependencies{
+			Build: make(map[string]dalec.PackageConstraints),
 		}
+
+		// Handle space-separated package lists from PackageOverrides
+		rustPackages := cfg.GetPackage("rust")
+		for _, pkg := range strings.Fields(rustPackages) {
+			spec.Dependencies.Build[pkg] = dalec.PackageConstraints{}
+		}
+
 		spec.Build.Steps = append(spec.Build.Steps, dalec.BuildStep{
 			Command: cmd,
 		})
