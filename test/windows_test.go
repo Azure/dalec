@@ -36,6 +36,9 @@ func TestWindows(t *testing.T) {
 		ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
 			return maps.Keys(spec.Artifacts.Binaries)
 		},
+		PackageOverrides: map[string]string{
+			"rust": "rust-all",
+		},
 	})
 
 	tcfg := targetConfig{
