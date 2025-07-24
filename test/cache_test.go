@@ -56,6 +56,11 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 			},
 		},
 		{
+			CargoBuild: &dalec.CargoBuildCache{
+				Scope: randKey,
+			},
+		},
+		{
 			Bazel: &dalec.BazelCache{
 				Scope: randKey,
 			},
@@ -78,6 +83,9 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 		}
 		if c.GoBuild != nil {
 			return "${GOCACHE}"
+		}
+		if c.CargoBuild != nil {
+			return "${SCCACHE_DIR}"
 		}
 		if c.Bazel != nil {
 			// There is no good way to determine the bazel cache dir
@@ -147,7 +155,7 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 				// Use the *original* distro name here since that is what wrote the file
 				check := fmt.Sprintf("%s %d", distro, i)
 				cmds = append(cmds, fmt.Sprintf("grep %q %s", check, filepath.Join(dir, "hello")))
-			case c.GoBuild != nil || c.Bazel != nil:
+			case c.GoBuild != nil || c.CargoBuild != nil || c.Bazel != nil:
 				// This should not exist because the cache is not shared between distros
 				cmds = append(cmds, fmt.Sprintf("[ ! -f %q ]", filepath.Join(dir, "hello")))
 			}
@@ -341,6 +349,55 @@ func testAutoGobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 
 		// Also make sure there is no autocache when there is no golang dependency
 		spec = specWithCommand("[ -z \"${GOCACHE}\" ]")
+		spec.Dependencies = nil
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
+	})
+}
+
+func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {
+	ctx = startTestSpan(ctx, t)
+
+	specWithCommand := func(cmd string) *dalec.Spec {
+		spec := newSimpleSpec()
+		spec.Dependencies = &dalec.PackageDependencies{}
+		spec.Dependencies.Build = map[string]dalec.PackageConstraints{
+			cfg.GetPackage("rust"): {},
+		}
+		spec.Build.Steps = append(spec.Build.Steps, dalec.BuildStep{
+			Command: cmd,
+		})
+		return spec
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		buf := bytes.NewBuffer(nil)
+		buf.WriteString("set -ex;\n")
+		buf.WriteString("[ -d \"$SCCACHE_DIR\" ]; echo hello > ${SCCACHE_DIR}/hello\n")
+
+		spec := specWithCommand(buf.String())
+		// Set ignore cache to make sure we always run the command so the cache is guaranteed to be populated
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
+		solveT(ctx, t, client, sr)
+
+		buf.Reset()
+		buf.WriteString("set -ex;\n")
+		buf.WriteString("[ -d \"$SCCACHE_DIR\" ]; grep hello ${SCCACHE_DIR}/hello\n")
+		spec = specWithCommand(buf.String())
+
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
+
+		// Now disable the auto cargobuild cache
+		spec = specWithCommand("[ -z \"${SCCACHE_DIR}\" ]")
+		spec.Build.Caches = []dalec.CacheConfig{
+			{CargoBuild: &dalec.CargoBuildCache{Disabled: true}},
+		}
+		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
+		solveT(ctx, t, client, sr)
+
+		// Also make sure there is no autocache when there is no rust dependency
+		spec = specWithCommand("[ -z \"${SCCACHE_DIR}\" ]")
 		spec.Dependencies = nil
 		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)

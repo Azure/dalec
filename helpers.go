@@ -634,6 +634,19 @@ func HasGolang(spec *Spec, targetKey string) bool {
 	return false
 }
 
+func HasRust(spec *Spec, targetKey string) bool {
+	for dep := range spec.GetBuildDeps(targetKey) {
+		switch dep {
+		case "rust", "rust-all", "rustc", "cargo":
+			return true
+		}
+		if strings.HasPrefix(dep, "rust-") {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Spec) GetProvides(targetKey string) map[string]PackageConstraints {
 	if p := s.Targets[targetKey].Provides; p != nil {
 		return p
