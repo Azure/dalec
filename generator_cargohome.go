@@ -9,6 +9,8 @@ import (
 
 const (
 	cargoHomeDir = "/cargo/registry"
+	// CargoCacheKey is the key used to identify the cargo registry cache in buildkit cache.
+	CargoCacheKey = "dalec-cargo-registry-cache"
 )
 
 func (s *Source) isCargohome() bool {
@@ -36,21 +38,69 @@ func withCargohome(g *SourceGenerator, srcSt, worker llb.State, subPath string, 
 		joinedWorkDir := filepath.Join(workDir, subPath, g.Subpath)
 		srcMount := llb.AddMount(workDir, srcSt)
 
+		const (
+			registryPath = "/tmp/dalec/cargo-registry-cache"
+			sccachePath  = "/tmp/dalec/sccache-binary-cache"
+		)
+
+		// First, install sccache binary to our persistent cache (we have network access here)
+		sccacheInstallScript := `#!/bin/bash
+set -euo pipefail
+
+# Check if sccache is already cached
+if [ -f "` + sccachePath + `/sccache" ]; then
+    echo "sccache already cached"
+    exit 0
+fi
+
+# Create cache directory
+mkdir -p "` + sccachePath + `"
+
+# Download precompiled sccache binary
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64) SCCACHE_ARCH="x86_64-unknown-linux-musl" ;;
+    aarch64) SCCACHE_ARCH="aarch64-unknown-linux-musl" ;;
+    *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+SCCACHE_VERSION="v0.10.0"
+SCCACHE_URL="https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
+
+echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
+curl -L "${SCCACHE_URL}" | tar xz --strip-components=1 -C "` + sccachePath + `"
+chmod +x "` + sccachePath + `/sccache"
+echo "sccache cached successfully"
+`
+
+		sccacheScript := llb.Scratch().File(llb.Mkfile("install_sccache.sh", 0o755, []byte(sccacheInstallScript)))
+
+		// Install sccache to persistent cache
+		deps := worker.Run(
+			ShArgs("bash /tmp/install_sccache.sh"),
+			llb.AddMount("/tmp", sccacheScript),
+			llb.AddMount(sccachePath, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)),
+			llb.Network(llb.NetModeSandbox), // Enable network for sccache download
+			WithConstraints(opts...),
+		).Root()
+
 		paths := g.Cargohome.Paths
 		if g.Cargohome.Paths == nil {
 			paths = []string{"."}
 		}
 
 		for _, path := range paths {
-			in = worker.Run(
-				ShArgs("cargo fetch"),
-				llb.AddEnv("CARGO_HOME", cargoHomeDir),
+			deps = worker.Run(
+				// Download cargo dependencies to our persistent registry cache
+				// This allows us to persist the cargo registry across builds
+				ShArgs(`set -e; CARGO_HOME="` + registryPath + `" cargo fetch`),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
+				llb.AddMount(registryPath, llb.Scratch(), llb.AsPersistentCacheDir(CargoCacheKey, llb.CacheMountShared)),
 				WithConstraints(opts...),
-			).AddMount(cargoHomeDir, in)
+			).AddMount(cargoHomeDir, deps)
 		}
-		return in
+		return deps
 	}
 }
 

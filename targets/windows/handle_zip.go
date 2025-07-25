@@ -279,6 +279,28 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 
 	if spec.HasCargohomes() {
 		fmt.Fprintln(buf, "export CARGO_HOME=\"$(pwd)/"+cargohomeName+"\"")
+
+		// Check if we have cargo caching enabled and set up sccache environment
+		hasCargoCache := false
+		for _, cache := range spec.Build.Caches {
+			if cache.CargoBuild != nil {
+				hasCargoCache = true
+				break
+			}
+		}
+
+		if hasCargoCache {
+			fmt.Fprintln(buf, "# Set up sccache environment for cargo build caching")
+			fmt.Fprintln(buf, "# Note: sccache binary should be pre-installed during dependency phase")
+			fmt.Fprintln(buf, "if command -v sccache >/dev/null 2>&1; then")
+			fmt.Fprintln(buf, "  export RUSTC_WRAPPER=sccache")
+			fmt.Fprintln(buf, "  export SCCACHE_DIR=/cache/cargo")
+			fmt.Fprintln(buf, "  echo 'Using pre-installed sccache for cargo build caching'")
+			fmt.Fprintln(buf, "else")
+			fmt.Fprintln(buf, "  echo 'Warning: sccache not found, cargo build caching disabled'")
+			fmt.Fprintln(buf, "fi")
+			fmt.Fprintln(buf, "")
+		}
 	}
 
 	if spec.HasPips() {

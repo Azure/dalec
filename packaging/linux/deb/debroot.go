@@ -337,12 +337,12 @@ func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
 	writeScriptHeader(buf, cfg)
 
-	// Set up cargo cache and install sccache if needed
+	// Set up cargo cache
 	if spec.HasCargohomes() {
 		fmt.Fprintln(buf, "# Set up cargo cache")
 		fmt.Fprintf(buf, "export CARGO_HOME=\"$(pwd)/%s\"\n", cargohomeName)
 
-		// Check if we have cargo caching enabled and set up sccache
+		// Check if we have cargo caching enabled and set up sccache environment
 		hasCargoCache := false
 		for _, cache := range spec.Build.Caches {
 			if cache.CargoBuild != nil {
@@ -352,23 +352,15 @@ func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		}
 
 		if hasCargoCache {
-			fmt.Fprintln(buf, "# Set up sccache for cargo build caching")
-			fmt.Fprintln(buf, "if ! command -v sccache >/dev/null 2>&1; then")
-			fmt.Fprintln(buf, "  echo 'Installing sccache...'")
-			fmt.Fprintln(buf, "  # Download and install sccache")
-			fmt.Fprintln(buf, "  SCCACHE_VERSION=\"0.8.2\"")
-			fmt.Fprintln(buf, "  ARCH=$(uname -m)")
-			fmt.Fprintln(buf, "  case \"$ARCH\" in")
-			fmt.Fprintln(buf, "    x86_64) SCCACHE_ARCH=\"x86_64-unknown-linux-musl\" ;;")
-			fmt.Fprintln(buf, "    aarch64) SCCACHE_ARCH=\"aarch64-unknown-linux-musl\" ;;")
-			fmt.Fprintln(buf, "    *) echo \"Unsupported architecture: $ARCH\"; exit 1 ;;")
-			fmt.Fprintln(buf, "  esac")
-			fmt.Fprintln(buf, "  SCCACHE_URL=\"https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz\"")
-			fmt.Fprintln(buf, "  curl -L \"$SCCACHE_URL\" | tar xz --strip-components=1 -C /usr/local/bin/ \"sccache-v${SCCACHE_VERSION}-${SCCACHE_ARCH}/sccache\"")
-			fmt.Fprintln(buf, "  chmod +x /usr/local/bin/sccache")
+			fmt.Fprintln(buf, "# Set up sccache environment for cargo build caching")
+			fmt.Fprintln(buf, "# Note: sccache binary should be pre-installed during dependency phase")
+			fmt.Fprintln(buf, "if command -v sccache >/dev/null 2>&1; then")
+			fmt.Fprintln(buf, "  export RUSTC_WRAPPER=sccache")
+			fmt.Fprintln(buf, "  export SCCACHE_DIR=/cache/cargo")
+			fmt.Fprintln(buf, "  echo 'Using pre-installed sccache for cargo build caching'")
+			fmt.Fprintln(buf, "else")
+			fmt.Fprintln(buf, "  echo 'Warning: sccache not found, cargo build caching disabled'")
 			fmt.Fprintln(buf, "fi")
-			fmt.Fprintln(buf, "export RUSTC_WRAPPER=sccache")
-			fmt.Fprintln(buf, "export SCCACHE_DIR=/cache/cargo")
 			fmt.Fprintln(buf, "")
 		}
 	}
