@@ -431,6 +431,10 @@
 					"$ref": "#/$defs/BazelCache",
 					"description": "Bazel specifies a cache for bazel builds."
 				},
+				"cargobuild": {
+					"$ref": "#/$defs/CargoBuildCache",
+					"description": "CargoBuild specifies a cache for Rust/Cargo build artifacts.\nThis uses sccache to cache Rust compilation artifacts."
+				},
 				"dir": {
 					"$ref": "#/$defs/CacheDir",
 					"description": "Dir specifies a generic cache directory configuration."
@@ -459,6 +463,12 @@
 						"gobuild"
 					],
 					"title": "gobuild"
+				},
+				{
+					"required": [
+						"cargobuild"
+					],
+					"title": "cargobuild"
 				},
 				{
 					"required": [
@@ -515,6 +525,31 @@
 				"null"
 			],
 			"description": "CacheDir is a generic cache directory configuration."
+		},
+		"CargoBuildCache": {
+			"properties": {
+				"disabled": {
+					"type": [
+						"boolean"
+					],
+					"description": "The cargobuild cache may be automatically injected into a build if\nrust is detected.\nDisabled explicitly turns this off."
+				},
+				"scope": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Scope adds extra information to the cache key.\nThis is useful to differentiate between different build contexts if required.\n\nThis is mainly intended for internal testing purposes."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			],
+			"description": "CargoBuildCache is a cache for Rust/Cargo build artifacts."
 		},
 		"ChangelogEntry": {
 			"required": [

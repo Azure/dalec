@@ -41,7 +41,17 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		return worker, err
 	}
 
-	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))...)
+	cargoExtraPaths, err := prepareCargo(ctx, client, &cfg, worker, spec, targetKey, opts...)
+	if err != nil {
+		return worker, err
+	}
+
+	// Combine the extra paths from both Go and Cargo preparations
+	combinedExtraPaths := func(in llb.State) llb.State {
+		return cargoExtraPaths(extraPaths(in))
+	}
+
+	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(combinedExtraPaths), spec, targetKey, versionID, cfg, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))...)
 	if err != nil {
 		return worker, err
 	}
@@ -152,6 +162,96 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 	return "", nil
 }
 
+func searchForAltRust(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, in llb.State, opts ...llb.ConstraintsOpt) (string, error) {
+	if !spec.HasCargohomes() {
+		return "", nil
+	}
+	var candidates []string
+
+	deps := spec.GetBuildDeps(targetKey)
+	if _, hasNormalRust := deps["rust"]; hasNormalRust {
+		return "", nil
+	}
+	if _, hasNormalCargo := deps["cargo"]; hasNormalCargo {
+		return "", nil
+	}
+
+	for dep := range deps {
+		if strings.HasPrefix(dep, "rust-") {
+			// Get the base version component
+			_, ver, _ := strings.Cut(dep, "-")
+			// Trim off any potential extra stuff
+			ver, _, _ = strings.Cut(ver, "-")
+			candidates = append(candidates, "usr/lib/rust-"+ver+"/bin")
+		}
+		if strings.HasPrefix(dep, "cargo-") {
+			// Get the base version component
+			_, ver, _ := strings.Cut(dep, "-")
+			// Trim off any potential extra stuff
+			ver, _, _ = strings.Cut(ver, "-")
+			candidates = append(candidates, "usr/lib/cargo-"+ver+"/bin")
+		}
+	}
+
+	if len(candidates) == 0 {
+		return "", nil
+	}
+
+	stfs, err := bkfs.FromState(ctx, &in, client, opts...)
+	if err != nil {
+		return "", err
+	}
+
+	for _, p := range candidates {
+		// Check for cargo binary first as it's more commonly used
+		_, err := fs.Stat(stfs, filepath.Join(p, "cargo"))
+		if err == nil {
+			// bkfs does not allow a leading `/` in the stat path per spec for [fs.FS]
+			// Add that in here
+			p := "/" + p
+			return p, nil
+		}
+		// Also check for rustc
+		_, err = fs.Stat(stfs, filepath.Join(p, "rustc"))
+		if err == nil {
+			p := "/" + p
+			return p, nil
+		}
+	}
+
+	return "", nil
+}
+
+func prepareCargo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePkgConfig, worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	if !dalec.HasRust(spec, targetKey) && !spec.HasCargohomes() {
+		return noOpStateOpt, nil
+	}
+
+	addCargoCache := true
+	for _, c := range spec.Build.Caches {
+		if c.CargoBuild != nil {
+			addCargoCache = false
+		}
+	}
+
+	if addCargoCache {
+		spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
+			CargoBuild: &dalec.CargoBuildCache{},
+		})
+	}
+
+	cargoBin, err := searchForAltRust(ctx, client, spec, targetKey, worker, opts...)
+	if err != nil {
+		return noOpStateOpt, errors.Wrap(err, "error while looking for alternate rust bin path")
+	}
+
+	if cargoBin == "" {
+		return noOpStateOpt, nil
+	}
+	cfg.PrependPath = append(cfg.PrependPath, cargoBin)
+	return addPaths([]string{cargoBin}, opts...), nil
+}
+
 // prepends the provided values to $PATH
 func addPaths(paths []string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
@@ -221,7 +321,17 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 			return nil, nil, err
 		}
 
-		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg, pc, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))
+		cargoExtraPaths, err := prepareCargo(ctx, client, &cfg, worker, spec, targetKey, pg, frontend.IgnoreCache(client))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Combine the extra paths from both Go and Cargo preparations
+		combinedExtraPaths := func(in llb.State) llb.State {
+			return cargoExtraPaths(extraPaths(in))
+		}
+
+		st, err := deb.SourcePackage(ctx, sOpt, worker.With(combinedExtraPaths), spec, targetKey, versionID, cfg, pg, pc, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building source package")
 		}
