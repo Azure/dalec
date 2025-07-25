@@ -385,6 +385,9 @@ const (
 	sccacheBinary      = "/tmp/dalec/sccache"
 	sccacheCacheDirWin = "C:\\temp\\dalec\\sccache-cache"
 	sccacheBinaryWin   = "C:\\temp\\dalec\\sccache.exe"
+	// SccacheCacheKey is the key used to identify the sccache binary cache in buildkit cache.
+	// This must match the key used in generator_cargohome.go
+	SccacheCacheKey    = "dalec-sccache-binary-cache"
 )
 
 func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts ...CargoBuildCacheOption) llb.RunOption {
@@ -427,14 +430,62 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			scriptName = "install_sccache.sh"
 		}
 
-		// Set up sccache binary installation and cache directory
+		// Set up sccache binary and cache directory
+		// First try to use pre-installed sccache from cargohome generator
+		var setupScript string
+		var setupScriptName string
+		
+		if c.isWindowsPlatform(distroKey) {
+			setupScriptName = "setup_sccache.ps1"
+			const sccacheFromCargoCache = "C:\\temp\\dalec\\sccache-binary-cache\\sccache.exe"
+			setupScript = `# PowerShell setup script
+if (Test-Path "` + sccacheFromCargoCache + `") {
+    Write-Host "Using pre-installed sccache from cargo cache"
+    Copy-Item "` + sccacheFromCargoCache + `" "` + binaryPath + `" -Force
+} else {
+    Write-Host "Installing sccache using fallback method"
+    & "` + scriptPath + `\` + scriptName + `"
+}
+`
+		} else {
+			setupScriptName = "setup_sccache.sh"
+			const sccacheFromCargoCache = "/tmp/dalec/sccache-binary-cache/sccache"
+			setupScript = `#!/bin/bash
+set -e
+# Check if we have sccache from the cargo dependency cache
+if [ -f "` + sccacheFromCargoCache + `" ]; then
+    echo "Using pre-installed sccache from cargo cache"
+    cp "` + sccacheFromCargoCache + `" "` + binaryPath + `"
+    chmod +x "` + binaryPath + `"
+else
+    echo "Installing sccache using fallback method"
+    # Run the installation script
+    ` + scriptPath + `/` + scriptName + `
+fi
+`
+		}
+
+		setupScriptSt := llb.Scratch().File(llb.Mkfile(setupScriptName, 0o755, []byte(setupScript)))
 		installSccache := c.installSccacheScript(distroKey)
 
 		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
+		// Mount the sccache binary cache to check for pre-installed sccache
+		if c.isWindowsPlatform(distroKey) {
+			llb.AddMount("C:\\temp\\dalec\\sccache-binary-cache", llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
+		} else {
+			llb.AddMount("/tmp/dalec/sccache-binary-cache", llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
+		}
 		llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
 		llb.AddEnv("SCCACHE_CACHE_SIZE", "10G").SetRunOption(ei)
 		llb.AddEnv("RUSTC_WRAPPER", binaryPath).SetRunOption(ei)
 
+		// Add both the setup script and the fallback installation script
+		if c.isWindowsPlatform(distroKey) {
+			llb.AddMount("C:\\temp\\dalec\\setup", setupScriptSt).SetRunOption(ei)
+		} else {
+			llb.AddMount("/tmp/dalec/setup", setupScriptSt).SetRunOption(ei)
+		}
+		
 		// Add the sccache installation script as a file mount
 		var fileMode os.FileMode = 0o755
 		if c.isWindowsPlatform(distroKey) {
@@ -442,6 +493,13 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 		}
 		sccacheScript := llb.Scratch().File(llb.Mkfile(scriptName, fileMode, installSccache))
 		llb.AddMount(scriptPath, sccacheScript).SetRunOption(ei)
+		
+		// Run the setup script that checks for pre-installed sccache first
+		if c.isWindowsPlatform(distroKey) {
+			llb.Shlex("powershell -ExecutionPolicy Bypass -File C:\\temp\\dalec\\setup\\" + setupScriptName).SetRunOption(ei)
+		} else {
+			llb.Shlex("bash /tmp/dalec/setup/" + setupScriptName).SetRunOption(ei)
+		}
 	})
 }
 
@@ -484,7 +542,7 @@ case "$ARCH" in
     *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
-SCCACHE_VERSION="v0.7.4"
+SCCACHE_VERSION="v0.10.0"
 SCCACHE_URL="https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
 
 echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
