@@ -70,16 +70,17 @@ echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
 curl -L "${SCCACHE_URL}" | tar xz --strip-components=1 -C "` + sccachePath + `"
 chmod +x "` + sccachePath + `/sccache"
 echo "sccache cached successfully"
-`
+`)
+		}
 
-		sccacheScript := llb.Scratch().File(llb.Mkfile("install_sccache.sh", 0o755, []byte(sccacheInstallScript)))
+		srcMount := llb.AddMount(workDir, srcSt)
+		sccacheScript := llb.Scratch().File(llb.Mkfile(scriptName, 0o755, sccacheInstallScript))
 
 		// Install sccache to persistent cache
 		deps := worker.Run(
-			ShArgs("bash /tmp/install_sccache.sh"),
+			ShArgs(shellCommand),
 			llb.AddMount("/tmp", sccacheScript),
 			llb.AddMount(sccachePath, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)),
-			llb.Network(llb.NetModeSandbox), // Enable network for sccache download
 			WithConstraints(opts...),
 		).Root()
 
@@ -88,19 +89,36 @@ echo "sccache cached successfully"
 			paths = []string{"."}
 		}
 
+		// Cargo fetch command varies by platform
+		var cargoFetchCommand string
+		var outputMount string
+		if isWindows {
+			cargoFetchCommand = `set CARGO_HOME=C:\output && cargo fetch`
+			outputMount = "C:\\output"
+		} else {
+			cargoFetchCommand = `set -e; CARGO_HOME="/output" cargo fetch`
+			outputMount = "/output"
+		}
+
 		for _, path := range paths {
 			// Create a temporary state to capture cargo output
 			cargoOutput := worker.Run(
 				// Download cargo dependencies and create proper cargo home structure
-				ShArgs(`set -e; CARGO_HOME="/output" cargo fetch`),
+				ShArgs(cargoFetchCommand),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
-				llb.AddMount("/output", llb.Scratch()),
+				llb.AddMount(outputMount, llb.Scratch()),
 				WithConstraints(opts...),
-			).GetMount("/output")
+			).GetMount(outputMount)
 
 			// Copy the cargo registry to the deps state
-			deps = deps.File(llb.Copy(cargoOutput, "/registry", "/registry"))
+			var registrySourcePath string
+			if isWindows {
+				registrySourcePath = "\\registry"
+			} else {
+				registrySourcePath = "/registry"
+			}
+			deps = deps.File(llb.Copy(cargoOutput, registrySourcePath, "/registry"))
 		}
 
 		return deps

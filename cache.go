@@ -498,9 +498,9 @@ echo "Cargo cache setup complete"
 
 		llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
 		llb.AddEnv("SCCACHE_CACHE_SIZE", "10G").SetRunOption(ei)
-		llb.AddEnv("RUSTC_WRAPPER", binaryPath).SetRunOption(ei)
+		// Note: RUSTC_WRAPPER is set by the setup script only when sccache is available
 
-		// Add both the setup script and the fallback installation script  
+		// Add both the setup script and the fallback installation script
 		llb.AddMount(setupMount, setupScriptSt).SetRunOption(ei)
 
 		sccacheScript := llb.Scratch().File(llb.Mkfile(scriptName, fileMode, installSccache))
