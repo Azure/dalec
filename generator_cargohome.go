@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	cargoHomeDir = "/cargo/registry"
 	// CargoCacheKey is the key used to identify the cargo registry cache in buildkit cache.
 	CargoCacheKey = "dalec-cargo-registry-cache"
 )
@@ -90,13 +89,18 @@ echo "sccache cached successfully"
 		}
 
 		for _, path := range paths {
-			deps = worker.Run(
-				// Download cargo dependencies - let cargo create the proper registry structure
+			// Create a temporary state to capture cargo output
+			cargoOutput := worker.Run(
+				// Download cargo dependencies and create proper cargo home structure
 				ShArgs(`set -e; CARGO_HOME="/output" cargo fetch`),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
+				llb.AddMount("/output", llb.Scratch()),
 				WithConstraints(opts...),
-			).Root()
+			).GetMount("/output")
+
+			// Copy the cargo registry to the deps state
+			deps = deps.File(llb.Copy(cargoOutput, "/registry", "/registry"))
 		}
 
 		return deps
