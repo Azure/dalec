@@ -456,17 +456,30 @@ if (Test-Path "` + sccacheFromCargoCache + `") {
 			fileMode = 0o755
 
 			setupScript = `#!/bin/bash
-set -e
+# Note: Don't use 'set -e' here to prevent cache setup failures from killing the build
+echo "Setting up sccache for cargo build cache..."
+
 # Check if we have sccache from the cargo dependency cache
 if [ -f "` + sccacheFromCargoCache + `" ]; then
     echo "Using pre-installed sccache from cargo cache"
-    cp "` + sccacheFromCargoCache + `" "` + binaryPath + `"
-    chmod +x "` + binaryPath + `"
+    cp "` + sccacheFromCargoCache + `" "` + binaryPath + `" || echo "Warning: Failed to copy sccache from cache"
+    chmod +x "` + binaryPath + `" || echo "Warning: Failed to make sccache executable"
 else
     echo "Installing sccache using fallback method"
-    # Run the installation script
-    ` + scriptPath + `/` + scriptName + `
+    # Run the installation script (don't fail if it doesn't work)
+    ` + scriptPath + `/` + scriptName + ` || echo "Warning: sccache installation failed"
 fi
+
+# Check if sccache is now available
+if [ -f "` + binaryPath + `" ] && [ -x "` + binaryPath + `" ]; then
+    echo "sccache setup completed successfully"
+    export RUSTC_WRAPPER="` + binaryPath + `"
+else
+    echo "Warning: sccache not available, continuing build without cargo cache"
+    unset RUSTC_WRAPPER || true
+fi
+
+echo "Cargo cache setup complete"
 `
 		}
 
@@ -487,18 +500,14 @@ fi
 		llb.AddEnv("SCCACHE_CACHE_SIZE", "10G").SetRunOption(ei)
 		llb.AddEnv("RUSTC_WRAPPER", binaryPath).SetRunOption(ei)
 
-		// Add both the setup script and the fallback installation script
+		// Add both the setup script and the fallback installation script  
 		llb.AddMount(setupMount, setupScriptSt).SetRunOption(ei)
 
 		sccacheScript := llb.Scratch().File(llb.Mkfile(scriptName, fileMode, installSccache))
 		llb.AddMount(scriptPath, sccacheScript).SetRunOption(ei)
 
-		// Run the setup script that checks for pre-installed sccache first
-		if isWindows {
-			llb.Shlex("powershell -ExecutionPolicy Bypass -File " + setupMount + "\\" + setupScriptName).SetRunOption(ei)
-		} else {
-			llb.Shlex("bash " + setupMount + "/" + setupScriptName).SetRunOption(ei)
-		}
+		// The sccache setup will be handled by the build process
+		// We just set up the environment and mounts here
 	})
 }
 
@@ -576,6 +585,7 @@ func (c *CargoBuildCache) isWindowsPlatform(distroKey string) bool {
 		"windowsservercore": true,
 		"nanoserver":        true,
 		"windows":           true,
+		"windowscross":      true,
 	}
 	return windowsPlatforms[distroKey]
 }
