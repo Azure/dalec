@@ -91,15 +91,14 @@ echo "sccache cached successfully"
 
 		for _, path := range paths {
 			deps = worker.Run(
-				// Download cargo dependencies to our persistent registry cache
-				// This allows us to persist the cargo registry across builds
-				ShArgs(`set -e; CARGO_HOME="` + registryPath + `" cargo fetch`),
+				// Download cargo dependencies - let cargo create the proper registry structure
+				ShArgs(`set -e; CARGO_HOME="/output" cargo fetch`),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
-				llb.AddMount(registryPath, llb.Scratch(), llb.AsPersistentCacheDir(CargoCacheKey, llb.CacheMountShared)),
 				WithConstraints(opts...),
-			).AddMount(cargoHomeDir, deps)
+			).Root()
 		}
+
 		return deps
 	}
 }

@@ -387,7 +387,7 @@ const (
 	sccacheBinaryWin   = "C:\\temp\\dalec\\sccache.exe"
 	// SccacheCacheKey is the key used to identify the sccache binary cache in buildkit cache.
 	// This must match the key used in generator_cargohome.go
-	SccacheCacheKey    = "dalec-sccache-binary-cache"
+	SccacheCacheKey = "dalec-sccache-binary-cache"
 )
 
 func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts ...CargoBuildCacheOption) llb.RunOption {
@@ -416,28 +416,26 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			key = fmt.Sprintf("%s-%s", key, c.Scope)
 		}
 
-		// Determine paths based on platform
-		var cacheDir, binaryPath, scriptPath, scriptName string
-		if c.isWindowsPlatform(distroKey) {
+		// Determine paths and configuration based on platform
+		isWindows := c.isWindowsPlatform(distroKey)
+
+		var (
+			cacheDir, binaryPath, scriptPath, scriptName       string
+			setupScriptName, sccacheFromCargoCache, setupMount string
+			fileMode                                           os.FileMode
+			setupScript                                        string
+		)
+
+		if isWindows {
 			cacheDir = sccacheCacheDirWin
 			binaryPath = sccacheBinaryWin
 			scriptPath = "C:\\temp\\dalec\\scripts"
 			scriptName = "install_sccache.ps1"
-		} else {
-			cacheDir = sccacheCacheDir
-			binaryPath = sccacheBinary
-			scriptPath = "/tmp/dalec/scripts"
-			scriptName = "install_sccache.sh"
-		}
-
-		// Set up sccache binary and cache directory
-		// First try to use pre-installed sccache from cargohome generator
-		var setupScript string
-		var setupScriptName string
-		
-		if c.isWindowsPlatform(distroKey) {
 			setupScriptName = "setup_sccache.ps1"
-			const sccacheFromCargoCache = "C:\\temp\\dalec\\sccache-binary-cache\\sccache.exe"
+			sccacheFromCargoCache = "C:\\temp\\dalec\\sccache-binary-cache\\sccache.exe"
+			setupMount = "C:\\temp\\dalec\\setup"
+			fileMode = 0o644 // PowerShell scripts don't need execute bit on Windows
+
 			setupScript = `# PowerShell setup script
 if (Test-Path "` + sccacheFromCargoCache + `") {
     Write-Host "Using pre-installed sccache from cargo cache"
@@ -448,8 +446,15 @@ if (Test-Path "` + sccacheFromCargoCache + `") {
 }
 `
 		} else {
+			cacheDir = sccacheCacheDir
+			binaryPath = sccacheBinary
+			scriptPath = "/tmp/dalec/scripts"
+			scriptName = "install_sccache.sh"
 			setupScriptName = "setup_sccache.sh"
-			const sccacheFromCargoCache = "/tmp/dalec/sccache-binary-cache/sccache"
+			sccacheFromCargoCache = "/tmp/dalec/sccache-binary-cache/sccache"
+			setupMount = "/tmp/dalec/setup"
+			fileMode = 0o755
+
 			setupScript = `#!/bin/bash
 set -e
 # Check if we have sccache from the cargo dependency cache
@@ -468,37 +473,31 @@ fi
 		setupScriptSt := llb.Scratch().File(llb.Mkfile(setupScriptName, 0o755, []byte(setupScript)))
 		installSccache := c.installSccacheScript(distroKey)
 
+		// Set up cache mounts and environment
 		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
+
 		// Mount the sccache binary cache to check for pre-installed sccache
-		if c.isWindowsPlatform(distroKey) {
-			llb.AddMount("C:\\temp\\dalec\\sccache-binary-cache", llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
-		} else {
-			llb.AddMount("/tmp/dalec/sccache-binary-cache", llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
+		sccacheBinaryCacheMount := "/tmp/dalec/sccache-binary-cache"
+		if isWindows {
+			sccacheBinaryCacheMount = "C:\\temp\\dalec\\sccache-binary-cache"
 		}
+		llb.AddMount(sccacheBinaryCacheMount, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
+
 		llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
 		llb.AddEnv("SCCACHE_CACHE_SIZE", "10G").SetRunOption(ei)
 		llb.AddEnv("RUSTC_WRAPPER", binaryPath).SetRunOption(ei)
 
 		// Add both the setup script and the fallback installation script
-		if c.isWindowsPlatform(distroKey) {
-			llb.AddMount("C:\\temp\\dalec\\setup", setupScriptSt).SetRunOption(ei)
-		} else {
-			llb.AddMount("/tmp/dalec/setup", setupScriptSt).SetRunOption(ei)
-		}
-		
-		// Add the sccache installation script as a file mount
-		var fileMode os.FileMode = 0o755
-		if c.isWindowsPlatform(distroKey) {
-			fileMode = 0o644 // PowerShell scripts don't need execute bit on Windows
-		}
+		llb.AddMount(setupMount, setupScriptSt).SetRunOption(ei)
+
 		sccacheScript := llb.Scratch().File(llb.Mkfile(scriptName, fileMode, installSccache))
 		llb.AddMount(scriptPath, sccacheScript).SetRunOption(ei)
-		
+
 		// Run the setup script that checks for pre-installed sccache first
-		if c.isWindowsPlatform(distroKey) {
-			llb.Shlex("powershell -ExecutionPolicy Bypass -File C:\\temp\\dalec\\setup\\" + setupScriptName).SetRunOption(ei)
+		if isWindows {
+			llb.Shlex("powershell -ExecutionPolicy Bypass -File " + setupMount + "\\" + setupScriptName).SetRunOption(ei)
 		} else {
-			llb.Shlex("bash /tmp/dalec/setup/" + setupScriptName).SetRunOption(ei)
+			llb.Shlex("bash " + setupMount + "/" + setupScriptName).SetRunOption(ei)
 		}
 	})
 }
