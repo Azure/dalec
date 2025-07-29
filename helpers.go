@@ -640,7 +640,7 @@ func HasRust(spec *Spec, targetKey string) bool {
 		case "rust", "rust-all", "rustc", "cargo":
 			return true
 		}
-		if strings.HasPrefix(dep, "rust-") {
+		if strings.HasPrefix(dep, "rust-") || strings.HasPrefix(dep, "cargo-") {
 			return true
 		}
 	}
