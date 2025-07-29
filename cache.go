@@ -18,6 +18,25 @@ const (
 	cacheMountUnset   = ""
 
 	BazelDefaultSocketID = "bazel-default" // Default ID for bazel socket
+
+	// SccacheVersion defines the version of sccache to install
+	SccacheVersion = "v0.10.0"
+
+	// SccacheDownloadURL is the base URL for downloading sccache releases
+	SccacheDownloadURL = "https://github.com/mozilla/sccache/releases/download"
+
+	// SccacheCacheSize is the default cache size for sccache
+	SccacheCacheSize = "10G"
+
+	// Sccache target architectures
+	SccacheArchLinuxX64   = "x86_64-unknown-linux-musl"
+	SccacheArchLinuxArm64 = "aarch64-unknown-linux-musl"
+	SccacheArchWindowsX64 = "x86_64-pc-windows-msvc"
+	SccacheArchWindowsX86 = "i686-pc-windows-msvc"
+
+	// Base paths for dalec temporary files
+	DalecTempDirLinux   = "/tmp/dalec"
+	DalecTempDirWindows = "C:\\temp\\dalec"
 )
 
 // CacheConfig configures a cache to use for a build.
@@ -497,7 +516,7 @@ echo "Cargo cache setup complete"
 		llb.AddMount(sccacheBinaryCacheMount, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
 
 		llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
-		llb.AddEnv("SCCACHE_CACHE_SIZE", "10G").SetRunOption(ei)
+		llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
 		// Note: RUSTC_WRAPPER is set by the setup script only when sccache is available
 
 		// Add both the setup script and the fallback installation script
@@ -545,13 +564,13 @@ fi
 		script += `# Download precompiled sccache binary for distros without package
 ARCH=$(uname -m)
 case "$ARCH" in
-    x86_64) SCCACHE_ARCH="x86_64-unknown-linux-musl" ;;
-    aarch64) SCCACHE_ARCH="aarch64-unknown-linux-musl" ;;
+    x86_64) SCCACHE_ARCH="` + SccacheArchLinuxX64 + `" ;;
+    aarch64) SCCACHE_ARCH="` + SccacheArchLinuxArm64 + `" ;;
     *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
-SCCACHE_VERSION="v0.10.0"
-SCCACHE_URL="https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
+SCCACHE_VERSION="` + SccacheVersion + `"
+SCCACHE_URL="` + SccacheDownloadURL + `/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
 
 echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
 curl -L "${SCCACHE_URL}" | tar xz --strip-components=1 -C /tmp
@@ -611,23 +630,27 @@ New-Item -Path "C:\temp\dalec" -ItemType Directory -Force | Out-Null
 
 # Detect architecture
 $arch = if ([Environment]::Is64BitOperatingSystem) { "x86_64" } else { "i686" }
-$sccacheArch = "$arch-pc-windows-msvc"
+$sccacheArch = if ($arch -eq "x86_64") { "` + SccacheArchWindowsX64 + `" } else { "` + SccacheArchWindowsX86 + `" }
 
-$sccacheVersion = "v0.7.4"
-$sccacheUrl = "https://github.com/mozilla/sccache/releases/download/$sccacheVersion/sccache-$sccacheVersion-$sccacheArch.zip"
+$sccacheVersion = "` + SccacheVersion + `"
+$sccacheUrl = "` + SccacheDownloadURL + `/$sccacheVersion/sccache-$sccacheVersion-$sccacheArch.tar.gz"
 
 Write-Host "Downloading sccache $sccacheVersion for $sccacheArch..."
 
 # Download and extract sccache
-$tempZip = "C:\temp\dalec\sccache.zip"
+$tempArchive = "C:\temp\dalec\sccache.tar.gz"
 try {
-    Invoke-WebRequest -Uri $sccacheUrl -OutFile $tempZip -UseBasicParsing
-    Expand-Archive -Path $tempZip -DestinationPath "C:\temp\dalec\sccache-extract" -Force
+    Invoke-WebRequest -Uri $sccacheUrl -OutFile $tempArchive -UseBasicParsing
+    
+    # Extract tar.gz file (requires tar command available in Windows 10+)
+    Push-Location "C:\temp\dalec"
+    tar -xzf "sccache.tar.gz"
+    Pop-Location
     
     # Find and move the sccache.exe binary
-    $sccacheExe = Get-ChildItem -Path "C:\temp\dalec\sccache-extract" -Name "sccache.exe" -Recurse | Select-Object -First 1
+    $sccacheExe = Get-ChildItem -Path "C:\temp\dalec" -Name "sccache.exe" -Recurse | Select-Object -First 1
     if ($sccacheExe) {
-        $sourcePath = Join-Path "C:\temp\dalec\sccache-extract" $sccacheExe.DirectoryName "sccache.exe"
+        $sourcePath = $sccacheExe.FullName
         Move-Item -Path $sourcePath -Destination "` + windowsSccacheBinary + `" -Force
     } else {
         throw "sccache.exe not found in downloaded archive"
@@ -636,8 +659,8 @@ try {
     Write-Host "sccache installed successfully to ` + windowsSccacheBinary + `"
 } finally {
     # Clean up temporary files
-    Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "C:\temp\dalec\sccache-extract" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $tempArchive -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "C:\temp\dalec\sccache-*" -Recurse -Force -ErrorAction SilentlyContinue
 }
 `
 

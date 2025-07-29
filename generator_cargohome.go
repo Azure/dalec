@@ -58,13 +58,13 @@ mkdir -p "` + sccachePath + `"
 # Download precompiled sccache binary
 ARCH=$(uname -m)
 case "$ARCH" in
-    x86_64) SCCACHE_ARCH="x86_64-unknown-linux-musl" ;;
-    aarch64) SCCACHE_ARCH="aarch64-unknown-linux-musl" ;;
+    x86_64) SCCACHE_ARCH="` + SccacheArchLinuxX64 + `" ;;
+    aarch64) SCCACHE_ARCH="` + SccacheArchLinuxArm64 + `" ;;
     *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
-SCCACHE_VERSION="v0.10.0"
-SCCACHE_URL="https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
+SCCACHE_VERSION="` + SccacheVersion + `"
+SCCACHE_URL="` + SccacheDownloadURL + `/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
 
 echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
 curl -L "${SCCACHE_URL}" | tar xz --strip-components=1 -C "` + sccachePath + `"
