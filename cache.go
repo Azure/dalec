@@ -29,14 +29,21 @@ const (
 	SccacheCacheSize = "10G"
 
 	// Sccache target architectures
-	SccacheArchLinuxX64   = "x86_64-unknown-linux-musl"
-	SccacheArchLinuxArm64 = "aarch64-unknown-linux-musl"
-	SccacheArchWindowsX64 = "x86_64-pc-windows-msvc"
-	SccacheArchWindowsX86 = "i686-pc-windows-msvc"
+	SccacheArchLinuxX64     = "x86_64-unknown-linux-musl"
+	SccacheArchLinuxArm64   = "aarch64-unknown-linux-musl"
+	SccacheArchWindowsX64   = "x86_64-pc-windows-msvc"
+	SccacheArchWindowsArm64 = "aarch64-pc-windows-msvc"
+	// Note: No i686 Windows build available for v0.10.0
 
 	// Base paths for dalec temporary files
 	DalecTempDirLinux   = "/tmp/dalec"
 	DalecTempDirWindows = "C:\\temp\\dalec"
+	
+	// Sccache v0.10.0 SHA256 checksums for binary validation
+	SccacheChecksumLinuxX64     = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
+	SccacheChecksumLinuxArm64   = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
+	SccacheChecksumWindowsX64   = "0d499d0f73fa575f805df014af6ece49b840195fb7de0c552230899d77186ceb"
+	SccacheChecksumWindowsArm64 = "5fd6cd6dd474e91c37510719bf27cfe1826f929e40dd383c22a7b96da9a5458d"
 )
 
 // CacheConfig configures a cache to use for a build.
@@ -564,8 +571,14 @@ fi
 		script += `# Download precompiled sccache binary for distros without package
 ARCH=$(uname -m)
 case "$ARCH" in
-    x86_64) SCCACHE_ARCH="` + SccacheArchLinuxX64 + `" ;;
-    aarch64) SCCACHE_ARCH="` + SccacheArchLinuxArm64 + `" ;;
+    x86_64) 
+        SCCACHE_ARCH="` + SccacheArchLinuxX64 + `"
+        SCCACHE_CHECKSUM="` + SccacheChecksumLinuxX64 + `"
+        ;;
+    aarch64) 
+        SCCACHE_ARCH="` + SccacheArchLinuxArm64 + `"
+        SCCACHE_CHECKSUM="` + SccacheChecksumLinuxArm64 + `"
+        ;;
     *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
@@ -573,9 +586,31 @@ SCCACHE_VERSION="` + SccacheVersion + `"
 SCCACHE_URL="` + SccacheDownloadURL + `/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
 
 echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
-curl -L "${SCCACHE_URL}" | tar xz --strip-components=1 -C /tmp
+curl -L "${SCCACHE_URL}" -o /tmp/sccache.tar.gz
+
+# Verify checksum
+echo "Verifying checksum..."
+if command -v sha256sum >/dev/null 2>&1; then
+    echo "${SCCACHE_CHECKSUM}  /tmp/sccache.tar.gz" | sha256sum -c - || {
+        echo "ERROR: Checksum verification failed for sccache binary"
+        rm -f /tmp/sccache.tar.gz
+        exit 1
+    }
+elif command -v shasum >/dev/null 2>&1; then
+    echo "${SCCACHE_CHECKSUM}  /tmp/sccache.tar.gz" | shasum -a 256 -c - || {
+        echo "ERROR: Checksum verification failed for sccache binary"
+        rm -f /tmp/sccache.tar.gz
+        exit 1
+    }
+else
+    echo "WARNING: No checksum utility found (sha256sum or shasum), skipping verification"
+fi
+
+# Extract and install
+tar xz --strip-components=1 -C /tmp -f /tmp/sccache.tar.gz
 mv /tmp/sccache "` + sccacheBinary + `"
 chmod +x "` + sccacheBinary + `"
+rm -f /tmp/sccache.tar.gz
 `
 	} else {
 		script += `# Install sccache from package manager
@@ -629,8 +664,23 @@ if ($existingSccache) {
 New-Item -Path "C:\temp\dalec" -ItemType Directory -Force | Out-Null
 
 # Detect architecture
-$arch = if ([Environment]::Is64BitOperatingSystem) { "x86_64" } else { "i686" }
-$sccacheArch = if ($arch -eq "x86_64") { "` + SccacheArchWindowsX64 + `" } else { "` + SccacheArchWindowsX86 + `" }
+$arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+switch ($arch) {
+    "X64" { 
+        $sccacheArch = "` + SccacheArchWindowsX64 + `"
+        $sccacheChecksum = "` + SccacheChecksumWindowsX64 + `"
+    }
+    "Arm64" { 
+        $sccacheArch = "` + SccacheArchWindowsArm64 + `"
+        $sccacheChecksum = "` + SccacheChecksumWindowsArm64 + `"
+    }
+    default { 
+        # Fallback to x64 for unsupported architectures (like x86)
+        Write-Host "Warning: Unsupported architecture $arch, using x64 version"
+        $sccacheArch = "` + SccacheArchWindowsX64 + `"
+        $sccacheChecksum = "` + SccacheChecksumWindowsX64 + `"
+    }
+}
 
 $sccacheVersion = "` + SccacheVersion + `"
 $sccacheUrl = "` + SccacheDownloadURL + `/$sccacheVersion/sccache-$sccacheVersion-$sccacheArch.tar.gz"
@@ -641,6 +691,14 @@ Write-Host "Downloading sccache $sccacheVersion for $sccacheArch..."
 $tempArchive = "C:\temp\dalec\sccache.tar.gz"
 try {
     Invoke-WebRequest -Uri $sccacheUrl -OutFile $tempArchive -UseBasicParsing
+    
+    # Verify checksum
+    Write-Host "Verifying checksum..."
+    $downloadedHash = (Get-FileHash -Path $tempArchive -Algorithm SHA256).Hash.ToLower()
+    if ($downloadedHash -ne $sccacheChecksum) {
+        throw "ERROR: Checksum verification failed. Expected: $sccacheChecksum, Got: $downloadedHash"
+    }
+    Write-Host "Checksum verification passed"
     
     # Extract tar.gz file (requires tar command available in Windows 10+)
     Push-Location "C:\temp\dalec"

@@ -58,8 +58,14 @@ mkdir -p "` + sccachePath + `"
 # Download precompiled sccache binary
 ARCH=$(uname -m)
 case "$ARCH" in
-    x86_64) SCCACHE_ARCH="` + SccacheArchLinuxX64 + `" ;;
-    aarch64) SCCACHE_ARCH="` + SccacheArchLinuxArm64 + `" ;;
+    x86_64) 
+        SCCACHE_ARCH="` + SccacheArchLinuxX64 + `"
+        SCCACHE_CHECKSUM="` + SccacheChecksumLinuxX64 + `"
+        ;;
+    aarch64) 
+        SCCACHE_ARCH="` + SccacheArchLinuxArm64 + `"
+        SCCACHE_CHECKSUM="` + SccacheChecksumLinuxArm64 + `"
+        ;;
     *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
@@ -67,8 +73,30 @@ SCCACHE_VERSION="` + SccacheVersion + `"
 SCCACHE_URL="` + SccacheDownloadURL + `/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
 
 echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
-curl -L "${SCCACHE_URL}" | tar xz --strip-components=1 -C "` + sccachePath + `"
+curl -L "${SCCACHE_URL}" -o /tmp/sccache.tar.gz
+
+# Verify checksum
+echo "Verifying checksum..."
+if command -v sha256sum >/dev/null 2>&1; then
+    echo "${SCCACHE_CHECKSUM}  /tmp/sccache.tar.gz" | sha256sum -c - || {
+        echo "ERROR: Checksum verification failed for sccache binary"
+        rm -f /tmp/sccache.tar.gz
+        exit 1
+    }
+elif command -v shasum >/dev/null 2>&1; then
+    echo "${SCCACHE_CHECKSUM}  /tmp/sccache.tar.gz" | shasum -a 256 -c - || {
+        echo "ERROR: Checksum verification failed for sccache binary"
+        rm -f /tmp/sccache.tar.gz
+        exit 1
+    }
+else
+    echo "WARNING: No checksum utility found (sha256sum or shasum), skipping verification"
+fi
+
+# Extract and install
+tar xz --strip-components=1 -C "` + sccachePath + `" -f /tmp/sccache.tar.gz
 chmod +x "` + sccachePath + `/sccache"
+rm -f /tmp/sccache.tar.gz
 echo "sccache cached successfully"
 `)
 		}
