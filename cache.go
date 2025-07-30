@@ -38,7 +38,7 @@ const (
 	// Base paths for dalec temporary files
 	DalecTempDirLinux   = "/tmp/dalec"
 	DalecTempDirWindows = "C:\\temp\\dalec"
-	
+
 	// Sccache v0.10.0 SHA256 checksums for binary validation
 	SccacheChecksumLinuxX64     = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
 	SccacheChecksumLinuxArm64   = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
