@@ -291,10 +291,8 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 
 		if hasCargoCache {
 			fmt.Fprintln(buf, "# Set up sccache for cargo build caching")
-			fmt.Fprintln(buf, "if [ -f /tmp/dalec/setup/setup_sccache.sh ]; then")
-			fmt.Fprintln(buf, "  bash /tmp/dalec/setup/setup_sccache.sh || echo 'Cargo cache setup failed, continuing...'")
-			fmt.Fprintln(buf, "elif [ -f /tmp/dalec/setup/setup_sccache.ps1 ]; then")
-			fmt.Fprintln(buf, "  powershell -File /tmp/dalec/setup/setup_sccache.ps1 || echo 'Cargo cache setup failed, continuing...'")
+			fmt.Fprintln(buf, "if [ -n \"${DALEC_SCCACHE_SETUP}\" ]; then")
+			fmt.Fprintln(buf, "  eval \"${DALEC_SCCACHE_SETUP}\" || echo 'Cargo cache setup failed, continuing...'")
 			fmt.Fprintln(buf, "fi")
 			fmt.Fprintln(buf, "")
 			fmt.Fprintln(buf, "# Check if sccache is available after setup")

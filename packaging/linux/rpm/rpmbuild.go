@@ -35,8 +35,11 @@ func Build(topDir, workerImg llb.State, specPath string, caches CacheInfo, opts 
 		// We don't want to have to re-run this step just because the path changed, this should be based on inputs only (ie the content of the rpm spec, sources, etc)
 		// The path should not be an input.
 		dalec.ShArgs(`# Set up cargo cache if available
-if [ -f "/tmp/dalec/setup/setup_sccache.sh" ]; then
-    bash /tmp/dalec/setup/setup_sccache.sh || echo "Cargo cache setup failed, continuing..."
+if [ -n "${DALEC_SCCACHE_SETUP}" ]; then
+    eval "${DALEC_SCCACHE_SETUP}" || echo "Cargo cache setup failed, continuing..."
+elif command -v sccache >/dev/null 2>&1; then
+    export RUSTC_WRAPPER=sccache
+    echo "Using system sccache for cargo build caching"
 fi
 
 # Run rpmbuild

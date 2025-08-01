@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
@@ -523,6 +524,23 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			"jammy":       true,
 		}
 
+		// Extract the base distro name from distroKey (might be in format like "ubuntu22.04/zip")
+		distroName := distroKey
+		if idx := strings.Index(distroKey, "/"); idx != -1 {
+			distroName = distroKey[:idx]
+		}
+
+		// Map version IDs to base names for needsPrecompiled check
+		distroNameMap := map[string]string{
+			"ubuntu22.04": "jammy",
+			"ubuntu20.04": "focal",
+			"ubuntu18.04": "bionic",
+			"debian11":    "bullseye",
+		}
+		if baseName, ok := distroNameMap[distroName]; ok {
+			distroName = baseName
+		}
+
 		// Determine paths based on platform
 		isWindows := platform.OS == "windows"
 
@@ -541,7 +559,7 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
 
 		// Only mount sccache binary cache for distros that need precompiled binaries or Windows
-		if needsPrecompiled[distroKey] || isWindows {
+		if needsPrecompiled[distroName] || isWindows {
 			// Mount the sccache binary cache to access pre-installed sccache from SourceHTTP
 			sccacheBinaryCacheMount := "/tmp/dalec/sccache-binary-cache"
 			if isWindows {
@@ -579,8 +597,8 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			// For distros that have sccache in their package manager, set up environment for package-manager installed sccache
 			llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
 			llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
-			// Assume sccache is installed via package manager and available in PATH
-			llb.AddEnv("RUSTC_WRAPPER", "sccache").SetRunOption(ei)
+			// Note: We don't set RUSTC_WRAPPER here because we can't guarantee sccache is available
+			// Build scripts should check if sccache is available before setting RUSTC_WRAPPER
 		}
 	})
 }

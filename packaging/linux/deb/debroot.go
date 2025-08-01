@@ -352,12 +352,12 @@ func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		}
 
 		if hasCargoCache {
-			fmt.Fprintln(buf, "# Set up sccache environment for cargo build caching")
-			fmt.Fprintln(buf, "# Note: sccache binary should be pre-installed during dependency phase")
-			fmt.Fprintln(buf, "if command -v sccache >/dev/null 2>&1; then")
+			fmt.Fprintln(buf, "# Set up sccache for cargo build caching")
+			fmt.Fprintln(buf, "if [ -n \"${DALEC_SCCACHE_SETUP}\" ]; then")
+			fmt.Fprintln(buf, "  eval \"${DALEC_SCCACHE_SETUP}\" || echo 'Cargo cache setup failed, continuing...'")
+			fmt.Fprintln(buf, "elif command -v sccache >/dev/null 2>&1; then")
 			fmt.Fprintln(buf, "  export RUSTC_WRAPPER=sccache")
-			fmt.Fprintln(buf, "  export SCCACHE_DIR=/cache/cargo")
-			fmt.Fprintln(buf, "  echo 'Using pre-installed sccache for cargo build caching'")
+			fmt.Fprintln(buf, "  echo 'Using system sccache for cargo build caching'")
 			fmt.Fprintln(buf, "else")
 			fmt.Fprintln(buf, "  echo 'Warning: sccache not found, cargo build caching disabled'")
 			fmt.Fprintln(buf, "fi")
