@@ -125,34 +125,40 @@ echo "sccache cached successfully"
 		if isWindows {
 			extractCmd = `powershell -Command "` +
 				`$ErrorActionPreference = 'Stop'; ` +
-				`if (Test-Path 'C:\sccache-download\sccache-*.tar.gz') { ` +
-				`tar -xzf (Get-ChildItem 'C:\sccache-download\sccache-*.tar.gz')[0].FullName -C 'C:\sccache-download'; ` +
-				`$sccacheExe = Get-ChildItem -Path 'C:\sccache-download' -Name 'sccache.exe' -Recurse | Select-Object -First 1; ` +
+				`if (Test-Path 'C:\sccache-download\sccache') { ` +
+				`New-Item -Path 'C:\temp\sccache-extract' -ItemType Directory -Force; ` +
+				`tar -xzf 'C:\sccache-download\sccache' -C 'C:\temp\sccache-extract' --strip-components=1; ` +
+				`$sccacheExe = Get-ChildItem -Path 'C:\temp\sccache-extract' -Name 'sccache.exe' -Recurse | Select-Object -First 1; ` +
 				`if ($sccacheExe) { ` +
 				`New-Item -Path '` + sccachePath + `' -ItemType Directory -Force; ` +
 				`Copy-Item $sccacheExe.FullName '` + sccachePath + `\sccache.exe' -Force; ` +
 				`Write-Host 'sccache binary installed successfully via SourceHTTP'; ` +
 				`} else { ` +
 				`Write-Host 'Warning: sccache.exe not found in SourceHTTP archive'; ` +
+				`Get-ChildItem -Path 'C:\temp\sccache-extract' -Recurse; ` +
 				`} ` +
 				`} else { ` +
 				`Write-Host 'Warning: sccache archive not found in SourceHTTP mount'; ` +
+				`Get-ChildItem -Path 'C:\sccache-download'; ` +
 				`}"`
 		} else {
 			extractCmd = `set -euo pipefail; ` +
 				`echo "Installing sccache via SourceHTTP..."; ` +
-				`if [ -f /sccache-download/sccache-*.tar.gz ]; then ` +
-				`mkdir -p "` + sccachePath + `"; ` +
-				`tar -xzf /sccache-download/sccache-*.tar.gz -C /sccache-download --strip-components=1; ` +
 				`if [ -f /sccache-download/sccache ]; then ` +
-				`cp /sccache-download/sccache "` + sccachePath + `/sccache"; ` +
+				`mkdir -p "` + sccachePath + `"; ` +
+				`mkdir -p /tmp/sccache-extract; ` +
+				`tar -xzf /sccache-download/sccache -C /tmp/sccache-extract --strip-components=1; ` +
+				`if [ -f /tmp/sccache-extract/sccache ]; then ` +
+				`cp /tmp/sccache-extract/sccache "` + sccachePath + `/sccache"; ` +
 				`chmod +x "` + sccachePath + `/sccache"; ` +
 				`echo "sccache binary installed successfully via SourceHTTP"; ` +
 				`else ` +
 				`echo "Warning: sccache binary not found in SourceHTTP archive"; ` +
+				`ls -la /tmp/sccache-extract/; ` +
 				`fi; ` +
 				`else ` +
 				`echo "Warning: sccache archive not found in SourceHTTP mount"; ` +
+				`ls -la /sccache-download/; ` +
 				`fi`
 		}
 
