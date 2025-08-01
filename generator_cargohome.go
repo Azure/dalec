@@ -142,8 +142,9 @@ echo "sccache cached successfully"
 				`Get-ChildItem -Path 'C:\sccache-download'; ` +
 				`}"`
 		} else {
-			extractCmd = `set -euo pipefail; ` +
+			extractCmd = `set -eu; ` +
 				`echo "Installing sccache via SourceHTTP..."; ` +
+				`ls -la /sccache-download/; ` +
 				`if [ -f /sccache-download/sccache ]; then ` +
 				`mkdir -p "` + sccachePath + `"; ` +
 				`mkdir -p /tmp/sccache-extract; ` +
@@ -154,11 +155,9 @@ echo "sccache cached successfully"
 				`echo "sccache binary installed successfully via SourceHTTP"; ` +
 				`else ` +
 				`echo "Warning: sccache binary not found in SourceHTTP archive"; ` +
-				`ls -la /tmp/sccache-extract/; ` +
 				`fi; ` +
 				`else ` +
 				`echo "Warning: sccache archive not found in SourceHTTP mount"; ` +
-				`ls -la /sccache-download/; ` +
 				`fi`
 		}
 
