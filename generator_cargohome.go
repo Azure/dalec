@@ -3,6 +3,7 @@ package dalec
 import (
 	"path/filepath"
 
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
@@ -102,12 +103,70 @@ echo "sccache cached successfully"
 		}
 
 		srcMount := llb.AddMount(workDir, srcSt)
-		sccacheScript := llb.Scratch().File(llb.Mkfile(scriptName, 0o755, sccacheInstallScript))
 
-		// Install sccache to persistent cache
-		deps := worker.Run(
-			ShArgs(shellCommand),
-			llb.AddMount("/tmp", sccacheScript),
+		// Get sccache using SourceHTTP instead of shell scripts
+		platform := constraints.Platform
+		if platform == nil {
+			p := platforms.DefaultSpec()
+			platform = &p
+		}
+
+		sccacheState, err := GetSccacheState(platform, opts...)
+		var deps llb.State
+		if err != nil {
+			// Since we can't return error from this nested function, we'll panic
+			// to fail fast if sccache download fails. This could indicate network,
+			// authentication, or other infrastructure issues that might affect the build
+			panic(errors.Wrap(err, "failed to download sccache via SourceHTTP"))
+		}
+
+		// Extract and install sccache using SourceHTTP
+		var extractCmd string
+		if isWindows {
+			extractCmd = `powershell -Command "` +
+				`$ErrorActionPreference = 'Stop'; ` +
+				`if (Test-Path 'C:\sccache-download\sccache-*.tar.gz') { ` +
+				`tar -xzf (Get-ChildItem 'C:\sccache-download\sccache-*.tar.gz')[0].FullName -C 'C:\sccache-download'; ` +
+				`$sccacheExe = Get-ChildItem -Path 'C:\sccache-download' -Name 'sccache.exe' -Recurse | Select-Object -First 1; ` +
+				`if ($sccacheExe) { ` +
+				`New-Item -Path '` + sccachePath + `' -ItemType Directory -Force; ` +
+				`Copy-Item $sccacheExe.FullName '` + sccachePath + `\sccache.exe' -Force; ` +
+				`Write-Host 'sccache binary installed successfully via SourceHTTP'; ` +
+				`} else { ` +
+				`Write-Host 'Warning: sccache.exe not found in SourceHTTP archive'; ` +
+				`} ` +
+				`} else { ` +
+				`Write-Host 'Warning: sccache archive not found in SourceHTTP mount'; ` +
+				`}"`
+		} else {
+			extractCmd = `set -euo pipefail; ` +
+				`echo "Installing sccache via SourceHTTP..."; ` +
+				`if [ -f /sccache-download/sccache-*.tar.gz ]; then ` +
+				`mkdir -p "` + sccachePath + `"; ` +
+				`tar -xzf /sccache-download/sccache-*.tar.gz -C /sccache-download --strip-components=1; ` +
+				`if [ -f /sccache-download/sccache ]; then ` +
+				`cp /sccache-download/sccache "` + sccachePath + `/sccache"; ` +
+				`chmod +x "` + sccachePath + `/sccache"; ` +
+				`echo "sccache binary installed successfully via SourceHTTP"; ` +
+				`else ` +
+				`echo "Warning: sccache binary not found in SourceHTTP archive"; ` +
+				`fi; ` +
+				`else ` +
+				`echo "Warning: sccache archive not found in SourceHTTP mount"; ` +
+				`fi`
+		}
+
+		// Install sccache using SourceHTTP mount and extraction
+		var mountPath string
+		if isWindows {
+			mountPath = "C:\\sccache-download"
+		} else {
+			mountPath = "/sccache-download"
+		}
+
+		deps = worker.Run(
+			ShArgs(extractCmd),
+			llb.AddMount(mountPath, sccacheState, llb.Readonly),
 			llb.AddMount(sccachePath, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)),
 			WithConstraints(opts...),
 		).Root()

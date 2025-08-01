@@ -3,11 +3,11 @@ package dalec
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -45,6 +45,74 @@ const (
 	SccacheChecksumWindowsX64   = "0d499d0f73fa575f805df014af6ece49b840195fb7de0c552230899d77186ceb"
 	SccacheChecksumWindowsArm64 = "5fd6cd6dd474e91c37510719bf27cfe1826f929e40dd383c22a7b96da9a5458d"
 )
+
+// getSccacheURL returns the download URL for sccache based on the target platform
+func getSccacheURL(p *ocispecs.Platform) string {
+	arch := getSccacheArch(p)
+	return fmt.Sprintf("%s/%s/sccache-%s-%s.tar.gz", SccacheDownloadURL, SccacheVersion, SccacheVersion, arch)
+}
+
+// getSccacheArch returns the sccache architecture string for the given platform
+func getSccacheArch(p *ocispecs.Platform) string {
+	switch {
+	case p.OS == "linux" && p.Architecture == "amd64":
+		return SccacheArchLinuxX64
+	case p.OS == "linux" && p.Architecture == "arm64":
+		return SccacheArchLinuxArm64
+	case p.OS == "windows" && p.Architecture == "amd64":
+		return SccacheArchWindowsX64
+	case p.OS == "windows" && p.Architecture == "arm64":
+		return SccacheArchWindowsArm64
+	default:
+		// Fallback to linux x64 for unsupported platforms
+		return SccacheArchLinuxX64
+	}
+}
+
+// getSccacheChecksum returns the SHA256 checksum for sccache based on the target platform
+func getSccacheChecksum(p *ocispecs.Platform) string {
+	switch {
+	case p.OS == "linux" && p.Architecture == "amd64":
+		return SccacheChecksumLinuxX64
+	case p.OS == "linux" && p.Architecture == "arm64":
+		return SccacheChecksumLinuxArm64
+	case p.OS == "windows" && p.Architecture == "amd64":
+		return SccacheChecksumWindowsX64
+	case p.OS == "windows" && p.Architecture == "arm64":
+		return SccacheChecksumWindowsArm64
+	default:
+		// Fallback to linux x64 for unsupported platforms
+		return SccacheChecksumLinuxX64
+	}
+}
+
+// GetSccacheSource returns a Source for downloading and verifying sccache using SourceHTTP
+func GetSccacheSource(p *ocispecs.Platform) Source {
+	url := getSccacheURL(p)
+	checksum := getSccacheChecksum(p)
+
+	return Source{
+		HTTP: &SourceHTTP{
+			URL:    url,
+			Digest: digest.Digest("sha256:" + checksum),
+		},
+	}
+}
+
+// GetSccacheState returns an llb.State containing the sccache binary for the given platform
+func GetSccacheState(p *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	src := GetSccacheSource(p)
+
+	// Download and extract the sccache archive
+	srcState, err := src.HTTP.AsState("sccache", opts...)
+	if err != nil {
+		return llb.State{}, fmt.Errorf("failed to create sccache source state: %w", err)
+	}
+
+	// The source will be a tar.gz archive, extract it
+	// The extracted content will have the sccache binary
+	return srcState, nil
+}
 
 // CacheConfig configures a cache to use for a build.
 type CacheConfig struct {
@@ -427,12 +495,13 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			opt.SetCargoBuildCacheOption(&info)
 		}
 
-		platform := ei.Platform
-
-		if platform == nil {
+		// Ensure platform is set
+		var platform *ocispecs.Platform
+		if ei.Platform != nil {
+			platform = ei.Platform
+		} else if info.Platform != nil {
 			platform = info.Platform
-		}
-		if platform == nil {
+		} else {
 			p := platforms.DefaultSpec()
 			platform = &p
 		}
@@ -442,287 +511,78 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			key = fmt.Sprintf("%s-%s", key, c.Scope)
 		}
 
-		// Determine paths and configuration based on platform
-		isWindows := c.isWindowsPlatform(distroKey)
+		// Check if this distro needs precompiled sccache binary
+		needsPrecompiled := map[string]bool{
+			"almalinux8":  true,
+			"almalinux9":  true,
+			"rockylinux8": true,
+			"rockylinux9": true,
+			"bullseye":    true,
+			"bionic":      true,
+			"focal":       true,
+			"jammy":       true,
+		}
 
-		var (
-			cacheDir, binaryPath, scriptPath, scriptName       string
-			setupScriptName, sccacheFromCargoCache, setupMount string
-			fileMode                                           os.FileMode
-			setupScript                                        string
-		)
+		// Determine paths based on platform
+		isWindows := platform.OS == "windows"
 
+		var cacheDir, binaryPath, sccacheFromCargoCache string
 		if isWindows {
 			cacheDir = sccacheCacheDirWin
 			binaryPath = sccacheBinaryWin
-			scriptPath = "C:\\temp\\dalec\\scripts"
-			scriptName = "install_sccache.ps1"
-			setupScriptName = "setup_sccache.ps1"
 			sccacheFromCargoCache = "C:\\temp\\dalec\\sccache-binary-cache\\sccache.exe"
-			setupMount = "C:\\temp\\dalec\\setup"
-			fileMode = 0o644 // PowerShell scripts don't need execute bit on Windows
-
-			setupScript = `# PowerShell setup script
-if (Test-Path "` + sccacheFromCargoCache + `") {
-    Write-Host "Using pre-installed sccache from cargo cache"
-    Copy-Item "` + sccacheFromCargoCache + `" "` + binaryPath + `" -Force
-} else {
-    Write-Host "Installing sccache using fallback method"
-    & "` + scriptPath + `\` + scriptName + `"
-}
-`
 		} else {
 			cacheDir = sccacheCacheDir
 			binaryPath = sccacheBinary
-			scriptPath = "/tmp/dalec/scripts"
-			scriptName = "install_sccache.sh"
-			setupScriptName = "setup_sccache.sh"
 			sccacheFromCargoCache = "/tmp/dalec/sccache-binary-cache/sccache"
-			setupMount = "/tmp/dalec/setup"
-			fileMode = 0o755
-
-			setupScript = `#!/bin/bash
-# Note: Don't use 'set -e' here to prevent cache setup failures from killing the build
-echo "Setting up sccache for cargo build cache..."
-
-# Check if we have sccache from the cargo dependency cache
-if [ -f "` + sccacheFromCargoCache + `" ]; then
-    echo "Using pre-installed sccache from cargo cache"
-    cp "` + sccacheFromCargoCache + `" "` + binaryPath + `" || echo "Warning: Failed to copy sccache from cache"
-    chmod +x "` + binaryPath + `" || echo "Warning: Failed to make sccache executable"
-else
-    echo "Installing sccache using fallback method"
-    # Run the installation script (don't fail if it doesn't work)
-    ` + scriptPath + `/` + scriptName + ` || echo "Warning: sccache installation failed"
-fi
-
-# Check if sccache is now available
-if [ -f "` + binaryPath + `" ] && [ -x "` + binaryPath + `" ]; then
-    echo "sccache setup completed successfully"
-    export RUSTC_WRAPPER="` + binaryPath + `"
-else
-    echo "Warning: sccache not available, continuing build without cargo cache"
-    unset RUSTC_WRAPPER || true
-fi
-
-echo "Cargo cache setup complete"
-`
 		}
 
-		setupScriptSt := llb.Scratch().File(llb.Mkfile(setupScriptName, 0o755, []byte(setupScript)))
-		installSccache := c.installSccacheScript(distroKey)
-
-		// Set up cache mounts and environment
+		// Set up cache mount for sccache compilation cache
 		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
 
-		// Mount the sccache binary cache to check for pre-installed sccache
-		sccacheBinaryCacheMount := "/tmp/dalec/sccache-binary-cache"
-		if isWindows {
-			sccacheBinaryCacheMount = "C:\\temp\\dalec\\sccache-binary-cache"
+		// Only mount sccache binary cache for distros that need precompiled binaries or Windows
+		if needsPrecompiled[distroKey] || isWindows {
+			// Mount the sccache binary cache to access pre-installed sccache from SourceHTTP
+			sccacheBinaryCacheMount := "/tmp/dalec/sccache-binary-cache"
+			if isWindows {
+				sccacheBinaryCacheMount = "C:\\temp\\dalec\\sccache-binary-cache"
+			}
+			llb.AddMount(sccacheBinaryCacheMount, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
+
+			// Set up environment variables
+			llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
+			llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
+
+			// Set up a pre-run command to copy sccache from cache and set RUSTC_WRAPPER
+			var setupCmd string
+			if isWindows {
+				setupCmd = `if (Test-Path "` + sccacheFromCargoCache + `") { ` +
+					`Copy-Item "` + sccacheFromCargoCache + `" "` + binaryPath + `" -Force; ` +
+					`$env:RUSTC_WRAPPER = "` + binaryPath + `"; ` +
+					`Write-Host "Using sccache from SourceHTTP installation"; ` +
+					`} else { ` +
+					`Write-Host "Warning: sccache not available, continuing without cargo cache"; ` +
+					`}`
+			} else {
+				setupCmd = `if [ -f "` + sccacheFromCargoCache + `" ]; then ` +
+					`cp "` + sccacheFromCargoCache + `" "` + binaryPath + `" && chmod +x "` + binaryPath + `"; ` +
+					`export RUSTC_WRAPPER="` + binaryPath + `"; ` +
+					`echo "Using sccache from SourceHTTP installation"; ` +
+					`else ` +
+					`echo "Warning: sccache not available, continuing without cargo cache"; ` +
+					`fi`
+			}
+
+			// Add the setup command as an environment variable that can be run by build scripts
+			llb.AddEnv("DALEC_SCCACHE_SETUP", setupCmd).SetRunOption(ei)
+		} else {
+			// For distros that have sccache in their package manager, set up environment for package-manager installed sccache
+			llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
+			llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
+			// Assume sccache is installed via package manager and available in PATH
+			llb.AddEnv("RUSTC_WRAPPER", "sccache").SetRunOption(ei)
 		}
-		llb.AddMount(sccacheBinaryCacheMount, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
-
-		llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
-		llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
-		// Note: RUSTC_WRAPPER is set by the setup script only when sccache is available
-
-		// Add both the setup script and the fallback installation script
-		llb.AddMount(setupMount, setupScriptSt).SetRunOption(ei)
-
-		sccacheScript := llb.Scratch().File(llb.Mkfile(scriptName, fileMode, installSccache))
-		llb.AddMount(scriptPath, sccacheScript).SetRunOption(ei)
-
-		// The sccache setup will be handled by the build process
-		// We just set up the environment and mounts here
 	})
-}
-
-// installSccacheScript generates a script to install sccache
-func (c *CargoBuildCache) installSccacheScript(distroKey string) []byte {
-	// Check if this is a Windows platform
-	if c.isWindowsPlatform(distroKey) {
-		return c.generateWindowsSccacheScript()
-	}
-
-	// List of distros that need precompiled binaries
-	needsPrecompiled := map[string]bool{
-		"almalinux8":  true,
-		"almalinux9":  true,
-		"rockylinux8": true,
-		"rockylinux9": true,
-		"bullseye":    true,
-		"bionic":      true,
-		"focal":       true,
-		"jammy":       true,
-	}
-
-	script := `#!/bin/bash
-set -euo pipefail
-
-# Check if sccache is already installed
-if command -v sccache >/dev/null 2>&1; then
-    ln -sf "$(command -v sccache)" "` + sccacheBinary + `"
-    exit 0
-fi
-
-`
-
-	if needsPrecompiled[distroKey] {
-		script += `# Download precompiled sccache binary for distros without package
-ARCH=$(uname -m)
-case "$ARCH" in
-    x86_64) 
-        SCCACHE_ARCH="` + SccacheArchLinuxX64 + `"
-        SCCACHE_CHECKSUM="` + SccacheChecksumLinuxX64 + `"
-        ;;
-    aarch64) 
-        SCCACHE_ARCH="` + SccacheArchLinuxArm64 + `"
-        SCCACHE_CHECKSUM="` + SccacheChecksumLinuxArm64 + `"
-        ;;
-    *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-esac
-
-SCCACHE_VERSION="` + SccacheVersion + `"
-SCCACHE_URL="` + SccacheDownloadURL + `/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
-
-echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
-curl -L "${SCCACHE_URL}" -o /tmp/sccache.tar.gz
-
-# Verify checksum
-echo "Verifying checksum..."
-if command -v sha256sum >/dev/null 2>&1; then
-    echo "${SCCACHE_CHECKSUM}  /tmp/sccache.tar.gz" | sha256sum -c - || {
-        echo "ERROR: Checksum verification failed for sccache binary"
-        rm -f /tmp/sccache.tar.gz
-        exit 1
-    }
-elif command -v shasum >/dev/null 2>&1; then
-    echo "${SCCACHE_CHECKSUM}  /tmp/sccache.tar.gz" | shasum -a 256 -c - || {
-        echo "ERROR: Checksum verification failed for sccache binary"
-        rm -f /tmp/sccache.tar.gz
-        exit 1
-    }
-else
-    echo "WARNING: No checksum utility found (sha256sum or shasum), skipping verification"
-fi
-
-# Extract and install
-tar xz --strip-components=1 -C /tmp -f /tmp/sccache.tar.gz
-mv /tmp/sccache "` + sccacheBinary + `"
-chmod +x "` + sccacheBinary + `"
-rm -f /tmp/sccache.tar.gz
-`
-	} else {
-		script += `# Install sccache from package manager
-if command -v apt-get >/dev/null 2>&1; then
-    apt-get update && apt-get install -y sccache
-    ln -sf "$(command -v sccache)" "` + sccacheBinary + `"
-elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y sccache
-    ln -sf "$(command -v sccache)" "` + sccacheBinary + `"
-elif command -v tdnf >/dev/null 2>&1; then
-    tdnf install -y sccache
-    ln -sf "$(command -v sccache)" "` + sccacheBinary + `"
-else
-    echo "No supported package manager found"
-    exit 1
-fi
-`
-	}
-
-	return []byte(script)
-}
-
-// isWindowsPlatform checks if the distro key indicates a Windows platform
-func (c *CargoBuildCache) isWindowsPlatform(distroKey string) bool {
-	windowsPlatforms := map[string]bool{
-		"windowsservercore": true,
-		"nanoserver":        true,
-		"windows":           true,
-		"windowscross":      true,
-	}
-	return windowsPlatforms[distroKey]
-}
-
-// generateWindowsSccacheScript creates a PowerShell script for Windows
-func (c *CargoBuildCache) generateWindowsSccacheScript() []byte {
-	const windowsSccacheBinary = "C:\\temp\\dalec\\sccache.exe"
-
-	script := `# PowerShell script to install sccache on Windows
-$ErrorActionPreference = "Stop"
-
-# Check if sccache is already installed
-$existingSccache = Get-Command sccache -ErrorAction SilentlyContinue
-if ($existingSccache) {
-    # Create symlink or copy to our expected location
-    New-Item -Path "C:\temp\dalec" -ItemType Directory -Force | Out-Null
-    Copy-Item -Path $existingSccache.Source -Destination "` + windowsSccacheBinary + `" -Force
-    exit 0
-}
-
-# Create temp directory
-New-Item -Path "C:\temp\dalec" -ItemType Directory -Force | Out-Null
-
-# Detect architecture
-$arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
-switch ($arch) {
-    "X64" { 
-        $sccacheArch = "` + SccacheArchWindowsX64 + `"
-        $sccacheChecksum = "` + SccacheChecksumWindowsX64 + `"
-    }
-    "Arm64" { 
-        $sccacheArch = "` + SccacheArchWindowsArm64 + `"
-        $sccacheChecksum = "` + SccacheChecksumWindowsArm64 + `"
-    }
-    default { 
-        # Fallback to x64 for unsupported architectures (like x86)
-        Write-Host "Warning: Unsupported architecture $arch, using x64 version"
-        $sccacheArch = "` + SccacheArchWindowsX64 + `"
-        $sccacheChecksum = "` + SccacheChecksumWindowsX64 + `"
-    }
-}
-
-$sccacheVersion = "` + SccacheVersion + `"
-$sccacheUrl = "` + SccacheDownloadURL + `/$sccacheVersion/sccache-$sccacheVersion-$sccacheArch.tar.gz"
-
-Write-Host "Downloading sccache $sccacheVersion for $sccacheArch..."
-
-# Download and extract sccache
-$tempArchive = "C:\temp\dalec\sccache.tar.gz"
-try {
-    Invoke-WebRequest -Uri $sccacheUrl -OutFile $tempArchive -UseBasicParsing
-    
-    # Verify checksum
-    Write-Host "Verifying checksum..."
-    $downloadedHash = (Get-FileHash -Path $tempArchive -Algorithm SHA256).Hash.ToLower()
-    if ($downloadedHash -ne $sccacheChecksum) {
-        throw "ERROR: Checksum verification failed. Expected: $sccacheChecksum, Got: $downloadedHash"
-    }
-    Write-Host "Checksum verification passed"
-    
-    # Extract tar.gz file (requires tar command available in Windows 10+)
-    Push-Location "C:\temp\dalec"
-    tar -xzf "sccache.tar.gz"
-    Pop-Location
-    
-    # Find and move the sccache.exe binary
-    $sccacheExe = Get-ChildItem -Path "C:\temp\dalec" -Name "sccache.exe" -Recurse | Select-Object -First 1
-    if ($sccacheExe) {
-        $sourcePath = $sccacheExe.FullName
-        Move-Item -Path $sourcePath -Destination "` + windowsSccacheBinary + `" -Force
-    } else {
-        throw "sccache.exe not found in downloaded archive"
-    }
-    
-    Write-Host "sccache installed successfully to ` + windowsSccacheBinary + `"
-} finally {
-    # Clean up temporary files
-    Remove-Item -Path $tempArchive -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "C:\temp\dalec\sccache-*" -Recurse -Force -ErrorAction SilentlyContinue
-}
-`
-
-	return []byte(script)
 }
 
 // BazelCache sets up a cache for bazel builds.
