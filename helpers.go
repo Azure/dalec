@@ -705,7 +705,7 @@ func ErrorState(in llb.State, err error) llb.State {
 	return asyncState(in, err)
 }
 
-// NoopStateOption returns a [llb.StateOption] that does not change the input state.
+// NoopStateOption is a [llb.StateOption] that does not change the input state.
 func NoopStateOption(in llb.State) llb.State {
 	return in
 }

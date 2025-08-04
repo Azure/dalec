@@ -957,14 +957,14 @@
 						"string",
 						"null"
 					],
-					"description": "Header is the name of the secret which contains the git auth header.\nwhen using git auth header based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+					"description": "Header is the name of the secret which contains the git auth header.\nWhen using git auth header based authentication.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
 				},
 				"ssh": {
 					"type": [
 						"string",
 						"null"
 					],
-					"description": "SSH is the name of the secret which contains the ssh auth into when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
+					"description": "SSH is the name of the secret which contains the ssh auth info when using\nssh based auth.\nNote: This should not have the *actual* secret value, just the name of\nthe secret which was specified as a build secret."
 				},
 				"token": {
 					"type": [

@@ -20,7 +20,7 @@ type SourceGit struct {
 
 type GitAuth struct {
 	// Header is the name of the secret which contains the git auth header.
-	// when using git auth header based authentication.
+	// When using git auth header based authentication.
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
 	Header string `yaml:"header,omitempty" json:"header,omitempty"`
@@ -29,7 +29,7 @@ type GitAuth struct {
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
 	Token string `yaml:"token,omitempty" json:"token,omitempty"`
-	// SSH is the name of the secret which contains the ssh auth into when using
+	// SSH is the name of the secret which contains the ssh auth info when using
 	// ssh based auth.
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
