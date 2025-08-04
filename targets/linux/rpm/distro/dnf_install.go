@@ -244,14 +244,14 @@ func (cfg *Config) installBuildDepsPackage(worker llb.State, target string, pack
 func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	deps := spec.GetBuildDeps(targetKey)
 	if len(deps) == 0 {
-		return func(in llb.State) llb.State { return in }
+		return dalec.NoopStateOption
 	}
 
 	repos := spec.GetBuildRepos(targetKey)
 
 	sOpt, err := frontend.SourceOptFromClient(ctx, client, sOpt.TargetPlatform)
 	if err != nil {
-		return nil
+		return dalec.ErrorStateOption(err)
 	}
 
 	return func(in llb.State) llb.State {
@@ -262,7 +262,7 @@ func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client,
 		installOpt, err := cfg.installBuildDepsPackage(in, targetKey, spec.Name, deps,
 			append(importRepos, dnfInstallWithConstraints(opts))...)(ctx, client, sOpt)
 		if err != nil {
-			return llb.Scratch()
+			return dalec.ErrorState(in, err)
 		}
 
 		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
