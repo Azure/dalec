@@ -110,10 +110,6 @@ func (s *SourceInline) validate(opts fetchOptions) (retErr error) {
 			errs = append(errs, errors.New("inline file source cannot have excludes set"))
 		}
 		if err := s.File.validate(); err != nil {
-			errs = append(errs, err)
-		}
-
-		if err := s.File.validate(); err != nil {
 			errs = append(errs, errors.Wrap(err, "inline file source validation failed"))
 		}
 	}
