@@ -113,7 +113,7 @@ func (src *SourceBuild) doc(w io.Writer, name string) {
 	printDocLn(w, "Generated from a docker build:")
 	printDocLn(w, "	Docker Build Target:", src.Target)
 
-	src.Source.toIntercace().doc(&indentWriter{w}, name)
+	src.Source.toInterface().doc(&indentWriter{w}, name)
 
 	if len(src.Args) > 0 {
 		sorted := SortMapKeys(src.Args)

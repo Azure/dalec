@@ -326,7 +326,7 @@ func createPatchScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	for name, patches := range spec.Patches {
 		for _, patch := range patches {
 			p := filepath.Join("${DEBIAN_DIR:=debian}/dalec/patches", name, patch.Source)
-			fmt.Fprintf(buf, "ls -lh %q; patch -d %q -p%d -s < %q\n", name, name, *patch.Strip, p)
+			fmt.Fprintf(buf, "patch -d %q -p%d -s < %q\n", name, *patch.Strip, p)
 		}
 	}
 
