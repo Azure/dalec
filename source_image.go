@@ -343,7 +343,7 @@ func (cmd *Command) doc(w io.Writer, name string) {
 		printDocLn(w, "	With the following items mounted:")
 		for _, src := range cmd.Mounts {
 			printDocLn(w, "		Destination Path:", src.Dest)
-			src.Spec.toIntercace().doc(&indentWriter{w}, name)
+			src.Spec.toInterface().doc(&indentWriter{w}, name)
 		}
 	}
 }

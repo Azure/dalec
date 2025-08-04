@@ -136,7 +136,7 @@ func SourceIsDir(src Source) bool {
 // so that others can reproduce the build.
 func (s Source) Doc(name string) io.Reader {
 	buf := bytes.NewBuffer(nil)
-	s.toIntercace().doc(buf, name)
+	s.toInterface().doc(buf, name)
 	if s.Path != "" {
 		fmt.Fprintln(buf, "	Extracted path:", s.Path)
 	}
@@ -331,7 +331,7 @@ func (s *Source) processBuildArgs(lex *shell.Lex, args map[string]string, allowA
 		s.Excludes[i] = updated
 	}
 
-	if err := s.toIntercace().processBuildArgs(lex, args, allowArg); err != nil {
+	if err := s.toInterface().processBuildArgs(lex, args, allowArg); err != nil {
 		appendErr(err)
 	}
 
@@ -418,15 +418,11 @@ func (s *Source) fetchOptions(sOpt SourceOpts) fetchOptions {
 	}
 }
 
-func (s *Source) toIntercace() source {
-	return s.toInterface()
-}
-
 func (s *Source) ToState(name string, sOpt SourceOpts, opts ...llb.ConstraintsOpt) llb.State {
 	fo := s.fetchOptions(sOpt)
 	fo.Constraints = opts
 	fo.Rename = name
-	st := s.toIntercace().toState(fo)
+	st := s.toInterface().toState(fo)
 	return st
 }
 
@@ -434,7 +430,7 @@ func (s *Source) ToMount(sOpt SourceOpts, constraints ...llb.ConstraintsOpt) (ll
 	fo := s.fetchOptions(sOpt)
 	fo.Constraints = append(fo.Constraints, constraints...)
 
-	st, mountOpts := s.toIntercace().toMount(fo)
+	st, mountOpts := s.toInterface().toMount(fo)
 	if !isRoot(s.Path) {
 		// Prepend source path to mount opts so that the returned options can
 		// overwrite that.
@@ -444,7 +440,7 @@ func (s *Source) ToMount(sOpt SourceOpts, constraints ...llb.ConstraintsOpt) (ll
 }
 
 func (s *Source) IsDir() bool {
-	return s.toIntercace().IsDir()
+	return s.toInterface().IsDir()
 }
 
 func sourceFilters(opts fetchOptions) llb.StateOption {
@@ -538,7 +534,7 @@ func mountFilters(opts fetchOptions) llb.StateOption {
 }
 
 func (s *Source) fillDefaults() {
-	s.toIntercace().fillDefaults(s.Generate)
+	s.toInterface().fillDefaults(s.Generate)
 }
 
 // doc writes should never error, so we panic if they do (and they won't because we are writing to a bytes.Buffer).

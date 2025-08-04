@@ -215,7 +215,7 @@ func TarDebSources(work llb.State, spec *dalec.Spec, srcStates map[string]llb.St
 		// If the tar contains only a single directory, dpkg will extract its contents directly into the root directory.
 		// So nest it an extra step
 		if len(srcStates) == 1 && isDir {
-			state = llb.Scratch().File(llb.Copy(state, "/", key, dalec.WithDirContentsOnly()), opts...)
+			state = state.With(nestState(key))
 		}
 		states = append(states, state)
 	}
