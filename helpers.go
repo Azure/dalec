@@ -695,3 +695,29 @@ func (w *indentWriter) Write(p []byte) (int, error) {
 	}
 	return total, nil
 }
+
+// ErrorState returns a state that contains the error in an async state.
+// If the error is nil, it returns the input state unchanged.
+func ErrorState(in llb.State, err error) llb.State {
+	if err == nil {
+		return in
+	}
+	return asyncState(in, err)
+}
+
+// NoopStateOption returns a [llb.StateOption] that does not change the input state.
+func NoopStateOption(in llb.State) llb.State {
+	return in
+}
+
+// ErrorStateOption returns a [llb.StateOption] that returns a state option that
+// surfaces the error in an async state.
+// If the error is nil, it returns a no-op state option.
+func ErrorStateOption(err error) llb.StateOption {
+	if err == nil {
+		return NoopStateOption
+	}
+	return func(in llb.State) llb.State {
+		return asyncState(in, err)
+	}
+}

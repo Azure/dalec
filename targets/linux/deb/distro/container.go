@@ -22,9 +22,6 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 	var baseImg llb.State
 	if bi != nil {
 		img := bi.ToState(sOpt, opts...)
-		if err != nil {
-			return llb.Scratch(), err
-		}
 		baseImg = img
 	} else {
 		if c.DefaultOutputImage == "" {
