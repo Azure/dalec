@@ -34,7 +34,7 @@ var (
 					"backports.list": {
 						Inline: &dalec.SourceInline{
 							File: &dalec.SourceInlineFile{
-								Contents: "deb http://deb.debian.org/debian bullseye-backports main",
+								Contents: "deb http://archive.debian.org/debian bullseye-backports main",
 							},
 						},
 					},
