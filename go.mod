@@ -9,7 +9,7 @@ require (
 	github.com/atombender/go-jsonschema v0.20.0
 	github.com/bazelbuild/remote-apis v0.0.0-20250410133023-536ec595e1df
 	github.com/cavaliergopher/rpm v1.3.0
-	github.com/containerd/containerd/v2 v2.1.3
+	github.com/containerd/containerd/v2 v2.1.4
 	github.com/containerd/platforms v1.0.0-rc.1
 	github.com/containerd/plugin v1.0.0
 	github.com/cpuguy83/dockercfg v0.3.2
