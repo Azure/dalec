@@ -480,9 +480,6 @@ const (
 	sccacheBinary      = "/tmp/dalec/sccache"
 	sccacheCacheDirWin = "C:\\temp\\dalec\\sccache-cache"
 	sccacheBinaryWin   = "C:\\temp\\dalec\\sccache.exe"
-	// SccacheCacheKey is the key used to identify the sccache binary cache in buildkit cache.
-	// This must match the key used in generator_cargohome.go
-	SccacheCacheKey = "dalec-sccache-binary-cache"
 )
 
 func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts ...CargoBuildCacheOption) llb.RunOption {
@@ -512,19 +509,7 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			key = fmt.Sprintf("%s-%s", key, c.Scope)
 		}
 
-		// Check if this distro needs precompiled sccache binary
-		needsPrecompiled := map[string]bool{
-			"almalinux8":  true,
-			"almalinux9":  true,
-			"rockylinux8": true,
-			"rockylinux9": true,
-			"bullseye":    true,
-			"bionic":      true,
-			"focal":       true,
-			"jammy":       true,
-		}
-
-		// Extract the base distro name from distroKey (might be in format like "ubuntu22.04/zip")
+		// Extract distro name for needsPrecompiled check
 		distroName := distroKey
 		if idx := strings.Index(distroKey, "/"); idx != -1 {
 			distroName = distroKey[:idx]
@@ -541,70 +526,115 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			distroName = baseName
 		}
 
+		// Check if this distro needs precompiled sccache binary or can use package manager
+		needsPrecompiled := map[string]bool{
+			"almalinux8":  true,
+			"almalinux9":  true,
+			"rockylinux8": true,
+			"rockylinux9": true,
+			"bullseye":    true,
+			"bionic":      true,
+			"focal":       true,
+			"jammy":       true,
+		}
+
 		// Determine paths based on platform
 		isWindows := platform.OS == "windows"
 
-		var cacheDir, binaryPath, sccacheFromCargoCache string
+		var cacheDir string
 		if isWindows {
 			cacheDir = sccacheCacheDirWin
-			binaryPath = sccacheBinaryWin
-			sccacheFromCargoCache = "C:\\temp\\dalec\\sccache-binary-cache\\sccache.exe"
 		} else {
 			cacheDir = sccacheCacheDir
-			binaryPath = sccacheBinary
-			sccacheFromCargoCache = "/tmp/dalec/sccache-binary-cache/sccache"
 		}
 
 		// Set up cache mount for sccache compilation cache
 		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
 
-		// Only mount sccache binary cache for distros that need precompiled binaries or Windows
+		// Set up environment variables
+		llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
+		llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
+
+		// Only download and set up precompiled sccache for distros that need it or Windows
 		if needsPrecompiled[distroName] || isWindows {
-			// Mount the sccache binary cache to access pre-installed sccache from SourceHTTP
-			sccacheBinaryCacheMount := "/tmp/dalec/sccache-binary-cache"
+			var binaryPath string
 			if isWindows {
-				sccacheBinaryCacheMount = "C:\\temp\\dalec\\sccache-binary-cache"
+				binaryPath = sccacheBinaryWin
+			} else {
+				binaryPath = sccacheBinary
 			}
-			llb.AddMount(sccacheBinaryCacheMount, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)).SetRunOption(ei)
 
-			// Set up environment variables
-			llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
-			llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
+			// Download sccache binary using SourceHTTP during build phase
+			sccacheSource := GetSccacheSource(platform)
+			sccacheState, err := sccacheSource.HTTP.AsState("sccache", llb.Platform(*platform))
+			if err != nil {
+				// If we can't get sccache, continue without it
+				return
+			}
 
-			// Set up a pre-run command to copy sccache from cache and set RUSTC_WRAPPER
+			// Create a setup command to extract and configure sccache
 			var setupCmd string
 			if isWindows {
-				setupCmd = `if (Test-Path "` + sccacheFromCargoCache + `") { ` +
-					`Copy-Item "` + sccacheFromCargoCache + `" "` + binaryPath + `" -Force; ` +
-					`$env:RUSTC_WRAPPER = "` + binaryPath + `"; ` +
-					`Write-Host "Using sccache from SourceHTTP installation"; ` +
-					`} else { ` +
-					`Write-Host "Warning: sccache not available, continuing without cargo cache"; ` +
-					`}`
+				// For Windows, extract the archive and copy the binary
+				setupCmd = fmt.Sprintf(`
+if (Test-Path "/tmp/dalec/sccache") {
+	# Extract sccache from tar.gz
+	tar -xzf /tmp/dalec/sccache -C /tmp/dalec/
+	# Find the sccache.exe file and copy it
+	$sccacheExe = Get-ChildItem -Path "/tmp/dalec/" -Name "sccache.exe" -Recurse | Select-Object -First 1
+	if ($sccacheExe) {
+		Copy-Item -Path "/tmp/dalec/$sccacheExe" -Destination "%s" -Force
+		$env:RUSTC_WRAPPER = "%s"
+		Write-Host "Using sccache for cargo build caching"
+	} else {
+		Write-Host "Warning: sccache.exe not found in archive"
+	}
+} elseif (Get-Command sccache -ErrorAction SilentlyContinue) {
+	$env:RUSTC_WRAPPER = "sccache"
+	Write-Host "Using system sccache for cargo build caching"
+} else {
+	Write-Host "Warning: sccache not available, cargo build caching disabled"
+}`, binaryPath, binaryPath)
 			} else {
-				setupCmd = `if [ -f "` + sccacheFromCargoCache + `" ]; then ` +
-					`cp "` + sccacheFromCargoCache + `" "` + binaryPath + `" && chmod +x "` + binaryPath + `"; ` +
-					`export RUSTC_WRAPPER="` + binaryPath + `"; ` +
-					`echo "Using sccache from SourceHTTP installation"; ` +
-					`else ` +
-					`echo "Warning: sccache not available, continuing without cargo cache"; ` +
-					`fi`
+				// For Linux, extract the archive and copy the binary
+				setupCmd = fmt.Sprintf(`
+if [ -f /tmp/dalec/sccache ]; then
+	# Extract sccache from tar.gz
+	tar -xzf /tmp/dalec/sccache -C /tmp/dalec/
+	# Find the sccache binary and copy it
+	sccache_bin=$(find /tmp/dalec/ -name "sccache" -type f | head -1)
+	if [ -n "$sccache_bin" ]; then
+		cp "$sccache_bin" "%s" && chmod +x "%s"
+		export RUSTC_WRAPPER="%s"
+		echo "Using sccache for cargo build caching"
+	else
+		echo "Warning: sccache binary not found in archive"
+	fi
+elif command -v sccache >/dev/null 2>&1; then
+	export RUSTC_WRAPPER=sccache
+	echo "Using system sccache for cargo build caching"
+else
+	echo "Warning: sccache not available, cargo build caching disabled"
+fi`, binaryPath, binaryPath, binaryPath)
 			}
 
-			// Add the setup command as an environment variable that can be run by build scripts
+			// Mount the sccache source and add the setup command
+			llb.AddMount("/tmp/dalec/sccache", sccacheState, llb.SourcePath("sccache")).SetRunOption(ei)
 			llb.AddEnv("DALEC_SCCACHE_SETUP", setupCmd).SetRunOption(ei)
 		} else {
-			// For distros that have sccache in their package manager, set up environment for package-manager installed sccache
-			llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
-			llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
-			// Note: We don't set RUSTC_WRAPPER here because we can't guarantee sccache is available
-			// Build scripts should check if sccache is available before setting RUSTC_WRAPPER
+			// For distros that have sccache in their package manager, provide a simpler setup
+			// The build scripts should install sccache via package manager first
+			setupCmd := `
+if command -v sccache >/dev/null 2>&1; then
+	export RUSTC_WRAPPER=sccache
+	echo "Using system sccache for cargo build caching"
+else
+	echo "Warning: sccache not available, cargo build caching disabled"
+fi`
+			llb.AddEnv("DALEC_SCCACHE_SETUP", setupCmd).SetRunOption(ei)
 		}
 	})
-}
-
-// BazelCache sets up a cache for bazel builds.
-//
+} // BazelCache sets up a cache for bazel builds.
 // Currently this only supports setting up a *local* bazel cache.
 //
 // BazelCache relies on the *system* bazelrc file to configure the default cache location.

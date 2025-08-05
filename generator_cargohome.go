@@ -3,7 +3,6 @@ package dalec
 import (
 	"path/filepath"
 
-	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
@@ -34,147 +33,30 @@ func (s *Spec) HasCargohomes() bool {
 
 func withCargohome(g *SourceGenerator, srcSt, worker llb.State, subPath string, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
-		workDir := "/work/src"
-		joinedWorkDir := filepath.Join(workDir, subPath, g.Subpath)
-		srcMount := llb.AddMount(workDir, srcSt)
+		// Extract platform information from constraints
+		var constraints llb.Constraints
+		for _, opt := range opts {
+			opt.SetConstraintsOption(&constraints)
+		}
 
-		const (
-			registryPath = "/tmp/dalec/cargo-registry-cache"
-			sccachePath  = "/tmp/dalec/sccache-binary-cache"
-		)
+		// Determine if this is a Windows platform
+		isWindows := constraints.Platform != nil && constraints.Platform.OS == "windows"
 
-		// First, install sccache binary to our persistent cache (we have network access here)
-		sccacheInstallScript := `#!/bin/bash
-set -euo pipefail
+		// Set up paths based on platform
+		var workDir, joinedWorkDir string
 
-# Check if sccache is already cached
-if [ -f "` + sccachePath + `/sccache" ]; then
-    echo "sccache already cached"
-    exit 0
-fi
-
-# Create cache directory
-mkdir -p "` + sccachePath + `"
-
-# Download precompiled sccache binary
-ARCH=$(uname -m)
-case "$ARCH" in
-    x86_64) 
-        SCCACHE_ARCH="` + SccacheArchLinuxX64 + `"
-        SCCACHE_CHECKSUM="` + SccacheChecksumLinuxX64 + `"
-        ;;
-    aarch64) 
-        SCCACHE_ARCH="` + SccacheArchLinuxArm64 + `"
-        SCCACHE_CHECKSUM="` + SccacheChecksumLinuxArm64 + `"
-        ;;
-    *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-esac
-
-SCCACHE_VERSION="` + SccacheVersion + `"
-SCCACHE_URL="` + SccacheDownloadURL + `/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-${SCCACHE_ARCH}.tar.gz"
-
-echo "Downloading sccache ${SCCACHE_VERSION} for ${SCCACHE_ARCH}..."
-curl -L "${SCCACHE_URL}" -o /tmp/sccache.tar.gz
-
-# Verify checksum
-echo "Verifying checksum..."
-if command -v sha256sum >/dev/null 2>&1; then
-    echo "${SCCACHE_CHECKSUM}  /tmp/sccache.tar.gz" | sha256sum -c - || {
-        echo "ERROR: Checksum verification failed for sccache binary"
-        rm -f /tmp/sccache.tar.gz
-        exit 1
-    }
-elif command -v shasum >/dev/null 2>&1; then
-    echo "${SCCACHE_CHECKSUM}  /tmp/sccache.tar.gz" | shasum -a 256 -c - || {
-        echo "ERROR: Checksum verification failed for sccache binary"
-        rm -f /tmp/sccache.tar.gz
-        exit 1
-    }
-else
-    echo "WARNING: No checksum utility found (sha256sum or shasum), skipping verification"
-fi
-
-# Extract and install
-tar xz --strip-components=1 -C "` + sccachePath + `" -f /tmp/sccache.tar.gz
-chmod +x "` + sccachePath + `/sccache"
-rm -f /tmp/sccache.tar.gz
-echo "sccache cached successfully"
-`)
+		if isWindows {
+			workDir = "C:\\work\\src"
+			joinedWorkDir = filepath.Join(workDir, g.Subpath)
+		} else {
+			workDir = "/work/src"
+			joinedWorkDir = filepath.Join(workDir, g.Subpath)
 		}
 
 		srcMount := llb.AddMount(workDir, srcSt)
 
-		// Get sccache using SourceHTTP instead of shell scripts
-		platform := constraints.Platform
-		if platform == nil {
-			p := platforms.DefaultSpec()
-			platform = &p
-		}
-
-		sccacheState, err := GetSccacheState(platform, opts...)
-		var deps llb.State
-		if err != nil {
-			// Since we can't return error from this nested function, we'll panic
-			// to fail fast if sccache download fails. This could indicate network,
-			// authentication, or other infrastructure issues that might affect the build
-			panic(errors.Wrap(err, "failed to download sccache via SourceHTTP"))
-		}
-
-		// Extract and install sccache using SourceHTTP
-		var extractCmd string
-		if isWindows {
-			extractCmd = `powershell -Command "` +
-				`$ErrorActionPreference = 'Stop'; ` +
-				`if (Test-Path 'C:\sccache-download\sccache') { ` +
-				`New-Item -Path 'C:\temp\sccache-extract' -ItemType Directory -Force; ` +
-				`tar -xzf 'C:\sccache-download\sccache' -C 'C:\temp\sccache-extract' --strip-components=1; ` +
-				`$sccacheExe = Get-ChildItem -Path 'C:\temp\sccache-extract' -Name 'sccache.exe' -Recurse | Select-Object -First 1; ` +
-				`if ($sccacheExe) { ` +
-				`New-Item -Path '` + sccachePath + `' -ItemType Directory -Force; ` +
-				`Copy-Item $sccacheExe.FullName '` + sccachePath + `\sccache.exe' -Force; ` +
-				`Write-Host 'sccache binary installed successfully via SourceHTTP'; ` +
-				`} else { ` +
-				`Write-Host 'Warning: sccache.exe not found in SourceHTTP archive'; ` +
-				`Get-ChildItem -Path 'C:\temp\sccache-extract' -Recurse; ` +
-				`} ` +
-				`} else { ` +
-				`Write-Host 'Warning: sccache archive not found in SourceHTTP mount'; ` +
-				`Get-ChildItem -Path 'C:\sccache-download'; ` +
-				`}"`
-		} else {
-			extractCmd = `set -eu; ` +
-				`echo "Installing sccache via SourceHTTP..."; ` +
-				`ls -la /sccache-download/; ` +
-				`if [ -f /sccache-download/sccache ]; then ` +
-				`mkdir -p "` + sccachePath + `"; ` +
-				`mkdir -p /tmp/sccache-extract; ` +
-				`tar -xzf /sccache-download/sccache -C /tmp/sccache-extract --strip-components=1; ` +
-				`if [ -f /tmp/sccache-extract/sccache ]; then ` +
-				`cp /tmp/sccache-extract/sccache "` + sccachePath + `/sccache"; ` +
-				`chmod +x "` + sccachePath + `/sccache"; ` +
-				`echo "sccache binary installed successfully via SourceHTTP"; ` +
-				`else ` +
-				`echo "Warning: sccache binary not found in SourceHTTP archive"; ` +
-				`fi; ` +
-				`else ` +
-				`echo "Warning: sccache archive not found in SourceHTTP mount"; ` +
-				`fi`
-		}
-
-		// Install sccache using SourceHTTP mount and extraction
-		var mountPath string
-		if isWindows {
-			mountPath = "C:\\sccache-download"
-		} else {
-			mountPath = "/sccache-download"
-		}
-
-		deps = worker.Run(
-			ShArgs(extractCmd),
-			llb.AddMount(mountPath, sccacheState, llb.Readonly),
-			llb.AddMount(sccachePath, llb.Scratch(), llb.AsPersistentCacheDir(SccacheCacheKey, llb.CacheMountShared)),
-			WithConstraints(opts...),
-		).Root()
+		// Start with worker state as base for dependencies
+		deps := worker
 
 		paths := g.Cargohome.Paths
 		if g.Cargohome.Paths == nil {
