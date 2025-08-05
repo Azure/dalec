@@ -578,14 +578,16 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 				// For Windows, extract the archive and copy the binary
 				setupCmd = fmt.Sprintf(`
 if (Test-Path "/tmp/dalec/sccache") {
-	# Extract sccache from tar.gz
-	tar -xzf /tmp/dalec/sccache -C /tmp/dalec/
-	# Find the sccache.exe file and copy it
-	$sccacheExe = Get-ChildItem -Path "/tmp/dalec/" -Name "sccache.exe" -Recurse | Select-Object -First 1
+	# Create temporary extraction directory
+	New-Item -Path "/tmp/dalec/sccache-extract" -ItemType Directory -Force
+	# Extract sccache from tar.gz - the archive contains a versioned directory
+	tar -xzf /tmp/dalec/sccache -C /tmp/dalec/sccache-extract/
+	# Find the sccache.exe file and copy it (it's in a subdirectory like sccache-v0.10.0-x86_64-pc-windows-msvc/)
+	$sccacheExe = Get-ChildItem -Path "/tmp/dalec/sccache-extract/" -Name "sccache.exe" -Recurse | Select-Object -First 1
 	if ($sccacheExe) {
-		Copy-Item -Path "/tmp/dalec/$sccacheExe" -Destination "%s" -Force
+		Copy-Item -Path $sccacheExe.FullName -Destination "%s" -Force
 		$env:RUSTC_WRAPPER = "%s"
-		Write-Host "Using sccache for cargo build caching"
+		Write-Host "Using downloaded sccache for cargo build caching"
 	} else {
 		Write-Host "Warning: sccache.exe not found in archive"
 	}
@@ -599,14 +601,16 @@ if (Test-Path "/tmp/dalec/sccache") {
 				// For Linux, extract the archive and copy the binary
 				setupCmd = fmt.Sprintf(`
 if [ -f /tmp/dalec/sccache ]; then
-	# Extract sccache from tar.gz
-	tar -xzf /tmp/dalec/sccache -C /tmp/dalec/
+	# Create temporary extraction directory
+	mkdir -p /tmp/dalec/sccache-extract
+	# Extract sccache from tar.gz - the archive contains a versioned directory like sccache-v0.10.0-x86_64-unknown-linux-musl/
+	tar -xzf /tmp/dalec/sccache -C /tmp/dalec/sccache-extract/
 	# Find the sccache binary and copy it
-	sccache_bin=$(find /tmp/dalec/ -name "sccache" -type f | head -1)
+	sccache_bin=$(find /tmp/dalec/sccache-extract/ -name "sccache" -type f | head -1)
 	if [ -n "$sccache_bin" ]; then
 		cp "$sccache_bin" "%s" && chmod +x "%s"
 		export RUSTC_WRAPPER="%s"
-		echo "Using sccache for cargo build caching"
+		echo "Using downloaded sccache for cargo build caching"
 	else
 		echo "Warning: sccache binary not found in archive"
 	fi
