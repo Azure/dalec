@@ -380,7 +380,7 @@
 				"object",
 				"null"
 			],
-			"description": "BazelCache sets up a cache for bazel builds."
+			"description": "Currently this only supports setting up a *local* bazel cache."
 		},
 		"BuildStep": {
 			"required": [
