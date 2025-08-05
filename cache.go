@@ -404,8 +404,6 @@ fetch --disk_cache=` + cacheDir + `
 			WithConstraint(info.constraints),
 		)
 
-		// Add the scope to the socket path that we check in order to avoid unexpected (buildkit) cache hits.
-		// This came up in testing, although I'm not sure why llb.IgnoreCache is not sufficient here.
 		checkSockPath := filepath.Join(filepath.Dir(sockPath), c.Scope, filepath.Base(sockPath))
 		checkScript := fmt.Sprintf(`#!/usr/bin/env sh
 
@@ -416,14 +414,15 @@ fi
 `, checkSockPath, sockPath, sockPath)
 		checkScriptSt := llb.Scratch().File(
 			llb.Mkfile("script.sh", 0o755, []byte(checkScript)),
+			WithConstraint(info.constraints),
 		)
 
 		scriptPath := "/tmp/dalec/internal/bazel/check-socket.sh"
 		rcFile = worker.Run(
 			llb.AddSSHSocket(llb.SSHID(BazelDefaultSocketID), llb.SSHSocketTarget(checkSockPath), llb.SSHOptional),
 			ShArgs(scriptPath),
-			llb.IgnoreCache,
 			llb.AddMount(scriptPath, checkScriptSt, llb.SourcePath("script.sh")),
+			WithConstraint(info.constraints),
 		).AddMount("/tmp/dalec/bazelrc", rcFile, llb.SourcePath("bazelrc"))
 
 		llb.AddMount("/etc/bazel.bazelrc", rcFile, llb.SourcePath("bazelrc")).SetRunOption(ei)
