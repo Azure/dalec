@@ -297,8 +297,6 @@ func createBuildScript(spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.State {
 			fmt.Fprintln(buf, "  echo 'Warning: sccache not found, cargo build caching disabled'")
 			fmt.Fprintln(buf, "fi")
 			fmt.Fprintln(buf, "")
-			fmt.Fprintln(buf, "fi")
-			fmt.Fprintln(buf, "")
 		}
 	}
 

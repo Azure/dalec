@@ -33,7 +33,7 @@ func (s *Spec) HasCargohomes() bool {
 func withCargohome(g *SourceGenerator, srcSt, worker llb.State, subPath string, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
 		workDir := "/work/src"
-		joinedWorkDir := filepath.Join(workDir, g.Subpath)
+		joinedWorkDir := filepath.Join(workDir, subPath, g.Subpath)
 		srcMount := llb.AddMount(workDir, srcSt)
 
 		paths := g.Cargohome.Paths
