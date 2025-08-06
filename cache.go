@@ -89,11 +89,14 @@ func GetSccacheSource(p *ocispecs.Platform) Source {
 func GetSccacheState(p *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	src := GetSccacheSource(p)
 
-	// Download and extract the sccache archive
-	srcState, err := src.HTTP.AsState("sccache", opts...)
-	if err != nil {
-		return llb.State{}, fmt.Errorf("failed to create sccache source state: %w", err)
+	// Create fetch options with constraints
+	fetchOpts := fetchOptions{
+		Constraints: opts,
+		Rename:      "sccache",
 	}
+
+	// Download the sccache archive using toState
+	srcState := src.HTTP.toState(fetchOpts)
 
 	// The source will be a tar.gz archive, extract it
 	// The extracted content will have the sccache binary
@@ -501,11 +504,14 @@ func (c *CargoBuildCache) ToRunOption(distroKey string, opts ...CargoBuildCacheO
 
 		// Always download and set up precompiled sccache for consistent behavior
 		sccacheSource := GetSccacheSource(platform)
-		sccacheState, err := sccacheSource.HTTP.AsState("sccache", llb.Platform(*platform))
-		if err != nil {
-			// If we can't get sccache, continue without it
-			return
+
+		// Create fetch options with platform constraints
+		fetchOpts := fetchOptions{
+			Constraints: []llb.ConstraintsOpt{llb.Platform(*platform)},
+			Rename:      "sccache",
 		}
+
+		sccacheState := sccacheSource.HTTP.toState(fetchOpts)
 
 		// Extract sccache binary using LLB state operations
 		extractedSccache := ei.State.Run(
