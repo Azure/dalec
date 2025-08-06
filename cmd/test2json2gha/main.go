@@ -15,11 +15,12 @@ import (
 )
 
 type config struct {
-	slowThreshold time.Duration
-	modName       string
-	verbose       bool
-	stream        bool
-	logDir        string
+	slowThreshold  time.Duration
+	modName        string
+	verbose        bool
+	stream         bool
+	logDir         string
+	ghaCommandsOut io.Writer
 }
 
 func main() {
@@ -107,6 +108,7 @@ func do(in io.Reader, out io.Writer, cfg config) (bool, error) {
 	handlers := []EventHandler{
 		results,
 		&anyFailed,
+		&githubActionsCommandPassthrough{out: cfg.ghaCommandsOut},
 	}
 
 	if cfg.stream {

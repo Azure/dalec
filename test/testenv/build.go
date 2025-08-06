@@ -224,25 +224,48 @@ func lookupProjectRoot(cur string) (string, error) {
 	return cur, nil
 }
 
-var ciLoadCacheOptions = sync.OnceValue(func() (out []client.CacheOptionsEntry) {
+func ghaAnnotation(skipFrames int, cmd string, msg string) {
+	ghaAnnotationf(skipFrames+1, cmd, "%s", msg)
+}
+
+func ghaAnnotationf(skipFrames int, cmd string, format string, args ...any) {
+	_, f, l, _ := runtime.Caller(skipFrames + 1)
 	if os.Getenv("GITHUB_ACTIONS") != "true" {
 		// not running in a github action, nothing to do
 		return
 	}
 
+	format = "::%s file=%s,line=%d::%s\n" + format
+	args = append([]any{cmd, f, l}, args...)
+	fmt.Printf(format, args...)
+}
+
+var ciLoadCacheOptions = sync.OnceValues(func() (out []client.CacheOptionsEntry, ok bool) {
+	const (
+		ghaEnv   = "GITHUB_ACTIONS"
+		tokenEnv = "ACTIONS_RUNTIME_TOKEN"
+		urlEnv   = "ACTIONS_CACHE_URL"
+	)
+	if os.Getenv(ghaEnv) != "true" {
+		// not running in a github action, nothing to do
+		return out, false
+	}
+
+	ghaAnnotation(0, "notice", "Loading cache options for GitHub Actions")
+
 	// token and url are required for the cache to work.
 	// These need to be exposed as environment variables in the GitHub Actions workflow.
 	// See the crazy-max/ghaction-github-runtime@v3 action.
-	token := os.Getenv("ACTIONS_RUNTIME_TOKEN")
+	token := os.Getenv(tokenEnv)
 	if token == "" {
-		fmt.Fprintln(os.Stderr, "::warning::GITHUB_ACTIONS_RUNTIME_TOKEN is not set, skipping cache export")
-		return nil
+		ghaAnnotationf(0, "warning", "%s is not set, skipping cache export", tokenEnv)
+		return nil, true
 	}
 
 	url := os.Getenv("ACTIONS_CACHE_URL")
 	if url == "" {
-		fmt.Fprintln(os.Stderr, "::warning::ACTIONS_CACHE_URL is not set, skipping cache export")
-		return nil
+		ghaAnnotationf(0, "warning", "%s is not set, skipping cache export", urlEnv)
+		return nil, true
 	}
 
 	// Unfortunately we need to load all the caches because at this level we do
@@ -254,6 +277,7 @@ var ciLoadCacheOptions = sync.OnceValue(func() (out []client.CacheOptionsEntry) 
 
 	for _, r := range plugins.Graph(filter) {
 		target := path.Join(r.ID, "worker")
+		ghaAnnotationf(0, "notice", "Adding cache import: type: gha target: %q", "gha", target)
 		out = append(out, client.CacheOptionsEntry{
 			Type: "gha",
 			Attrs: map[string]string{
@@ -264,18 +288,16 @@ var ciLoadCacheOptions = sync.OnceValue(func() (out []client.CacheOptionsEntry) 
 		})
 	}
 
-	fmt.Fprintln(os.Stderr, "::add-mask::"+token)
-	_, f, l, _ := runtime.Caller(1)
 	if len(out) == 0 {
-		_, f, l, _ := runtime.Caller(1)
-		fmt.Fprintf(os.Stderr, "::error file=%s,line=%d::No build targets found, skipping cache export\n", f, l)
+		ghaAnnotation(0, "error", "No build targets found, skipping cache export")
 	}
-	for _, o := range out {
-		fmt.Fprintf(os.Stderr, "::notice file=%s,line=%d::Adding cache import: %s %v\n", f, l, o.Type, o.Attrs)
-	}
-	return out
+	return out, true
 })
 
-func withCICache(opts *client.SolveOpt) {
-	opts.CacheImports = append(opts.CacheImports, ciLoadCacheOptions()...)
+func withCICache(opts *client.SolveOpt) bool {
+	imports, ok := ciLoadCacheOptions()
+	if ok {
+		opts.CacheImports = append(opts.CacheImports, imports...)
+	}
+	return ok
 }
