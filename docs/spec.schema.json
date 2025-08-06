@@ -431,7 +431,7 @@
 					"$ref": "#/$defs/BazelCache",
 					"description": "Bazel specifies a cache for bazel builds."
 				},
-				"cargobuild": {
+				"cargosccache": {
 					"$ref": "#/$defs/CargoBuildCache",
 					"description": "CargoBuild specifies a cache for Rust/Cargo build artifacts.\nThis uses sccache to cache Rust compilation artifacts."
 				},
@@ -466,9 +466,9 @@
 				},
 				{
 					"required": [
-						"cargobuild"
+						"cargosccache"
 					],
-					"title": "cargobuild"
+					"title": "cargosccache"
 				},
 				{
 					"required": [
@@ -532,7 +532,7 @@
 					"type": [
 						"boolean"
 					],
-					"description": "The cargobuild cache may be automatically injected into a build if\nrust is detected.\nDisabled explicitly turns this off."
+					"description": "The cargosccache cache may be automatically injected into a build if\nrust is detected.\nDisabled explicitly turns this off."
 				},
 				"scope": {
 					"type": [

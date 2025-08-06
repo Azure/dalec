@@ -8,8 +8,7 @@ import (
 )
 
 const (
-	// CargoCacheKey is the key used to identify the cargo registry cache in buildkit cache.
-	CargoCacheKey = "dalec-cargo-registry-cache"
+	cargoHomeDir = "/cargo/registry"
 )
 
 func (s *Source) isCargohome() bool {
@@ -33,69 +32,25 @@ func (s *Spec) HasCargohomes() bool {
 
 func withCargohome(g *SourceGenerator, srcSt, worker llb.State, subPath string, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
 	return func(in llb.State) llb.State {
-		// Extract platform information from constraints
-		var constraints llb.Constraints
-		for _, opt := range opts {
-			opt.SetConstraintsOption(&constraints)
-		}
-
-		// Determine if this is a Windows platform
-		isWindows := constraints.Platform != nil && constraints.Platform.OS == "windows"
-
-		// Set up paths based on platform
-		var workDir, joinedWorkDir string
-
-		if isWindows {
-			workDir = "C:\\work\\src"
-			joinedWorkDir = filepath.Join(workDir, g.Subpath)
-		} else {
-			workDir = "/work/src"
-			joinedWorkDir = filepath.Join(workDir, g.Subpath)
-		}
-
+		workDir := "/work/src"
+		joinedWorkDir := filepath.Join(workDir, g.Subpath)
 		srcMount := llb.AddMount(workDir, srcSt)
-
-		// Start with worker state as base for dependencies
-		deps := worker
 
 		paths := g.Cargohome.Paths
 		if g.Cargohome.Paths == nil {
 			paths = []string{"."}
 		}
 
-		// Cargo fetch command varies by platform
-		var cargoFetchCommand string
-		var outputMount string
-		if isWindows {
-			cargoFetchCommand = `set CARGO_HOME=C:\output && cargo fetch`
-			outputMount = "C:\\output"
-		} else {
-			cargoFetchCommand = `set -e; CARGO_HOME="/output" cargo fetch`
-			outputMount = "/output"
-		}
-
 		for _, path := range paths {
-			// Create a temporary state to capture cargo output
-			cargoOutput := worker.Run(
-				// Download cargo dependencies and create proper cargo home structure
-				ShArgs(cargoFetchCommand),
+			in = worker.Run(
+				ShArgs("cargo fetch"),
+				llb.AddEnv("CARGO_HOME", cargoHomeDir),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
-				llb.AddMount(outputMount, llb.Scratch()),
 				WithConstraints(opts...),
-			).GetMount(outputMount)
-
-			// Copy the cargo registry to the deps state
-			var registrySourcePath string
-			if isWindows {
-				registrySourcePath = "\\registry"
-			} else {
-				registrySourcePath = "/registry"
-			}
-			deps = deps.File(llb.Copy(cargoOutput, registrySourcePath, "/registry"))
+			).AddMount(cargoHomeDir, in)
 		}
-
-		return deps
+		return in
 	}
 }
 

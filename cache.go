@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
@@ -30,21 +29,15 @@ const (
 	SccacheCacheSize = "10G"
 
 	// Sccache target architectures
-	SccacheArchLinuxX64     = "x86_64-unknown-linux-musl"
-	SccacheArchLinuxArm64   = "aarch64-unknown-linux-musl"
-	SccacheArchWindowsX64   = "x86_64-pc-windows-msvc"
-	SccacheArchWindowsArm64 = "aarch64-pc-windows-msvc"
-	// Note: No i686 Windows build available for v0.10.0
+	SccacheArchLinuxX64   = "x86_64-unknown-linux-musl"
+	SccacheArchLinuxArm64 = "aarch64-unknown-linux-musl"
 
 	// Base paths for dalec temporary files
-	DalecTempDirLinux   = "/tmp/dalec"
-	DalecTempDirWindows = "C:\\temp\\dalec"
+	DalecTempDirLinux = "/tmp/dalec"
 
 	// Sccache v0.10.0 SHA256 checksums for binary validation
-	SccacheChecksumLinuxX64     = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
-	SccacheChecksumLinuxArm64   = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
-	SccacheChecksumWindowsX64   = "0d499d0f73fa575f805df014af6ece49b840195fb7de0c552230899d77186ceb"
-	SccacheChecksumWindowsArm64 = "5fd6cd6dd474e91c37510719bf27cfe1826f929e40dd383c22a7b96da9a5458d"
+	SccacheChecksumLinuxX64   = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
+	SccacheChecksumLinuxArm64 = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
 )
 
 // getSccacheURL returns the download URL for sccache based on the target platform
@@ -60,10 +53,6 @@ func getSccacheArch(p *ocispecs.Platform) string {
 		return SccacheArchLinuxX64
 	case p.OS == "linux" && p.Architecture == "arm64":
 		return SccacheArchLinuxArm64
-	case p.OS == "windows" && p.Architecture == "amd64":
-		return SccacheArchWindowsX64
-	case p.OS == "windows" && p.Architecture == "arm64":
-		return SccacheArchWindowsArm64
 	default:
 		// Fallback to linux x64 for unsupported platforms
 		return SccacheArchLinuxX64
@@ -77,10 +66,6 @@ func getSccacheChecksum(p *ocispecs.Platform) string {
 		return SccacheChecksumLinuxX64
 	case p.OS == "linux" && p.Architecture == "arm64":
 		return SccacheChecksumLinuxArm64
-	case p.OS == "windows" && p.Architecture == "amd64":
-		return SccacheChecksumWindowsX64
-	case p.OS == "windows" && p.Architecture == "arm64":
-		return SccacheChecksumWindowsArm64
 	default:
 		// Fallback to linux x64 for unsupported platforms
 		return SccacheChecksumLinuxX64
@@ -124,7 +109,7 @@ type CacheConfig struct {
 	GoBuild *GoBuildCache `json:"gobuild,omitempty" yaml:"gobuild,omitempty" jsonschema:"oneof_required=gobuild"`
 	// CargoBuild specifies a cache for Rust/Cargo build artifacts.
 	// This uses sccache to cache Rust compilation artifacts.
-	CargoBuild *CargoBuildCache `json:"cargobuild,omitempty" yaml:"cargobuild,omitempty" jsonschema:"oneof_required=cargobuild"`
+	CargoBuild *CargoBuildCache `json:"cargosccache,omitempty" yaml:"cargosccache,omitempty" jsonschema:"oneof_required=cargosccache"`
 	// Bazel specifies a cache for bazel builds.
 	Bazel *BazelCache `json:"bazel,omitempty" yaml:"bazel,omitempty" jsonschema:"oneof_required=bazel-local"`
 }
@@ -194,7 +179,7 @@ func (c *CacheConfig) ToRunOption(worker llb.State, distroKey string, opts ...Ca
 	}
 
 	if c.CargoBuild != nil {
-		return c.CargoBuild.ToRunOption(worker, distroKey, CargoBuildCacheOptionFunc(func(info *CargoBuildCacheInfo) {
+		return c.CargoBuild.ToRunOption(distroKey, CargoBuildCacheOptionFunc(func(info *CargoBuildCacheInfo) {
 			var cacheInfo CacheInfo
 			for _, opt := range opts {
 				opt.SetCacheConfigOption(&cacheInfo)
@@ -237,7 +222,7 @@ func (c *CacheConfig) validate() error {
 	}
 
 	if count != 1 {
-		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, cargobuild, bazel) must be set")
+		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, cargosccache, bazel) must be set")
 	}
 
 	var errs []error
@@ -441,7 +426,7 @@ type CargoBuildCache struct {
 	// This is mainly intended for internal testing purposes.
 	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
 
-	// The cargobuild cache may be automatically injected into a build if
+	// The cargosccache cache may be automatically injected into a build if
 	// rust is detected.
 	// Disabled explicitly turns this off.
 	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
@@ -476,13 +461,11 @@ func WithCargoCacheConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
 }
 
 const (
-	sccacheCacheDir    = "/tmp/dalec/sccache-cache"
-	sccacheBinary      = "/tmp/dalec/sccache"
-	sccacheCacheDirWin = "C:\\temp\\dalec\\sccache-cache"
-	sccacheBinaryWin   = "C:\\temp\\dalec\\sccache.exe"
+	sccacheCacheDir = "/tmp/dalec/sccache-cache"
+	sccacheBinary   = "/tmp/dalec/sccache"
 )
 
-func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts ...CargoBuildCacheOption) llb.RunOption {
+func (c *CargoBuildCache) ToRunOption(distroKey string, opts ...CargoBuildCacheOption) llb.RunOption {
 	return RunOptFunc(func(ei *llb.ExecInfo) {
 		if c.Disabled {
 			return
@@ -504,139 +487,50 @@ func (c *CargoBuildCache) ToRunOption(worker llb.State, distroKey string, opts .
 			platform = &p
 		}
 
-		key := fmt.Sprintf("%s-%s-dalec-cargobuildcache", distroKey, platforms.Format(*platform))
+		key := fmt.Sprintf("%s-%s-dalec-cargosccache", distroKey, platforms.Format(*platform))
 		if c.Scope != "" {
 			key = fmt.Sprintf("%s-%s", key, c.Scope)
 		}
 
-		// Extract distro name for needsPrecompiled check
-		distroName := distroKey
-		if idx := strings.Index(distroKey, "/"); idx != -1 {
-			distroName = distroKey[:idx]
-		}
-
-		// Map version IDs to base names for needsPrecompiled check
-		distroNameMap := map[string]string{
-			"ubuntu22.04": "jammy",
-			"ubuntu20.04": "focal",
-			"ubuntu18.04": "bionic",
-			"debian11":    "bullseye",
-		}
-		if baseName, ok := distroNameMap[distroName]; ok {
-			distroName = baseName
-		}
-
-		// Check if this distro needs precompiled sccache binary or can use package manager
-		needsPrecompiled := map[string]bool{
-			"almalinux8":  true,
-			"almalinux9":  true,
-			"rockylinux8": true,
-			"rockylinux9": true,
-			"bullseye":    true,
-			"bionic":      true,
-			"focal":       true,
-			"jammy":       true,
-		}
-
-		// Determine paths based on platform
-		isWindows := platform.OS == "windows"
-
-		var cacheDir string
-		if isWindows {
-			cacheDir = sccacheCacheDirWin
-		} else {
-			cacheDir = sccacheCacheDir
-		}
-
 		// Set up cache mount for sccache compilation cache
-		llb.AddMount(cacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
+		llb.AddMount(sccacheCacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
 
 		// Set up environment variables
-		llb.AddEnv("SCCACHE_DIR", cacheDir).SetRunOption(ei)
+		llb.AddEnv("SCCACHE_DIR", sccacheCacheDir).SetRunOption(ei)
 		llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
 
-		// Only download and set up precompiled sccache for distros that need it or Windows
-		if needsPrecompiled[distroName] || isWindows {
-			var binaryPath string
-			if isWindows {
-				binaryPath = sccacheBinaryWin
-			} else {
-				binaryPath = sccacheBinary
-			}
-
-			// Download sccache binary using SourceHTTP during build phase
-			sccacheSource := GetSccacheSource(platform)
-			sccacheState, err := sccacheSource.HTTP.AsState("sccache", llb.Platform(*platform))
-			if err != nil {
-				// If we can't get sccache, continue without it
-				return
-			}
-
-			// Create a setup command to extract and configure sccache
-			var setupCmd string
-			if isWindows {
-				// For Windows, extract the archive and copy the binary
-				setupCmd = fmt.Sprintf(`
-if (Test-Path "/tmp/dalec/sccache") {
-	# Create temporary extraction directory
-	New-Item -Path "/tmp/dalec/sccache-extract" -ItemType Directory -Force
-	# Extract sccache from tar.gz - the archive contains a versioned directory
-	tar -xzf /tmp/dalec/sccache -C /tmp/dalec/sccache-extract/
-	# Find the sccache.exe file and copy it (it's in a subdirectory like sccache-v0.10.0-x86_64-pc-windows-msvc/)
-	$sccacheExe = Get-ChildItem -Path "/tmp/dalec/sccache-extract/" -Name "sccache.exe" -Recurse | Select-Object -First 1
-	if ($sccacheExe) {
-		Copy-Item -Path $sccacheExe.FullName -Destination "%s" -Force
-		$env:RUSTC_WRAPPER = "%s"
-		Write-Host "Using downloaded sccache for cargo build caching"
-	} else {
-		Write-Host "Warning: sccache.exe not found in archive"
-	}
-} elseif (Get-Command sccache -ErrorAction SilentlyContinue) {
-	$env:RUSTC_WRAPPER = "sccache"
-	Write-Host "Using system sccache for cargo build caching"
-} else {
-	Write-Host "Warning: sccache not available, cargo build caching disabled"
-}`, binaryPath, binaryPath)
-			} else {
-				// For Linux, extract the archive and copy the binary
-				setupCmd = fmt.Sprintf(`
-if [ -f /tmp/dalec/sccache ]; then
-	# Create temporary extraction directory
-	mkdir -p /tmp/dalec/sccache-extract
-	# Extract sccache from tar.gz - the archive contains a versioned directory like sccache-v0.10.0-x86_64-unknown-linux-musl/
-	tar -xzf /tmp/dalec/sccache -C /tmp/dalec/sccache-extract/
-	# Find the sccache binary and copy it
-	sccache_bin=$(find /tmp/dalec/sccache-extract/ -name "sccache" -type f | head -1)
-	if [ -n "$sccache_bin" ]; then
-		cp "$sccache_bin" "%s" && chmod +x "%s"
-		export RUSTC_WRAPPER="%s"
-		echo "Using downloaded sccache for cargo build caching"
-	else
-		echo "Warning: sccache binary not found in archive"
-	fi
-elif command -v sccache >/dev/null 2>&1; then
-	export RUSTC_WRAPPER=sccache
-	echo "Using system sccache for cargo build caching"
-else
-	echo "Warning: sccache not available, cargo build caching disabled"
-fi`, binaryPath, binaryPath, binaryPath)
-			}
-
-			// Mount the sccache source and add the setup command
-			llb.AddMount("/tmp/dalec/sccache", sccacheState, llb.SourcePath("sccache")).SetRunOption(ei)
-			llb.AddEnv("DALEC_SCCACHE_SETUP", setupCmd).SetRunOption(ei)
-		} else {
-			// For distros that have sccache in their package manager, provide a simpler setup
-			// The build scripts should install sccache via package manager first
-			setupCmd := `
-if command -v sccache >/dev/null 2>&1; then
-	export RUSTC_WRAPPER=sccache
-	echo "Using system sccache for cargo build caching"
-else
-	echo "Warning: sccache not available, cargo build caching disabled"
-fi`
-			llb.AddEnv("DALEC_SCCACHE_SETUP", setupCmd).SetRunOption(ei)
+		// Always download and set up precompiled sccache for consistent behavior
+		sccacheSource := GetSccacheSource(platform)
+		sccacheState, err := sccacheSource.HTTP.AsState("sccache", llb.Platform(*platform))
+		if err != nil {
+			// If we can't get sccache, continue without it
+			return
 		}
+
+		// Extract sccache binary using LLB state operations
+		extractedSccache := ei.State.Run(
+			llb.AddMount("/tmp/dalec/sccache", sccacheState, llb.SourcePath("sccache")),
+			ShArgs(`set -e
+# Create temporary extraction directory
+mkdir -p /tmp/dalec/sccache-extract
+# Extract sccache from tar.gz - the archive contains a versioned directory like sccache-v0.10.0-x86_64-unknown-linux-musl/
+tar -xzf /tmp/dalec/sccache -C /tmp/dalec/sccache-extract/
+# Find the sccache binary and copy it to output
+sccache_bin=$(find /tmp/dalec/sccache-extract/ -name "sccache" -type f | head -1)
+if [ -n "$sccache_bin" ]; then
+	cp "$sccache_bin" /output/sccache && chmod +x /output/sccache
+	echo "sccache binary extracted successfully"
+else
+	echo "Warning: sccache binary not found in archive" >&2
+	exit 1
+fi`),
+		).AddMount("/output", llb.Scratch())
+
+		// Mount the extracted sccache binary and set environment
+		llb.AddMount(sccacheBinary, extractedSccache, llb.SourcePath("sccache")).SetRunOption(ei)
+
+		// Set up a simple environment variable to enable sccache
+		llb.AddEnv("RUSTC_WRAPPER", sccacheBinary).SetRunOption(ei)
 	})
 } // BazelCache sets up a cache for bazel builds.
 // Currently this only supports setting up a *local* bazel cache.

@@ -377,20 +377,19 @@ func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig
 	}
 
 	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-		// Test that DALEC_SCCACHE_SETUP is set when cargo cache is automatically enabled
+		// Test that sccache is properly mounted and available
 		buf := bytes.NewBuffer(nil)
 		buf.WriteString("set -ex;\n")
-		buf.WriteString("[ -n \"${DALEC_SCCACHE_SETUP}\" ]\n")
-		buf.WriteString("echo \"DALEC_SCCACHE_SETUP is set\"\n")
+		buf.WriteString("command -v sccache\n")
+		buf.WriteString("echo \"sccache is available\"\n")
 
 		spec := specWithCommand(buf.String())
 		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)
 
-		// Test the actual sccache setup and that it works
+		// Test the sccache functionality and that cache directory works
 		buf.Reset()
 		buf.WriteString("set -ex;\n")
-		buf.WriteString("eval \"${DALEC_SCCACHE_SETUP}\" || echo 'Setup failed, continuing...'\n")
 		buf.WriteString("[ -d \"$SCCACHE_DIR\" ]; echo hello > ${SCCACHE_DIR}/hello\n")
 
 		spec = specWithCommand(buf.String())
