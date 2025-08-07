@@ -634,19 +634,7 @@ func HasGolang(spec *Spec, targetKey string) bool {
 	return false
 }
 
-// HasGolangResolved checks if the resolved spec has golang as a build dependency
-func HasGolangResolved(resolved *ResolvedSpec) bool {
-	for dep := range resolved.GetBuildDeps() {
-		switch dep {
-		case "golang", "msft-golang":
-			return true
-		}
-		if strings.HasPrefix(dep, "golang-") {
-			return true
-		}
-	}
-	return false
-}
+
 
 func (s *Spec) GetProvides(targetKey string) map[string]PackageConstraints {
 	if p := s.Targets[targetKey].Provides; p != nil {
@@ -679,16 +667,7 @@ func HasNpm(spec *Spec, targetKey string) bool {
 	return false
 }
 
-// HasNpmResolved checks if the resolved spec has npm as a build dependency  
-func HasNpmResolved(resolved *ResolvedSpec) bool {
-	for dep := range resolved.GetBuildDeps() {
-		switch dep {
-		case "npm":
-			return true
-		}
-	}
-	return false
-}
+
 
 // asyncState is a helper is useful when returning an error that can just be encapsulated in an async state.
 // The error itself will propagate when the state once the state is marshalled (e.g. st.Marshal(ctx))

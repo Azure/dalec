@@ -7,7 +7,6 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/targets/linux"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -114,7 +113,7 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 			return nil, nil, fmt.Errorf("error building image config: %w", err)
 		}
 
-		ref, err := ctr.ToState().Marshal(ctx)
+		ref, err := ctr.Marshal(ctx)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshalling container rootfs: %w", err)
 		}
@@ -128,89 +127,5 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 
 		r, err := res.SingleRef()
 		return r, &imgConfig, err
-	})
-}
-
-// HandleDepsOnlyResolved demonstrates the resolved spec approach - eliminates targetKey parameter passing
-func (cfg *Config) HandleDepsOnlyResolved(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-	return frontend.BuildWithResolvedSpec(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, resolved *dalec.ResolvedSpec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		deps := resolved.GetRuntimeDeps()
-		if len(deps) == 0 {
-			return nil, nil, fmt.Errorf("no runtime deps found for '%s'", resolved.TargetKey())
-		}
-
-		pg := dalec.ProgressGroup("Build " + resolved.TargetKey() + " deps-only container for: " + resolved.Name)
-
-		sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		pc := dalec.Platform(platform)
-		worker, err := cfg.Worker(sOpt, pg, pc)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		var rpmDir = llb.Scratch()
-
-		if len(deps) > 0 {
-			withDownloads := worker.Run(dalec.ShArgs("set -ex; mkdir -p /tmp/rpms/RPMS/$(uname -m)")).
-				Run(cfg.Install(deps,  // Note: no need to call GetRuntimeDeps again!
-					DnfDownloadAllDeps("/tmp/rpms/RPMS/$(uname -m)"))).Root()
-			rpmDir = llb.Scratch().File(llb.Copy(withDownloads, "/tmp/rpms", "/", dalec.WithDirContentsOnly()))
-		}
-		
-		// Would need to update BuildContainer interface to accept ResolvedSpec, but this shows the pattern
-		ctr, err := cfg.BuildContainer(ctx, client, worker, sOpt, resolved.OriginalSpec(), resolved.TargetKey(), rpmDir, pg, pc)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		imgConfig := dalec.DockerImageSpec{}
-		if err := dalec.BuildImageConfigResolved(resolved, &imgConfig); err != nil {
-			return nil, nil, fmt.Errorf("error building image config: %w", err)
-		}
-
-		ref, err := ctr.ToState().Marshal(ctx)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error marshalling container rootfs: %w", err)
-		}
-
-		res, err := client.Solve(ctx, gwclient.SolveRequest{
-			Definition: ref.ToPB(),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		r, err := res.SingleRef()
-		return r, &imgConfig, err
-	})
-}
-
-		def, err := ctr.Marshal(ctx, pc)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		res, err := client.Solve(ctx, gwclient.SolveRequest{
-			Definition: def.ToPB(),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-
-		img, err := linux.BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ref, err := res.SingleRef()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return ref, img, nil
 	})
 }

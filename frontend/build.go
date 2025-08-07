@@ -110,9 +110,6 @@ func fillPlatformArgs(prefix string, args map[string]string, platform ocispecs.P
 
 type PlatformBuildFunc func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error)
 
-// ResolvedPlatformBuildFunc is like PlatformBuildFunc but uses a ResolvedSpec instead of spec+targetKey
-type ResolvedPlatformBuildFunc func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, resolved *dalec.ResolvedSpec) (gwclient.Reference, *dalec.DockerImageSpec, error)
-
 // BuildWithPlatform is a helper function to build a spec with a given platform
 // It takes care of looping through each target platform and executing the build with the platform args substituted in the spec.
 // This also deals with the docker-style multi-platform output.
@@ -124,14 +121,6 @@ func BuildWithPlatform(ctx context.Context, client gwclient.Client, f PlatformBu
 	return BuildWithPlatformFromUIClient(ctx, client, dc, f)
 }
 
-// BuildWithResolvedSpec is like BuildWithPlatform but uses ResolvedPlatformBuildFunc
-func BuildWithResolvedSpec(ctx context.Context, client gwclient.Client, f ResolvedPlatformBuildFunc) (*gwclient.Result, error) {
-	dc, err := dockerui.NewClient(client)
-	if err != nil {
-		return nil, err
-	}
-	return BuildWithResolvedSpecFromUIClient(ctx, client, dc, f)
-}
 
 func getPanicStack() error {
 	stackBuf := make([]uintptr, 32)
@@ -179,38 +168,7 @@ func BuildWithPlatformFromUIClient(ctx context.Context, client gwclient.Client, 
 	return rb.Finalize()
 }
 
-// Like [BuildWithResolvedSpec] but with a pre-initialized dockerui.Client
-func BuildWithResolvedSpecFromUIClient(ctx context.Context, client gwclient.Client, dc *dockerui.Client, f ResolvedPlatformBuildFunc) (*gwclient.Result, error) {
-	rb, err := dc.Build(ctx, func(ctx context.Context, platform *ocispecs.Platform, idx int) (_ gwclient.Reference, _ *dalec.DockerImageSpec, _ *dalec.DockerImageSpec, retErr error) {
-		defer func() {
-			if r := recover(); r != nil {
-				trace := getPanicStack()
-				recErr := fmt.Errorf("recovered from panic in build: %+v", r)
-				retErr = stderrors.Join(recErr, trace)
-			}
-		}()
 
-		spec, err := LoadSpec(ctx, dc, platform)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		targetKey := GetTargetKey(dc)
-
-		// Create resolved spec instead of passing spec + targetKey separately
-		resolved := spec.ResolveForTarget(targetKey)
-
-		ref, cfg, err := f(ctx, client, platform, resolved)
-		if cfg != nil {
-			now := time.Now()
-			cfg.Created = &now
-		}
-		return ref, cfg, nil, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	return rb.Finalize()
-}
 
 // GetBaseImage returns an image that first checks if the client provided the
 // image in the build context matching the image ref.

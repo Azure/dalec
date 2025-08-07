@@ -10,16 +10,7 @@ func BuildImageConfig(spec *Spec, targetKey string, img *DockerImageSpec) error 
 	return nil
 }
 
-// BuildImageConfigResolved is like BuildImageConfig but uses a ResolvedSpec
-func BuildImageConfigResolved(resolved *ResolvedSpec, img *DockerImageSpec) error {
-	cfg := img.Config
-	if err := MergeImageConfig(&cfg, resolved.Image); err != nil {
-		return err
-	}
 
-	img.Config = cfg
-	return nil
-}
 
 func MergeSpecImage(spec *Spec, targetKey string) *ImageConfig {
 	var cfg ImageConfig
