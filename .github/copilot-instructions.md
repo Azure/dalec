@@ -69,7 +69,7 @@ Always reference these instructions first and fallback to search or bash command
 ```
 
 ### Key Files to Monitor
-- Always regenerate files after modifying source variants: `go generate`
+- Always regenerate files after modifying source variants: `go generate ./...`
 - Always run linting after changes: `go run ./cmd/lint ./...`
 - Check `docker-bake.hcl` for Docker build targets and configurations
 - Check `docs/examples/go-md2man.yml` for canonical example of Dalec spec format
@@ -90,10 +90,10 @@ Always reference these instructions first and fallback to search or bash command
 
 ### Optional but Recommended
 - Node.js 18+ for documentation site (`cd website && npm start`)
-- golangci-lint for additional linting (though custom linter is primary)
+- golangci-lint for additional linting (custom linter is used in addition to golangci-lint)
 
 ### Environment Limitations
-- Docker builds may fail due to network/certificate issues in some environments
+- Docker builds require internet access
 - Integration tests require full Docker functionality
 - Host-based Go builds always work and are sufficient for most development
 
