@@ -537,6 +537,10 @@ fi`),
 
 		// Set up a simple environment variable to enable sccache
 		llb.AddEnv("RUSTC_WRAPPER", sccacheBinary).SetRunOption(ei)
+
+		// Create a symbolic link from /usr/local/bin/sccache to the actual binary
+		// This allows 'command -v sccache' to find it in the PATH
+		llb.AddMount("/usr/local/bin/sccache", extractedSccache, llb.SourcePath("sccache")).SetRunOption(ei)
 	})
 } // BazelCache sets up a cache for bazel builds.
 // Currently this only supports setting up a *local* bazel cache.
