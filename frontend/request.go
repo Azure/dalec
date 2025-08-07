@@ -223,19 +223,6 @@ func MaybeSignResolved(ctx context.Context, client gwclient.Client, st llb.State
 	return forwardFromFile(ctx, client, cfgPath, st, opts...)
 }
 
-	configCtxName := getSignContextNameWithDefault(client)
-	if specCfg := cfg; specCfg != nil {
-		Warnf(ctx, client, st, "Spec signing config overwritten by config at path %q in build-context %q", cfgPath, configCtxName)
-	}
-
-	cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, configCtxName, sOpt)
-	if err != nil {
-		return llb.Scratch(), err
-	}
-
-	return forwardToSigner(ctx, client, cfg, st, opts...)
-}
-
 func getSignContextNameWithDefault(client gwclient.Client) string {
 	configCtxName := dockerui.DefaultLocalNameContext
 	if cn := getSignConfigCtxName(client); cn != "" {
