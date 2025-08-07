@@ -182,3 +182,72 @@ func TestResolvedSpecMethods(t *testing.T) {
 		}
 	})
 }
+
+// TestResolvedSpecBenefits demonstrates the code quality improvements from using ResolvedSpec
+func TestResolvedSpecBenefits(t *testing.T) {
+	spec := &Spec{
+		Name: "example",
+		Dependencies: &PackageDependencies{
+			Runtime: map[string]PackageConstraints{"dep1": {}},
+			Build:   map[string]PackageConstraints{"build-dep1": {}},
+			Test:    []string{"test-dep1"},
+		},
+		Targets: map[string]Target{
+			"ubuntu": {
+				Dependencies: &PackageDependencies{
+					Runtime: map[string]PackageConstraints{"ubuntu-dep": {}},
+				},
+			},
+		},
+	}
+
+	t.Run("OldApproachRequiresRepeatedCalls", func(t *testing.T) {
+		// Old approach: need to pass targetKey everywhere
+		targetKey := "ubuntu"
+		
+		// Example function that needs multiple dependency types
+		processPackageDeps := func(spec *Spec, targetKey string) (int, int, int) {
+			runtimeDeps := spec.GetRuntimeDeps(targetKey)   // Call 1
+			buildDeps := spec.GetBuildDeps(targetKey)        // Call 2  
+			testDeps := spec.GetTestDeps(targetKey)          // Call 3
+			// Each call looks up the target, merges deps, etc.
+			return len(runtimeDeps), len(buildDeps), len(testDeps)
+		}
+		
+		runtimeCount, buildCount, testCount := processPackageDeps(spec, targetKey)
+		if runtimeCount == 0 || buildCount == 0 || testCount == 0 {
+			t.Error("Expected non-zero dependency counts")
+		}
+	})
+
+	t.Run("NewApproachResolvesOnce", func(t *testing.T) {
+		// New approach: resolve once, use many times
+		resolved := spec.ResolveForTarget("ubuntu")
+		
+		// Same function but cleaner - no targetKey needed, resolved dependencies are cached
+		processResolvedPackageDeps := func(resolved *ResolvedSpec) (int, int, int) {
+			runtimeDeps := resolved.GetRuntimeDeps()   // Direct access, no lookup needed
+			buildDeps := resolved.GetBuildDeps()       // Direct access, no lookup needed
+			testDeps := resolved.GetTestDeps()         // Direct access, no lookup needed
+			return len(runtimeDeps), len(buildDeps), len(testDeps)
+		}
+		
+		runtimeCount, buildCount, testCount := processResolvedPackageDeps(resolved)
+		if runtimeCount == 0 || buildCount == 0 || testCount == 0 {
+			t.Error("Expected non-zero dependency counts")
+		}
+		
+		// Demonstrate that we get the merged dependencies as expected
+		runtimeDeps := resolved.GetRuntimeDeps()
+		foundUbuntuDep := false
+		for _, dep := range runtimeDeps {
+			if dep == "ubuntu-dep" {
+				foundUbuntuDep = true
+				break
+			}
+		}
+		if !foundUbuntuDep {
+			t.Error("Expected ubuntu-specific dependency to be merged into resolved spec")
+		}
+	})
+}

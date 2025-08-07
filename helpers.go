@@ -634,6 +634,20 @@ func HasGolang(spec *Spec, targetKey string) bool {
 	return false
 }
 
+// HasGolangResolved checks if the resolved spec has golang as a build dependency
+func HasGolangResolved(resolved *ResolvedSpec) bool {
+	for dep := range resolved.GetBuildDeps() {
+		switch dep {
+		case "golang", "msft-golang":
+			return true
+		}
+		if strings.HasPrefix(dep, "golang-") {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Spec) GetProvides(targetKey string) map[string]PackageConstraints {
 	if p := s.Targets[targetKey].Provides; p != nil {
 		return p
@@ -657,6 +671,17 @@ func (s *Spec) GetConflicts(targetKey string) map[string]PackageConstraints {
 
 func HasNpm(spec *Spec, targetKey string) bool {
 	for dep := range spec.GetBuildDeps(targetKey) {
+		switch dep {
+		case "npm":
+			return true
+		}
+	}
+	return false
+}
+
+// HasNpmResolved checks if the resolved spec has npm as a build dependency  
+func HasNpmResolved(resolved *ResolvedSpec) bool {
+	for dep := range resolved.GetBuildDeps() {
 		switch dep {
 		case "npm":
 			return true
