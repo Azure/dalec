@@ -12,10 +12,11 @@ import (
 )
 
 type SourceGit struct {
-	URL        string  `yaml:"url" json:"url"`
-	Commit     string  `yaml:"commit" json:"commit"`
-	KeepGitDir bool    `yaml:"keepGitDir,omitempty" json:"keepGitDir,omitempty"`
-	Auth       GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	URL           string   `yaml:"url" json:"url"`
+	Commit        string   `yaml:"commit" json:"commit"`
+	KeepGitDir    bool     `yaml:"keepGitDir,omitempty" json:"keepGitDir,omitempty"`
+	Auth          GitAuth  `yaml:"auth,omitempty" json:"auth,omitempty"`
+	SSHKnownHosts []string `yaml:"sshKnownHosts,omitempty" json:"sshKnownHosts,omitempty"`
 }
 
 type GitAuth struct {
@@ -116,6 +117,10 @@ func (src *SourceGit) baseState(opts fetchOptions) llb.State {
 	gOpts = append(gOpts, WithConstraints(opts.Constraints...))
 	gOpts = append(gOpts, &src.Auth)
 
+	for _, host := range src.SSHKnownHosts {
+		gOpts = append(gOpts, llb.KnownSSHHosts(host))
+	}
+
 	return llb.Git(src.URL, src.Commit, gOpts...)
 }
 
@@ -156,7 +161,8 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 	if err != nil {
 		errs = append(errs, err)
 	}
-	if len(errs) > 1 {
+
+	if len(errs) > 0 {
 		return fmt.Errorf("failed to process build args for git source: %w", stderrors.Join(errs...))
 	}
 	return nil

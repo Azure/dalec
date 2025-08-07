@@ -97,6 +97,20 @@ func TestSourceGitSSH(t *testing.T) {
 		checkGitOp(t, ops, &src)
 	})
 
+	t.Run("with known hosts", func(t *testing.T) {
+		knownHosts := "github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7"
+		src := Source{
+			Git: &SourceGit{
+				URL:           fmt.Sprintf("user@%s:test.git", addr),
+				Commit:        t.Name(),
+				SSHKnownHosts: []string{knownHosts},
+			},
+		}
+
+		ops := getSourceOp(ctx, t, src)
+		checkGitOp(t, ops, &src)
+	})
+
 }
 
 func TestSourceGitHTTP(t *testing.T) {
@@ -1060,6 +1074,18 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 			ssh = src.Git.Auth.SSH
 		}
 		assert.Check(t, cmp.Equal(op.Attrs["git.mountsshsock"], ssh), op)
+	}
+
+	// Check known hosts if set
+	if len(src.Git.SSHKnownHosts) > 0 {
+		// BuildKit's KnownSSHHosts option may add formatting like newlines
+		actualKnownHosts := op.Attrs["git.knownsshhosts"]
+		expectedKnownHosts := strings.Join(src.Git.SSHKnownHosts, "\n")
+
+		// Remove trailing whitespace for comparison since BuildKit may add formatting
+		actualTrimmed := strings.TrimSpace(actualKnownHosts)
+		expectedTrimmed := strings.TrimSpace(expectedKnownHosts)
+		assert.Check(t, cmp.Equal(actualTrimmed, expectedTrimmed), "Expected: %q, Got: %q", expectedKnownHosts, actualKnownHosts)
 	}
 }
 
