@@ -1,4 +1,5 @@
 //go:generate go run ./cmd/gen-jsonschema docs/spec.schema.json
+//go:generate go run ./cmd/gen-resolve spec_resolve_generated.go
 package dalec
 
 import (
@@ -420,64 +421,4 @@ func (s *Spec) WithExtension(key string, value interface{}) error {
 	return nil
 }
 
-// Resolve creates a new Spec with target-specific configuration merged in.
-// This eliminates the need to pass targetKey parameters around by pre-resolving
-// all target-specific configuration into a single Spec.
-func (s *Spec) Resolve(targetKey string) *Spec {
-	// Create a deep copy of the current spec
-	resolved := &Spec{
-		Name:          s.Name,
-		Description:   s.Description,
-		Website:       s.Website,
-		Version:       s.Version,
-		Revision:      s.Revision,
-		NoArch:        s.NoArch,
-		License:       s.License,
-		Vendor:        s.Vendor,
-		Packager:      s.Packager,
-		Sources:       s.Sources,
-		Patches:       s.Patches,
-		Build:         s.Build,
-		Args:          s.Args,
-		Changelog:     s.Changelog,
-	}
 
-	// Copy extension fields
-	if s.extensions != nil {
-		resolved.extensions = make(extensionFields)
-		for k, v := range s.extensions {
-			resolved.extensions[k] = v
-		}
-	}
-
-	// Merge tests (global + target-specific)
-	resolved.Tests = append([]*TestSpec(nil), s.Tests...)
-	if target, ok := s.Targets[targetKey]; ok && target.Tests != nil {
-		resolved.Tests = append(resolved.Tests, target.Tests...)
-	}
-
-	// Resolve dependencies by merging global and target-specific
-	resolved.Dependencies = s.GetPackageDeps(targetKey)
-
-	// Resolve package config (target overrides global)
-	resolved.PackageConfig = s.PackageConfig
-	if target, ok := s.Targets[targetKey]; ok && target.PackageConfig != nil {
-		resolved.PackageConfig = target.PackageConfig
-	}
-
-	// Resolve image config by merging
-	resolved.Image = MergeSpecImage(s, targetKey)
-
-	// Resolve artifacts
-	resolved.Artifacts = s.GetArtifacts(targetKey)
-
-	// Resolve provides, replaces, conflicts
-	resolved.Provides = s.GetProvides(targetKey)
-	resolved.Replaces = s.GetReplaces(targetKey)
-	resolved.Conflicts = s.GetConflicts(targetKey)
-
-	// Clear targets as this is now a resolved spec for a specific target
-	resolved.Targets = nil
-
-	return resolved
-}
