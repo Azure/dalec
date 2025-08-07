@@ -97,6 +97,22 @@ func TestSourceGitSSH(t *testing.T) {
 		checkGitOp(t, ops, &src)
 	})
 
+	t.Run("with known hosts", func(t *testing.T) {
+		knownHosts := "github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7"
+		src := Source{
+			Git: &SourceGit{
+				URL:    fmt.Sprintf("user@%s:test.git", addr),
+				Commit: t.Name(),
+				Auth: GitAuth{
+					KnownHosts: knownHosts,
+				},
+			},
+		}
+
+		ops := getSourceOp(ctx, t, src)
+		checkGitOp(t, ops, &src)
+	})
+
 }
 
 func TestSourceGitHTTP(t *testing.T) {
@@ -1031,6 +1047,11 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 		}
 		assert.Check(t, cmp.Equal(op.Attrs["git.mountsshsock"], ssh), op)
 	}
+
+	// Check known hosts if set
+	if src.Git.Auth.KnownHosts != "" {
+		assert.Check(t, cmp.Equal(op.Attrs["git.knownsshhosts"], src.Git.Auth.KnownHosts), op.Attrs)
+	}
 }
 
 func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, expectedNumSecrets, expectedNumSSH int) {
@@ -1374,6 +1395,53 @@ func Test_pathHasPrefix(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			hasPrefix := pathHasPrefix(tc.path, tc.prefix)
 			assert.Equal(t, hasPrefix, tc.expect)
+		})
+	}
+}
+
+// Test GitAuth SetGitOption method specifically for KnownHosts
+func TestGitAuthSetGitOption(t *testing.T) {
+	tests := []struct {
+		name             string
+		auth             *GitAuth
+		expectKnownHosts string
+	}{
+		{
+			name:             "nil auth",
+			auth:             nil,
+			expectKnownHosts: "",
+		},
+		{
+			name: "empty known hosts",
+			auth: &GitAuth{
+				KnownHosts: "",
+			},
+			expectKnownHosts: "",
+		},
+		{
+			name: "with known hosts",
+			auth: &GitAuth{
+				KnownHosts: "github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7",
+			},
+			expectKnownHosts: "github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7",
+		},
+		{
+			name: "multiline known hosts",
+			auth: &GitAuth{
+				KnownHosts: `github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7
+gitlab.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI`,
+			},
+			expectKnownHosts: `github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7
+gitlab.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gi := &llb.GitInfo{}
+			tt.auth.SetGitOption(gi)
+
+			assert.Check(t, cmp.Equal(gi.KnownSSHHosts, tt.expectKnownHosts))
 		})
 	}
 }

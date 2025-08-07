@@ -34,6 +34,11 @@ type GitAuth struct {
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
 	SSH string `yaml:"ssh,omitempty" json:"ssh,omitempty"`
+	// KnownHosts is the SSH known hosts data to use for host key verification.
+	// This should be the actual known hosts content (can be expanded from build args).
+	// When provided, SSH connections will verify the host key against this data.
+	// When not provided, BuildKit will use TOFU (Trust On First Use).
+	KnownHosts string `yaml:"knownHosts,omitempty" json:"knownHosts,omitempty"`
 }
 
 type GomodGitAuth struct {
@@ -80,6 +85,10 @@ func (a *GitAuth) SetGitOption(gi *llb.GitInfo) {
 
 	if a.SSH != "" {
 		gi.MountSSHSock = a.SSH
+	}
+
+	if a.KnownHosts != "" {
+		gi.KnownSSHHosts = a.KnownHosts
 	}
 }
 
@@ -156,7 +165,17 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 	if err != nil {
 		errs = append(errs, err)
 	}
-	if len(errs) > 1 {
+
+	// Process KnownHosts in Auth if present
+	if src.Auth.KnownHosts != "" {
+		updated, err = expandArgs(lex, src.Auth.KnownHosts, args, allowArg)
+		src.Auth.KnownHosts = updated
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
 		return fmt.Errorf("failed to process build args for git source: %w", stderrors.Join(errs...))
 	}
 	return nil
