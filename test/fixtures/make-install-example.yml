@@ -12,22 +12,24 @@ sources:
   src:
     inline:
       dir:
-        Makefile: |
-          PREFIX ?= /usr
-          DESTDIR ?=
+        files:
+          Makefile:
+            contents: |
+              PREFIX ?= /usr
+              DESTDIR ?=
 
-          all:
-          	@echo "Building example project..."
-          	@echo "#!/bin/bash" > myapp
-          	@echo "echo 'Hello from myapp!'" >> myapp
-          	@chmod +x myapp
-          	@echo ".TH MYAPP 1" > myapp.1
-          	@echo ".SH NAME" >> myapp.1  
-          	@echo "myapp \\- example application" >> myapp.1
+              all:
+              	@echo "Building example project..."
+              	@echo "#!/bin/bash" > myapp
+              	@echo "echo 'Hello from myapp!'" >> myapp
+              	@chmod +x myapp
+              	@echo ".TH MYAPP 1" > myapp.1
+              	@echo ".SH NAME" >> myapp.1  
+              	@echo "myapp \\- example application" >> myapp.1
 
-          install:
-          	install -D -m 755 myapp $(DESTDIR)$(PREFIX)/bin/myapp
-          	install -D -m 644 myapp.1 $(DESTDIR)$(PREFIX)/share/man/man1/myapp.1
+              install:
+              	install -D -m 755 myapp $(DESTDIR)$(PREFIX)/bin/myapp
+              	install -D -m 644 myapp.1 $(DESTDIR)$(PREFIX)/share/man/man1/myapp.1
 
 build:
   steps:
@@ -54,4 +56,5 @@ tests:
     steps:
       - command: myapp
         stdout:
-          contains: "Hello from myapp!"
+          contains:
+            - "Hello from myapp!"
