@@ -15,9 +15,6 @@ on:
     branches: ["main"]
     paths-ignore:
       - '.github/copilot-instructions.md'
-      - 'website/**'
-      - 'docs/**'
-      - '*.md'
 
 # Declare default permissions as read only.
 permissions: read-all
