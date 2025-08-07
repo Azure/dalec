@@ -688,13 +688,6 @@ func setSymlinkOwnershipPostInst(w *bytes.Buffer, spec *dalec.Spec, target strin
 // generateReadmeDebian creates the content for debian/README.Debian that documents
 // source provenance, allowing consumers to understand where sources came from.
 func generateReadmeDebian(spec *dalec.Spec) []byte {
-	return GenerateReadmeDebian(spec)
-}
-
-// GenerateReadmeDebian creates the content for debian/README.Debian that documents
-// source provenance, allowing consumers to understand where sources came from.
-// This is exported for testing purposes.
-func GenerateReadmeDebian(spec *dalec.Spec) []byte {
 	buf := bytes.NewBuffer(nil)
 	
 	fmt.Fprintf(buf, "%s for Debian\n", spec.Name)

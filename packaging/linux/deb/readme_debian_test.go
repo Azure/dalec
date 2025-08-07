@@ -17,7 +17,7 @@ func TestGenerateReadmeDebian(t *testing.T) {
 			Description: "Test package description",
 		}
 		
-		result := GenerateReadmeDebian(spec)
+		result := generateReadmeDebian(spec)
 		content := string(result)
 		
 		assert.Assert(t, strings.Contains(content, "test-package for Debian"))
@@ -41,7 +41,7 @@ func TestGenerateReadmeDebian(t *testing.T) {
 			},
 		}
 		
-		result := GenerateReadmeDebian(spec)
+		result := generateReadmeDebian(spec)
 		content := string(result)
 		
 		assert.Assert(t, strings.Contains(content, "test-package for Debian"))
@@ -73,7 +73,7 @@ func TestGenerateReadmeDebian(t *testing.T) {
 			},
 		}
 		
-		result := GenerateReadmeDebian(spec)
+		result := generateReadmeDebian(spec)
 		content := string(result)
 		
 		assert.Assert(t, strings.Contains(content, "multi-source-package for Debian"))
@@ -112,7 +112,7 @@ func TestGenerateReadmeDebian(t *testing.T) {
 			},
 		}
 		
-		result := GenerateReadmeDebian(spec)
+		result := generateReadmeDebian(spec)
 		
 		// Parse the result to verify indentation
 		scanner := bufio.NewScanner(bytes.NewReader(result))
