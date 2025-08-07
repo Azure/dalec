@@ -7,7 +7,9 @@ import (
 	"math"
 	"os"
 	"path"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Azure/dalec"
@@ -47,7 +49,29 @@ type outputStreamer struct {
 
 func (h *outputStreamer) HandleEvent(te *TestEvent) error {
 	if te.Output != "" {
-		_, err := h.out.Write([]byte(te.Output))
+		if !githubActionsCommand().MatchString(te.Output) {
+			_, err := h.out.Write([]byte(te.Output))
+			return err
+		}
+	}
+	return nil
+}
+
+var githubActionsCommand = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`^::(error|warning|notice|add-mask)(?:\s+file=([^,:]+)(?:,line=(\d+))?)?::`)
+})
+
+type githubActionsCommandPassthrough struct {
+	out io.Writer
+}
+
+func (h *githubActionsCommandPassthrough) HandleEvent(te *TestEvent) error {
+	if te.Output != "" && githubActionsCommand().MatchString(te.Output) {
+		out := h.out
+		if out == nil {
+			out = os.Stderr
+		}
+		_, err := out.Write([]byte(te.Output))
 		return err
 	}
 	return nil
@@ -109,9 +133,11 @@ func (h *resultsHandler) HandleEvent(te *TestEvent) error {
 	tr.elapsed = te.Elapsed
 
 	if te.Output != "" {
-		_, err := tr.output.WriteString(te.Output)
-		if err != nil {
-			return errors.Wrap(err, "error collecting test event output")
+		if !githubActionsCommand().MatchString(te.Output) {
+			_, err := tr.output.WriteString(te.Output)
+			if err != nil {
+				return errors.Wrap(err, "error collecting test event output")
+			}
 		}
 	}
 
