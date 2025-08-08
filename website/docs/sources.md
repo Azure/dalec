@@ -95,6 +95,40 @@ git auth section (shown below with default values):
 Note: These are secret names which are used to reference the secrets provided
 by the client, not the actual secret values.
 
+#### SSH Known Hosts
+
+For SSH-based git URLs, you can specify known SSH host keys to improve security
+and avoid Trust-On-First-Use (TOFU) behavior. When known hosts are provided,
+the SSH connection will verify the host key against the specified keys and fail
+if they don't match.
+
+```yaml
+  someSource1:
+    git:
+      url: git@github.com:myOrg/myRepo.git
+      commit: 1234567890abcdef
+      sshKnownHosts: |
+        github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqbLJofwIHMHnSVPP0k+aLU6X5OtN6a1r9K4kS...
+        github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+```
+
+You can also use build arguments to dynamically provide known hosts:
+
+```yaml
+  someSource1:
+    git:
+      url: git@github.com:myOrg/myRepo.git
+      commit: 1234567890abcdef
+      sshKnownHosts: ${KNOWN_HOSTS}
+```
+
+Then build with: `docker build --build-arg KNOWN_HOSTS="$(cat ~/.ssh/known_hosts)" ...`
+
+When known hosts are not specified, BuildKit will use Trust-On-First-Use (TOFU)
+behavior, where it will connect to the SSH server, retrieve the host key, and 
+use that for the connection. Specifying known hosts avoids this extra connection
+and provides better security by ensuring you're connecting to the expected server.
+
 ### HTTP
 
 HTTP sources fetch a file from an HTTP URL. The HTTP source type is considered to be a "file" source.
