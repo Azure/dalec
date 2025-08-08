@@ -12,10 +12,11 @@ import (
 )
 
 type SourceGit struct {
-	URL        string  `yaml:"url" json:"url"`
-	Commit     string  `yaml:"commit" json:"commit"`
-	KeepGitDir bool    `yaml:"keepGitDir,omitempty" json:"keepGitDir,omitempty"`
-	Auth       GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	URL           string  `yaml:"url" json:"url"`
+	Commit        string  `yaml:"commit" json:"commit"`
+	KeepGitDir    bool    `yaml:"keepGitDir,omitempty" json:"keepGitDir,omitempty"`
+	Auth          GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	SSHKnownHosts string  `yaml:"sshKnownHosts,omitempty" json:"sshKnownHosts,omitempty"`
 }
 
 type GitAuth struct {
@@ -34,11 +35,6 @@ type GitAuth struct {
 	// Note: This should not have the *actual* secret value, just the name of
 	// the secret which was specified as a build secret.
 	SSH string `yaml:"ssh,omitempty" json:"ssh,omitempty"`
-	// KnownHosts is the SSH known hosts data to use for host key verification.
-	// This should be the actual known hosts content (can be expanded from build args).
-	// When provided, SSH connections will verify the host key against this data.
-	// When not provided, BuildKit will use TOFU (Trust On First Use).
-	KnownHosts string `yaml:"knownHosts,omitempty" json:"knownHosts,omitempty"`
 }
 
 type GomodGitAuth struct {
@@ -86,10 +82,6 @@ func (a *GitAuth) SetGitOption(gi *llb.GitInfo) {
 	if a.SSH != "" {
 		gi.MountSSHSock = a.SSH
 	}
-
-	if a.KnownHosts != "" {
-		gi.KnownSSHHosts = a.KnownHosts
-	}
 }
 
 func (src *SourceGit) IsDir() bool {
@@ -124,6 +116,10 @@ func (src *SourceGit) baseState(opts fetchOptions) llb.State {
 	}
 	gOpts = append(gOpts, WithConstraints(opts.Constraints...))
 	gOpts = append(gOpts, &src.Auth)
+	
+	if src.SSHKnownHosts != "" {
+		gOpts = append(gOpts, llb.KnownSSHHosts(src.SSHKnownHosts))
+	}
 
 	return llb.Git(src.URL, src.Commit, gOpts...)
 }
@@ -166,10 +162,10 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 		errs = append(errs, err)
 	}
 
-	// Process KnownHosts in Auth if present
-	if src.Auth.KnownHosts != "" {
-		updated, err = expandArgs(lex, src.Auth.KnownHosts, args, allowArg)
-		src.Auth.KnownHosts = updated
+	// Process SSHKnownHosts if present
+	if src.SSHKnownHosts != "" {
+		updated, err = expandArgs(lex, src.SSHKnownHosts, args, allowArg)
+		src.SSHKnownHosts = updated
 		if err != nil {
 			errs = append(errs, err)
 		}

@@ -107,10 +107,9 @@ if they don't match.
     git:
       url: git@github.com:myOrg/myRepo.git
       commit: 1234567890abcdef
-      auth:
-        knownHosts: |
-          github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqbLJofwIHMHnSVPP0k+aLU6X5OtN6a1r9K4kS...
-          github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+      sshKnownHosts: |
+        github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqbLJofwIHMHnSVPP0k+aLU6X5OtN6a1r9K4kS...
+        github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
 ```
 
 You can also use build arguments to dynamically provide known hosts:
@@ -120,8 +119,7 @@ You can also use build arguments to dynamically provide known hosts:
     git:
       url: git@github.com:myOrg/myRepo.git
       commit: 1234567890abcdef
-      auth:
-        knownHosts: ${KNOWN_HOSTS}
+      sshKnownHosts: ${KNOWN_HOSTS}
 ```
 
 Then build with: `docker build --build-arg KNOWN_HOSTS="$(cat ~/.ssh/known_hosts)" ...`
