@@ -14,10 +14,7 @@ import (
 
 // Resolve is a handler that generates a resolved spec file with all the build args and variables expanded.
 func Resolve(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		// Create resolved spec
-		resolved := spec.Resolve(targetKey)
-		
+	return frontend.BuildWithResolvedSpec(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, resolved *dalec.ResolvedSpec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
 		dt, err := yaml.Marshal(resolved)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshalling resolved spec: %w", err)

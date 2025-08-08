@@ -32,32 +32,31 @@ func (s *Spec) Resolve(targetKey string) *Spec {
 		}
 	}
 
-	// Merge tests (global + target-specific)
-	resolved.Tests = append([]*TestSpec(nil), s.Tests...)
-	if target, ok := s.Targets[targetKey]; ok && target.Tests != nil {
-		resolved.Tests = append(resolved.Tests, target.Tests...)
-	}
+	// Get target-specific configuration
+	target, hasTarget := s.Targets[targetKey]
 
-	// Resolve dependencies by merging global and target-specific
+	// Resolve Artifacts using existing logic
+	resolved.Artifacts = s.GetArtifacts(targetKey)
+	// Resolve Conflicts using existing logic
+	resolved.Conflicts = s.GetConflicts(targetKey)
+	// Resolve Dependencies using existing merge logic
 	resolved.Dependencies = s.GetPackageDeps(targetKey)
-
-	// Resolve package config (target overrides global)
+	// Resolve Image using existing merge logic
+	resolved.Image = MergeSpecImage(s, targetKey)
+	// Resolve PackageConfig (target overrides global)
 	resolved.PackageConfig = s.PackageConfig
-	if target, ok := s.Targets[targetKey]; ok && target.PackageConfig != nil {
+	if hasTarget && target.PackageConfig != nil {
 		resolved.PackageConfig = target.PackageConfig
 	}
-
-	// Resolve image config by merging
-	resolved.Image = MergeSpecImage(s, targetKey)
-
-	// Resolve artifacts
-	resolved.Artifacts = s.GetArtifacts(targetKey)
-
-	// Resolve provides, replaces, conflicts
+	// Resolve Provides using existing logic
 	resolved.Provides = s.GetProvides(targetKey)
+	// Resolve Replaces using existing logic
 	resolved.Replaces = s.GetReplaces(targetKey)
-	resolved.Conflicts = s.GetConflicts(targetKey)
-
+	// Merge Tests (global + target-specific)
+	resolved.Tests = append([]*TestSpec(nil), s.Tests...)
+	if hasTarget && target.Tests != nil {
+		resolved.Tests = append(resolved.Tests, target.Tests...)
+	}
 	// Clear targets as this is now a resolved spec for a specific target
 	resolved.Targets = nil
 

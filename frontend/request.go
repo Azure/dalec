@@ -212,7 +212,36 @@ func MaybeSign(ctx context.Context, client gwclient.Client, st llb.State, spec *
 	return forwardToSigner(ctx, client, cfg, st, opts...)
 }
 
+// MaybeSignResolved is like MaybeSign but uses a ResolvedSpec
+func MaybeSignResolved(ctx context.Context, client gwclient.Client, st llb.State, resolved *dalec.ResolvedSpec, sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	if signingDisabled(client) {
+		Warnf(ctx, client, st, "Signing disabled by build-arg %q", keySkipSigningArg)
+		return st, nil
+	}
 
+	cfg, ok := resolved.GetSigner()
+	cfgPath := getUserSignConfigPath(client)
+	if cfgPath == "" {
+		if !ok || cfg == nil {
+			// i.e. there's no signing config. not in the build context, not in the spec.
+			return st, nil
+		}
+
+		return forwardToSigner(ctx, client, cfg, st, opts...)
+	}
+
+	configCtxName := getSignContextNameWithDefault(client)
+	if cfg != nil {
+		Warnf(ctx, client, st, "Spec signing config overwritten by config at path %q in build-context %q", cfgPath, configCtxName)
+	}
+
+	cfg, err := getSigningConfigFromContext(ctx, client, cfgPath, configCtxName, sOpt, opts...)
+	if err != nil {
+		return llb.Scratch(), err
+	}
+
+	return forwardToSigner(ctx, client, cfg, st, opts...)
+}
 
 func getSignContextNameWithDefault(client gwclient.Client) string {
 	configCtxName := dockerui.DefaultLocalNameContext

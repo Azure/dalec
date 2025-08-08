@@ -19,15 +19,15 @@ func main() {
 
 	outputFile := os.Args[1]
 
-	// Parse the spec.go file to extract Spec struct fields
-	specFields, err := extractSpecFields()
+	// Parse the source files to extract struct information
+	specFields, targetFields, err := extractStructFields()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error extracting spec fields: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error extracting struct fields: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Generate the code
-	code, err := generateResolveMethod(specFields)
+	code, err := generateResolveMethod(specFields, targetFields)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating code: %v\n", err)
 		os.Exit(1)
@@ -43,7 +43,7 @@ func main() {
 	fmt.Printf("Generated Resolve method in %s\n", outputFile)
 }
 
-type SpecField struct {
+type FieldInfo struct {
 	Name     string // Field name (e.g. "Name")
 	TypeName string // Type name (e.g. "string")
 	IsSlice  bool   // Is it a slice type
@@ -51,18 +51,34 @@ type SpecField struct {
 	IsPtr    bool   // Is it a pointer type
 }
 
-func extractSpecFields() ([]SpecField, error) {
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, "spec.go", nil, parser.ParseComments)
+func extractStructFields() ([]FieldInfo, []FieldInfo, error) {
+	// Parse spec.go for Spec struct
+	specFields, err := parseStructFromFile("spec.go", "Spec")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse spec.go: %w", err)
+		return nil, nil, fmt.Errorf("failed to extract Spec fields: %w", err)
 	}
 
-	var specFields []SpecField
+	// Parse target.go for Target struct  
+	targetFields, err := parseStructFromFile("target.go", "Target")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to extract Target fields: %w", err)
+	}
 
-	// Find the Spec struct
+	return specFields, targetFields, nil
+}
+
+func parseStructFromFile(filename, structName string) ([]FieldInfo, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", filename, err)
+	}
+
+	var fields []FieldInfo
+
+	// Find the target struct
 	ast.Inspect(node, func(n ast.Node) bool {
-		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == "Spec" {
+		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == structName {
 			if st, ok := ts.Type.(*ast.StructType); ok {
 				for _, field := range st.Fields.List {
 					if len(field.Names) == 0 {
@@ -71,14 +87,14 @@ func extractSpecFields() ([]SpecField, error) {
 
 					fieldName := field.Names[0].Name
 					
-					// Skip unexported fields and fields that are internal
+					// Skip unexported fields and internal fields
 					if !ast.IsExported(fieldName) || fieldName == "extensions" || fieldName == "decodeOpts" {
 						continue
 					}
 
 					typeName, isSlice, isMap, isPtr := parseFieldType(field.Type)
 					
-					specFields = append(specFields, SpecField{
+					fields = append(fields, FieldInfo{
 						Name:     fieldName,
 						TypeName: typeName,
 						IsSlice:  isSlice,
@@ -92,11 +108,11 @@ func extractSpecFields() ([]SpecField, error) {
 	})
 
 	// Sort fields for consistent output
-	sort.Slice(specFields, func(i, j int) bool {
-		return specFields[i].Name < specFields[j].Name
+	sort.Slice(fields, func(i, j int) bool {
+		return fields[i].Name < fields[j].Name
 	})
 
-	return specFields, nil
+	return fields, nil
 }
 
 func parseFieldType(expr ast.Expr) (typeName string, isSlice, isMap, isPtr bool) {
@@ -125,7 +141,7 @@ func parseFieldType(expr ast.Expr) (typeName string, isSlice, isMap, isPtr bool)
 	}
 }
 
-func generateResolveMethod(fields []SpecField) ([]byte, error) {
+func generateResolveMethod(specFields []FieldInfo, targetFields []FieldInfo) ([]byte, error) {
 	var buf bytes.Buffer
 
 	// Generate file header
@@ -135,6 +151,29 @@ package dalec
 
 `)
 
+	// Determine which fields exist in both Spec and Target structs
+	targetFieldNames := make(map[string]bool)
+	for _, field := range targetFields {
+		targetFieldNames[field.Name] = true
+	}
+
+	// Fields that need special merge logic (exist in both structs)
+	var targetOverrideFields []FieldInfo
+	var regularFields []FieldInfo
+
+	for _, field := range specFields {
+		// Skip Targets field itself
+		if field.Name == "Targets" {
+			continue
+		}
+		
+		if targetFieldNames[field.Name] {
+			targetOverrideFields = append(targetOverrideFields, field)
+		} else {
+			regularFields = append(regularFields, field)
+		}
+	}
+
 	// Start the Resolve method
 	buf.WriteString("// Resolve creates a new Spec with target-specific configuration merged in.\n")
 	buf.WriteString("// This eliminates the need to pass targetKey parameters around by pre-resolving\n")
@@ -143,24 +182,9 @@ package dalec
 	buf.WriteString("\t// Create a deep copy of the current spec\n")
 	buf.WriteString("\tresolved := &Spec{\n")
 
-	// Define fields that need special handling
-	specialFields := map[string]bool{
-		"Tests":         true, // Merge global + target-specific
-		"Dependencies":  true, // Resolved via GetPackageDeps
-		"PackageConfig": true, // Target overrides global
-		"Image":         true, // Resolved via MergeSpecImage
-		"Artifacts":     true, // Resolved via GetArtifacts
-		"Provides":      true, // Resolved via GetProvides
-		"Replaces":      true, // Resolved via GetReplaces  
-		"Conflicts":     true, // Resolved via GetConflicts
-		"Targets":       true, // Cleared (set to nil)
-	}
-
-	// Copy basic fields
-	for _, field := range fields {
-		if !specialFields[field.Name] {
-			buf.WriteString(fmt.Sprintf("\t\t%s: s.%s,\n", field.Name, field.Name))
-		}
+	// Copy regular fields (no target overrides)
+	for _, field := range regularFields {
+		buf.WriteString(fmt.Sprintf("\t\t%s: s.%s,\n", field.Name, field.Name))
 	}
 
 	buf.WriteString("\t}\n\n")
@@ -174,32 +198,14 @@ package dalec
 	buf.WriteString("\t\t}\n")
 	buf.WriteString("\t}\n\n")
 
-	// Handle special fields with target-specific resolution logic
-	buf.WriteString("\t// Merge tests (global + target-specific)\n")
-	buf.WriteString("\tresolved.Tests = append([]*TestSpec(nil), s.Tests...)\n")
-	buf.WriteString("\tif target, ok := s.Targets[targetKey]; ok && target.Tests != nil {\n")
-	buf.WriteString("\t\tresolved.Tests = append(resolved.Tests, target.Tests...)\n")
-	buf.WriteString("\t}\n\n")
+	// Handle target override fields dynamically
+	buf.WriteString("\t// Get target-specific configuration\n")
+	buf.WriteString("\ttarget, hasTarget := s.Targets[targetKey]\n\n")
 
-	buf.WriteString("\t// Resolve dependencies by merging global and target-specific\n")
-	buf.WriteString("\tresolved.Dependencies = s.GetPackageDeps(targetKey)\n\n")
-
-	buf.WriteString("\t// Resolve package config (target overrides global)\n")
-	buf.WriteString("\tresolved.PackageConfig = s.PackageConfig\n")
-	buf.WriteString("\tif target, ok := s.Targets[targetKey]; ok && target.PackageConfig != nil {\n")
-	buf.WriteString("\t\tresolved.PackageConfig = target.PackageConfig\n")
-	buf.WriteString("\t}\n\n")
-
-	buf.WriteString("\t// Resolve image config by merging\n")
-	buf.WriteString("\tresolved.Image = MergeSpecImage(s, targetKey)\n\n")
-
-	buf.WriteString("\t// Resolve artifacts\n")
-	buf.WriteString("\tresolved.Artifacts = s.GetArtifacts(targetKey)\n\n")
-
-	buf.WriteString("\t// Resolve provides, replaces, conflicts\n")
-	buf.WriteString("\tresolved.Provides = s.GetProvides(targetKey)\n")
-	buf.WriteString("\tresolved.Replaces = s.GetReplaces(targetKey)\n")
-	buf.WriteString("\tresolved.Conflicts = s.GetConflicts(targetKey)\n\n")
+	for _, field := range targetOverrideFields {
+		generateFieldMergeLogic(&buf, field)
+		buf.WriteString("\n")
+	}
 
 	buf.WriteString("\t// Clear targets as this is now a resolved spec for a specific target\n")
 	buf.WriteString("\tresolved.Targets = nil\n\n")
@@ -214,4 +220,53 @@ package dalec
 	}
 
 	return formatted, nil
+}
+
+func generateFieldMergeLogic(buf *bytes.Buffer, field FieldInfo) {
+	switch field.Name {
+	case "Tests":
+		// Tests are appended (global + target-specific)
+		buf.WriteString(fmt.Sprintf("\t// Merge %s (global + target-specific)\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\tresolved.%s = append([]*TestSpec(nil), s.%s...)\n", field.Name, field.Name))
+		buf.WriteString("\tif hasTarget && target.Tests != nil {\n")
+		buf.WriteString(fmt.Sprintf("\t\tresolved.%s = append(resolved.%s, target.%s...)\n", field.Name, field.Name, field.Name))
+		buf.WriteString("\t}")
+
+	case "Dependencies":
+		// Dependencies use special GetPackageDeps logic
+		buf.WriteString(fmt.Sprintf("\t// Resolve %s using existing merge logic\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\tresolved.%s = s.GetPackageDeps(targetKey)", field.Name))
+
+	case "Image":
+		// Image uses special MergeSpecImage logic  
+		buf.WriteString(fmt.Sprintf("\t// Resolve %s using existing merge logic\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\tresolved.%s = MergeSpecImage(s, targetKey)", field.Name))
+
+	case "Artifacts":
+		// Artifacts use GetArtifacts logic
+		buf.WriteString(fmt.Sprintf("\t// Resolve %s using existing logic\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\tresolved.%s = s.GetArtifacts(targetKey)", field.Name))
+
+	case "Provides", "Replaces", "Conflicts":
+		// These use the existing Get* methods
+		methodName := "Get" + field.Name
+		buf.WriteString(fmt.Sprintf("\t// Resolve %s using existing logic\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\tresolved.%s = s.%s(targetKey)", field.Name, methodName))
+
+	case "PackageConfig":
+		// PackageConfig: target overrides global
+		buf.WriteString(fmt.Sprintf("\t// Resolve %s (target overrides global)\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\tresolved.%s = s.%s\n", field.Name, field.Name))
+		buf.WriteString(fmt.Sprintf("\tif hasTarget && target.%s != nil {\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\t\tresolved.%s = target.%s\n", field.Name, field.Name))
+		buf.WriteString("\t}")
+
+	default:
+		// Default: target overrides global (for future fields)
+		buf.WriteString(fmt.Sprintf("\t// Resolve %s (target overrides global)\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\tresolved.%s = s.%s\n", field.Name, field.Name))
+		buf.WriteString(fmt.Sprintf("\tif hasTarget && target.%s != nil {\n", field.Name))
+		buf.WriteString(fmt.Sprintf("\t\tresolved.%s = target.%s\n", field.Name, field.Name))
+		buf.WriteString("\t}")
+	}
 }
