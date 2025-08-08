@@ -1,4 +1,5 @@
 //go:generate go run ./cmd/gen-jsonschema docs/spec.schema.json
+//go:generate go run ./cmd/gen-resolve spec_resolve_generated.go
 package dalec
 
 import (
@@ -419,3 +420,5 @@ func (s *Spec) WithExtension(key string, value interface{}) error {
 	s.extensions[key] = dt
 	return nil
 }
+
+
