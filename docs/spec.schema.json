@@ -432,7 +432,7 @@
 					"description": "Bazel specifies a cache for bazel builds."
 				},
 				"cargosccache": {
-					"$ref": "#/$defs/CargoBuildCache",
+					"$ref": "#/$defs/CargoSCCache",
 					"description": "CargoBuild specifies a cache for Rust/Cargo build artifacts.\nThis uses sccache to cache Rust compilation artifacts."
 				},
 				"dir": {
@@ -526,7 +526,7 @@
 			],
 			"description": "CacheDir is a generic cache directory configuration."
 		},
-		"CargoBuildCache": {
+		"CargoSCCache": {
 			"properties": {
 				"disabled": {
 					"type": [
@@ -549,7 +549,7 @@
 				"object",
 				"null"
 			],
-			"description": "CargoBuildCache is a cache for Rust/Cargo build artifacts."
+			"description": "CargoSCCache is a cache for Rust/Cargo build artifacts."
 		},
 		"ChangelogEntry": {
 			"required": [

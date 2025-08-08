@@ -56,7 +56,7 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 			},
 		},
 		{
-			CargoBuild: &dalec.CargoBuildCache{
+			CargoBuild: &dalec.CargoSCCache{
 				Scope: randKey,
 			},
 		},
@@ -408,7 +408,7 @@ func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig
 		// Now disable the auto cargobuild cache
 		spec = specWithCommand("[ -z \"${SCCACHE_DIR}\" ]")
 		spec.Build.Caches = []dalec.CacheConfig{
-			{CargoBuild: &dalec.CargoBuildCache{Disabled: true}},
+			{CargoBuild: &dalec.CargoSCCache{Disabled: true}},
 		}
 		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)

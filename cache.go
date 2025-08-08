@@ -112,7 +112,7 @@ type CacheConfig struct {
 	GoBuild *GoBuildCache `json:"gobuild,omitempty" yaml:"gobuild,omitempty" jsonschema:"oneof_required=gobuild"`
 	// CargoBuild specifies a cache for Rust/Cargo build artifacts.
 	// This uses sccache to cache Rust compilation artifacts.
-	CargoBuild *CargoBuildCache `json:"cargosccache,omitempty" yaml:"cargosccache,omitempty" jsonschema:"oneof_required=cargosccache"`
+	CargoBuild *CargoSCCache `json:"cargosccache,omitempty" yaml:"cargosccache,omitempty" jsonschema:"oneof_required=cargosccache"`
 	// Bazel specifies a cache for bazel builds.
 	Bazel *BazelCache `json:"bazel,omitempty" yaml:"bazel,omitempty" jsonschema:"oneof_required=bazel-local"`
 }
@@ -120,7 +120,7 @@ type CacheConfig struct {
 type CacheInfo struct {
 	DirInfo    CacheDirInfo
 	GoBuild    GoBuildCacheInfo
-	CargoBuild CargoBuildCacheInfo
+	CargoBuild CargoSCCacheInfo
 	Bazel      BazelCacheInfo
 }
 
@@ -182,7 +182,7 @@ func (c *CacheConfig) ToRunOption(worker llb.State, distroKey string, opts ...Ca
 	}
 
 	if c.CargoBuild != nil {
-		return c.CargoBuild.ToRunOption(distroKey, CargoBuildCacheOptionFunc(func(info *CargoBuildCacheInfo) {
+		return c.CargoBuild.ToRunOption(distroKey, CargoSCCacheOptionFunc(func(info *CargoSCCacheInfo) {
 			var cacheInfo CacheInfo
 			for _, opt := range opts {
 				opt.SetCacheConfigOption(&cacheInfo)
@@ -420,9 +420,9 @@ func (c *GoBuildCache) ToRunOption(distroKey string, opts ...GoBuildCacheOption)
 	})
 }
 
-// CargoBuildCache is a cache for Rust/Cargo build artifacts.
+// CargoSCCache is a cache for Rust/Cargo build artifacts.
 // It uses sccache to speed up Rust compilation by caching build artifacts.
-type CargoBuildCache struct {
+type CargoSCCache struct {
 	// Scope adds extra information to the cache key.
 	// This is useful to differentiate between different build contexts if required.
 	//
@@ -435,21 +435,21 @@ type CargoBuildCache struct {
 	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 }
 
-func (c *CargoBuildCache) validate() error {
+func (c *CargoSCCache) validate() error {
 	return nil
 }
 
-type CargoBuildCacheInfo struct {
+type CargoSCCacheInfo struct {
 	Platform *ocispecs.Platform
 }
 
-type CargoBuildCacheOption interface {
-	SetCargoBuildCacheOption(*CargoBuildCacheInfo)
+type CargoSCCacheOption interface {
+	SetCargoSCCacheOption(*CargoSCCacheInfo)
 }
 
-type CargoBuildCacheOptionFunc func(*CargoBuildCacheInfo)
+type CargoSCCacheOptionFunc func(*CargoSCCacheInfo)
 
-func (f CargoBuildCacheOptionFunc) SetCargoBuildCacheOption(info *CargoBuildCacheInfo) {
+func (f CargoSCCacheOptionFunc) SetCargoSCCacheOption(info *CargoSCCacheInfo) {
 	f(info)
 }
 
@@ -468,15 +468,15 @@ const (
 	sccacheBinary   = "/tmp/dalec/sccache"
 )
 
-func (c *CargoBuildCache) ToRunOption(distroKey string, opts ...CargoBuildCacheOption) llb.RunOption {
+func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption) llb.RunOption {
 	return RunOptFunc(func(ei *llb.ExecInfo) {
 		if c.Disabled {
 			return
 		}
 
-		var info CargoBuildCacheInfo
+		var info CargoSCCacheInfo
 		for _, opt := range opts {
-			opt.SetCargoBuildCacheOption(&info)
+			opt.SetCargoSCCacheOption(&info)
 		}
 
 		// Ensure platform is set

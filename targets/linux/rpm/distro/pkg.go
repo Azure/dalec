@@ -32,7 +32,7 @@ func addGoCache(info *rpm.CacheInfo) {
 
 func addCargoCache(info *rpm.CacheInfo) {
 	info.Caches = append(info.Caches, dalec.CacheConfig{
-		CargoBuild: &dalec.CargoBuildCache{},
+		CargoBuild: &dalec.CargoSCCache{},
 	})
 }
 

@@ -190,7 +190,7 @@ func addCargoCache(spec *dalec.Spec, targetKey string) {
 	}
 
 	spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
-		CargoBuild: &dalec.CargoBuildCache{},
+		CargoBuild: &dalec.CargoSCCache{},
 	})
 }
 

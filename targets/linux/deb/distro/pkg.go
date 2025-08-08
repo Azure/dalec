@@ -214,7 +214,7 @@ func prepareCargo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePk
 
 	if addCargoCache {
 		spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
-			CargoBuild: &dalec.CargoBuildCache{},
+			CargoBuild: &dalec.CargoSCCache{},
 		})
 	}
 
