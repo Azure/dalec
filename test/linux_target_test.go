@@ -52,8 +52,10 @@ type targetConfig struct {
 	Package string
 	// Container is the target for creating a container
 	Container string
-	// Target is the build target for creating the worker image.
+	// Worker is the target for creating the worker image.
 	Worker string
+	// Sysext is the target for creating a systemd system extension.
+	Sysext string
 
 	// FormatDepEqual, when set, alters the provided dependency version to match
 	// what is necessary for the target distro to set a dependency for an equals
@@ -662,6 +664,312 @@ echo "$BAR" > bar.txt
 			_, err := gwc.Solve(ctx, sr)
 			if err == nil {
 				t.Fatal("expected test spec to run with error but got none")
+			}
+		})
+	})
+
+	t.Run("sysext", func(t *testing.T) {
+		skip.If(t, testConfig.Target.Sysext == "", "skipping test as it is not supported for this config")
+
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+
+		const src2Patch3File = "patch3"
+		src2Patch3Content := []byte(`
+diff --git a/file3 b/file3
+new file mode 100700
+index 0000000..5260cb1
+--- /dev/null
++++ b/file3
+@@ -0,0 +1,3 @@
++#!/usr/bin/env bash
++
++echo "Added another new file"
+`)
+
+		src2Patch4Content := []byte(`
+diff --git a/file4 b/file4
+new file mode 100700
+index 0000000..5260cb1
+--- /dev/null
++++ b/file4
+@@ -0,0 +1,3 @@
++#!/usr/bin/env bash
++
++echo "Added yet another new file"
+`)
+
+		src2Patch5Content := []byte(`
+diff --git a/file5 b/file5
+new file mode 100700
+index 0000000..5260cb1
+--- /dev/null
++++ b/file5
+@@ -0,0 +1,3 @@
++#!/usr/bin/env bash
++
++echo "Added yet again...another new file"
+`)
+
+		const src2Patch4File = "patches/patch4"
+		const src2Patch5File = "patches/patch5"
+		const patchContextName = "patch-context"
+
+		patchContext := llb.Scratch().
+			File(llb.Mkfile(src2Patch3File, 0o600, src2Patch3Content)).
+			File(llb.Mkdir("patches", 0o755)).
+			File(llb.Mkfile(src2Patch4File, 0o600, src2Patch4Content)).
+			File(llb.Mkfile(src2Patch5File, 0o600, src2Patch5Content))
+
+		spec := dalec.Spec{
+			Name:        "test-sysext-build",
+			Version:     "0.0.1",
+			Revision:    "1",
+			License:     "MIT",
+			Website:     "https://github.com/azure/dalec",
+			Vendor:      "Dalec",
+			Packager:    "Dalec",
+			Description: "Testing sysext target",
+			Sources: map[string]dalec.Source{
+				"src1": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho hello world",
+							Permissions: 0o700,
+						},
+					},
+				},
+				"src2": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"file1": {Contents: "file1 contents\n"},
+							},
+						},
+					},
+				},
+				"src2-patch1": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents: `
+diff --git a/file1 b/file1
+index 84d55c5..22b9b11 100644
+--- a/file1
++++ b/file1
+@@ -1 +1 @@
+-file1 contents
++file1 contents patched
+`,
+						},
+					},
+				},
+				"src2-patch2": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"the-patch": {
+									Contents: `
+diff --git a/file2 b/file2
+new file mode 100700
+index 0000000..5260cb1
+--- /dev/null
++++ b/file2
+@@ -0,0 +1,3 @@
++#!/usr/bin/env bash
++
++echo "Added a new file"
+`,
+								},
+							},
+						},
+					},
+				},
+				"src2-patch3": {
+					Context: &dalec.SourceContext{
+						Name: patchContextName,
+					},
+				},
+				"src2-patch4": {
+					Context: &dalec.SourceContext{
+						Name: patchContextName,
+					},
+					Includes: []string{src2Patch4File},
+				},
+				"src2-patch5": {
+					Context: &dalec.SourceContext{
+						Name: patchContextName,
+					},
+					Path: src2Patch5File,
+				},
+				"src3": {
+					Inline: &dalec.SourceInline{
+						File: &dalec.SourceInlineFile{
+							Contents:    "#!/usr/bin/env bash\necho goodbye",
+							Permissions: 0o700,
+						},
+					},
+				},
+			},
+			Patches: map[string][]dalec.PatchSpec{
+				"src2": {
+					{Source: "src2-patch1"},
+					{Source: "src2-patch2", Path: "the-patch"},
+					{Source: "src2-patch3", Path: src2Patch3File},
+					{Source: "src2-patch4", Path: src2Patch4File},
+					{Source: "src2-patch5", Path: filepath.Base(src2Patch5File)},
+				},
+			},
+
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: map[string]dalec.PackageConstraints{
+					"bash":      {},
+					"coreutils": {},
+				},
+			},
+
+			Build: dalec.ArtifactBuild{
+				Steps: []dalec.BuildStep{
+					// These are "build" steps where we aren't really building things just verifying
+					// that sources are in the right place and have the right permissions and content
+					{
+						// file added by patch
+						Command: "test -f ./src1",
+					},
+					{
+						Command: "test -x ./src1",
+					},
+					{
+						Command: "test ! -d ./src1",
+					},
+					{
+						Command: "./src1 | grep 'hello world'",
+					},
+					{
+						// file added by patch
+						Command: "ls -lh ./src2/file2",
+					},
+					{
+						// file added by patch
+						Command: "test -f ./src2/file2",
+					},
+					{
+						// file added by patch
+						Command: "test -x ./src2/file2",
+					},
+					{
+						Command: "grep 'Added a new file' ./src2/file2",
+					},
+					{
+						// file added by patch
+						Command: "test -f ./src2/file3",
+					},
+					{
+						// file added by patch
+						Command: "test -x ./src2/file3",
+					},
+					{
+						Command: "grep 'Added another new file' ./src2/file3",
+					},
+					{
+						// Test that a multiline command works with env vars
+						Env: map[string]string{
+							"FOO": "foo",
+							"BAR": "bar",
+						},
+						Command: `
+echo "${FOO}_0" > foo0.txt
+echo "${FOO}_1" > foo1.txt
+echo "$BAR" > bar.txt
+`,
+					},
+				},
+			},
+
+			Artifacts: dalec.Artifacts{
+				Binaries: map[string]dalec.ArtifactConfig{
+					"src1":       {},
+					"src2/file2": {},
+					"src3":       {},
+					// These are files we created in the build step
+					// They aren't really binaries but we want to test that they are created and have the right content
+					"foo0.txt": {},
+					"foo1.txt": {},
+					"bar.txt":  {},
+				},
+				Links: []dalec.ArtifactSymlinkConfig{
+					{
+						Source: "/usr/bin/src3",
+						Dest:   "/bin/owned-link",
+						User:   "need",
+						Group:  "coffee",
+					},
+					{
+						Source: "/usr/bin/src2/file2",
+						Dest:   "/bin/owned-link2",
+						User:   "need",
+					},
+					{
+						Source: "/usr/bin/src1",
+						Dest:   "/bin/owned-link3",
+						Group:  "coffee",
+					},
+					{
+						Source: "/usr/bin/src1",
+						Dest:   "/bin/owned-link4",
+						User:   "nobody",
+					},
+				},
+				Users: []dalec.AddUserConfig{
+					{
+						Name: "need",
+					},
+				},
+				Groups: []dalec.AddGroupConfig{
+					{
+						Name: "coffee",
+					},
+				},
+			},
+		}
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(
+				withSpec(ctx, t, &spec),
+				withBuildTarget(testConfig.Target.Sysext),
+				withBuildContext(ctx, t, patchContextName, patchContext),
+			)
+			sr.Evaluate = true
+
+			beforeBuild := time.Now()
+			res := solveT(ctx, t, gwc, sr)
+
+			dt, ok := res.Metadata[exptypes.ExporterImageConfigKey]
+			assert.Assert(t, ok, "result metadata should contain an image config: available metadata: %s", strings.Join(maps.Keys(res.Metadata), ", "))
+
+			var cfg dalec.DockerImageSpec
+			assert.Assert(t, json.Unmarshal(dt, &cfg))
+			assert.Check(t, cfg.Created.After(beforeBuild))
+			assert.Check(t, cfg.Created.Before(time.Now()))
+
+			// Map Docker to systemd architecture. Some (e.g. arm64) are the
+			// same and are covered by the default case.
+			var systemdArch string
+			switch cfg.Platform.Architecture {
+			case "amd64":
+				systemdArch = "x86-64"
+			default:
+				systemdArch = cfg.Platform.Architecture
+			}
+
+			ref, refErr := res.SingleRef()
+			if refErr != nil {
+				t.Fatal(refErr)
+			}
+
+			expectedPath := fmt.Sprintf("/test-sysext-build-v0.0.1-1-%s.raw", systemdArch)
+			_, statErr := ref.StatFile(ctx, gwclient.StatRequest{Path: expectedPath})
+			if statErr != nil {
+				t.Fatalf("expected sysext image not found: %v", statErr)
 			}
 		})
 	})
