@@ -2,6 +2,7 @@ package linux
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 
@@ -23,6 +24,7 @@ type DistroConfig interface {
 
 	// Worker returns the worker image for the particular distro
 	Worker(sOpt dalec.SourceOpts, opts ...llb.ConstraintsOpt) (llb.State, error)
+	SysextWorker(worker llb.State, opts ...llb.ConstraintsOpt) llb.State
 
 	// BuildPkg returns an llb.State containing the built package
 	// which the passed in spec describes. This should be composable with
@@ -32,6 +34,14 @@ type DistroConfig interface {
 		worker llb.State,
 		sOpt dalec.SourceOpts,
 		spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error)
+
+	// ExtractPkg consumes an llb.State containing the built package from the
+	// given *dalec.Spec, and extracts it in a scratch container, along with any
+	// dependencies listed under sysext. The package manager is not used, so no
+	// further dependency resolution is performed.
+	ExtractPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts,
+		spec *dalec.Spec, targetKey string,
+		pkgState llb.State, opts ...llb.ConstraintsOpt) llb.State
 
 	// BuildContainer consumes an llb.State containing the built package from the
 	// given *dalec.Spec, and installs it in a target container.
@@ -122,6 +132,89 @@ func HandleContainer(c DistroConfig) gwclient.BuildFunc {
 
 			ref, err := c.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, opts...)
 			return ref, img, err
+		})
+	}
+}
+
+//go:embed build_sysext.sh
+var buildSysextSh []byte
+
+func HandleSysext(c DistroConfig) gwclient.BuildFunc {
+	return func(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
+		return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
+			sOpt, err := frontend.SourceOptFromClient(ctx, client, platform)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			pc := dalec.Platform(platform)
+			var opts []llb.ConstraintsOpt
+			opts = append(opts, dalec.ProgressGroup(spec.Name))
+			opts = append(opts, pc)
+
+			worker, err := c.Worker(sOpt, opts...)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "error building worker container")
+			}
+
+			pkgSt, foundPrebuiltPkg := getPrebuiltPackage(ctx, targetKey, client, opts, sOpt)
+
+			// Pre-built package wasn't found so we need to build it.
+			if !foundPrebuiltPkg {
+				var err error
+				pkgSt, err = c.BuildPkg(ctx, client, worker, sOpt, spec, targetKey, opts...)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+
+			extracted := c.ExtractPkg(ctx, client, worker, sOpt, spec, targetKey, pkgSt, opts...)
+
+			if platform == nil {
+				p := platforms.DefaultSpec()
+				platform = &p
+			}
+
+			scriptPath := "/tmp/dalec/internal/sysext/build.sh"
+
+			scriptFile := llb.Scratch().File(
+				llb.Mkfile("build_sysext.sh", 0o755, []byte(buildSysextSh)),
+				dalec.WithConstraints(opts...),
+			)
+
+			rev := spec.Revision
+			if rev == "" {
+				rev = "1"
+			}
+
+			erofs := c.SysextWorker(worker, opts...).Run(
+				llb.Args([]string{scriptPath, spec.Name, fmt.Sprintf("v%s-%s", spec.Version, rev), platform.Architecture}),
+				llb.AddMount(scriptPath, scriptFile, llb.SourcePath("build_sysext.sh"), llb.Readonly),
+				llb.AddMount("/input", extracted, llb.Readonly),
+				dalec.WithConstraints(opts...),
+			).AddMount("/output", llb.Scratch())
+
+			def, err := erofs.Marshal(ctx, pc)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error marshalling llb: %w", err)
+			}
+
+			res, err := client.Solve(ctx, gwclient.SolveRequest{
+				Definition: def.ToPB(),
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+
+			ref, err := res.SingleRef()
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := ref.Evaluate(ctx); err != nil {
+				return ref, nil, err
+			}
+
+			return ref, &dalec.DockerImageSpec{Image: ocispecs.Image{Platform: *platform}}, nil
 		})
 	}
 }

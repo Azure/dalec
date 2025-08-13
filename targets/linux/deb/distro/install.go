@@ -197,3 +197,56 @@ func (d *Config) InstallTestDeps(sOpt dalec.SourceOpts, targetKey string, spec *
 		).Root()
 	}
 }
+
+func (d *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.State {
+	opts = append(opts, dalec.ProgressGroup("Downloading dependencies"))
+
+	deps := spec.GetPackageDeps(targetKey)
+	if deps == nil {
+		return llb.Scratch()
+	}
+
+	constraints := deps.Runtime
+	if constraints == nil {
+		return llb.Scratch()
+	}
+
+	scriptPath := "/tmp/dalec/internal/deb/download.sh"
+	const scriptSrc = `#!/usr/bin/env bash
+set -euxo pipefail
+cd /output
+
+# Make sure any cached data from local repos is purged since this should not
+# be shared between builds.
+rm -f /var/lib/apt/lists/_*
+apt autoclean -y
+apt update
+
+# Use APT to resolve the constraints and download just the requested packages
+# without the sub-dependencies. Ideally, we would resolve all the constraints
+# together and match the packages by name, but the resolved name is often
+# different. We therefore have to resolve each constraint in turn and assume
+# that the last Inst line corresponds to the requested package. This should be
+# the case when recommends and suggests are omitted.
+for CONSTRAINT; do
+	apt satisfy -y -s --no-install-recommends --no-install-suggests "${CONSTRAINT}" |
+		tac |
+		sed -n -r 's/^Inst ([^ ]+) \(([^ ]+).*/\1=\2/p;T;q' |
+		xargs -t apt download
+done
+`
+
+	scriptFile := llb.Scratch().File(
+		llb.Mkfile("download.sh", 0o755, []byte(scriptSrc)),
+		dalec.WithConstraints(opts...),
+	)
+
+	return worker.Run(
+		llb.Args(append([]string{scriptPath}, deb.AppendConstraints(constraints)...)),
+		llb.AddMount(scriptPath, scriptFile, llb.SourcePath("download.sh"), llb.Readonly),
+		llb.AddMount("/var/lib/dpkg", llb.Scratch(), llb.Tmpfs()),
+		llb.AddEnv("DEBIAN_FRONTEND", "noninteractive"),
+		dalec.WithMountedAptCache(d.AptCachePrefix),
+		dalec.WithConstraints(opts...),
+	).AddMount("/output", llb.Scratch())
+}

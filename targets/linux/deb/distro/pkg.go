@@ -245,3 +245,15 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 		return ref, nil, nil
 	})
 }
+
+func (c *Config) ExtractPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, debSt llb.State, opts ...llb.ConstraintsOpt) llb.State {
+	deps := c.DownloadDeps(worker, sOpt, spec, targetKey, opts...)
+	opts = append(opts, dalec.ProgressGroup("Extracting DEBs"))
+
+	return worker.Run(
+		llb.Args([]string{"find", "/input", "-name", "*.deb", "-exec", "dpkg-deb", "--verbose", "--extract", "{}", "/output", ";"}),
+		llb.AddMount("/input/build", debSt),
+		llb.AddMount("/input/deps", deps),
+		dalec.WithConstraints(opts...),
+	).AddMount("/output", llb.Scratch())
+}
