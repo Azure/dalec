@@ -27,4 +27,6 @@ var Azlinux3Config = &distro.Config{
 	BasePackages:       basePackages(AzLinux3TargetKey),
 	RepoPlatformConfig: &defaultAzlinuxRepoPlatform,
 	InstallFunc:        distro.TdnfInstall,
+
+	SysextSupported: true,
 }

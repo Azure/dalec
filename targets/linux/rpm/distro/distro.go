@@ -37,6 +37,9 @@ type Config struct {
 
 	// e.g. /var/cache/tdnf or /var/cache/dnf
 	CacheDir string
+
+	// erofs-utils 1.7+ is required for tar support.
+	SysextSupported bool
 }
 
 func (cfg *Config) PackageCacheMount(root string) llb.RunOption {
@@ -78,6 +81,13 @@ func (cfg *Config) Handle(ctx context.Context, client gwclient.Client) (*gwclien
 		Name:        "worker",
 		Description: "Builds the base worker image responsible for building the rpm",
 	})
+
+	if cfg.SysextSupported {
+		mux.Add("sysext", linux.HandleSysext(cfg), &targets.Target{
+			Name:        "sysext",
+			Description: "Builds a systemd system extension image.",
+		})
+	}
 
 	return mux.Handle(ctx, client)
 }

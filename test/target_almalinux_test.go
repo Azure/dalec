@@ -13,6 +13,7 @@ func TestAlmalinux9(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	testLinuxDistro(ctx, t, testLinuxConfig{
 		Target: targetConfig{
+			Key:       "almalinux9",
 			Package:   "almalinux9/rpm",
 			Container: "almalinux9/container",
 			Worker:    "almalinux9/worker",

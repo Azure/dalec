@@ -24,11 +24,18 @@ func withPackageOverride(oldPkg, newPkg string) func(cfg *testLinuxConfig) {
 }
 
 func debLinuxTestConfigFor(targetKey string, cfg *distro.Config, opts ...func(*testLinuxConfig)) testLinuxConfig {
+	var sysextTarget string
+	if cfg.SysextSupported {
+		sysextTarget = targetKey + "/sysext"
+	}
+
 	tlc := testLinuxConfig{
 		Target: targetConfig{
+			Key:       targetKey,
 			Container: targetKey + "/testing/container",
 			Package:   targetKey + "/deb",
 			Worker:    targetKey + "/worker",
+			Sysext:    sysextTarget,
 			FormatDepEqual: func(ver, rev string) string {
 				return ver + "-" + cfg.VersionID + "u" + rev
 			},

@@ -22,5 +22,6 @@ var (
 		DefaultOutputImage: nobleRef,
 		BuilderPackages:    builderPackages,
 		BasePackages:       basePackages,
+		SysextSupported:    true,
 	}
 )

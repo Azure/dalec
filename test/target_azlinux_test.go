@@ -81,9 +81,11 @@ func TestAzlinux3(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	cfg := testLinuxConfig{
 		Target: targetConfig{
+			Key:                   "azlinux3",
 			Package:               "azlinux3/rpm",
 			Container:             "azlinux3/container",
 			Worker:                "azlinux3/worker",
+			Sysext:                "azlinux3/sysext",
 			ListExpectedSignFiles: azlinuxListSignFiles("azl3"),
 		},
 		LicenseDir: "/usr/share/licenses",
