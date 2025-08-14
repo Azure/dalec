@@ -198,18 +198,12 @@ func (d *Config) InstallTestDeps(sOpt dalec.SourceOpts, targetKey string, spec *
 	}
 }
 
-func (d *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.State {
-	opts = append(opts, dalec.ProgressGroup("Downloading dependencies"))
-
-	deps := spec.GetPackageDeps(targetKey)
-	if deps == nil {
-		return llb.Scratch()
-	}
-
-	constraints := deps.Runtime
+func (d *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints map[string]dalec.PackageConstraints, opts ...llb.ConstraintsOpt) llb.State {
 	if constraints == nil {
 		return llb.Scratch()
 	}
+
+	opts = append(opts, dalec.ProgressGroup("Downloading dependencies"))
 
 	scriptPath := "/tmp/dalec/internal/deb/download.sh"
 	const scriptSrc = `#!/usr/bin/env bash

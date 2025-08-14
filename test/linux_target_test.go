@@ -45,6 +45,7 @@ type workerConfig struct {
 	ContextName    string
 	TestRepoConfig func(string) map[string]dalec.Source
 	Platform       *ocispecs.Platform
+	SysextWorker   func(worker llb.State, opts ...llb.ConstraintsOpt) llb.State
 }
 
 type targetConfig struct {
@@ -827,6 +828,10 @@ index 0000000..5260cb1
 					"bash":      {},
 					"coreutils": {},
 				},
+				Sysext: map[string]dalec.PackageConstraints{
+					"zsh":  {Version: []string{">= 3", "< 99"}},
+					"zstd": {Version: []string{">= 1.5.0"}},
+				},
 			},
 
 			Build: dalec.ArtifactBuild{
@@ -972,6 +977,60 @@ echo "$BAR" > bar.txt
 			_, statErr := ref.StatFile(ctx, gwclient.StatRequest{Path: expectedPath})
 			if statErr != nil {
 				t.Fatalf("expected sysext image not found: %v", statErr)
+			}
+
+			sr = newSolveRequest(withBuildTarget(testConfig.Target.Worker), withSpec(ctx, t, nil))
+			worker := testConfig.Worker.SysextWorker(reqToState(ctx, gwc, sr, t))
+
+			pc := dalec.Platform(&cfg.Platform)
+			var opts []llb.ConstraintsOpt
+			opts = append(opts, pc)
+
+			state, stateErr := ref.ToState()
+			if stateErr != nil {
+				t.Fatal(stateErr)
+			}
+
+			output := worker.Run(
+				llb.Args([]string{"fsck.erofs", "--extract=/output", "/input" + expectedPath}),
+				llb.AddMount("/input", state, llb.Readonly),
+				dalec.WithConstraints(opts...),
+			).AddMount("/output", llb.Scratch())
+
+			def, defErr := output.Marshal(ctx, pc)
+			if defErr != nil {
+				t.Fatalf("error marshalling llb: %v", defErr)
+			}
+
+			res, resErr := gwc.Solve(ctx, gwclient.SolveRequest{
+				Definition: def.ToPB(),
+			})
+			if resErr != nil {
+				t.Fatal(resErr)
+			}
+
+			ref, refErr = res.SingleRef()
+			if refErr != nil {
+				t.Fatal(refErr)
+			}
+			if evalErr := ref.Evaluate(ctx); evalErr != nil {
+				t.Fatalf("error extracting sysext: %v", evalErr)
+			}
+
+			for _, file := range []string{"/usr/bin/zsh", "/usr/bin/zstd"} {
+				_, statErr = ref.StatFile(ctx, gwclient.StatRequest{Path: file})
+				if statErr != nil {
+					t.Fatalf("expected file in sysext not found: %v", statErr)
+				}
+			}
+
+			// zlib is required by zstd, but it shouldn't be pulled into the
+			// sysext. Its installed location varies by distro.
+			for _, file := range []string{"/usr/bin/bash", "/usr/bin/ls", "/usr/lib/libz.so.1", "/usr/lib/x86_64-linux-gnu/libz.so.1"} {
+				_, statErr = ref.StatFile(ctx, gwclient.StatRequest{Path: file})
+				if statErr == nil {
+					t.Fatalf("unexpected file in sysext found: %s", file)
+				}
 			}
 		})
 	})

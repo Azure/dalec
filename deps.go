@@ -31,6 +31,10 @@ type PackageDependencies struct {
 	// Recommends is the list of packages recommended to install with the generated package.
 	// Note: Not all package managers support this (e.g. rpm)
 	Recommends map[string]PackageConstraints `yaml:"recommends,omitempty" json:"recommends,omitempty"`
+	// Sysext is the list of packages to include in the generated system
+	// extension. No dependency resolution is performed when generating system
+	// extensions, so all required dependencies must be explicitly listed here.
+	Sysext map[string]PackageConstraints `yaml:"sysext,omitempty" json:"sysext,omitempty"`
 
 	// Test lists any extra packages required for running tests
 	// These packages are only installed for tests which have steps that require

@@ -101,6 +101,7 @@ func TestAzlinux3(t *testing.T) {
 			CreateRepo:     createYumRepo(azlinux.Azlinux3Config),
 			SignRepo:       signRepoAzLinux,
 			TestRepoConfig: azlinuxTestRepoConfig,
+			SysextWorker:   azlinux.Azlinux3Config.SysextWorker,
 		},
 		Release: OSRelease{
 			ID:        "azurelinux",
