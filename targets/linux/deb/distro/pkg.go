@@ -41,7 +41,17 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		return worker, err
 	}
 
-	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))...)
+	cargoExtraPaths, err := prepareCargo(ctx, client, &cfg, worker, spec, targetKey, opts...)
+	if err != nil {
+		return worker, err
+	}
+
+	// Combine the extra paths from both Go and Cargo preparations
+	combinedExtraPaths := func(in llb.State) llb.State {
+		return cargoExtraPaths(extraPaths(in))
+	}
+
+	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(combinedExtraPaths), spec, targetKey, versionID, cfg, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))...)
 	if err != nil {
 		return worker, err
 	}
@@ -109,15 +119,48 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 	if !spec.HasGomods() {
 		return "", nil
 	}
-	var candidates []string
 
 	deps := spec.GetBuildDeps(targetKey)
 	if _, hasNormalGo := deps["golang"]; hasNormalGo {
 		return "", nil
 	}
 
+	candidates := buildCandidatePaths(deps, "golang", "usr/lib/go", "/bin")
+	return findBinaryInCandidates(ctx, client, in, candidates, "go", opts...)
+}
+
+func searchForAltRust(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, in llb.State, opts ...llb.ConstraintsOpt) (string, error) {
+	if !spec.HasCargohomes() {
+		return "", nil
+	}
+
+	deps := spec.GetBuildDeps(targetKey)
+	if _, hasNormalRust := deps["rust"]; hasNormalRust {
+		return "", nil
+	}
+	if _, hasNormalCargo := deps["cargo"]; hasNormalCargo {
+		return "", nil
+	}
+
+	// Check for both rust- and cargo- prefixed packages
+	rustCandidates := buildCandidatePaths(deps, "rust", "usr/lib/rust", "/bin")
+	cargoCandidates := buildCandidatePaths(deps, "cargo", "usr/lib/cargo", "/bin")
+
+	allCandidates := append(rustCandidates, cargoCandidates...)
+
+	// Try to find cargo first, then rustc as fallback
+	if path, err := findBinaryInCandidates(ctx, client, in, allCandidates, "cargo", opts...); err == nil && path != "" {
+		return path, nil
+	}
+	return findBinaryInCandidates(ctx, client, in, allCandidates, "rustc", opts...)
+}
+
+// buildCandidatePaths extracts version-specific package paths from dependencies
+func buildCandidatePaths(deps map[string]dalec.PackageConstraints, prefix, basePath, suffix string) []string {
+	var candidates []string
+
 	for dep := range deps {
-		if strings.HasPrefix(dep, "golang-") {
+		if strings.HasPrefix(dep, prefix+"-") {
 			// Get the base version component
 			_, ver, _ := strings.Cut(dep, "-")
 			// Trim off any potential extra stuff like `golang-1.20-go` (ie the `-go` bit)
@@ -126,10 +169,15 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 			// something else like `-doc` since we are still going to check the
 			// binary exists anyway (plus this would be highly unlikely in any case).
 			ver, _, _ = strings.Cut(ver, "-")
-			candidates = append(candidates, "usr/lib/go-"+ver+"/bin")
+			candidates = append(candidates, basePath+"-"+ver+suffix)
 		}
 	}
 
+	return candidates
+}
+
+// findBinaryInCandidates searches for a binary in a list of candidate paths
+func findBinaryInCandidates(ctx context.Context, client gwclient.Client, in llb.State, candidates []string, binaryName string, opts ...llb.ConstraintsOpt) (string, error) {
 	if len(candidates) == 0 {
 		return "", nil
 	}
@@ -140,7 +188,7 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 	}
 
 	for _, p := range candidates {
-		_, err := fs.Stat(stfs, filepath.Join(p, "go"))
+		_, err := fs.Stat(stfs, filepath.Join(p, binaryName))
 		if err == nil {
 			// bkfs does not allow a leading `/` in the stat path per spec for [fs.FS]
 			// Add that in here
@@ -150,6 +198,36 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 	}
 
 	return "", nil
+}
+
+func prepareCargo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePkgConfig, worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
+	if !dalec.HasRust(spec, targetKey) && !spec.HasCargohomes() {
+		return noOpStateOpt, nil
+	}
+
+	addCargoCache := true
+	for _, c := range spec.Build.Caches {
+		if c.CargoBuild != nil {
+			addCargoCache = false
+		}
+	}
+
+	if addCargoCache {
+		spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
+			CargoBuild: &dalec.CargoSCCache{},
+		})
+	}
+
+	cargoBin, err := searchForAltRust(ctx, client, spec, targetKey, worker, opts...)
+	if err != nil {
+		return noOpStateOpt, errors.Wrap(err, "error while looking for alternate rust bin path")
+	}
+
+	if cargoBin == "" {
+		return noOpStateOpt, nil
+	}
+	cfg.PrependPath = append(cfg.PrependPath, cargoBin)
+	return addPaths([]string{cargoBin}, opts...), nil
 }
 
 // prepends the provided values to $PATH
@@ -221,7 +299,17 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 			return nil, nil, err
 		}
 
-		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg, pc, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))
+		cargoExtraPaths, err := prepareCargo(ctx, client, &cfg, worker, spec, targetKey, pg, frontend.IgnoreCache(client))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Combine the extra paths from both Go and Cargo preparations
+		combinedExtraPaths := func(in llb.State) llb.State {
+			return cargoExtraPaths(extraPaths(in))
+		}
+
+		st, err := deb.SourcePackage(ctx, sOpt, worker.With(combinedExtraPaths), spec, targetKey, versionID, cfg, pg, pc, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building source package")
 		}
