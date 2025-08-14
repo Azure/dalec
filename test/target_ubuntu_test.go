@@ -54,6 +54,7 @@ func debLinuxTestConfigFor(targetKey string, cfg *distro.Config, opts ...func(*t
 			CreateRepo:     ubuntuCreateRepo(cfg),
 			SignRepo:       signRepoUbuntu,
 			TestRepoConfig: ubuntuTestRepoConfig,
+			SysextWorker:   cfg.SysextWorker,
 		},
 
 		Platforms: []ocispecs.Platform{
