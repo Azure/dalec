@@ -14,12 +14,12 @@ import (
 
 // Resolve is a handler that generates a resolved spec file with all the build args and variables expanded.
 func Resolve(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
-	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		dt, err := yaml.Marshal(spec)
+	return frontend.BuildWithResolvedSpec(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, resolved *dalec.ResolvedSpec) (gwclient.Reference, *dalec.DockerImageSpec, error) {
+		dt, err := yaml.Marshal(resolved)
 		if err != nil {
-			return nil, nil, fmt.Errorf("error marshalling spec: %w", err)
+			return nil, nil, fmt.Errorf("error marshalling resolved spec: %w", err)
 		}
-		st := llb.Scratch().File(llb.Mkfile("spec.yml", 0640, dt), llb.WithCustomName("Generate resolved spec file - spec.yml"))
+		st := llb.Scratch().File(llb.Mkfile("resolved-spec.yml", 0640, dt), llb.WithCustomName("Generate resolved spec file - resolved-spec.yml"))
 		def, err := st.Marshal(ctx)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshalling llb: %w", err)

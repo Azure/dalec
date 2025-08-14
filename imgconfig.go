@@ -10,6 +10,8 @@ func BuildImageConfig(spec *Spec, targetKey string, img *DockerImageSpec) error 
 	return nil
 }
 
+
+
 func MergeSpecImage(spec *Spec, targetKey string) *ImageConfig {
 	var cfg ImageConfig
 
