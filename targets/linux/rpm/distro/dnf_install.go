@@ -259,18 +259,12 @@ func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client,
 	}
 }
 
-func (cfg *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.State {
-	opts = append(opts, dalec.ProgressGroup("Downloading dependencies"))
-
-	deps := spec.GetPackageDeps(targetKey)
-	if deps == nil {
-		return llb.Scratch()
-	}
-
-	constraints := deps.Runtime
+func (cfg *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints map[string]dalec.PackageConstraints, opts ...llb.ConstraintsOpt) llb.State {
 	if constraints == nil {
 		return llb.Scratch()
 	}
+
+	opts = append(opts, dalec.ProgressGroup("Downloading dependencies"))
 
 	worker = worker.Run(
 		dalec.WithConstraints(opts...),
