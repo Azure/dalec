@@ -5,6 +5,7 @@ azlinux3/rpm                     Builds an rpm and src.rpm.
 azlinux3/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.
 azlinux3/rpm/debug/sources       Outputs all the sources specified in the spec file in the format given to rpmbuild.
 azlinux3/rpm/debug/spec          Outputs the generated RPM spec file
+azlinux3/sysext                  Builds a systemd system extension.
 azlinux3/worker                  Builds the base worker image responsible for building the rpm
 bionic/deb (default)             Builds a deb package.
 bionic/dsc                       Builds a Debian source package.
@@ -40,6 +41,7 @@ mariner2/rpm/debug/spec          Outputs the generated RPM spec file
 mariner2/worker                  Builds the base worker image responsible for building the rpm
 noble/deb (default)              Builds a deb package.
 noble/dsc                        Builds a Debian source package.
+noble/sysext                     Builds a systemd system extension.
 noble/testing/container          Builds a container image for testing purposes only.
 noble/worker                     Builds the worker image.
 windowscross/container (default) Builds binaries and installs them into a Windows base image

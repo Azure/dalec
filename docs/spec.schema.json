@@ -1259,6 +1259,16 @@
 					],
 					"description": "Runtime is the list of packages required to install/run the package."
 				},
+				"sysext": {
+					"additionalProperties": {
+						"$ref": "#/$defs/PackageConstraints"
+					},
+					"type": [
+						"object",
+						"null"
+					],
+					"description": "Sysext is the list of packages to include in the generated system extension."
+				},
 				"test": {
 					"items": {
 						"type": [
