@@ -935,6 +935,138 @@ echo "$BAR" > bar.txt
 					},
 				},
 			},
+
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Verify source mounts work",
+					Mounts: []dalec.SourceMount{
+						{
+							Dest: "/foo",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									File: &dalec.SourceInlineFile{
+										Contents: "hello world",
+									},
+								},
+							},
+						},
+						{
+							Dest: "/nested/foo",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									File: &dalec.SourceInlineFile{
+										Contents: "hello world nested",
+									},
+								},
+							},
+						},
+						{
+							Dest: "/dir",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									Dir: &dalec.SourceInlineDir{
+										Files: map[string]*dalec.SourceInlineFile{
+											"foo": {Contents: "hello from dir"},
+										},
+									},
+								},
+							},
+						},
+						{
+							Dest: "/nested/dir",
+							Spec: dalec.Source{
+								Inline: &dalec.SourceInline{
+									Dir: &dalec.SourceInlineDir{
+										Files: map[string]*dalec.SourceInlineFile{
+											"foo": {Contents: "hello from nested dir"},
+										},
+									},
+								},
+							},
+						},
+					},
+					Steps: []dalec.TestStep{
+						{
+							Command: "/bin/sh -c 'cat /foo'",
+							Stdout:  dalec.CheckOutput{Equals: "hello world"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+						{
+							Command: "/bin/sh -c 'cat /nested/foo'",
+							Stdout:  dalec.CheckOutput{Equals: "hello world nested"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+						{
+							Command: "/bin/sh -c 'cat /dir/foo'",
+							Stdout:  dalec.CheckOutput{Equals: "hello from dir"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+						{
+							Command: "/bin/sh -c 'cat /nested/dir/foo'",
+							Stdout:  dalec.CheckOutput{Equals: "hello from nested dir"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+					},
+				},
+				{
+					Name: "Check that the binary artifacts execute and provide the expected output",
+					Steps: []dalec.TestStep{
+						{
+							Command: "/usr/bin/src1",
+							Stdout:  dalec.CheckOutput{Equals: "hello world\n"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+						{
+							Command: "/usr/bin/file2",
+							Stdout:  dalec.CheckOutput{Equals: "Added a new file\n"},
+							Stderr:  dalec.CheckOutput{Empty: true},
+						},
+					},
+				},
+				{
+					Name: "Check that multi-line command (from build step) with env vars propagates env vars to whole command",
+					Files: map[string]dalec.FileCheckOutput{
+						"/usr/bin/foo0.txt": {CheckOutput: dalec.CheckOutput{StartsWith: "foo_0\n"}},
+						"/usr/bin/foo1.txt": {CheckOutput: dalec.CheckOutput{StartsWith: "foo_1\n"}},
+						"/usr/bin/bar.txt":  {CheckOutput: dalec.CheckOutput{StartsWith: "bar\n"}},
+					},
+				},
+				{
+					Name: "Check /etc/os-release",
+					Files: map[string]dalec.FileCheckOutput{
+						"/etc/os-release": {
+							CheckOutput: dalec.CheckOutput{
+								Matches: []string{
+									// Some distros have quotes around the values
+									// Regex is to match the values with or without quotes
+									// "(?m)" enables multi-line mode so that ^ and $ match the start and end of lines rather than the full document.
+									//
+									// Due to these values getting processed for build args, quotes are stripped unless they are escaped.
+									`(?m)^ID=(\")?` + testConfig.Release.ID + `(\")?`,
+									`(?m)^VERSION_ID=(\")?` + testConfig.Release.VersionID + `(\")?`,
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "Artifact symlinks should have correct ownership",
+					Steps: []dalec.TestStep{
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link)\" = \"/usr/bin/src3\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd need | cut -d: -f3); COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link2'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link2)\" = \"/usr/bin/src2/file2\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd need | cut -d: -f3); COFFEE_GID=0; LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link2); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link3'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link3)\" = \"/usr/bin/src1\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=0; COFFEE_GID=$(getent group coffee | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link3); [ \"$LINK_OWNER\" = \"$NEED_UID:$COFFEE_GID\" ]'"},
+						{Command: "/bin/bash -exc 'test -L /bin/owned-link4'"},
+						{Command: "/bin/bash -exc 'test \"$(readlink /bin/owned-link4)\" = \"/usr/bin/src1\"'"},
+						{Command: "/bin/bash -exc 'NEED_UID=$(getent passwd nobody | cut -d: -f3); LINK_OWNER=$(stat -c \"%u:%g\" /bin/owned-link4); [ \"$LINK_OWNER\" = \"$NEED_UID:0\" ]'"},
+					},
+				},
+			},
 		}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
@@ -955,6 +1087,23 @@ echo "$BAR" > bar.txt
 			assert.Assert(t, json.Unmarshal(dt, &cfg))
 			assert.Check(t, cfg.Created.After(beforeBuild))
 			assert.Check(t, cfg.Created.Before(time.Now()))
+
+			// Make sure the test framework was actually executed by the build target.
+			// This appends a test case so that is expected to fail and as such cause the build to fail.
+			spec.Tests = append(spec.Tests, &dalec.TestSpec{
+				Name: "Test framework should be executed",
+				Steps: []dalec.TestStep{
+					{Command: "/bin/sh -c 'echo this command should fail; exit 42'"},
+				},
+			})
+
+			// update the spec in the solve request
+			withSpec(ctx, t, &spec)(&newSolveRequestConfig{req: &sr})
+
+			_, solveErr := gwc.Solve(ctx, sr)
+			if solveErr == nil {
+				t.Fatal("expected test spec to run with error but got none")
+			}
 
 			// Map Docker to systemd architecture. Some (e.g. arm64) are the
 			// same and are covered by the default case.
