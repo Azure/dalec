@@ -214,6 +214,16 @@ func HandleSysext(c DistroConfig) gwclient.BuildFunc {
 				return ref, nil, err
 			}
 
+			ctr, err := c.BuildContainer(ctx, client, worker, sOpt, spec, targetKey, pkgSt, pc)
+			if err != nil {
+				return ref, nil, err
+			}
+
+			if ref, err := c.RunTests(ctx, client, worker, spec, sOpt, ctr, targetKey, pc); err != nil {
+				cfg, _ := BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
+				return ref, cfg, err
+			}
+
 			return ref, &dalec.DockerImageSpec{Image: ocispecs.Image{Platform: *platform}}, nil
 		})
 	}
