@@ -123,3 +123,20 @@ func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targ
 		).AddMount("/tmp/rootfs", in)
 	}
 }
+
+func (cfg *Config) ExtractPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, rpmDir llb.State, opts ...llb.ConstraintsOpt) llb.State {
+	depRpms := llb.Scratch()
+	deps := spec.GetPackageDeps(targetKey)
+	if deps != nil {
+		depRpms = cfg.DownloadDeps(worker, sOpt, spec, targetKey, deps.Sysext, opts...)
+	}
+
+	opts = append(opts, dalec.ProgressGroup("Extracting RPMs"))
+
+	return worker.Run(
+		llb.Args([]string{"find", "/input", "-name", "*.rpm", "-exec", "sh", "-c", "rpm2cpio \"$1\" | cpio -idmv -D /output", "-", "{}", ";"}),
+		llb.AddMount("/input/build", rpmDir, llb.SourcePath("/RPMS")),
+		llb.AddMount("/input/deps", depRpms),
+		dalec.WithConstraints(opts...),
+	).AddMount("/output", llb.Scratch())
+}
