@@ -21,6 +21,7 @@ const sidebars: SidebarsConfig = {
         'quickstart',
         'container-only-builds',
         'virtual-packages',
+        'system-extensions',
       ],
     },
     {

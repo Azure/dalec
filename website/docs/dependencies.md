@@ -30,6 +30,14 @@ title: Dependencies
           arch: ["amd64", "arm64"]
     ```
 
+- **Sysext**: The list of packages to include in the generated system extension. No dependency resolution is performed when generating system extensions, so all required dependencies must be explicitly listed here.
+    ```yaml
+    sysext:
+      package_name:
+          version: [">=1.0.0", "<2.0.0"]
+          arch: ["amd64", "arm64"]
+    ```
+
 :::note
 Each of the above fields is a list of [PackageConstraints](https://pkg.go.dev/github.com/Azure/dalec#PackageConstraints).
 :::
@@ -73,6 +81,9 @@ dependencies:
   recommends:
     curl:
       version: [">=7.68.0"]
+  sysext:
+    zstd:
+      version: [">=1.5.0"]
   test:
     - bats
   extra_repos:
