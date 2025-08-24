@@ -634,6 +634,8 @@ func HasGolang(spec *Spec, targetKey string) bool {
 	return false
 }
 
+
+
 func (s *Spec) GetProvides(targetKey string) map[string]PackageConstraints {
 	if p := s.Targets[targetKey].Provides; p != nil {
 		return p
@@ -664,6 +666,8 @@ func HasNpm(spec *Spec, targetKey string) bool {
 	}
 	return false
 }
+
+
 
 // asyncState is a helper is useful when returning an error that can just be encapsulated in an async state.
 // The error itself will propagate when the state once the state is marshalled (e.g. st.Marshal(ctx))
