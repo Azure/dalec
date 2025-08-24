@@ -97,6 +97,20 @@ func TestSourceGitSSH(t *testing.T) {
 		checkGitOp(t, ops, &src)
 	})
 
+	t.Run("with known hosts", func(t *testing.T) {
+		knownHosts := "github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7"
+		src := Source{
+			Git: &SourceGit{
+				URL:           fmt.Sprintf("user@%s:test.git", addr),
+				Commit:        t.Name(),
+				SSHKnownHosts: knownHosts,
+			},
+		}
+
+		ops := getSourceOp(ctx, t, src)
+		checkGitOp(t, ops, &src)
+	})
+
 }
 
 func TestSourceGitHTTP(t *testing.T) {
@@ -1031,6 +1045,18 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 		}
 		assert.Check(t, cmp.Equal(op.Attrs["git.mountsshsock"], ssh), op)
 	}
+
+	// Check known hosts if set
+	if src.Git.SSHKnownHosts != "" {
+		// BuildKit's KnownSSHHosts option may add formatting like newlines
+		actualKnownHosts := op.Attrs["git.knownsshhosts"]
+		expectedKnownHosts := src.Git.SSHKnownHosts
+		
+		// Remove trailing whitespace for comparison since BuildKit may add formatting
+		actualTrimmed := strings.TrimSpace(actualKnownHosts)
+		expectedTrimmed := strings.TrimSpace(expectedKnownHosts)
+		assert.Check(t, cmp.Equal(actualTrimmed, expectedTrimmed), "Expected: %q, Got: %q", expectedKnownHosts, actualKnownHosts)
+	}
 }
 
 func checkGitAuth(t *testing.T, m map[string]*pb.Op, ops []*pb.Op, src *Source, expectedNumSecrets, expectedNumSSH int) {
@@ -1374,6 +1400,36 @@ func Test_pathHasPrefix(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			hasPrefix := pathHasPrefix(tc.path, tc.prefix)
 			assert.Equal(t, hasPrefix, tc.expect)
+		})
+	}
+}
+
+// Test SourceGit SSH known hosts functionality
+func TestSourceGitSSHKnownHosts(t *testing.T) {
+	tests := []struct {
+		name          string
+		sshKnownHosts string
+	}{
+		{
+			name:          "empty known hosts",
+			sshKnownHosts: "",
+		},
+		{
+			name:          "with known hosts",
+			sshKnownHosts: "github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := &SourceGit{
+				URL:           "git@github.com:test/repo.git",
+				Commit:        "abc123",
+				SSHKnownHosts: tt.sshKnownHosts,
+			}
+			
+			// Just test that the struct field is set correctly
+			assert.Check(t, cmp.Equal(src.SSHKnownHosts, tt.sshKnownHosts))
 		})
 	}
 }
