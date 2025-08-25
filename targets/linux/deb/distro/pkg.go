@@ -129,32 +129,6 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 	return findBinaryInCandidates(ctx, client, in, candidates, "go", opts...)
 }
 
-func searchForAltRust(ctx context.Context, client gwclient.Client, spec *dalec.Spec, targetKey string, in llb.State, opts ...llb.ConstraintsOpt) (string, error) {
-	if !spec.HasCargohomes() {
-		return "", nil
-	}
-
-	deps := spec.GetBuildDeps(targetKey)
-	if _, hasNormalRust := deps["rust"]; hasNormalRust {
-		return "", nil
-	}
-	if _, hasNormalCargo := deps["cargo"]; hasNormalCargo {
-		return "", nil
-	}
-
-	// Check for both rust- and cargo- prefixed packages
-	rustCandidates := buildCandidatePaths(deps, "rust", "usr/lib/rust", "/bin")
-	cargoCandidates := buildCandidatePaths(deps, "cargo", "usr/lib/cargo", "/bin")
-
-	allCandidates := append(rustCandidates, cargoCandidates...)
-
-	// Try to find cargo first, then rustc as fallback
-	if path, err := findBinaryInCandidates(ctx, client, in, allCandidates, "cargo", opts...); err == nil && path != "" {
-		return path, nil
-	}
-	return findBinaryInCandidates(ctx, client, in, allCandidates, "rustc", opts...)
-}
-
 // buildCandidatePaths extracts version-specific package paths from dependencies
 func buildCandidatePaths(deps map[string]dalec.PackageConstraints, prefix, basePath, suffix string) []string {
 	var candidates []string
@@ -218,16 +192,7 @@ func prepareCargo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePk
 		})
 	}
 
-	cargoBin, err := searchForAltRust(ctx, client, spec, targetKey, worker, opts...)
-	if err != nil {
-		return noOpStateOpt, errors.Wrap(err, "error while looking for alternate rust bin path")
-	}
-
-	if cargoBin == "" {
-		return noOpStateOpt, nil
-	}
-	cfg.PrependPath = append(cfg.PrependPath, cargoBin)
-	return addPaths([]string{cargoBin}, opts...), nil
+	return noOpStateOpt, nil
 }
 
 // prepends the provided values to $PATH

@@ -32,9 +32,6 @@ const (
 	SccacheArchLinuxX64   = "x86_64-unknown-linux-musl"
 	SccacheArchLinuxArm64 = "aarch64-unknown-linux-musl"
 
-	// Base paths for dalec temporary files
-	DalecTempDirLinux = "/tmp/dalec"
-
 	// Sccache v0.10.0 SHA256 checksums for binary validation
 	SccacheChecksumLinuxX64   = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
 	SccacheChecksumLinuxArm64 = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
@@ -538,7 +535,7 @@ fi`),
 		// Set up a simple environment variable to enable sccache
 		llb.AddEnv("RUSTC_WRAPPER", sccacheBinary).SetRunOption(ei)
 
-		// Create a symbolic link from /usr/local/bin/sccache to the actual binary
+		// Mount the sccache binary directly to /usr/local/bin/sccache
 		// This allows 'command -v sccache' to find it in the PATH
 		llb.AddMount("/usr/local/bin/sccache", extractedSccache, llb.SourcePath("sccache")).SetRunOption(ei)
 	})
