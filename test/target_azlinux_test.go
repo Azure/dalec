@@ -85,7 +85,7 @@ func TestAzlinux3(t *testing.T) {
 			Package:               "azlinux3/rpm",
 			Container:             "azlinux3/container",
 			Worker:                "azlinux3/worker",
-			Sysext:                "azlinux3/sysext",
+			Sysext:                "azlinux3/testing/sysext",
 			ListExpectedSignFiles: azlinuxListSignFiles("azl3"),
 		},
 		LicenseDir: "/usr/share/licenses",

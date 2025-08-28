@@ -83,8 +83,8 @@ func (cfg *Config) Handle(ctx context.Context, client gwclient.Client) (*gwclien
 	})
 
 	if cfg.SysextSupported {
-		mux.Add("sysext", linux.HandleSysext(cfg), &targets.Target{
-			Name:        "sysext",
+		mux.Add("testing/sysext", linux.HandleSysext(cfg), &targets.Target{
+			Name:        "testing/sysext",
 			Description: "Builds a systemd system extension image.",
 		})
 	}

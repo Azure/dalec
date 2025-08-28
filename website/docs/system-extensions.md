@@ -1,5 +1,5 @@
 ---
-title: System Extensions
+title: System Extensions (EXPERIMENTAL)
 ---
 
 Dalec can create system extensions, known as sysexts, for use with systemd. Such extensions are filesystem images that get overlaid onto an existing running system. These are often designed to be standalone, making them very portable, but they don't necessarily have to be.
@@ -31,7 +31,7 @@ dependencies:
 Build the container:
 
 ```shell
-docker build -f my-sysext.yml --target=azlinux3/sysext --output=. .
+docker build -f my-sysext.yml --target=azlinux3/testing/sysext --output=. .
 ```
 
 This creates `my-sysext-v0.1.0-1-azlinux3-x86-64.raw` in the current directory. You can merge this with `systemd-sysext` or just mount it to some directory with `mount -o loop`. It contains:

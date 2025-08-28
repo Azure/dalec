@@ -26,7 +26,7 @@ func withPackageOverride(oldPkg, newPkg string) func(cfg *testLinuxConfig) {
 func debLinuxTestConfigFor(targetKey string, cfg *distro.Config, opts ...func(*testLinuxConfig)) testLinuxConfig {
 	var sysextTarget string
 	if cfg.SysextSupported {
-		sysextTarget = targetKey + "/sysext"
+		sysextTarget = targetKey + "/testing/sysext"
 	}
 
 	tlc := testLinuxConfig{
