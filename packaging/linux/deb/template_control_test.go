@@ -65,8 +65,8 @@ func TestAppendConstraints(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := appendConstraints(tt.deps); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("appendConstraints() = %v, want %v", got, tt.want)
+			if got := AppendConstraints(tt.deps); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AppendConstraints() = %v, want %v", got, tt.want)
 			}
 		})
 	}

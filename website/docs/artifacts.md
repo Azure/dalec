@@ -357,3 +357,6 @@ For rpmbuild setting this to true will set `AutoReq: no` in the resulting rpm
 spec file.
 For debbuild, DALEC will not include `${shlibs:Depends}` in the control file,
 which DALEC normally includes by default.
+
+Note that this setting has no effect on sysext targets because the packages are
+installed without any dependency resolution.

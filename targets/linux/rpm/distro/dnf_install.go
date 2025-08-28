@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/packaging/linux/rpm"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
@@ -143,11 +144,18 @@ func importGPGScript(keyPaths []string) string {
 	return importScript
 }
 
-func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.RunOption {
+func dnfCommand(cfg *dnfInstallConfig, releaseVer string, exe string, dnfShArgs []string, dnfArgs []string) llb.RunOption {
 	cmdFlags := dnfInstallFlags(cfg)
-	// tdnf makecache is needed to ensure that the package metadata is up to date if extra repo
+	// dnf makecache is needed to ensure that the package metadata is up to date if extra repo
 	// config files have been mounted
-	cmdArgs := fmt.Sprintf("set -ex; tdnf makecache -y; tdnf install -y --refresh --setopt=varsdir=/etc/dnf/vars --releasever=%s %s %s", releaseVer, cmdFlags, strings.Join(pkgs, " "))
+	cmdArgs := fmt.Sprintf(
+		"set -ex; %s makecache -y; exec %s -y --refresh --setopt=varsdir=/etc/dnf/vars --releasever=%s %s %s \"${@}\"",
+		exe,
+		exe,
+		releaseVer,
+		cmdFlags,
+		strings.Join(dnfShArgs, " "),
+	)
 
 	var runOpts []llb.RunOption
 
@@ -166,39 +174,21 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 			llb.SourcePath("/import-keys.sh")))
 	}
 
-	runOpts = append(runOpts, dalec.ShArgs(cmdArgs))
+	sh := []string{"sh", "-c", cmdArgs, "-"}
+	sh = append(sh, dnfArgs...)
+
+	runOpts = append(runOpts, llb.Args(sh))
 	runOpts = append(runOpts, cfg.mounts...)
 
 	return dalec.WithRunOptions(runOpts...)
 }
 
 func DnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.RunOption {
-	cmdFlags := dnfInstallFlags(cfg)
-	// tdnf makecache is needed to ensure that the package metadata is up to date if extra repo
-	// config files have been mounted
-	cmdArgs := fmt.Sprintf("set -ex; dnf makecache -y; dnf install -y --refresh --releasever=%s --setopt=varsdir=/etc/dnf/vars %s %s", releaseVer, cmdFlags, strings.Join(pkgs, " "))
+	return dnfCommand(cfg, releaseVer, "dnf", append([]string{"install"}, pkgs...), nil)
+}
 
-	var runOpts []llb.RunOption
-
-	// TODO: see if this can be removed for dnf
-	// If we have keys to import in order to access a repo, we need to create a script to use `gpg` to import them
-	// This is an unfortunate consequence of a bug in tdnf (see https://github.com/vmware/tdnf/issues/471).
-	// The keys *should* be imported automatically by tdnf as long as the repo config references them correctly and
-	// we mount the key files themselves under the right path. However, tdnf does NOT do this
-	// currently if the keys are referenced via a `file:///` type url,
-	// and we must manually import the keys as well.
-	if len(cfg.keys) > 0 {
-		importScript := importGPGScript(cfg.keys)
-		cmdArgs = "/tmp/import-keys.sh; " + cmdArgs
-		runOpts = append(runOpts, llb.AddMount("/tmp/import-keys.sh",
-			llb.Scratch().File(llb.Mkfile("/import-keys.sh", 0755, []byte(importScript))),
-			llb.SourcePath("/import-keys.sh")))
-	}
-
-	runOpts = append(runOpts, dalec.ShArgs(cmdArgs))
-	runOpts = append(runOpts, cfg.mounts...)
-
-	return dalec.WithRunOptions(runOpts...)
+func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.RunOption {
+	return dnfCommand(cfg, releaseVer, "tdnf", append([]string{"install"}, pkgs...), nil)
 }
 
 type buildDepsInstallerFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.RunOption, error)
@@ -267,4 +257,45 @@ func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client,
 
 		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
 	}
+}
+
+func (cfg *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints map[string]dalec.PackageConstraints, opts ...llb.ConstraintsOpt) llb.State {
+	if constraints == nil {
+		return llb.Scratch()
+	}
+
+	opts = append(opts, dalec.ProgressGroup("Downloading dependencies"))
+
+	worker = worker.Run(
+		dalec.WithConstraints(opts...),
+		cfg.Install([]string{"dnf-utils"}),
+	).Root()
+
+	args := []string{"--downloaddir", "/output", "download"}
+	for name, constraint := range constraints {
+		if len(constraint.Version) == 0 {
+			args = append(args, name)
+			continue
+		}
+		for _, version := range constraint.Version {
+			args = append(args, fmt.Sprintf("%s %s", name, rpm.FormatVersionConstraint(version)))
+		}
+	}
+
+	installTimeRepos := spec.GetInstallRepos(targetKey)
+	repoMounts, keyPaths := cfg.RepoMounts(installTimeRepos, sOpt, opts...)
+
+	installOpts := []DnfInstallOpt{
+		DnfWithMounts(repoMounts),
+		DnfImportKeys(keyPaths),
+		dnfInstallWithConstraints(opts),
+	}
+
+	var installCfg dnfInstallConfig
+	dnfInstallOptions(&installCfg, installOpts)
+
+	return worker.Run(
+		dalec.WithRunOptions(dnfCommand(&installCfg, cfg.ReleaseVer, "dnf", nil, args)),
+		dalec.WithConstraints(opts...),
+	).AddMount("/output", llb.Scratch())
 }

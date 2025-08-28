@@ -39,6 +39,9 @@ type Config struct {
 	// that are not inthe base worker config.
 	// A prime example of this is adding Debian backports on debian distributions.
 	ExtraRepos []dalec.PackageRepositoryConfig
+
+	// erofs-utils 1.7+ is required for tar support.
+	SysextSupported bool
 }
 
 func (cfg *Config) BuildImageConfig(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, platform *ocispecs.Platform, targetKey string) (*dalec.DockerImageSpec, error) {
@@ -116,6 +119,13 @@ func (cfg *Config) Handle(ctx context.Context, client gwclient.Client) (*gwclien
 		Name:        "worker",
 		Description: "Builds the worker image.",
 	})
+
+	if cfg.SysextSupported {
+		mux.Add("testing/sysext", linux.HandleSysext(cfg), &targets.Target{
+			Name:        "testing/sysext",
+			Description: "Builds a systemd system extension image.",
+		})
+	}
 
 	return mux.Handle(ctx, client)
 }

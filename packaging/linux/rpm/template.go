@@ -241,7 +241,7 @@ func (w *specWrapper) Recommends() fmt.Stringer {
 // NOTE: This is very basic and does not handle things like grouped constraints
 // Given this is just trying to shim things to allow either the rpm format or the deb format
 // in its basic form, this is sufficient for now.
-func formatVersionConstraint(v string) string {
+func FormatVersionConstraint(v string) string {
 	prefix, suffix, ok := strings.Cut(v, " ")
 	if !ok {
 		if len(prefix) >= 1 {
@@ -274,7 +274,7 @@ func writeDep(b *strings.Builder, kind, name string, constraints dalec.PackageCo
 		}
 
 		for _, c := range constraints.Version {
-			fmt.Fprintf(b, "%s: %s %s\n", kind, name, formatVersionConstraint(c))
+			fmt.Fprintf(b, "%s: %s %s\n", kind, name, FormatVersionConstraint(c))
 		}
 	}
 
