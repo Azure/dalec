@@ -31,7 +31,7 @@ dependencies:
 Build the container:
 
 ```shell
-docker build -f my-sysext.yml --target=azlinux3/sysext --output=. .
+docker build -f my-sysext.yml --target=azlinux3/testing/sysext --output=. .
 ```
 
 This creates `my-sysext-v0.1.0-1-x86-64.raw` in the current directory. You can merge this with `systemd-sysext` or just mount it to some directory with `mount -o loop`. It contains:
