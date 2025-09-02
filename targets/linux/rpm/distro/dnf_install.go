@@ -119,7 +119,7 @@ func dnfInstallFlags(cfg *dnfInstallConfig) string {
 	}
 
 	if !cfg.includeDocs {
-		cmdOpts += " --setopt='tsflags=nodocs'"
+		cmdOpts += " --setopt=tsflags=nodocs"
 	}
 
 	return cmdOpts
@@ -144,20 +144,36 @@ func importGPGScript(keyPaths []string) string {
 	return importScript
 }
 
-func dnfCommand(cfg *dnfInstallConfig, releaseVer string, exe string, dnfShArgs []string, dnfArgs []string) llb.RunOption {
-	cmdFlags := dnfInstallFlags(cfg)
-	// dnf makecache is needed to ensure that the package metadata is up to date if extra repo
-	// config files have been mounted
-	cmdArgs := fmt.Sprintf(
-		"set -ex; %s makecache -y; exec %s -y --refresh --setopt=varsdir=/etc/dnf/vars --releasever=%s %s %s \"${@}\"",
-		exe,
-		exe,
-		releaseVer,
-		cmdFlags,
-		strings.Join(dnfShArgs, " "),
-	)
+func dnfCommand(cfg *dnfInstallConfig, releaseVer string, exe string, dnfSubCmd []string, dnfArgs []string) llb.RunOption {
+	const importKeysPath = "/tmp/dalec/internal/dnf/import-keys.sh"
 
+	cacheDir := "/var/cache/" + exe
+	if cfg.root != "" {
+		cacheDir = filepath.Join(cfg.root, cacheDir)
+	}
+	installFlags := dnfInstallFlags(cfg)
+	installFlags += " -y --setopt varsdir=/etc/dnf/vars --releasever=" + releaseVer + " "
+	installScriptDt := `#!/usr/bin/env bash
+set -eux -o pipefail
+
+import_keys_path="` + importKeysPath + `"
+cmd="` + exe + `"
+install_flags="` + installFlags + `"
+dnf_sub_cmd="` + strings.Join(dnfSubCmd, " ") + `"
+cache_dir="` + cacheDir + `"
+
+if [ -x "$import_keys_path" ]; then
+	"$import_keys_path"
+fi
+
+$cmd $dnf_sub_cmd $install_flags "${@}"
+`
 	var runOpts []llb.RunOption
+
+	installScript := llb.Scratch().File(llb.Mkfile("install.sh", 0o700, []byte(installScriptDt)), cfg.constraints...)
+	const installScriptPath = "/tmp/dalec/internal/dnf/install.sh"
+
+	runOpts = append(runOpts, llb.AddMount(installScriptPath, installScript, llb.SourcePath("install.sh"), llb.Readonly))
 
 	// TODO(adamperlin): see if this can be removed for dnf
 	// If we have keys to import in order to access a repo, we need to create a script to use `gpg` to import them
@@ -168,16 +184,17 @@ func dnfCommand(cfg *dnfInstallConfig, releaseVer string, exe string, dnfShArgs 
 	// and we must manually import the keys as well.
 	if len(cfg.keys) > 0 {
 		importScript := importGPGScript(cfg.keys)
-		cmdArgs = "/tmp/import-keys.sh; " + cmdArgs
-		runOpts = append(runOpts, llb.AddMount("/tmp/import-keys.sh",
+		runOpts = append(runOpts, llb.AddMount(importKeysPath,
 			llb.Scratch().File(llb.Mkfile("/import-keys.sh", 0755, []byte(importScript))),
+			llb.Readonly,
 			llb.SourcePath("/import-keys.sh")))
 	}
 
-	sh := []string{"sh", "-c", cmdArgs, "-"}
-	sh = append(sh, dnfArgs...)
+	cmd := make([]string, 0, len(dnfArgs)+1)
+	cmd = append(cmd, installScriptPath)
+	cmd = append(cmd, dnfArgs...)
 
-	runOpts = append(runOpts, llb.Args(sh))
+	runOpts = append(runOpts, llb.Args(cmd))
 	runOpts = append(runOpts, cfg.mounts...)
 
 	return dalec.WithRunOptions(runOpts...)
