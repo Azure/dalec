@@ -81,9 +81,11 @@ func TestAzlinux3(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	cfg := testLinuxConfig{
 		Target: targetConfig{
+			Key:                   "azlinux3",
 			Package:               "azlinux3/rpm",
 			Container:             "azlinux3/container",
 			Worker:                "azlinux3/worker",
+			Sysext:                "azlinux3/testing/sysext",
 			ListExpectedSignFiles: azlinuxListSignFiles("azl3"),
 		},
 		LicenseDir: "/usr/share/licenses",
@@ -99,6 +101,7 @@ func TestAzlinux3(t *testing.T) {
 			CreateRepo:     createYumRepo(azlinux.Azlinux3Config),
 			SignRepo:       signRepoAzLinux,
 			TestRepoConfig: azlinuxTestRepoConfig,
+			SysextWorker:   azlinux.Azlinux3Config.SysextWorker,
 		},
 		Release: OSRelease{
 			ID:        "azurelinux",

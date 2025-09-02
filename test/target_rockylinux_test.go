@@ -13,6 +13,7 @@ func TestRockylinux9(t *testing.T) {
 	ctx := startTestSpan(baseCtx, t)
 	testLinuxDistro(ctx, t, testLinuxConfig{
 		Target: targetConfig{
+			Key:       "rockylinux9",
 			Package:   "rockylinux9/rpm",
 			Container: "rockylinux9/container",
 			Worker:    "rockylinux9/worker",

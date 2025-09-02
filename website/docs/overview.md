@@ -18,7 +18,7 @@ Dalec is a [Docker Buildkit frontend](https://docs.docker.com/build/buildkit/fro
 
 - 🐳 No additional tools needed except [Docker](https://docs.docker.com/engine/install/)
 - 🚀 Easy to use declarative configuration
-- 📦 Build packages and/or containers for multiple [targets](targets.md)
+- 📦 Build packages, containers and/or system extensions for multiple [targets](targets.md)
   - DEB-based: Debian and Ubuntu
   - RPM-based: Azure Linux, Rocky Linux, and Alma Linux
   - Windows containers (cross compilation only)
