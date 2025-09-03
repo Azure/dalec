@@ -2,7 +2,10 @@ package test
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/Azure/dalec"
@@ -10,12 +13,19 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
+func createRepoSuffix() string {
+	buf := make([]byte, 8)
+	n, _ := rand.Read(buf)
+	return hex.EncodeToString(buf[:n])
+}
+
 func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, targetCfg targetConfig) {
 	// provide a unique suffix per test otherwise, depending on the test case,
 	// you can end up with a false positive result due to apt package caching.
 	// e.g. there may not be a public key for the repo under test, but if the
 	// package is already in the package cache (due to other tests that injected
 	// a public key) then apt may use that package anyway.
+
 	getDepSpec := func(suffix string) *dalec.Spec {
 		return &dalec.Spec{
 			Name:        "dalec-test-package" + suffix,
@@ -42,7 +52,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 		}
 	}
 
-	getSpec := func(dep *dalec.Spec, keyConfig map[string]dalec.Source, keyPath string) *dalec.Spec {
+	getSpec := func(dep *dalec.Spec, keyConfig map[string]dalec.Source, repoPath, keyPath string) *dalec.Spec {
 		spec := &dalec.Spec{
 			Name:        "dalec-test-custom-repo",
 			Version:     "0.0.1",
@@ -65,10 +75,10 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 
 				ExtraRepos: []dalec.PackageRepositoryConfig{
 					{
-						Config: workerCfg.TestRepoConfig(keyPath),
+						Config: workerCfg.TestRepoConfig(keyPath, repoPath),
 						Data: []dalec.SourceMount{
 							{
-								Dest: "/opt/repo",
+								Dest: repoPath,
 								Spec: dalec.Source{
 									Context: &dalec.SourceContext{
 										Name: "test-repo",
@@ -112,15 +122,15 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 		return spec
 	}
 
-	getRepoState := func(ctx context.Context, t *testing.T, client gwclient.Client, w llb.State, key llb.State, depSpec *dalec.Spec) llb.State {
+	getRepoState := func(ctx context.Context, t *testing.T, client gwclient.Client, w llb.State, key llb.State, depSpec *dalec.Spec, repoPath string) llb.State {
 		sr := newSolveRequest(withSpec(ctx, t, depSpec), withBuildTarget(targetCfg.Package))
 		pkg := reqToState(ctx, client, sr, t)
 
 		// create a repo using our existing worker
-		workerWithRepo := w.With(workerCfg.CreateRepo(pkg, workerCfg.SignRepo(key)))
+		workerWithRepo := w.With(workerCfg.CreateRepo(pkg, repoPath, workerCfg.SignRepo(key, repoPath)))
 
 		// copy out just the contents of the repo
-		return llb.Scratch().File(llb.Copy(workerWithRepo, "/opt/repo", "/", &llb.CopyInfo{CopyDirContentsOnly: true}))
+		return llb.Scratch().File(llb.Copy(workerWithRepo, repoPath, "/", &llb.CopyInfo{CopyDirContentsOnly: true}))
 	}
 
 	t.Run("no public key", func(t *testing.T) {
@@ -135,10 +145,12 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 			gpgKey := generateGPGKey(w, false)
 
 			depSpec := getDepSpec("no-public-key")
-			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec)
+			repoPath := filepath.Join("/opt/repo", createRepoSuffix())
+
+			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec, repoPath)
 
 			sr = newSolveRequest(
-				withSpec(ctx, t, getSpec(depSpec, nil, "public.key")),
+				withSpec(ctx, t, getSpec(depSpec, nil, repoPath, "public.key")),
 				withBuildContext(ctx, t, "test-repo", repoState),
 				withBuildTarget(targetCfg.Container),
 				withPlatformPtr(workerCfg.Platform),
@@ -167,7 +179,8 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 			// under /public.gpg or /public.asc, depending on armored flag
 			gpgKey := generateGPGKey(w, armored)
 			depSpec := getDepSpec(packageNameSuffix)
-			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec)
+			repoPath := filepath.Join("/opt/repo", createRepoSuffix())
+			repoState := getRepoState(ctx, t, gwc, w, gpgKey, depSpec, repoPath)
 
 			ext := ".gpg"
 			if armored {
@@ -183,7 +196,7 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 					},
 					Path: keyName,
 				},
-			}, keyName)
+			}, repoPath, keyName)
 
 			sr = newSolveRequest(
 				withSpec(ctx, t, spec),
