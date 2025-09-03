@@ -62,22 +62,22 @@ func debLinuxTestConfigFor(targetKey string, cfg *distro.Config, opts ...func(*t
 	return tlc
 }
 
-func ubuntuCreateRepo(cfg *distro.Config) func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
-	return func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
+func ubuntuCreateRepo(cfg *distro.Config) func(pkg llb.State, repoPath string, opts ...llb.StateOption) llb.StateOption {
+	return func(pkg llb.State, repoPath string, opts ...llb.StateOption) llb.StateOption {
 		repoFile := []byte(`
-deb [trusted=yes] copy:/opt/repo/ /
+deb [trusted=yes] copy:` + repoPath + `/ /
 `)
 		return func(in llb.State) llb.State {
 			withRepo := in.Run(
 				dalec.ShArgs("apt-get update && apt-get install -y apt-utils gnupg2"),
 				dalec.WithMountedAptCache(cfg.AptCachePrefix),
-			).File(llb.Copy(pkg, "/", "/opt/repo")).
+			).File(llb.Copy(pkg, "/", repoPath, dalec.WithCreateDestPath())).
 				Run(
-					llb.Dir("/opt/repo"),
+					llb.Dir(repoPath),
 					dalec.ShArgs("apt-ftparchive packages . > Packages"),
 				).
 				Run(
-					llb.Dir("/opt/repo"),
+					llb.Dir(repoPath),
 					dalec.ShArgs("apt-ftparchive release . > Release"),
 				).Root()
 
@@ -91,7 +91,7 @@ deb [trusted=yes] copy:/opt/repo/ /
 	}
 }
 
-func signRepoUbuntu(gpgKey llb.State) llb.StateOption {
+func signRepoUbuntu(gpgKey llb.State, repoPath string) llb.StateOption {
 	// key should be a state that has a public key under /public.key
 	return func(in llb.State) llb.State {
 		// assuming in is the state that has the repo files under / including
@@ -103,20 +103,20 @@ func signRepoUbuntu(gpgKey llb.State) llb.StateOption {
 			Run(
 				dalec.ShArgs(`ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2) && \
 					gpg --list-keys --keyid-format LONG && \
-					gpg --default-key $ID -abs -o /opt/repo/Release.gpg /opt/repo/Release && \
-					gpg --default-key "$ID" --clearsign -o /opt/repo/InRelease /opt/repo/Release`),
+					gpg --default-key $ID -abs -o `+repoPath+`/Release.gpg `+repoPath+`/Release && \
+					gpg --default-key "$ID" --clearsign -o `+repoPath+`/InRelease `+repoPath+`/Release`),
 				llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
 				dalec.ProgressGroup("signing repo"),
 			).Root()
 	}
 }
 
-func ubuntuTestRepoConfig(name string) map[string]dalec.Source {
+func ubuntuTestRepoConfig(name, repoPath string) map[string]dalec.Source {
 	return map[string]dalec.Source{
 		"local.list": {
 			Inline: &dalec.SourceInline{
 				File: &dalec.SourceInlineFile{
-					Contents: fmt.Sprintf(`deb [signed-by=/usr/share/keyrings/%s] copy:/opt/repo/ /`, name),
+					Contents: fmt.Sprintf(`deb [signed-by=/usr/share/keyrings/%s] copy:`+repoPath+`/ /`, name),
 				},
 			},
 		},
