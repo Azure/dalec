@@ -1,18 +1,24 @@
 package test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"path/filepath"
+
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/targets/linux/rpm/distro"
 	"github.com/moby/buildkit/client/llb"
 )
 
-func createYumRepo(installer *distro.Config) func(rpms llb.State, opts ...llb.StateOption) llb.StateOption {
-	return func(rpms llb.State, opts ...llb.StateOption) llb.StateOption {
+func createYumRepo(installer *distro.Config) func(rpms llb.State, repoPath string, opts ...llb.StateOption) llb.StateOption {
+	return func(rpms llb.State, repoPath string, opts ...llb.StateOption) llb.StateOption {
 		return func(in llb.State) llb.State {
+			suffixBytes := sha256.Sum256([]byte(repoPath))
+			suffix := hex.EncodeToString(suffixBytes[:])[:8]
 			localRepo := []byte(`
-[Local]
+[Local-` + suffix + `]
 name=Local Repository
-baseurl=file:///opt/repo
+baseurl=file://` + repoPath + `
 gpgcheck=0
 priority=0
 enabled=1
@@ -21,15 +27,15 @@ enabled=1
 			pg := dalec.ProgressGroup("Install local repo for test")
 			withRepos := in.
 				Run(installer.Install([]string{"createrepo"}), pg).
-				File(llb.Mkdir("/opt/repo/RPMS", 0o755, llb.WithParents(true)), pg).
-				File(llb.Mkdir("/opt/repo/SRPMS", 0o755), pg).
-				File(llb.Mkfile("/etc/yum.repos.d/local.repo", 0o644, localRepo), pg).
+				File(llb.Mkdir(filepath.Join(repoPath, "RPMS"), 0o755, llb.WithParents(true)), pg).
+				File(llb.Mkdir(filepath.Join(repoPath, "SRPMS"), 0o755), pg).
+				File(llb.Mkfile("/etc/yum.repos.d/local-"+suffix+".repo", 0o644, localRepo), pg).
 				Run(
 					llb.AddMount("/tmp/st", rpms, llb.Readonly),
-					dalec.ShArgs("cp /tmp/st/RPMS/$(uname -m)/* /opt/repo/RPMS/ && cp /tmp/st/SRPMS/* /opt/repo/SRPMS"),
+					dalec.ShArgsf("cp /tmp/st/RPMS/$(uname -m)/* %s/RPMS/ && cp /tmp/st/SRPMS/* %s/SRPMS", repoPath, repoPath),
 					pg,
 				).
-				Run(dalec.ShArgs("createrepo --compatibility /opt/repo"), pg).
+				Run(dalec.ShArgs("createrepo --compatibility "+repoPath), pg).
 				Root()
 
 			for _, opt := range opts {
