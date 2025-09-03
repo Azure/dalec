@@ -22,6 +22,7 @@ baseurl=file://` + repoPath + `
 gpgcheck=0
 priority=0
 enabled=1
+metadata_expire=0
 `)
 
 			pg := dalec.ProgressGroup("Install local repo for test")
