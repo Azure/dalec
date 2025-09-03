@@ -29,6 +29,7 @@ repo_gpgcheck=1
 priority=0
 enabled=1
 gpgkey=file:///etc/pki/rpm-gpg/%s
+metadata_expire=0
 	`, suffix, repoPath, keyPath),
 				},
 			},
