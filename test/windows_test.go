@@ -60,21 +60,21 @@ func TestWindows(t *testing.T) {
 		SignRepo:       signRepoUbuntu,
 		TestRepoConfig: ubuntuTestRepoConfig,
 		Platform:       &windowsAmd64,
-		CreateRepo: func(pkg llb.State, opts ...llb.StateOption) llb.StateOption {
+		CreateRepo: func(pkg llb.State, repoPath string, opts ...llb.StateOption) llb.StateOption {
 			return func(in llb.State) llb.State {
 				repoFile := []byte(`
-deb [trusted=yes] copy:/opt/repo/ /
+deb [trusted=yes] copy:` + repoPath + `/ /
 `)
 				withRepo := in.Run(
 					dalec.ShArgs("apt-get update && apt-get install -y apt-utils gnupg2"),
 					dalec.WithMountedAptCache(ubuntu.JammyAptCachePrefix),
-				).File(llb.Copy(pkg, "/", "/opt/repo")).
+				).File(llb.Copy(pkg, "/", repoPath, dalec.WithCreateDestPath())).
 					Run(
-						llb.Dir("/opt/repo"),
+						llb.Dir(repoPath),
 						dalec.ShArgs("apt-ftparchive packages . > Packages"),
 					).
 					Run(
-						llb.Dir("/opt/repo"),
+						llb.Dir(repoPath),
 						dalec.ShArgs("apt-ftparchive release . > Release"),
 					).Root()
 
@@ -779,7 +779,8 @@ func testCustomWindowscrossWorker(ctx context.Context, t *testing.T, targetCfg t
 		// Add the base package + repo to the worker
 		// This should make it so when dalec installs build deps it can use the package
 		// we built above.
-		worker = worker.With(workerCfg.CreateRepo(pkg))
+		repoPath := filepath.Join("/opt/repo", createRepoSuffix())
+		worker = worker.With(workerCfg.CreateRepo(pkg, repoPath))
 
 		// Now build again with our custom worker
 		// Note, we are solving the main spec, not depSpec here.
