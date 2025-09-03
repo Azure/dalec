@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -13,19 +15,21 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-var azlinuxTestRepoConfig = func(keyPath string) map[string]dalec.Source {
+var azlinuxTestRepoConfig = func(keyPath, repoPath string) map[string]dalec.Source {
+	suffixBytes := sha256.Sum256([]byte(repoPath))
+	suffix := hex.EncodeToString(suffixBytes[:])[:8]
 	return map[string]dalec.Source{
 		"local.repo": {
 			Inline: &dalec.SourceInline{
 				File: &dalec.SourceInlineFile{
-					Contents: fmt.Sprintf(`[Local]
+					Contents: fmt.Sprintf(`[Local-%s]
 name=Local Repository
-baseurl=file:///opt/repo
+baseurl=file://%s
 repo_gpgcheck=1
 priority=0
 enabled=1
 gpgkey=file:///etc/pki/rpm-gpg/%s
-	`, keyPath),
+	`, suffix, repoPath, keyPath),
 				},
 			},
 		},
@@ -167,7 +171,7 @@ func azlinuxListSignFiles(ver string) func(*dalec.Spec, ocispecs.Platform) []str
 	}
 }
 
-func signRepoAzLinux(gpgKey llb.State) llb.StateOption {
+func signRepoAzLinux(gpgKey llb.State, repoPath string) llb.StateOption {
 	// key should be a state that has a public key under /public.key
 	return func(in llb.State) llb.State {
 		return in.Run(
@@ -177,7 +181,7 @@ func signRepoAzLinux(gpgKey llb.State) llb.StateOption {
 			Run(
 				dalec.ShArgs(`ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2) && \
 					gpg --list-keys --keyid-format LONG && \
-					gpg --detach-sign --default-key "$ID" --armor --yes /opt/repo/repodata/repomd.xml`),
+					gpg --detach-sign --default-key "$ID" --armor --yes `+repoPath+`/repodata/repomd.xml`),
 				llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
 			).Root()
 	}
