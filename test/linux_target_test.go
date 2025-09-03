@@ -39,12 +39,12 @@ type workerConfig struct {
 	// CreateRepo takes in a state which is the output of the sign target,
 	// as well as optional state options for additional configuration.
 	// the output [llb.StateOption] should install the repo into the worker image.
-	CreateRepo func(llb.State, ...llb.StateOption) llb.StateOption
-	SignRepo   func(llb.State) llb.StateOption
+	CreateRepo func(st llb.State, repoPath string, opts ...llb.StateOption) llb.StateOption
+	SignRepo   func(st llb.State, repoPath string) llb.StateOption
 	// ContextName is the name of the worker context that the build target will use
 	// to see if a custom worker is provided in a context
 	ContextName    string
-	TestRepoConfig func(string) map[string]dalec.Source
+	TestRepoConfig func(keyPath, repoPath string) map[string]dalec.Source
 	Platform       *ocispecs.Platform
 }
 
@@ -1832,7 +1832,8 @@ func testCustomLinuxWorker(ctx context.Context, t *testing.T, targetCfg targetCo
 		// Add the base package + repo to the worker
 		// This should make it so when dalec installs build deps it can use the package
 		// we built above.
-		worker = worker.With(workerCfg.CreateRepo(pkg))
+		repoPath := filepath.Join("/opt/repo", createRepoSuffix())
+		worker = worker.With(workerCfg.CreateRepo(pkg, repoPath))
 
 		// Now build again with our custom worker
 		// Note, we are solving the main spec, not depSpec here.
@@ -1952,7 +1953,8 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 			pkg := reqToState(ctx, client, sr, t)
 			pkgs = append(pkgs, pkg)
 		}
-		return w.With(cfg.Worker.CreateRepo(llb.Merge(pkgs)))
+		repoPath := filepath.Join("/opt/repo", createRepoSuffix())
+		return w.With(cfg.Worker.CreateRepo(llb.Merge(pkgs), repoPath))
 	}
 
 	for _, tt := range tests {
