@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/targets/linux"
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
@@ -34,13 +35,31 @@ type Config struct {
 	// Unique identifier for the package cache for this particular distro,
 	// e.g., azlinux3-tdnf-cache
 	CacheName string
+	// Whether to namespace the cache key by platform
+	// Not all distros need this, hence why it is configurable.
+	// The cache key is only added when the build platform and target platform differ.
+	CacheAddPlatform bool
 
 	// e.g. /var/cache/tdnf or /var/cache/dnf
 	CacheDir string
 }
 
 func (cfg *Config) PackageCacheMount(root string) llb.RunOption {
-	return llb.AddMount(filepath.Join(root, cfg.CacheDir), llb.Scratch(), llb.AsPersistentCacheDir(cfg.CacheName, llb.CacheMountLocked))
+	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
+		cacheKey := cfg.CacheName
+		if cfg.CacheAddPlatform {
+			p := ei.Constraints.Platform
+			if p == nil {
+				p = ei.Platform
+			}
+			if p == nil {
+				dp := platforms.DefaultSpec()
+				p = &dp
+			}
+			cacheKey += "-" + platforms.Format(*p)
+		}
+		llb.AddMount(filepath.Join(root, cfg.CacheDir), llb.Scratch(), llb.AsPersistentCacheDir(cacheKey, llb.CacheMountLocked)).SetRunOption(ei)
+	})
 }
 
 func (c *Config) Install(pkgs []string, opts ...DnfInstallOpt) llb.RunOption {
