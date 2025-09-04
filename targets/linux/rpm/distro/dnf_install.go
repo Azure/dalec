@@ -147,7 +147,7 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 	cmdFlags := dnfInstallFlags(cfg)
 	// tdnf makecache is needed to ensure that the package metadata is up to date if extra repo
 	// config files have been mounted
-	cmdArgs := fmt.Sprintf("set -ex; tdnf makecache -y; tdnf install -y --refresh --setopt=varsdir=/etc/dnf/vars --releasever=%s %s %s", releaseVer, cmdFlags, strings.Join(pkgs, " "))
+	cmdArgs := fmt.Sprintf("tdnf install -y --setopt=varsdir=/etc/dnf/vars --releasever=%s %s %s", releaseVer, cmdFlags, strings.Join(pkgs, " "))
 
 	var runOpts []llb.RunOption
 
@@ -176,7 +176,7 @@ func DnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Run
 	cmdFlags := dnfInstallFlags(cfg)
 	// tdnf makecache is needed to ensure that the package metadata is up to date if extra repo
 	// config files have been mounted
-	cmdArgs := fmt.Sprintf("set -ex; dnf makecache -y; dnf install -y --refresh --releasever=%s --setopt=varsdir=/etc/dnf/vars %s %s", releaseVer, cmdFlags, strings.Join(pkgs, " "))
+	cmdArgs := fmt.Sprintf("dnf install -y --releasever=%s --setopt=varsdir=/etc/dnf/vars %s %s", releaseVer, cmdFlags, strings.Join(pkgs, " "))
 
 	var runOpts []llb.RunOption
 
