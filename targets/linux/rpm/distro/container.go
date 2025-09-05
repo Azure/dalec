@@ -7,7 +7,6 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/targets/linux"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -109,28 +108,24 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 			return nil, nil, err
 		}
 
-		def, err := ctr.Marshal(ctx, pc)
+		imgConfig := dalec.DockerImageSpec{}
+		if err := dalec.BuildImageConfig(spec, targetKey, &imgConfig); err != nil {
+			return nil, nil, fmt.Errorf("error building image config: %w", err)
+		}
+
+		ref, err := ctr.Marshal(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("error marshalling container rootfs: %w", err)
 		}
 
 		res, err := client.Solve(ctx, gwclient.SolveRequest{
-			Definition: def.ToPB(),
+			Definition: ref.ToPB(),
 		})
 		if err != nil {
 			return nil, nil, err
 		}
 
-		img, err := linux.BuildImageConfig(ctx, sOpt, spec, platform, targetKey)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ref, err := res.SingleRef()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return ref, img, nil
+		r, err := res.SingleRef()
+		return r, &imgConfig, err
 	})
 }

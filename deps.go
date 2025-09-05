@@ -232,7 +232,7 @@ func GetExtraRepos(repos []PackageRepositoryConfig, env string) []PackageReposit
 	var out []PackageRepositoryConfig
 	for _, repo := range repos {
 		if slices.Contains(repo.Envs, env) {
-			out = append(repos, repo)
+			out = append(out, repo)
 		}
 	}
 	return out
