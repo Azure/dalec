@@ -286,6 +286,18 @@ var ciLoadCacheOptions = sync.OnceValues(func() (out []client.CacheOptionsEntry,
 				"url":   url,
 			},
 		})
+		out = append(out, client.CacheOptionsEntry{
+			Type: "registry",
+			Attrs: map[string]string{
+				"ref": "ghcr.io/azure/dalec/" + target + "/worker:latest",
+			},
+		})
+		out = append(out, client.CacheOptionsEntry{
+			Type: "registry",
+			Attrs: map[string]string{
+				"ref": "ghcr.io/azure/dalec/" + target + "/worker:main",
+			},
+		})
 	}
 
 	if len(out) == 0 {
