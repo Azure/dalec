@@ -75,6 +75,10 @@ func (src *SourceHTTP) IsDir() bool {
 }
 
 func (src *SourceHTTP) toMount(opts fetchOptions) (llb.State, []llb.MountOption) {
+	if isRoot(opts.Rename) {
+		opts.Rename = internalMountSourceName
+	}
+
 	st := src.toState(opts)
 	// This is always a file, so to make sure we always mount a file instead of
 	// a directory we need to add a mount opt pointing at the file name.
