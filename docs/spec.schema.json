@@ -1670,6 +1670,12 @@
 						"boolean"
 					]
 				},
+				"sshKnownHosts": {
+					"type": [
+						"string",
+						"null"
+					]
+				},
 				"url": {
 					"type": [
 						"string"
