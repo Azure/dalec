@@ -107,8 +107,8 @@ func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
 		envIdx := make(map[string]int)
 		for i, env := range dst.Env {
 			// Extract the environment variable name (part before '=')
-			if eqIdx := strings.Index(env, "="); eqIdx != -1 {
-				varName := env[:eqIdx]
+			varName, _, found := strings.Cut(env, "=")
+			if found {
 				envIdx[varName] = i
 			} else {
 				// Environment variable without '=' - use the whole string as key
@@ -118,10 +118,8 @@ func MergeImageConfig(dst *DockerImageConfig, src *ImageConfig) error {
 
 		for _, env := range src.Env {
 			// Extract the environment variable name from the new env var
-			var varName string
-			if eqIdx := strings.Index(env, "="); eqIdx != -1 {
-				varName = env[:eqIdx]
-			} else {
+			varName, _, found := strings.Cut(env, "=")
+			if !found {
 				varName = env
 			}
 
