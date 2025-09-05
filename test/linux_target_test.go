@@ -2335,6 +2335,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		testAutoGobuildCache(ctx, t, testConfig.Target)
 	})
 
+	t.Run("auto cargobuild cache", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testAutoCargobuildCache(ctx, t, testConfig.Target)
+	})
+
 	t.Run("bazel cache", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
