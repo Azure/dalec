@@ -4,11 +4,16 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 
+	"github.com/Azure/dalec/internal/plugins"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -217,4 +222,94 @@ func lookupProjectRoot(cur string) (string, error) {
 	}
 
 	return cur, nil
+}
+
+func ghaAnnotation(skipFrames int, cmd string, msg string) {
+	ghaAnnotationf(skipFrames+1, cmd, "%s", msg)
+}
+
+func ghaAnnotationf(skipFrames int, cmd string, format string, args ...any) {
+	_, f, l, _ := runtime.Caller(skipFrames + 1)
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		// not running in a github action, nothing to do
+		return
+	}
+
+	format = "::%s file=%s,line=%d::%s\n" + format
+	args = append([]any{cmd, f, l}, args...)
+	fmt.Printf(format, args...)
+}
+
+var ciLoadCacheOptions = sync.OnceValues(func() (out []client.CacheOptionsEntry, ok bool) {
+	const (
+		ghaEnv   = "GITHUB_ACTIONS"
+		tokenEnv = "ACTIONS_RUNTIME_TOKEN"
+		urlEnv   = "ACTIONS_CACHE_URL"
+	)
+	if os.Getenv(ghaEnv) != "true" {
+		// not running in a github action, nothing to do
+		return out, false
+	}
+
+	ghaAnnotation(0, "notice", "Loading cache options for GitHub Actions")
+
+	// token and url are required for the cache to work.
+	// These need to be exposed as environment variables in the GitHub Actions workflow.
+	// See the crazy-max/ghaction-github-runtime@v3 action.
+	token := os.Getenv(tokenEnv)
+	if token == "" {
+		ghaAnnotationf(0, "warning", "%s is not set, skipping cache export", tokenEnv)
+		return nil, true
+	}
+
+	url := os.Getenv("ACTIONS_CACHE_URL")
+	if url == "" {
+		ghaAnnotationf(0, "warning", "%s is not set, skipping cache export", urlEnv)
+		return nil, true
+	}
+
+	// Unfortunately we need to load all the caches because at this level we do
+	// not know what the build target will be since that will be done at the
+	// gateway client level, where we can't set cache imports.
+	filter := func(r *plugins.Registration) bool {
+		return r.Type != plugins.TypeBuildTarget
+	}
+
+	for _, r := range plugins.Graph(filter) {
+		target := path.Join(r.ID, "worker")
+		ghaAnnotationf(0, "notice", "Adding cache import: type: gha target: %q", "gha", target)
+		out = append(out, client.CacheOptionsEntry{
+			Type: "gha",
+			Attrs: map[string]string{
+				"scope": "main." + target,
+				"token": token,
+				"url":   url,
+			},
+		})
+		out = append(out, client.CacheOptionsEntry{
+			Type: "registry",
+			Attrs: map[string]string{
+				"ref": "ghcr.io/azure/dalec/" + target + "/worker:latest",
+			},
+		})
+		out = append(out, client.CacheOptionsEntry{
+			Type: "registry",
+			Attrs: map[string]string{
+				"ref": "ghcr.io/azure/dalec/" + target + "/worker:main",
+			},
+		})
+	}
+
+	if len(out) == 0 {
+		ghaAnnotation(0, "error", "No build targets found, skipping cache export")
+	}
+	return out, true
+})
+
+func withCICache(opts *client.SolveOpt) bool {
+	imports, ok := ciLoadCacheOptions()
+	if ok {
+		opts.CacheImports = append(opts.CacheImports, imports...)
+	}
+	return ok
 }
