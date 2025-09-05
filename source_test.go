@@ -916,15 +916,10 @@ func stubListener(t *testing.T) net.Addr {
 	return l.Addr()
 }
 
-// 1. Generates the LLB for a source using Source2LLBGetter (the function we are testing)
-// 2. Marshals the LLB to a protobuf (since we don't have access to the data in LLB directly)
-// 3. Unmarshals the protobuf to get the [pb.Op]s which is what buildkit would act on to get the actual source data during build.
-func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
+func prepareGetSourceOp(ctx context.Context, t *testing.T, src *Source) SourceOpts {
 	t.Helper()
 
-	s := &src
-	s.fillDefaults()
-	src = *s
+	src.fillDefaults()
 
 	var sOpt SourceOpts
 	if src.Build != nil {
@@ -946,17 +941,15 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 		st := llb.Local(name, opts...)
 		return &st, nil
 	}
+	return sOpt
+}
 
-	// The name we pass to `ToState` will be the path that the source is copied to
-	// For dirs, and the sake of tests, don't use any name so the everything is
-	// at the root path.
-	// Files must have a name, so give it a name of "test".
-	name := ""
-	if !src.IsDir() {
-		name = "test"
-	}
+// 1. Generates the LLB for a source using Source2LLBGetter (the function we are testing)
+// 2. Marshals the LLB to a protobuf (since we don't have access to the data in LLB directly)
+// 3. Unmarshals the protobuf to get the [pb.Op]s which is what buildkit would act on to get the actual source data during build.
+func sourceOpsFromState(ctx context.Context, t *testing.T, st llb.State) []*pb.Op {
+	t.Helper()
 
-	st := src.ToState(name, sOpt)
 	def, err := st.Marshal(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -975,6 +968,43 @@ func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
 	}
 
 	return out
+}
+
+func getSourceOp(ctx context.Context, t *testing.T, src Source) []*pb.Op {
+	t.Helper()
+
+	s := &src
+	sOpt := prepareGetSourceOp(ctx, t, s)
+	src = *s
+
+	// The name we pass to `ToState` will be the path that the source is copied to
+	// For dirs, and the sake of tests, don't use any name so the everything is
+	// at the root path.
+	// Files must have a name, so give it a name of "test".
+	name := ""
+	if !src.IsDir() {
+		name = "test"
+	}
+
+	st := src.ToState(name, sOpt)
+	return sourceOpsFromState(ctx, t, st)
+}
+
+func getMountOp(ctx context.Context, t *testing.T, src Source, target string) []*pb.Op {
+	t.Helper()
+
+	s := &src
+	sOpt := prepareGetSourceOp(ctx, t, s)
+	src = *s
+
+	srcSt, mountOpts := src.ToMount(sOpt)
+
+	st := llb.Scratch().Run(
+		llb.Args([]string{"true"}),
+		llb.AddMount(target, srcSt, mountOpts...),
+	).Root()
+
+	return sourceOpsFromState(ctx, t, st)
 }
 
 func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
@@ -1376,4 +1406,35 @@ func Test_pathHasPrefix(t *testing.T) {
 			assert.Equal(t, hasPrefix, tc.expect)
 		})
 	}
+}
+
+func TestSourceToMount(t *testing.T) {
+	t.Run("HTTP", func(t *testing.T) {
+		src := Source{
+			HTTP: &SourceHTTP{
+				URL: "https://example.com/file.tar.gz",
+			},
+		}
+
+		ctx := context.Background()
+		ops := getMountOp(ctx, t, src, "/mnt")
+
+		if len(ops) == 0 {
+			t.Fatal("expected at least 1 op")
+		}
+
+		assert.Assert(t, cmp.Len(ops, 2))
+
+		srcOp := ops[0].GetSource()
+		execOp := ops[1].GetExec()
+		assert.Assert(t, srcOp != nil)
+		assert.Assert(t, execOp != nil)
+		assert.Assert(t, cmp.Len(execOp.Mounts, 2)) // rootfs mount and http mount
+
+		assert.Check(t, cmp.Equal(src.HTTP.URL, srcOp.Identifier))
+		assert.Check(t, cmp.Equal(srcOp.Attrs["http.filename"], internalMountSourceName))
+
+		assert.Check(t, cmp.Equal("/mnt", execOp.Mounts[1].Dest))
+		assert.Check(t, cmp.Equal(internalMountSourceName, execOp.Mounts[1].Selector)) // should match the filename we set on the source op
+	})
 }
