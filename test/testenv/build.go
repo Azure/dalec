@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -230,7 +230,7 @@ func ghaAnnotation(skipFrames int, cmd string, msg string) {
 
 func ghaAnnotationf(skipFrames int, cmd string, format string, args ...any) {
 	_, f, l, _ := runtime.Caller(skipFrames + 1)
-	if os.Getenv("GITHUB_ACTIONS") != "true" {
+	if !isGHA {
 		// not running in a github action, nothing to do
 		return
 	}
@@ -240,64 +240,85 @@ func ghaAnnotationf(skipFrames int, cmd string, format string, args ...any) {
 	fmt.Printf(format, args...)
 }
 
-var ciLoadCacheOptions = sync.OnceValues(func() (out []client.CacheOptionsEntry, ok bool) {
-	const (
-		ghaEnv   = "GITHUB_ACTIONS"
-		tokenEnv = "ACTIONS_RUNTIME_TOKEN"
-		urlEnv   = "ACTIONS_CACHE_URL"
-	)
-	if os.Getenv(ghaEnv) != "true" {
-		// not running in a github action, nothing to do
-		return out, false
-	}
+var (
+	ghaEnv   = os.Getenv("GITHUB_ACTIONS")
+	ghaEvent = os.Getenv("GITHUB_EVENT_NAME")
+	tokenEnv = os.Getenv("ACTIONS_RUNTIME_TOKEN")
+	urlEnv   = os.Getenv("ACTIONS_CACHE_URL")
+	isGHA    = ghaEnv == "true"
 
-	ghaAnnotation(0, "notice", "Loading cache options for GitHub Actions")
+	canAddGHACache = isGHA && tokenEnv != "" && urlEnv != ""
+	workerCaches   = sync.OnceValues(getWorkerCaches)
+)
 
-	// token and url are required for the cache to work.
-	// These need to be exposed as environment variables in the GitHub Actions workflow.
-	// See the crazy-max/ghaction-github-runtime@v3 action.
-	token := os.Getenv(tokenEnv)
-	if token == "" {
-		ghaAnnotationf(0, "warning", "%s is not set, skipping cache export", tokenEnv)
-		return nil, true
-	}
-
-	url := os.Getenv("ACTIONS_CACHE_URL")
-	if url == "" {
-		ghaAnnotationf(0, "warning", "%s is not set, skipping cache export", urlEnv)
-		return nil, true
-	}
-
-	// Unfortunately we need to load all the caches because at this level we do
-	// not know what the build target will be since that will be done at the
-	// gateway client level, where we can't set cache imports.
+func loadWorkers() []string {
+	var workers []string
 	filter := func(r *plugins.Registration) bool {
-		return r.Type != plugins.TypeBuildTarget
+		return r.Type == plugins.TypeBuildTarget
 	}
 
 	for _, r := range plugins.Graph(filter) {
-		target := path.Join(r.ID, "worker")
-		ghaAnnotationf(0, "notice", "Adding cache import: type: gha target: %q", "gha", target)
-		out = append(out, client.CacheOptionsEntry{
-			Type: "gha",
-			Attrs: map[string]string{
-				"scope": "main." + target,
-				"token": token,
-				"url":   url,
+		worker, _, _ := strings.Cut(r.ID, "/")
+		workers = append(workers, worker)
+	}
+	return workers
+}
+
+func getWorkerCaches() (cacheTo []client.CacheOptionsEntry, cacheFrom []client.CacheOptionsEntry) {
+	for _, worker := range loadWorkers() {
+		cacheFrom = append(cacheFrom, []client.CacheOptionsEntry{
+			{
+				Type: "registry",
+				Attrs: map[string]string{
+					"ref": "ghcr.io/azure/dalec/" + worker + "/worker:main",
+				},
 			},
-		})
+			{
+				Type: "registry",
+				Attrs: map[string]string{
+					"ref": "ghcr.io/azure/dalec/" + worker + "/worker:latest",
+				},
+			},
+		}...)
+
+		if canAddGHACache {
+			cacheFrom = append(cacheTo, client.CacheOptionsEntry{
+				Type: "gha",
+				Attrs: map[string]string{
+					"scope": "main." + worker,
+					"token": tokenEnv,
+					"url":   urlEnv,
+				},
+			})
+
+			if ghaEvent == "pull_request" {
+				cacheFrom = append(cacheTo, client.CacheOptionsEntry{
+					Type: "gha",
+					Attrs: map[string]string{
+						"scope": "main." + worker,
+						"token": tokenEnv,
+						"url":   urlEnv,
+					},
+				})
+
+				cacheTo = append(cacheFrom, client.CacheOptionsEntry{
+					Type: "gha",
+					Attrs: map[string]string{
+						"scope": "pr." + worker,
+						"token": tokenEnv,
+						"url":   urlEnv,
+						"mode":  "max",
+					},
+				})
+			}
+		}
 	}
 
-	if len(out) == 0 {
-		ghaAnnotation(0, "error", "No build targets found, skipping cache export")
-	}
-	return out, true
-})
+	return
+}
 
-func withCICache(opts *client.SolveOpt) bool {
-	imports, ok := ciLoadCacheOptions()
-	if ok {
-		opts.CacheImports = append(opts.CacheImports, imports...)
-	}
-	return ok
+func withCICache(opts *client.SolveOpt) {
+	cacheTo, cacheFrom := workerCaches()
+	opts.CacheImports = append(opts.CacheImports, cacheFrom...)
+	opts.CacheExports = append(opts.CacheExports, cacheTo...)
 }
