@@ -18,12 +18,9 @@ func TestGenerateReadmeDebian(t *testing.T) {
 		}
 		
 		result := generateReadmeDebian(spec)
-		content := string(result)
 		
-		assert.Assert(t, strings.Contains(content, "test-package for Debian"))
-		assert.Assert(t, strings.Contains(content, "Test package description"))
-		assert.Assert(t, strings.Contains(content, "Source Provenance"))
-		assert.Assert(t, strings.Contains(content, "No sources defined"))
+		// Should return nil when there are no sources
+		assert.Assert(t, result == nil)
 	})
 
 	t.Run("single inline source", func(t *testing.T) {

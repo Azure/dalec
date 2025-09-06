@@ -123,9 +123,14 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 
 	// Generate README.Debian with source provenance documentation
 	readmeDebian := generateReadmeDebian(spec)
-	readmeDebianState := in.
-		File(llb.Mkdir(filepath.Join(dir), 0o755, llb.WithParents(true))).
-		File(llb.Mkfile(filepath.Join(dir, "README.Debian"), 0o644, readmeDebian))
+	var readmeDebianState llb.State
+	if readmeDebian != nil {
+		readmeDebianState = in.
+			File(llb.Mkdir(filepath.Join(dir), 0o755, llb.WithParents(true))).
+			File(llb.Mkfile(filepath.Join(dir, "README.Debian"), 0o644, readmeDebian))
+	} else {
+		readmeDebianState = in.File(llb.Mkdir(filepath.Join(dir), 0o755, llb.WithParents(true)))
+	}
 
 	if dir == "" {
 		dir = "debian"
@@ -688,6 +693,10 @@ func setSymlinkOwnershipPostInst(w *bytes.Buffer, spec *dalec.Spec, target strin
 // generateReadmeDebian creates the content for debian/README.Debian that documents
 // source provenance, allowing consumers to understand where sources came from.
 func generateReadmeDebian(spec *dalec.Spec) []byte {
+	if len(spec.Sources) == 0 {
+		return nil
+	}
+
 	buf := bytes.NewBuffer(nil)
 	
 	fmt.Fprintf(buf, "%s for Debian\n", spec.Name)
@@ -700,11 +709,6 @@ func generateReadmeDebian(spec *dalec.Spec) []byte {
 	fmt.Fprintf(buf, "Source Provenance\n")
 	fmt.Fprintf(buf, "-----------------\n\n")
 	fmt.Fprintf(buf, "This package was built from the following sources:\n\n")
-	
-	if len(spec.Sources) == 0 {
-		fmt.Fprintf(buf, "No sources defined.\n")
-		return buf.Bytes()
-	}
 	
 	// Sort source names for consistent output
 	sorted := dalec.SortMapKeys(spec.Sources)
