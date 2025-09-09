@@ -29,14 +29,14 @@ const (
 	sccacheCacheSize = "10G"
 
 	// sccache target architectures
-	sccacheArchLinuxX64    = "x86_64-unknown-linux-musl"
-	sccacheArchLinuxArm64  = "aarch64-unknown-linux-musl"
-	sccacheArchLinuxArmV7  = "armv7-unknown-linux-musleabihf"
+	sccacheArchLinuxX64   = "x86_64-unknown-linux-musl"
+	sccacheArchLinuxArm64 = "aarch64-unknown-linux-musl"
+	sccacheArchLinuxArmV7 = "armv7-unknown-linux-musleabihf"
 
 	// sccache v0.10.0 SHA256 checksums for binary validation
-	sccacheChecksumLinuxX64    = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
-	sccacheChecksumLinuxArm64  = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
-	sccacheChecksumLinuxArmV7  = "TODO_NEED_ACTUAL_CHECKSUM"
+	sccacheChecksumLinuxX64   = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
+	sccacheChecksumLinuxArm64 = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
+	sccacheChecksumLinuxArmV7 = "TODO_NEED_ACTUAL_CHECKSUM"
 )
 
 // getSccacheURL returns the download URL for sccache based on the target platform
@@ -490,7 +490,7 @@ func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption)
 
 		// Always download and set up precompiled sccache for consistent behavior
 		sccacheSource := getSccacheSource(platform)
-		
+
 		// Use HTTP download directly since we're in a RunOption context without SourceOpts
 		sccacheDownload := llb.HTTP(sccacheSource.HTTP.URL, llb.Filename("sccache.tar.gz"))
 
@@ -518,7 +518,7 @@ fi`),
 
 		// Set up a simple environment variable to enable sccache
 		llb.AddEnv("RUSTC_WRAPPER", sccacheBinary).SetRunOption(ei)
-		
+
 		// Update PATH to include the sccache directory
 		currentPath := "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 		updatedPath := sccacheBinDir + ":" + currentPath
