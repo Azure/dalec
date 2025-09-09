@@ -490,18 +490,18 @@ func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption)
 
 		// Always download and set up precompiled sccache for consistent behavior
 		sccacheSource := getSccacheSource(platform)
-
-		// Use ToMount to properly handle the source download
-		sccacheMount := sccacheSource.ToMount("/tmp/internal/dalec/sccache-archive")
+		
+		// Use HTTP download directly since we're in a RunOption context without SourceOpts
+		sccacheDownload := llb.HTTP(sccacheSource.HTTP.URL, llb.Filename("sccache.tar.gz"))
 
 		// Extract sccache binary using LLB state operations
 		extractedSccache := ei.State.Run(
-			sccacheMount,
+			llb.AddMount("/tmp/internal/dalec/sccache-download", sccacheDownload, llb.Readonly),
 			ShArgs(`set -e
 # Create temporary extraction directory
 mkdir -p /tmp/internal/dalec/sccache-extract
 # Extract sccache from tar.gz - the archive contains a versioned directory like sccache-v0.10.0-x86_64-unknown-linux-musl/
-tar -xzf /tmp/internal/dalec/sccache-archive -C /tmp/internal/dalec/sccache-extract/
+tar -xzf /tmp/internal/dalec/sccache-download/sccache.tar.gz -C /tmp/internal/dalec/sccache-extract/
 # Find the sccache binary and copy it to output
 sccache_bin=$(find /tmp/internal/dalec/sccache-extract/ -name "sccache" -type f | head -1)
 if [ -n "$sccache_bin" ]; then
@@ -520,7 +520,7 @@ fi`),
 		llb.AddEnv("RUSTC_WRAPPER", sccacheBinary).SetRunOption(ei)
 		
 		// Update PATH to include the sccache directory
-		currentPath := ei.State.GetEnv("PATH")
+		currentPath := "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 		updatedPath := sccacheBinDir + ":" + currentPath
 		llb.AddEnv("PATH", updatedPath).SetRunOption(ei)
 	})
