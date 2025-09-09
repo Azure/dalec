@@ -49,6 +49,9 @@
 - source: "python:latest"
   dest: mirror/dockerhub/library/python:latest
 
+- source: "jaegertracing/all-in-one:1.62.0"
+  dest: mirror/dockerhub/jaegertracing/all-in-one:1.62.0
+
 - source: "mcr.microsoft.com/windows/nanoserver:ltsc2022"
   dest: mirror/mcr/windows/nanoserver:ltsc2022
 
@@ -72,3 +75,4 @@
 
 - source: "mcr.microsoft.com/oss/go/microsoft/golang:1.24"
   dest: mirror/mcr/oss/go/microsoft/golang:1.24
+
