@@ -34,13 +34,7 @@ func Build(topDir, workerImg llb.State, specPath string, caches CacheInfo, opts 
 		// TODO(cpuguy83): specPath would ideally never change.
 		// We don't want to have to re-run this step just because the path changed, this should be based on inputs only (ie the content of the rpm spec, sources, etc)
 		// The path should not be an input.
-		dalec.ShArgs(`# Set up cargo cache if available
-if command -v sccache >/dev/null 2>&1; then
-    echo "Using sccache for cargo build caching"
-fi
-
-# Run rpmbuild
-rpmbuild --define "_topdir /build/top" --define "_srcrpmdir /build/out/SRPMS" --define "_rpmdir /build/out/RPMS" --buildroot /build/tmp/work -ba `+specPath),
+		dalec.ShArgs(`rpmbuild --define "_topdir /build/top" --define "_srcrpmdir /build/out/SRPMS" --define "_rpmdir /build/out/RPMS" --buildroot /build/tmp/work -ba `+specPath),
 		llb.AddMount("/build/top", topDir),
 		llb.AddMount("/build/tmp", llb.Scratch(), llb.Tmpfs()),
 		llb.Dir("/build/top"),

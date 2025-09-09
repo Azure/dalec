@@ -337,31 +337,6 @@ func createBuildScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
 	writeScriptHeader(buf, cfg)
 
-	// Set up cargo cache
-	if spec.HasCargohomes() {
-		fmt.Fprintln(buf, "# Set up cargo cache")
-		fmt.Fprintf(buf, "export CARGO_HOME=\"$(pwd)/%s\"\n", cargohomeName)
-
-		// Check if we have cargo caching enabled and set up sccache environment
-		hasCargoCache := false
-		for _, cache := range spec.Build.Caches {
-			if cache.CargoBuild != nil {
-				hasCargoCache = true
-				break
-			}
-		}
-
-		if hasCargoCache {
-			fmt.Fprintln(buf, "# Set up sccache for cargo build caching")
-			fmt.Fprintln(buf, "if command -v sccache >/dev/null 2>&1; then")
-			fmt.Fprintln(buf, "  echo 'Using sccache for cargo build caching'")
-			fmt.Fprintln(buf, "else")
-			fmt.Fprintln(buf, "  echo 'Warning: sccache not found, cargo build caching disabled'")
-			fmt.Fprintln(buf, "fi")
-			fmt.Fprintln(buf, "")
-		}
-	}
-
 	if spec.HasPips() {
 		// Set up pip environment and install dependencies during build
 		fmt.Fprintln(buf, "# Set up pip environment")

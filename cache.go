@@ -19,58 +19,64 @@ const (
 
 	BazelDefaultSocketID = "bazel-default" // Default ID for bazel socket
 
-	// SccacheVersion defines the version of sccache to install
-	SccacheVersion = "v0.10.0"
+	// sccacheVersion defines the version of sccache to install
+	sccacheVersion = "v0.10.0"
 
-	// SccacheDownloadURL is the base URL for downloading sccache releases
-	SccacheDownloadURL = "https://github.com/mozilla/sccache/releases/download"
+	// sccacheDownloadURL is the base URL for downloading sccache releases
+	sccacheDownloadURL = "https://github.com/mozilla/sccache/releases/download"
 
-	// SccacheCacheSize is the default cache size for sccache
-	SccacheCacheSize = "10G"
+	// sccacheCacheSize is the default cache size for sccache
+	sccacheCacheSize = "10G"
 
-	// Sccache target architectures
-	SccacheArchLinuxX64   = "x86_64-unknown-linux-musl"
-	SccacheArchLinuxArm64 = "aarch64-unknown-linux-musl"
+	// sccache target architectures
+	sccacheArchLinuxX64    = "x86_64-unknown-linux-musl"
+	sccacheArchLinuxArm64  = "aarch64-unknown-linux-musl"
+	sccacheArchLinuxArmV7  = "armv7-unknown-linux-musleabihf"
 
-	// Sccache v0.10.0 SHA256 checksums for binary validation
-	SccacheChecksumLinuxX64   = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
-	SccacheChecksumLinuxArm64 = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
+	// sccache v0.10.0 SHA256 checksums for binary validation
+	sccacheChecksumLinuxX64    = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
+	sccacheChecksumLinuxArm64  = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
+	sccacheChecksumLinuxArmV7  = "TODO_NEED_ACTUAL_CHECKSUM"
 )
 
 // getSccacheURL returns the download URL for sccache based on the target platform
 func getSccacheURL(p *ocispecs.Platform) string {
 	arch := getSccacheArch(p)
-	return fmt.Sprintf("%s/%s/sccache-%s-%s.tar.gz", SccacheDownloadURL, SccacheVersion, SccacheVersion, arch)
+	return fmt.Sprintf("%s/%s/sccache-%s-%s.tar.gz", sccacheDownloadURL, sccacheVersion, sccacheVersion, arch)
 }
 
 // getSccacheArch returns the sccache architecture string for the given platform
 func getSccacheArch(p *ocispecs.Platform) string {
 	switch {
-	case p.OS == "linux" && p.Architecture == "amd64":
-		return SccacheArchLinuxX64
-	case p.OS == "linux" && p.Architecture == "arm64":
-		return SccacheArchLinuxArm64
+	case p.Architecture == "amd64":
+		return sccacheArchLinuxX64
+	case p.Architecture == "arm64":
+		return sccacheArchLinuxArm64
+	case p.Architecture == "arm" && p.Variant == "v7":
+		return sccacheArchLinuxArmV7
 	default:
 		// Fallback to linux x64 for unsupported platforms
-		return SccacheArchLinuxX64
+		return sccacheArchLinuxX64
 	}
 }
 
 // getSccacheChecksum returns the SHA256 checksum for sccache based on the target platform
 func getSccacheChecksum(p *ocispecs.Platform) string {
 	switch {
-	case p.OS == "linux" && p.Architecture == "amd64":
-		return SccacheChecksumLinuxX64
-	case p.OS == "linux" && p.Architecture == "arm64":
-		return SccacheChecksumLinuxArm64
+	case p.Architecture == "amd64":
+		return sccacheChecksumLinuxX64
+	case p.Architecture == "arm64":
+		return sccacheChecksumLinuxArm64
+	case p.Architecture == "arm" && p.Variant == "v7":
+		return sccacheChecksumLinuxArmV7
 	default:
 		// Fallback to linux x64 for unsupported platforms
-		return SccacheChecksumLinuxX64
+		return sccacheChecksumLinuxX64
 	}
 }
 
-// GetSccacheSource returns a Source for downloading and verifying sccache using SourceHTTP
-func GetSccacheSource(p *ocispecs.Platform) Source {
+// getSccacheSource returns a Source for downloading and verifying sccache using SourceHTTP
+func getSccacheSource(p *ocispecs.Platform) Source {
 	url := getSccacheURL(p)
 	checksum := getSccacheChecksum(p)
 
@@ -80,24 +86,6 @@ func GetSccacheSource(p *ocispecs.Platform) Source {
 			Digest: digest.Digest("sha256:" + checksum),
 		},
 	}
-}
-
-// GetSccacheState returns an llb.State containing the sccache binary for the given platform
-func GetSccacheState(p *ocispecs.Platform, opts ...llb.ConstraintsOpt) (llb.State, error) {
-	src := GetSccacheSource(p)
-
-	// Create fetch options with constraints
-	fetchOpts := fetchOptions{
-		Constraints: opts,
-		Rename:      "sccache",
-	}
-
-	// Download the sccache archive using toState
-	srcState := src.HTTP.toState(fetchOpts)
-
-	// The source will be a tar.gz archive, extract it
-	// The extracted content will have the sccache binary
-	return srcState, nil
 }
 
 // CacheConfig configures a cache to use for a build.
@@ -462,7 +450,8 @@ func WithCargoCacheConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
 
 const (
 	sccacheCacheDir = "/tmp/dalec/sccache-cache"
-	sccacheBinary   = "/tmp/dalec/sccache"
+	sccacheBinDir   = "/tmp/internal/dalec/sccache"
+	sccacheBinary   = "/tmp/internal/dalec/sccache/sccache"
 )
 
 func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption) llb.RunOption {
@@ -497,29 +486,24 @@ func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption)
 
 		// Set up environment variables
 		llb.AddEnv("SCCACHE_DIR", sccacheCacheDir).SetRunOption(ei)
-		llb.AddEnv("SCCACHE_CACHE_SIZE", SccacheCacheSize).SetRunOption(ei)
+		llb.AddEnv("SCCACHE_CACHE_SIZE", sccacheCacheSize).SetRunOption(ei)
 
 		// Always download and set up precompiled sccache for consistent behavior
-		sccacheSource := GetSccacheSource(platform)
+		sccacheSource := getSccacheSource(platform)
 
-		// Create fetch options with platform constraints
-		fetchOpts := fetchOptions{
-			Constraints: []llb.ConstraintsOpt{llb.Platform(*platform)},
-			Rename:      "sccache",
-		}
-
-		sccacheState := sccacheSource.HTTP.toState(fetchOpts)
+		// Use ToMount to properly handle the source download
+		sccacheMount := sccacheSource.ToMount("/tmp/internal/dalec/sccache-archive")
 
 		// Extract sccache binary using LLB state operations
 		extractedSccache := ei.State.Run(
-			llb.AddMount("/tmp/dalec/sccache", sccacheState, llb.SourcePath("sccache")),
+			sccacheMount,
 			ShArgs(`set -e
 # Create temporary extraction directory
-mkdir -p /tmp/dalec/sccache-extract
+mkdir -p /tmp/internal/dalec/sccache-extract
 # Extract sccache from tar.gz - the archive contains a versioned directory like sccache-v0.10.0-x86_64-unknown-linux-musl/
-tar -xzf /tmp/dalec/sccache -C /tmp/dalec/sccache-extract/
+tar -xzf /tmp/internal/dalec/sccache-archive -C /tmp/internal/dalec/sccache-extract/
 # Find the sccache binary and copy it to output
-sccache_bin=$(find /tmp/dalec/sccache-extract/ -name "sccache" -type f | head -1)
+sccache_bin=$(find /tmp/internal/dalec/sccache-extract/ -name "sccache" -type f | head -1)
 if [ -n "$sccache_bin" ]; then
 	cp "$sccache_bin" /output/sccache && chmod +x /output/sccache
 	echo "sccache binary extracted successfully"
@@ -529,15 +513,16 @@ else
 fi`),
 		).AddMount("/output", llb.Scratch())
 
-		// Mount the extracted sccache binary and set environment
+		// Mount the extracted sccache binary to a temp directory and update PATH
 		llb.AddMount(sccacheBinary, extractedSccache, llb.SourcePath("sccache")).SetRunOption(ei)
 
 		// Set up a simple environment variable to enable sccache
 		llb.AddEnv("RUSTC_WRAPPER", sccacheBinary).SetRunOption(ei)
-
-		// Mount the sccache binary directly to /usr/local/bin/sccache
-		// This allows 'command -v sccache' to find it in the PATH
-		llb.AddMount("/usr/local/bin/sccache", extractedSccache, llb.SourcePath("sccache")).SetRunOption(ei)
+		
+		// Update PATH to include the sccache directory
+		currentPath := ei.State.GetEnv("PATH")
+		updatedPath := sccacheBinDir + ":" + currentPath
+		llb.AddEnv("PATH", updatedPath).SetRunOption(ei)
 	})
 } // BazelCache sets up a cache for bazel builds.
 // Currently this only supports setting up a *local* bazel cache.
