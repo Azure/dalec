@@ -4,11 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -222,22 +220,6 @@ func lookupProjectRoot(cur string) (string, error) {
 	}
 
 	return cur, nil
-}
-
-func ghaAnnotation(skipFrames int, cmd string, msg string) {
-	ghaAnnotationf(skipFrames+1, cmd, "%s", msg)
-}
-
-func ghaAnnotationf(skipFrames int, cmd string, format string, args ...any) {
-	_, f, l, _ := runtime.Caller(skipFrames + 1)
-	if !isGHA {
-		// not running in a github action, nothing to do
-		return
-	}
-
-	format = "::%s file=%s,line=%d::%s\n" + format
-	args = append([]any{cmd, f, l}, args...)
-	fmt.Printf(format, args...)
 }
 
 var (
