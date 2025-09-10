@@ -7,6 +7,7 @@ import (
 
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -17,27 +18,95 @@ const (
 	cacheMountUnset   = ""
 
 	BazelDefaultSocketID = "bazel-default" // Default ID for bazel socket
+
+	// sccacheVersion defines the version of sccache to install
+	sccacheVersion = "v0.10.0"
+
+	// sccacheDownloadURL is the base URL for downloading sccache releases
+	sccacheDownloadURL = "https://github.com/mozilla/sccache/releases/download"
+
+	// sccacheCacheSize is the default cache size for sccache
+	sccacheCacheSize = "10G"
+
+	// sccache target architectures
+	sccacheArchLinuxX64   = "x86_64-unknown-linux-musl"
+	sccacheArchLinuxArm64 = "aarch64-unknown-linux-musl"
+	sccacheArchLinuxArmV7 = "armv7-unknown-linux-musleabihf"
+
+	// sccache v0.10.0 SHA256 checksums for binary validation
+	sccacheChecksumLinuxX64   = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
+	sccacheChecksumLinuxArm64 = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
+	sccacheChecksumLinuxArmV7 = "TODO_NEED_ACTUAL_CHECKSUM"
 )
 
+// getSccacheURL returns the download URL for sccache based on the target platform
+func getSccacheURL(p *ocispecs.Platform) string {
+	arch := getSccacheArch(p)
+	return fmt.Sprintf("%s/%s/sccache-%s-%s.tar.gz", sccacheDownloadURL, sccacheVersion, sccacheVersion, arch)
+}
+
+// getSccacheArch returns the sccache architecture string for the given platform
+func getSccacheArch(p *ocispecs.Platform) string {
+	switch {
+	case p.Architecture == "amd64":
+		return sccacheArchLinuxX64
+	case p.Architecture == "arm64":
+		return sccacheArchLinuxArm64
+	case p.Architecture == "arm" && p.Variant == "v7":
+		return sccacheArchLinuxArmV7
+	default:
+		// Fallback to linux x64 for unsupported platforms
+		return sccacheArchLinuxX64
+	}
+}
+
+// getSccacheChecksum returns the SHA256 checksum for sccache based on the target platform
+func getSccacheChecksum(p *ocispecs.Platform) string {
+	switch {
+	case p.Architecture == "amd64":
+		return sccacheChecksumLinuxX64
+	case p.Architecture == "arm64":
+		return sccacheChecksumLinuxArm64
+	case p.Architecture == "arm" && p.Variant == "v7":
+		return sccacheChecksumLinuxArmV7
+	default:
+		// Fallback to linux x64 for unsupported platforms
+		return sccacheChecksumLinuxX64
+	}
+}
+
+// getSccacheSource returns a Source for downloading and verifying sccache using SourceHTTP
+func getSccacheSource(p *ocispecs.Platform) Source {
+	url := getSccacheURL(p)
+	checksum := getSccacheChecksum(p)
+
+	return Source{
+		HTTP: &SourceHTTP{
+			URL:    url,
+			Digest: digest.Digest("sha256:" + checksum),
+		},
+	}
+}
+
 // CacheConfig configures a cache to use for a build.
-//
-// Other, cache types may be added in the future, such as:
-// - rust compiler cache
-// ...
 type CacheConfig struct {
 	// Dir specifies a generic cache directory configuration.
 	Dir *CacheDir `json:"dir,omitempty" yaml:"dir,omitempty" jsonschema:"oneof_required=dir"`
 	// GoBuild specifies a cache for Go's incremental build artifacts.
 	// This should speed up repeated builds of Go projects.
 	GoBuild *GoBuildCache `json:"gobuild,omitempty" yaml:"gobuild,omitempty" jsonschema:"oneof_required=gobuild"`
+	// CargoBuild specifies a cache for Rust/Cargo build artifacts.
+	// This uses sccache to cache Rust compilation artifacts.
+	CargoBuild *CargoSCCache `json:"cargosccache,omitempty" yaml:"cargosccache,omitempty" jsonschema:"oneof_required=cargosccache"`
 	// Bazel specifies a cache for bazel builds.
 	Bazel *BazelCache `json:"bazel,omitempty" yaml:"bazel,omitempty" jsonschema:"oneof_required=bazel-local"`
 }
 
 type CacheInfo struct {
-	DirInfo CacheDirInfo
-	GoBuild GoBuildCacheInfo
-	Bazel   BazelCacheInfo
+	DirInfo    CacheDirInfo
+	GoBuild    GoBuildCacheInfo
+	CargoBuild CargoSCCacheInfo
+	Bazel      BazelCacheInfo
 }
 
 type CacheDirInfo struct {
@@ -97,6 +166,16 @@ func (c *CacheConfig) ToRunOption(worker llb.State, distroKey string, opts ...Ca
 		}))
 	}
 
+	if c.CargoBuild != nil {
+		return c.CargoBuild.ToRunOption(distroKey, CargoSCCacheOptionFunc(func(info *CargoSCCacheInfo) {
+			var cacheInfo CacheInfo
+			for _, opt := range opts {
+				opt.SetCacheConfigOption(&cacheInfo)
+			}
+			*info = cacheInfo.CargoBuild
+		}))
+	}
+
 	if c.Bazel != nil {
 		return c.Bazel.ToRunOption(worker, distroKey, BazelCacheOptionFunc(func(info *BazelCacheInfo) {
 			var cacheInfo CacheInfo
@@ -123,12 +202,15 @@ func (c *CacheConfig) validate() error {
 	if c.GoBuild != nil {
 		count++
 	}
+	if c.CargoBuild != nil {
+		count++
+	}
 	if c.Bazel != nil {
 		count++
 	}
 
 	if count != 1 {
-		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, bazel) must be set")
+		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, cargosccache, bazel) must be set")
 	}
 
 	var errs []error
@@ -140,6 +222,11 @@ func (c *CacheConfig) validate() error {
 	if c.GoBuild != nil {
 		if err := c.GoBuild.validate(); err != nil {
 			errs = append(errs, fmt.Errorf("invalid go build cache config: %w", err))
+		}
+	}
+	if c.CargoBuild != nil {
+		if err := c.CargoBuild.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("invalid cargo build cache config: %w", err))
 		}
 	}
 	if c.Bazel != nil {
@@ -318,8 +405,121 @@ func (c *GoBuildCache) ToRunOption(distroKey string, opts ...GoBuildCacheOption)
 	})
 }
 
-// BazelCache sets up a cache for bazel builds.
-//
+// CargoSCCache is a cache for Rust/Cargo build artifacts.
+// It uses sccache to speed up Rust compilation by caching build artifacts.
+type CargoSCCache struct {
+	// Scope adds extra information to the cache key.
+	// This is useful to differentiate between different build contexts if required.
+	//
+	// This is mainly intended for internal testing purposes.
+	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
+
+	// The cargosccache cache may be automatically injected into a build if
+	// rust is detected.
+	// Disabled explicitly turns this off.
+	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
+}
+
+func (c *CargoSCCache) validate() error {
+	return nil
+}
+
+type CargoSCCacheInfo struct {
+	Platform *ocispecs.Platform
+}
+
+type CargoSCCacheOption interface {
+	SetCargoSCCacheOption(*CargoSCCacheInfo)
+}
+
+type CargoSCCacheOptionFunc func(*CargoSCCacheInfo)
+
+func (f CargoSCCacheOptionFunc) SetCargoSCCacheOption(info *CargoSCCacheInfo) {
+	f(info)
+}
+
+func WithCargoCacheConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
+	return CacheConfigOptionFunc(func(info *CacheInfo) {
+		var c llb.Constraints
+		for _, opt := range opts {
+			opt.SetConstraintsOption(&c)
+		}
+		info.CargoBuild.Platform = c.Platform
+	})
+}
+
+const (
+	sccacheCacheDir = "/tmp/dalec/sccache-cache"
+	sccacheBinDir   = "/tmp/internal/dalec/sccache"
+	sccacheBinary   = "/tmp/internal/dalec/sccache/sccache"
+)
+
+func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption) llb.RunOption {
+	return RunOptFunc(func(ei *llb.ExecInfo) {
+		if c.Disabled {
+			return
+		}
+
+		var info CargoSCCacheInfo
+		for _, opt := range opts {
+			opt.SetCargoSCCacheOption(&info)
+		}
+
+		// Ensure platform is set
+		var platform *ocispecs.Platform
+		if ei.Platform != nil {
+			platform = ei.Platform
+		} else if info.Platform != nil {
+			platform = info.Platform
+		} else {
+			p := platforms.DefaultSpec()
+			platform = &p
+		}
+
+		key := fmt.Sprintf("%s-%s-dalec-cargosccache", distroKey, platforms.Format(*platform))
+		if c.Scope != "" {
+			key = fmt.Sprintf("%s-%s", key, c.Scope)
+		}
+
+		// Set up cache mount for sccache compilation cache
+		llb.AddMount(sccacheCacheDir, llb.Scratch(), llb.AsPersistentCacheDir(key, llb.CacheMountShared)).SetRunOption(ei)
+
+		// Set up environment variables
+		llb.AddEnv("SCCACHE_DIR", sccacheCacheDir).SetRunOption(ei)
+		llb.AddEnv("SCCACHE_CACHE_SIZE", sccacheCacheSize).SetRunOption(ei)
+
+		// Always download and set up precompiled sccache for consistent behavior
+		sccacheSource := getSccacheSource(platform)
+
+		// Use HTTP download directly since we're in a RunOption context without SourceOpts
+		sccacheDownload := llb.HTTP(sccacheSource.HTTP.URL, llb.Filename("sccache.tar.gz"))
+
+		// Extract sccache binary using LLB state operations
+		extractedSccache := ei.State.Run(
+			llb.AddMount("/tmp/internal/dalec/sccache-download", sccacheDownload, llb.Readonly),
+			ShArgs(`set -e
+# Create temporary extraction directory
+mkdir -p /tmp/internal/dalec/sccache-extract
+# Extract sccache from tar.gz - the archive contains a versioned directory like sccache-v0.10.0-x86_64-unknown-linux-musl/
+tar -xzf /tmp/internal/dalec/sccache-download/sccache.tar.gz -C /tmp/internal/dalec/sccache-extract/
+# Find the sccache binary and copy it to output
+sccache_bin=$(find /tmp/internal/dalec/sccache-extract/ -name "sccache" -type f | head -1)
+if [ -n "$sccache_bin" ]; then
+	cp "$sccache_bin" /output/sccache && chmod +x /output/sccache
+	echo "sccache binary extracted successfully"
+else
+	echo "Warning: sccache binary not found in archive" >&2
+	exit 1
+fi`),
+		).AddMount("/output", llb.Scratch())
+
+		// Mount the extracted sccache binary to a temp directory
+		llb.AddMount(sccacheBinary, extractedSccache, llb.SourcePath("sccache")).SetRunOption(ei)
+
+		// Set up RUSTC_WRAPPER to point at the absolute sccache binary path (no PATH update needed)
+		llb.AddEnv("RUSTC_WRAPPER", sccacheBinary).SetRunOption(ei)
+	})
+} // BazelCache sets up a cache for bazel builds.
 // Currently this only supports setting up a *local* bazel cache.
 //
 // BazelCache relies on the *system* bazelrc file to configure the default cache location.
