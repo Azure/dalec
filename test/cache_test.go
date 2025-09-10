@@ -377,11 +377,12 @@ func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig
 	}
 
 	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-		// Test that sccache is properly mounted and available
+		// Test that RUSTC_WRAPPER is set to our sccache binary path
 		buf := bytes.NewBuffer(nil)
 		buf.WriteString("set -ex;\n")
-		buf.WriteString("command -v sccache\n")
-		buf.WriteString("echo \"sccache is available\"\n")
+		buf.WriteString("[ -n \"$RUSTC_WRAPPER\" ]\n")
+		buf.WriteString("[ -x \"$RUSTC_WRAPPER\" ]\n")
+		buf.WriteString("echo \"RUSTC_WRAPPER is set to: $RUSTC_WRAPPER\"\n")
 
 		spec := specWithCommand(buf.String())
 		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))

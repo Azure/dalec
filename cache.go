@@ -513,16 +513,11 @@ else
 fi`),
 		).AddMount("/output", llb.Scratch())
 
-		// Mount the extracted sccache binary to a temp directory and update PATH
+		// Mount the extracted sccache binary to a temp directory
 		llb.AddMount(sccacheBinary, extractedSccache, llb.SourcePath("sccache")).SetRunOption(ei)
 
-		// Set up a simple environment variable to enable sccache
+		// Set up RUSTC_WRAPPER to point at the absolute sccache binary path (no PATH update needed)
 		llb.AddEnv("RUSTC_WRAPPER", sccacheBinary).SetRunOption(ei)
-
-		// Update PATH to include the sccache directory
-		currentPath := "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-		updatedPath := sccacheBinDir + ":" + currentPath
-		llb.AddEnv("PATH", updatedPath).SetRunOption(ei)
 	})
 } // BazelCache sets up a cache for bazel builds.
 // Currently this only supports setting up a *local* bazel cache.
