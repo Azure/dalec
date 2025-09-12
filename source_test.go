@@ -191,14 +191,20 @@ func TestSourceGitHTTP(t *testing.T) {
 
 	t.Run("gomod auth", func(t *testing.T) {
 		const (
-			numSecrets = 2
+			numSecrets = 3 // Updated to account for localhost auto-filled auth
 			numSSH     = 1
 		)
 
+		knownHosts := []string{
+			"github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbZ...",
+			"dev.azure.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...",
+		}
+
 		src := Source{
 			Git: &SourceGit{
-				URL:    "https://localhost/test.git",
-				Commit: t.Name(),
+				URL:           "https://localhost/test.git",
+				Commit:        t.Name(),
+				SSHKnownHosts: knownHosts,
 				Auth: GitAuth{
 					Header: "some header",
 				},
@@ -232,8 +238,24 @@ func TestSourceGitHTTP(t *testing.T) {
 			},
 		}
 
+		// Check that SSH known hosts are properly copied during fillDefaults
+		srcInSpec := spec.Sources[srcName]
+		srcInSpec.fillDefaults()
+		spec.Sources[srcName] = srcInSpec
+		srcAfterDefaults := spec.Sources[srcName]
+		
+		// Verify that SSH known hosts were propagated to localhost (from git URL)
+		localhostAuth, ok := srcAfterDefaults.Generate[0].Gomod.Auth["localhost"]
+		if !ok {
+			t.Fatal("Expected git auth to be auto-filled for localhost from git source URL")
+		}
+		
+		if !reflect.DeepEqual(localhostAuth.SSHKnownHosts, knownHosts) {
+			t.Fatalf("SSH known hosts not properly propagated. Expected %v, got %v", knownHosts, localhostAuth.SSHKnownHosts)
+		}
+
 		m, ops := getGomodLLBOps(ctx, t, spec)
-		checkGitAuth(t, m, ops, &src, numSecrets, numSSH)
+		checkGitAuth(t, m, ops, &srcAfterDefaults, numSecrets, numSSH)
 	})
 }
 

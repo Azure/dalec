@@ -54,6 +54,10 @@ type GomodGitAuth struct {
 	// Note: This should not have the *actual* socket address, just the name of
 	// the ssh ID which was specified as a build secret.
 	SSH *GomodGitAuthSSH `yaml:"ssh,omitempty" json:"ssh,omitempty"`
+	// SSHKnownHosts is a list of SSH host keys for host verification when using SSH auth.
+	// These are used to prevent man-in-the-middle attacks during git operations.
+	// Each entry should be in the format: "hostname ssh-keytype key"
+	SSHKnownHosts []string `yaml:"sshKnownHosts,omitempty" json:"sshKnownHosts,omitempty"`
 }
 
 type GomodGitAuthSSH struct {
@@ -140,10 +144,10 @@ func (git *SourceGit) fillDefaults(ls []*SourceGenerator) {
 		host = u.Host
 	}
 
-	// Thes the git auth from the git source is autofilled for the gomods, so
+	// The git auth and SSH known hosts from the git source are autofilled for the gomods, so
 	// the user doesn't have to repeat themselves.
 	for _, gen := range ls {
-		gen.fillDefaults(host, &git.Auth)
+		gen.fillDefaults(host, &git.Auth, git.SSHKnownHosts)
 	}
 }
 
@@ -160,6 +164,15 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 	src.Commit = updated
 	if err != nil {
 		errs = append(errs, err)
+	}
+
+	// Process SSH known hosts for build arg expansion
+	for i, host := range src.SSHKnownHosts {
+		updated, err := expandArgs(lex, host, args, allowArg)
+		src.SSHKnownHosts[i] = updated
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	if len(errs) > 0 {

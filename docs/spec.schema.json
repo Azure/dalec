@@ -1020,6 +1020,17 @@
 					"$ref": "#/$defs/GomodGitAuthSSH",
 					"description": "SSH is a struct container the name of the ssh ID which contains the\naddress of the ssh auth socket, plus the username to use for the git\nremote.\nNote: This should not have the *actual* socket address, just the name of\nthe ssh ID which was specified as a build secret."
 				},
+				"sshKnownHosts": {
+					"items": {
+						"type": [
+							"string"
+						]
+					},
+					"type": [
+						"array"
+					],
+					"description": "SSHKnownHosts is a list of SSH host keys for host verification when using SSH auth.\nThese are used to prevent man-in-the-middle attacks during git operations.\nEach entry should be in the format: \"hostname ssh-keytype key\""
+				},
 				"token": {
 					"type": [
 						"string",

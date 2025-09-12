@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -173,78 +174,141 @@ go {{ .ModFileGoVersion }}
 	t.Run("SSH", func(t *testing.T) {
 		t.Parallel()
 
-		sockaddr := getSocketAddr(t)
+		t.Run("without_known_hosts", func(t *testing.T) {
+			sockaddr := getSocketAddr(t)
 
-		// In order to simulate real-life SSH auth scenarios, we generate a
-		// keypair. Buildkit handles SSH auth by forwarding an SSH agent socket
-		// to provide the private key upon request. We start an agent here to
-		// serve the private key.
-		pubkey, privkey := generateKeyPair(t)
-		agentErrChan := startSSHAgent(t, privkey, sockaddr)
+			// In order to simulate real-life SSH auth scenarios, we generate a
+			// keypair. Buildkit handles SSH auth by forwarding an SSH agent socket
+			// to provide the private key upon request. We start an agent here to
+			// serve the private key.
+			pubkey, privkey := generateKeyPair(t)
+			agentErrChan := startSSHAgent(t, privkey, sockaddr)
 
-		netHostBuildxEnv.RunTestOptsFirst(ctx, t, []testenv.TestRunnerOpt{
-			// This tells buildkit to forward the SSH Agent socket, giving the
-			// gomod generator worker access to the private key
-			testenv.WithSSHSocket(sshID, sockaddr),
-			testenv.WithHostNetworking,
-		}, func(ctx context.Context, client gwclient.Client) {
-			// This MUST be called at the  start of each test. Because we
-			// persist the go mod cache between runs, the git tag of the
-			// private go module needs to be unique. Within a single run of the
-			// tests, the http and ssh tests cannot have the same tag or we
-			// risk a false positive due to caching.
-			attr := attr.WithNewPrivateGoModuleGitTag()
+			netHostBuildxEnv.RunTestOptsFirst(ctx, t, []testenv.TestRunnerOpt{
+				// This tells buildkit to forward the SSH Agent socket, giving the
+				// gomod generator worker access to the private key
+				testenv.WithSSHSocket(sshID, sockaddr),
+				testenv.WithHostNetworking,
+			}, func(ctx context.Context, client gwclient.Client) {
+				// This MUST be called at the  start of each test. Because we
+				// persist the go mod cache between runs, the git tag of the
+				// private go module needs to be unique. Within a single run of the
+				// tests, the http and ssh tests cannot have the same tag or we
+				// risk a false positive due to caching.
+				attr := attr.WithNewPrivateGoModuleGitTag()
 
-			testState := gitservices.NewTestState(ctx, t, client, attr)
+				testState := gitservices.NewTestState(ctx, t, client, attr)
 
-			_, repo, gitHost := initStates(&testState)
-			sshGitHost := gitHost.
-				// The SSH host has to know the public key that corresponds to
-				// the client's private key; otherwise it will deny access.
-				With(authorizedKey(pubkey, "/root")).
-				// In order to host a git repo over SSH, it needs to be hosted
-				// as a "bare" git repo. An existing git repo can be made into
-				// a bare repo by hoisting the contents of the `.git` directory
-				// up a level, removing everything else, and calling `git init
-				// --bare`. That bare repo can then be used as a git remote
-				// over SSH.
-				With(bareRepo(repo, attr.RepoAbsDir()))
+				_, repo, gitHost := initStates(&testState)
+				sshGitHost := gitHost.
+					// The SSH host has to know the public key that corresponds to
+					// the client's private key; otherwise it will deny access.
+					With(authorizedKey(pubkey, "/root")).
+					// In order to host a git repo over SSH, it needs to be hosted
+					// as a "bare" git repo. An existing git repo can be made into
+					// a bare repo by hoisting the contents of the `.git` directory
+					// up a level, removing everything else, and calling `git init
+					// --bare`. That bare repo can then be used as a git remote
+					// over SSH.
+					With(bareRepo(repo, attr.RepoAbsDir()))
 
-			const githostUsername = "root"
-			sshErrChan := testState.StartSSHServer(sshGitHost)
+				const githostUsername = "root"
+				sshErrChan := testState.StartSSHServer(sshGitHost)
 
-			spec := testState.GenerateSpec(depModfileContents(t, attr), dalec.GomodGitAuth{
-				SSH: &dalec.GomodGitAuthSSH{
-					ID:       sshID,
-					Username: githostUsername,
-				},
+				spec := testState.GenerateSpec(depModfileContents(t, attr), dalec.GomodGitAuth{
+					SSH: &dalec.GomodGitAuthSSH{
+						ID:       sshID,
+						Username: githostUsername,
+					},
+				})
+				sr := newSolveRequest(
+					withBuildTarget("debug/gomods"),
+					withSpec(ctx, t, spec),
+					// The extra host in fquestion here is the
+					withExtraHost(testState.Attr.PrivateGomoduleHost, testState.Attr.GitRemoteAddr),
+				)
+
+				solveResultChan := make(chan *gwclient.Result)
+				solveErrChan := make(chan error)
+
+				solveTCh(ctx, t, testState.Client(), sr, solveResultChan, solveErrChan)
+
+				var res *gwclient.Result
+				select {
+				case err := <-agentErrChan:
+					t.Fatalf("ssh agent unexpededly failed: %s", err)
+				case err := <-sshErrChan:
+					t.Fatalf("ssh server unexpectedly failed: %s", err)
+				case err := <-solveErrChan:
+					t.Fatalf("solve failed: %s", err)
+				case r := <-solveResultChan:
+					res = r
+				}
+
+				filename := calculateFilename(ctx, t, attr, res)
+				checkFile(ctx, t, filename, res, []byte("bar\n"))
 			})
-			sr := newSolveRequest(
-				withBuildTarget("debug/gomods"),
-				withSpec(ctx, t, spec),
-				// The extra host in fquestion here is the
-				withExtraHost(testState.Attr.PrivateGomoduleHost, testState.Attr.GitRemoteAddr),
-			)
+		})
 
-			solveResultChan := make(chan *gwclient.Result)
-			solveErrChan := make(chan error)
+		t.Run("with_known_hosts", func(t *testing.T) {
+			sockaddr := getSocketAddr(t)
 
-			solveTCh(ctx, t, testState.Client(), sr, solveResultChan, solveErrChan)
+			// Generate a keypair for SSH auth
+			pubkey, privkey := generateKeyPair(t)
+			agentErrChan := startSSHAgent(t, privkey, sockaddr)
 
-			var res *gwclient.Result
-			select {
-			case err := <-agentErrChan:
-				t.Fatalf("ssh agent unexpededly failed: %s", err)
-			case err := <-sshErrChan:
-				t.Fatalf("ssh server unexpectedly failed: %s", err)
-			case err := <-solveErrChan:
-				t.Fatalf("solve failed: %s", err)
-			case r := <-solveResultChan:
-				res = r
-			}
+			// Generate SSH known host entry for the test
+			hostKeyEntry := formatSSHHostKey(t, pubkey, "127.0.0.1", attr.SSHPort)
 
-			filename := calculateFilename(ctx, t, attr, res)
-			checkFile(ctx, t, filename, res, []byte("bar\n"))
+			netHostBuildxEnv.RunTestOptsFirst(ctx, t, []testenv.TestRunnerOpt{
+				testenv.WithSSHSocket(sshID, sockaddr),
+				testenv.WithHostNetworking,
+			}, func(ctx context.Context, client gwclient.Client) {
+				attr := attr.WithNewPrivateGoModuleGitTag()
+
+				testState := gitservices.NewTestState(ctx, t, client, attr)
+
+				_, repo, gitHost := initStates(&testState)
+				sshGitHost := gitHost.
+					With(authorizedKey(pubkey, "/root")).
+					With(bareRepo(repo, attr.RepoAbsDir()))
+
+				const githostUsername = "root"
+				sshErrChan := testState.StartSSHServer(sshGitHost)
+
+				spec := testState.GenerateSpec(depModfileContents(t, attr), dalec.GomodGitAuth{
+					SSH: &dalec.GomodGitAuthSSH{
+						ID:       sshID,
+						Username: githostUsername,
+					},
+					SSHKnownHosts: []string{hostKeyEntry},
+				})
+				sr := newSolveRequest(
+					withBuildTarget("debug/gomods"),
+					withSpec(ctx, t, spec),
+					withExtraHost(testState.Attr.PrivateGomoduleHost, testState.Attr.GitRemoteAddr),
+				)
+
+				solveResultChan := make(chan *gwclient.Result)
+				solveErrChan := make(chan error)
+
+				solveTCh(ctx, t, testState.Client(), sr, solveResultChan, solveErrChan)
+
+				var res *gwclient.Result
+				select {
+				case err := <-agentErrChan:
+					t.Fatalf("ssh agent unexpededly failed: %s", err)
+				case err := <-sshErrChan:
+					t.Fatalf("ssh server unexpectedly failed: %s", err)
+				case err := <-solveErrChan:
+					t.Fatalf("solve failed: %s", err)
+				case r := <-solveResultChan:
+					res = r
+				}
+
+				filename := calculateFilename(ctx, t, attr, res)
+				checkFile(ctx, t, filename, res, []byte("bar\n"))
+			})
 		})
 	})
 }
@@ -369,6 +433,16 @@ func generateKeyPair(t *testing.T) (ssh.PublicKey, crypto.PrivateKey) {
 	}
 
 	return pubkey, privkey
+}
+
+// formatSSHHostKey formats a public key as an SSH known hosts entry
+func formatSSHHostKey(t *testing.T, pubkey ssh.PublicKey, hostname, port string) string {
+	keyType := pubkey.Type()
+	keyData := base64.StdEncoding.EncodeToString(pubkey.Marshal())
+	if port != "22" {
+		hostname = fmt.Sprintf("[%s]:%s", hostname, port)
+	}
+	return fmt.Sprintf("%s %s %s", hostname, keyType, keyData)
 }
 
 // This is a helper function to find the filename of the download go module
