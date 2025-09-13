@@ -258,7 +258,7 @@ go {{ .ModFileGoVersion }}
 			agentErrChan := startSSHAgent(t, privkey, sockaddr)
 
 			// Generate SSH known host entry for the test
-			hostKeyEntry := formatSSHHostKey(t, pubkey, "127.0.0.1", attr.SSHPort)
+			hostKeyEntry := formatSSHHostKey(t, pubkey, attr.PrivateGomoduleHost, attr.SSHPort)
 
 			netHostBuildxEnv.RunTestOptsFirst(ctx, t, []testenv.TestRunnerOpt{
 				testenv.WithSSHSocket(sshID, sockaddr),
