@@ -380,6 +380,10 @@ func (c *GoBuildCache) ToRunOption(distroKey string, opts ...GoBuildCacheOption)
 //
 // NOTE: This cache downloads a pre-compiled binary from GitHub and should be
 // explicitly enabled by the user due to security and external dependency considerations.
+//
+// Future enhancement: Add support for providing sccache via build context instead of
+// downloading from GitHub. This would add Source and BinaryPath fields to allow users
+// to include their own verified sccache binary in the build context.
 type CargoSCCache struct {
 	// Scope adds extra information to the cache key.
 	// This is useful to differentiate between different build contexts if required.
@@ -417,6 +421,15 @@ const (
 )
 
 func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption) llb.RunOption {
+	// TODO: Future improvement - allow pulling sccache from build context instead of GitHub
+	// This would provide better security and flexibility by allowing users to:
+	// 1. Bring their own verified sccache binary
+	// 2. Use different versions than the hardcoded v0.10.0
+	// 3. Work in offline environments
+	// 4. Avoid external downloads during build time
+	//
+	// Implementation would add Source and BinaryPath fields to CargoSCCache struct
+	// to allow specifying a context source like: { "context": { "name": "." }, "path": "tools/sccache" }
 	return RunOptFunc(func(ei *llb.ExecInfo) {
 		if !c.Enabled {
 			return
