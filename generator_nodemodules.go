@@ -1,8 +1,10 @@
 package dalec
 
 import (
+	"context"
 	"path/filepath"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
@@ -55,11 +57,12 @@ func withNodeMod(g *SourceGenerator, worker llb.State, name string, opts ...llb.
 				WithConstraints(opts...),
 				llb.AddMount(workDir, in, llb.Readonly),
 				llb.IgnoreCache,
+				g.NodeMod._sourceMap.GetLocation(in),
 			).AddMount(installBasePath, in)
 
 			states = append(states, st)
 		}
-		return MergeAtPath(llb.Scratch(), append(states, in), "/")
+		return MergeAtPath(llb.Scratch(), append(states, in), "/", opts...)
 	}
 }
 
@@ -107,4 +110,18 @@ func (s *Spec) NodeModDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constr
 		result[key] = merged
 	}
 	return result, nil
+}
+
+func (gen *GeneratorNodeMod) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal GeneratorNodeMod
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return err
+	}
+
+	*gen = GeneratorNodeMod(i)
+	gen._sourceMap = newSourceMap(ctx, node)
+	return nil
 }

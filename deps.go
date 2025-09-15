@@ -1,9 +1,13 @@
 package dalec
 
 import (
+	"context"
 	goerrors "errors"
 	"slices"
 
+	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
 )
@@ -18,6 +22,82 @@ type PackageConstraints struct {
 	// Arch is a list of architecture constraints for the package.
 	// Use this to specify that a package constraint only applies to certain architectures.
 	Arch []string `yaml:"arch,omitempty" json:"arch,omitempty"`
+
+	// _sourceMap holds the source map for this specific package entry. It is
+	// populated by the YAML source-map attachment code so callers can attribute
+	// errors directly to the package entry line in the YAML.
+	_sourceMap *sourceMap `json:"-" yaml:"-"`
+}
+
+// GetSourceLocation returns an llb.ConstraintsOpt for this package's source map or nil when not present.
+func (pc *PackageConstraints) GetSourceLocation(state llb.State) llb.ConstraintsOpt {
+	if pc == nil {
+		return ConstraintsOptFunc(func(c *llb.Constraints) {})
+	}
+	return pc._sourceMap.GetLocation(state)
+}
+
+type PackageDependencyList map[string]PackageConstraints
+
+func (pc *PackageConstraints) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal PackageConstraints
+	var i internal
+
+	if node.Type() != ast.NullType {
+		if err := yaml.NodeToValue(node, &i, decodeOpts(ctx)...); err != nil {
+			return errors.Wrap(err, "unmarshal package constraints")
+		}
+	}
+
+	*pc = PackageConstraints(i)
+	pc._sourceMap = newSourceMap(ctx, node)
+	return nil
+}
+
+func (l *PackageDependencyList) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	mapNode, ok := node.(*ast.MappingNode)
+	if !ok {
+		return goerrors.New("expected a mapping node for package dependency list")
+	}
+
+	result := make(PackageDependencyList)
+	dec := getDecoder(ctx)
+	for _, v := range mapNode.Values {
+		var pc PackageConstraints
+		if err := dec.DecodeFromNodeContext(ctx, v.Value, &pc); err != nil {
+			return errors.Wrap(err, "unmarshal package constraints")
+		}
+
+		key, ok := v.Key.(*ast.StringNode)
+		if !ok {
+			return goerrors.New("expected string key for package dependency")
+		}
+
+		// Handle case where a package constraint is specified:
+		// e.g.
+		//   pkg-name:
+		//	 	version: [">=1.0.0"]
+		// In this case, the the line number would be pointing at the line below `pkg-name`
+		// However, we want to include the package name itself in the source map.
+		if pc._sourceMap.pos.Start.Line > int32(key.GetToken().Position.Line) {
+			pc._sourceMap.pos.Start.Line = int32(key.GetToken().Position.Line)
+		}
+		result[key.Value] = pc
+	}
+
+	*l = result
+
+	return nil
+}
+
+func (l PackageDependencyList) GetSourceLocation(state llb.State) llb.ConstraintsOpt {
+	var locations []llb.ConstraintsOpt
+	for _, pc := range l {
+		if c := pc.GetSourceLocation(state); c != nil {
+			locations = append(locations, c)
+		}
+	}
+	return MergeSourceLocations(locations...)
 }
 
 // PackageDependencies is a list of dependencies for a package.
@@ -25,26 +105,61 @@ type PackageConstraints struct {
 // It also includes build-time dedendencies, which we'll install before running any build steps.
 type PackageDependencies struct {
 	// Build is the list of packagese required to build the package.
-	Build map[string]PackageConstraints `yaml:"build,omitempty" json:"build,omitempty"`
+	Build PackageDependencyList `yaml:"build,omitempty" json:"build,omitempty"`
 	// Runtime is the list of packages required to install/run the package.
-	Runtime map[string]PackageConstraints `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Runtime PackageDependencyList `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 	// Recommends is the list of packages recommended to install with the generated package.
 	// Note: Not all package managers support this (e.g. rpm)
-	Recommends map[string]PackageConstraints `yaml:"recommends,omitempty" json:"recommends,omitempty"`
+	Recommends PackageDependencyList `yaml:"recommends,omitempty" json:"recommends,omitempty"`
 	// Sysext is the list of packages to include in the generated system
 	// extension. No dependency resolution is performed when generating system
 	// extensions, so all required dependencies must be explicitly listed here.
-	Sysext map[string]PackageConstraints `yaml:"sysext,omitempty" json:"sysext,omitempty"`
+	Sysext PackageDependencyList `yaml:"sysext,omitempty" json:"sysext,omitempty"`
 
 	// Test lists any extra packages required for running tests
 	// These packages are only installed for tests which have steps that require
 	// running a command in the built container.
-	// See [TestSpec] for more information.
-	Test []string `yaml:"test,omitempty" json:"test,omitempty"`
+	// Use a map so test dependencies can have PackageConstraints (and source maps).
+	Test PackageDependencyList `yaml:"test,omitempty" json:"test,omitempty"`
 
 	// ExtraRepos is used to inject extra package repositories that may be used to
 	// satisfy package dependencies in various stages.
 	ExtraRepos []PackageRepositoryConfig `yaml:"extra_repos,omitempty" json:"extra_repos,omitempty"`
+}
+
+func (p *PackageDependencies) GetBuild() PackageDependencyList {
+	if p == nil {
+		return nil
+	}
+	return p.Build
+}
+
+func (p *PackageDependencies) GetRuntime() PackageDependencyList {
+	if p == nil {
+		return nil
+	}
+	return p.Runtime
+}
+
+func (p *PackageDependencies) GetRecommends() PackageDependencyList {
+	if p == nil {
+		return nil
+	}
+	return p.Recommends
+}
+
+func (p *PackageDependencies) GetSysext() PackageDependencyList {
+	if p == nil {
+		return nil
+	}
+	return p.Sysext
+}
+
+func (p *PackageDependencies) GetTest() PackageDependencyList {
+	if p == nil {
+		return nil
+	}
+	return p.Test
 }
 
 // PackageRepositoryConfig
@@ -225,6 +340,9 @@ func (r *PackageRepositoryConfig) validate() error {
 }
 
 func (p *PackageDependencies) GetExtraRepos(env string) []PackageRepositoryConfig {
+	if p == nil {
+		return nil
+	}
 	return GetExtraRepos(p.ExtraRepos, env)
 }
 
@@ -232,7 +350,7 @@ func GetExtraRepos(repos []PackageRepositoryConfig, env string) []PackageReposit
 	var out []PackageRepositoryConfig
 	for _, repo := range repos {
 		if slices.Contains(repo.Envs, env) {
-			out = append(repos, repo)
+			out = append(out, repo)
 		}
 	}
 	return out

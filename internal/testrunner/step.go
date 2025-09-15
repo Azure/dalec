@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	stderrors "errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/Azure/dalec"
@@ -37,8 +37,17 @@ func StepCmd(args []string) {
 	flags := flag.NewFlagSet(StepRunnerCmdName, flag.ExitOnError)
 	var outputPath string
 	flags.StringVar(&outputPath, "output", "", "Path to write test results to")
+
+	var stepIndex int
+	flags.IntVar(&stepIndex, "step-index", -1, "Index of the step being run")
+
 	if err := flags.Parse(args); err != nil {
 		fmt.Fprintln(os.Stderr, "error parsing flags:", err)
+		os.Exit(1)
+	}
+
+	if stepIndex < 0 {
+		fmt.Fprintln(os.Stderr, "--step-index is required")
 		os.Exit(1)
 	}
 
@@ -48,31 +57,38 @@ func StepCmd(args []string) {
 		return
 	}
 
-	args = flags.Args()[1:]
-
 	var step dalec.TestStep
 	if err := json.Unmarshal(dt, &step); err != nil {
 		fmt.Fprintln(os.Stderr, "error unmarshaling test step:", err)
 		return
 	}
 
-	if err := runStep(ctx, &step, os.Stdout, os.Stderr, strings.Join(args, " ")); err != nil {
+	results, err := runStep(ctx, &step, os.Stdout, os.Stderr, stepIndex)
+	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			os.Exit(exitErr.ExitCode())
 		}
+		fmt.Fprintln(os.Stderr, "error running test step:", err)
+		os.Exit(2)
+	}
 
-		if err := writeFileAppend(outputPath, []byte(err.Error()), 0o600); err != nil {
-			fmt.Fprintln(os.Stderr, "error writing test result:", err)
-			os.Exit(2)
-		}
+	dt, err = json.Marshal(results)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error marshalling results:", err)
+		os.Exit(2)
+	}
+
+	if err := writeFileAppend(outputPath, dt, 0o600); err != nil {
+		fmt.Fprintln(os.Stderr, "error writing test results:", err)
+		os.Exit(2)
 	}
 }
 
 // WithRunStep returns an llb.RunOption that executes the provided test step.
 func WithTestStep(frontend llb.State, step *dalec.TestStep, index int, outputPath string) llb.RunOption {
 	return dalec.RunOptFunc(func(ei *llb.ExecInfo) {
-		llb.WithCustomNamef(step.Command).SetRunOption(ei)
+		llb.WithCustomName(step.Command).SetRunOption(ei)
 
 		dt, err := json.Marshal(step)
 		if err != nil {
@@ -87,9 +103,9 @@ func WithTestStep(frontend llb.State, step *dalec.TestStep, index int, outputPat
 
 		llb.AddMount(testRunnerPath, frontend, llb.SourcePath("/frontend")).SetRunOption(ei)
 
-		st := llb.Scratch().File(llb.Mkfile("test.json", 0o600, dt))
-		llb.AddMount(testStepPath, st, llb.SourcePath("test.json")).SetRunOption(ei)
-		llb.Args([]string{testRunnerPath, StepRunnerCmdName, "--output", outputPath, testStepPath}).SetRunOption(ei)
+		st := llb.Scratch().File(llb.Mkfile("step.json", 0o600, dt))
+		llb.AddMount(testStepPath, st, llb.SourcePath("step.json")).SetRunOption(ei)
+		llb.Args([]string{testRunnerPath, StepRunnerCmdName, "--output", outputPath, "--step-index", strconv.Itoa(index), testStepPath}).SetRunOption(ei)
 	})
 }
 
@@ -111,11 +127,12 @@ func FilterStepError(err error) error {
 // This should only be called from inside a container where the test is meant to run.
 //
 // Provide the desired stdout and stderr writers to capture output.
-func runStep(ctx context.Context, step *dalec.TestStep, stdout, stderr io.Writer, testName string) (retErr error) {
+func runStep(ctx context.Context, step *dalec.TestStep, stdout, stderr io.Writer, stepIndex int) ([]FileCheckErrResult, error) {
 	args, err := shlex.Split(step.Command)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -152,16 +169,16 @@ func runStep(ctx context.Context, step *dalec.TestStep, stdout, stderr io.Writer
 		checks = append(checks, check{buf, step.Stderr, "stderr"})
 	}
 	if err := cmd.Run(); err != nil {
-		return err
+		return nil, err
 	}
 
-	var errs []error
+	var results []FileCheckErrResult
 	for _, c := range checks {
 		if err := c.checker.Check(c.buf.String(), c.name); err != nil {
-			errs = append(errs, errors.Wrap(err, testName))
+			results = append(results, FileCheckErrResult{Filename: c.name, StepIndex: &stepIndex, Checks: getFileCheckErrs(err)})
 		}
 	}
-	return stderrors.Join(errs...)
+	return results, nil
 }
 
 type stepCmdError struct {

@@ -33,7 +33,7 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		}
 	}
 
-	worker = worker.With(d.InstallBuildDeps(sOpt, spec, targetKey, append(opts, frontend.IgnoreCache(client))...))
+	worker = worker.With(d.InstallBuildDeps(ctx, sOpt, spec, targetKey, append(opts, frontend.IgnoreCache(client))...))
 
 	var cfg deb.SourcePkgConfig
 	extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, opts...)
@@ -48,7 +48,8 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 
 	builder := worker.With(dalec.SetBuildNetworkMode(spec))
 
-	st, err := deb.BuildDeb(builder, spec, srcPkg, versionID, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))...)
+	buildOpts := append(opts, spec.Build.Steps.GetSourceLocation(builder))
+	st, err := deb.BuildDeb(builder, spec, srcPkg, versionID, append(buildOpts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))...)
 	if err != nil {
 		return llb.Scratch(), err
 	}
@@ -58,6 +59,7 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		llb.Copy(st, "/", "/",
 			dalec.WithIncludes([]string{"**/*.deb"}),
 		),
+		opts...,
 	)
 
 	signed, err := frontend.MaybeSign(ctx, client, filtered, spec, targetKey, sOpt, opts...)
@@ -67,7 +69,7 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 
 	// Merge the signed state with the original state
 	// The signed files should overwrite the unsigned ones.
-	st = st.File(llb.Copy(signed, "/", "/"))
+	st = st.File(llb.Copy(signed, "/", "/"), opts...)
 	return st, nil
 }
 
@@ -110,7 +112,7 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 		return "", nil
 	}
 
-	deps := spec.GetBuildDeps(targetKey)
+	deps := spec.GetPackageDeps(targetKey).Build
 	if _, hasNormalGo := deps["golang"]; hasNormalGo {
 		return "", nil
 	}
@@ -224,7 +226,7 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 			return nil, nil, err
 		}
 
-		worker = worker.With(cfg.InstallBuildDeps(sOpt, spec, targetKey, pg, frontend.IgnoreCache(client)))
+		worker = worker.With(cfg.InstallBuildDeps(ctx, sOpt, spec, targetKey, pg, frontend.IgnoreCache(client)))
 
 		var cfg deb.SourcePkgConfig
 		extraPaths, err := prepareGo(ctx, client, &cfg, worker, spec, targetKey, pg, frontend.IgnoreCache(client))
@@ -259,9 +261,10 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 
 func (c *Config) ExtractPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, debSt llb.State, opts ...llb.ConstraintsOpt) llb.State {
 	depDebs := llb.Scratch()
-	deps := spec.GetPackageDeps(targetKey)
-	if deps != nil {
-		depDebs = c.DownloadDeps(worker, sOpt, spec, targetKey, deps.Sysext, opts...)
+	deps := spec.GetPackageDeps(targetKey).Sysext
+	if len(deps) > 0 {
+		opts = append(opts, deps.GetSourceLocation(worker))
+		depDebs = c.DownloadDeps(worker, sOpt, spec, targetKey, deps, opts...)
 	}
 
 	opts = append(opts, dalec.ProgressGroup("Extracting DEBs"))

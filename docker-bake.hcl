@@ -56,6 +56,70 @@ variable "RUNC_REVISION" {
     default = "1"
 }
 
+target "maps-dep" {
+    name = "maps-dep-${replace(tgt, "/", "-")}"
+    dockerfile = "test/fixtures/sourcemap-test-bad-builddep.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+        "dalec_frontend" = "target:frontend"
+    }
+    matrix = {
+        tgt = ["azlinux3/rpm", "mariner2/rpm", "jammy/deb", "noble/deb", "bookworm/deb", "bullseye/deb"]
+    }
+    target = tgt
+}
+
+target "maps-buildstep" {
+    name = "maps-buildstep-${replace(tgt, "/", "-")}"
+    dockerfile = "test/fixtures/sourcemap-test-bad-buildstep.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+        "dalec_frontend" = "target:frontend"
+    }
+    matrix = {
+        tgt = ["azlinux3/rpm", "mariner2/rpm", "jammy/deb", "noble/deb", "bookworm/deb", "bullseye/deb"]
+    }
+    target = tgt
+}
+
+target "maps-test" {
+    name = "maps-test-${replace(tgt, "/", "-")}"
+    dockerfile = "test/fixtures/sourcemap-test-bad-test.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+        "dalec_frontend" = "target:frontend"
+    }
+    matrix = {
+        tgt = ["azlinux3/rpm", "mariner2/rpm", "jammy/deb", "noble/deb", "bookworm/deb", "bullseye/deb"]
+    }
+    target = tgt
+}
+
+target "maps-source" {
+    name = "maps-source-${replace(tgt, "/", "-")}"
+    dockerfile = "test/fixtures/sourcemap-test-bad-sources.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = "dalec_frontend"
+    }
+    contexts = {
+        "dalec_frontend" = "target:frontend"
+    }
+    matrix = {
+        tgt = ["azlinux3/rpm", "mariner2/rpm", "jammy/deb", "noble/deb", "bookworm/deb", "bullseye/deb"]
+    }
+    target = tgt
+}
+
+group "maps-all" {
+    targets = ["maps", "maps-buildstep", "maps-test"]
+}
+
 target "runc-azlinux" {
     name = "runc-${distro}-${replace(tgt, "/", "-")}"
     dockerfile = "test/fixtures/moby-runc.yml"

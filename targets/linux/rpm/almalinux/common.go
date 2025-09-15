@@ -48,7 +48,7 @@ func basePackages(name string) []dalec.Spec {
 			License:     license,
 			Description: "DALEC base packages for " + name,
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string]dalec.PackageConstraints{
+				Runtime: dalec.PackageDependencyList{
 					"almalinux-release": {},
 					"tzdata":            {},
 				},

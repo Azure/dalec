@@ -205,15 +205,15 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 }
 
 func (cfg *Config) InstallBuildDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	deps := spec.GetPackageDeps(targetKey)
-	if deps == nil || len(deps.Build) == 0 {
+	deps := spec.GetPackageDeps(targetKey).Build
+	if len(deps) == 0 {
 		return dalec.NoopStateOption
 	}
 	repos := spec.GetBuildRepos(targetKey)
-	return cfg.WithDeps(sOpt, targetKey, spec.Name, deps.Build, repos, opts...)
+	return cfg.WithDeps(sOpt, targetKey, spec.Name, deps, repos, opts...)
 }
 
-func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, deps map[string]dalec.PackageConstraints, repos []dalec.PackageRepositoryConfig, opts ...llb.ConstraintsOpt) llb.StateOption {
+func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, deps dalec.PackageDependencyList, repos []dalec.PackageRepositoryConfig, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		if len(deps) == 0 {
 			return in
@@ -221,7 +221,7 @@ func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, de
 
 		spec := &dalec.Spec{
 			Name:        fmt.Sprintf("%s-dependencies", pkgName),
-			Description: "Virtual Package to install dependencies",
+			Description: "Virtual Package to install dependencies for " + pkgName,
 			Version:     "1.0",
 			License:     "Apache 2.0",
 			Revision:    "1",
@@ -252,12 +252,13 @@ func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, de
 		install := cfg.Install([]string{filepath.Join(rpmMountDir, "*/*.rpm")}, installOpts...)
 		return in.Run(
 			dalec.WithConstraints(opts...),
+			deps.GetSourceLocation(in),
 			install,
 		).Root()
 	}
 }
 
-func (cfg *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints map[string]dalec.PackageConstraints, opts ...llb.ConstraintsOpt) llb.State {
+func (cfg *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints dalec.PackageDependencyList, opts ...llb.ConstraintsOpt) llb.State {
 	if constraints == nil {
 		return llb.Scratch()
 	}

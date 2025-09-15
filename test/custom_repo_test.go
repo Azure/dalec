@@ -67,10 +67,10 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 					dep.Name: {},
 				},
 
-				Test: []string{
-					dep.Name,
-					"bash",
-					"coreutils",
+				Test: map[string]dalec.PackageConstraints{
+					dep.Name: {},
+					"bash":   {},
+					"coreutils": {},
 				},
 
 				ExtraRepos: []dalec.PackageRepositoryConfig{

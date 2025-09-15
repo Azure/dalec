@@ -27,7 +27,8 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 		return llb.Scratch(), err
 	}
 
-	deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
+	deps := spec.GetPackageDeps(targetKey).GetBuild()
+	pkgNames := dalec.SortMapKeys(deps)
 	if spec.HasGomods() {
 		if !dalec.HasGolang(spec, targetKey) {
 			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
@@ -38,8 +39,8 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 		hasRust := func(s string) bool {
 			return s == "rust"
 		}
-		if !slices.ContainsFunc(deps, hasRust) {
-			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
+		if !slices.ContainsFunc(pkgNames, hasRust) {
+			return llb.Scratch(), errors.New("spec contains cargo homes but does not have rust in build deps")
 		}
 	}
 

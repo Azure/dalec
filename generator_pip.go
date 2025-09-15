@@ -1,8 +1,10 @@
 package dalec
 
 import (
+	"context"
 	"path/filepath"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
@@ -76,6 +78,7 @@ func withPip(g *SourceGenerator, srcSt, worker llb.State, path string, opts ...l
 			llb.Dir(filepath.Join(joinedWorkDir, path)),
 			srcMount,
 			WithConstraints(opts...),
+			g.Pip._sourceMap.GetLocation(result),
 		).AddMount(cacheDir, result)
 	}
 	return result
@@ -132,6 +135,20 @@ func (s *Spec) PipDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constraint
 	}
 
 	// Merge all cache states into a single state
-	merged := MergeAtPath(llb.Scratch(), cacheStates, "/")
+	merged := MergeAtPath(llb.Scratch(), cacheStates, "/", opts...)
 	return &merged, nil
+}
+
+func (gen *GeneratorPip) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal GeneratorPip
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return err
+	}
+
+	*gen = GeneratorPip(i)
+	gen._sourceMap = newSourceMap(ctx, node)
+	return nil
 }

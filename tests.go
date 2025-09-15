@@ -1,13 +1,17 @@
 package dalec
 
 import (
+	"context"
 	goerrors "errors"
 	"fmt"
 	"io/fs"
 	"regexp"
 	"strings"
 
+	"github.com/goccy/go-yaml/ast"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/pkg/errors"
 )
 
@@ -31,6 +35,14 @@ type TestSpec struct {
 
 	// Files is the list of files to check after running the steps.
 	Files map[string]FileCheckOutput `yaml:"files,omitempty" json:"files,omitempty"`
+
+	// unexported pointer to parsed source map for this TestSpec
+	_sourceMap *sourceMap `json:"-" yaml:"-"`
+}
+
+// GetSourceLocation returns an llb.ConstraintsOpt for the TestSpec
+func (t *TestSpec) GetSourceLocation(state llb.State) llb.ConstraintsOpt {
+	return t._sourceMap.GetLocation(state)
 }
 
 // TestStep is a wrapper for [BuildStep] to include checks on stdio streams
@@ -40,12 +52,35 @@ type TestStep struct {
 	Command string `yaml:"command" json:"command" jsonschema:"required"`
 	// Env is the list of environment variables to set for the command.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
-	// Stdout is the expected output on stdout
-	Stdout CheckOutput `yaml:"stdout,omitempty" json:"stdout,omitempty"`
-	// Stderr is the expected output on stderr
-	Stderr CheckOutput `yaml:"stderr,omitempty" json:"stderr,omitempty"`
-	// Stdin is the input to pass to stdin for the command
+
+	// Stdin is the input to provide to the command when running tests
 	Stdin string `yaml:"stdin,omitempty" json:"stdin,omitempty"`
+	// Stdout describes checks to perform against stdout
+	Stdout CheckOutput `yaml:"stdout,omitempty" json:"stdout,omitempty"`
+	// Stderr describes checks to perform against stderr
+	Stderr CheckOutput `yaml:"stderr,omitempty" json:"stderr,omitempty"`
+
+	// unexported pointer to parsed source map for this TestStep
+	_sourceMap *sourceMap `json:"-" yaml:"-"`
+}
+
+func (step *TestStep) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal TestStep
+	var ti internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &ti); err != nil {
+		return err
+	}
+
+	*step = TestStep(ti)
+	step._sourceMap = newSourceMap(ctx, node)
+	return nil
+}
+
+// GetSourceLocation returns an llb.ConstraintsOpt for the TestStep
+func (ts *TestStep) GetSourceLocation(state llb.State) llb.ConstraintsOpt {
+	return ts._sourceMap.GetLocation(state)
 }
 
 // CheckOutput is used to specify the expected output of a check, such as stdout/stderr or a file.
@@ -63,6 +98,13 @@ type CheckOutput struct {
 	EndsWith string `yaml:"ends_with,omitempty" json:"ends_with,omitempty"`
 	// Empty is used to check if the output is empty.
 	Empty bool `yaml:"empty,omitempty" json:"empty,omitempty"`
+
+	equalsSourceMap     *sourceMap   `json:"-" yaml:"-"`
+	startsWithSourceMap *sourceMap   `json:"-" yaml:"-"`
+	endsWithSourceMap   *sourceMap   `json:"-" yaml:"-"`
+	emptySourceMap      *sourceMap   `json:"-" yaml:"-"`
+	containsSourceMaps  []*sourceMap `json:"-" yaml:"-"`
+	matchesSourceMaps   []*sourceMap `json:"-" yaml:"-"`
 }
 
 // FileCheckOutput is used to specify the expected output of a file.
@@ -74,9 +116,122 @@ type FileCheckOutput struct {
 	IsDir bool `yaml:"is_dir,omitempty" json:"is_dir,omitempty"`
 	// NotExist is used to check that the file does not exist.
 	NotExist bool `yaml:"not_exist,omitempty" json:"not_exist,omitempty"`
+	// field-level source maps for file-specific attributes
+	permissionsSourceMap *sourceMap `json:"-" yaml:"-"`
+	isDirSourceMap       *sourceMap `json:"-" yaml:"-"`
+	notExistSourceMap    *sourceMap `json:"-" yaml:"-"`
 
 	// TODO: Support checking symlinks
 	// This is not currently possible with buildkit as it does not expose information about the symlink
+}
+
+func (check *FileCheckOutput) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	// Custom unmarshallers with inline structs behave strangely (like fields not getting set properly, even on the main type).
+	// For now split it out manually.
+	type internal struct {
+		Permissions sourceMappedValue[fs.FileMode] `yaml:"permissions,omitempty"`
+		IsDir       sourceMappedValue[bool]        `yaml:"is_dir,omitempty"`
+		NotExist    sourceMappedValue[bool]        `yaml:"not_exist,omitempty"`
+
+		Equals     ast.Node `yaml:"equals,omitempty"`
+		Contains   ast.Node `yaml:"contains,omitempty"`
+		Matches    ast.Node `yaml:"matches,omitempty"`
+		StartsWith ast.Node `yaml:"starts_with,omitempty"`
+		EndsWith   ast.Node `yaml:"ends_with,omitempty"`
+		Empty      ast.Node `yaml:"empty,omitempty"`
+	}
+
+	dec := getDecoder(ctx)
+	var i internal
+
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return fmt.Errorf("error unmarshalling file check output: %w", err)
+	}
+
+	// Now for a 2nd pass, remove the fields we have already processed
+	// and pass the rest to the CheckOutput unmarshaller
+	// This is a bit hacky but it works around the limitations of the inline yaml.
+	// It also makes sure this works with strict mode enabled.
+	var values []*ast.MappingValueNode
+	for _, v := range node.(*ast.MappingNode).Values {
+		switch key := v.Key.(*ast.StringNode); key.Value {
+		case "permissions", "is_dir", "not_exist":
+		default:
+			values = append(values, v)
+		}
+	}
+
+	updated := ast.Mapping(node.GetToken(), false, values...)
+
+	var i2 CheckOutput
+	if err := dec.DecodeFromNodeContext(ctx, updated, &i2); err != nil {
+		return err
+	}
+
+	*check = FileCheckOutput{
+		Permissions: i.Permissions.Value,
+		IsDir:       i.IsDir.Value,
+		NotExist:    i.NotExist.Value,
+		CheckOutput: i2,
+
+		permissionsSourceMap: i.Permissions.sourceMap,
+		isDirSourceMap:       i.IsDir.sourceMap,
+		notExistSourceMap:    i.NotExist.sourceMap,
+	}
+
+	// a file check that does not set NotExist (explicitly) will not have a source map set
+	// In this case the source map should point to the entire file check node
+	if check.notExistSourceMap == nil {
+		check.notExistSourceMap = newSourceMap(ctx, node)
+	}
+
+	return nil
+}
+
+func (check *CheckOutput) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal struct {
+		Equals     sourceMappedValue[string]   `yaml:"equals,omitempty"`
+		Contains   []sourceMappedValue[string] `yaml:"contains,omitempty"`
+		Matches    []sourceMappedValue[string] `yaml:"matches,omitempty"`
+		StartsWith sourceMappedValue[string]   `yaml:"starts_with,omitempty"`
+		EndsWith   sourceMappedValue[string]   `yaml:"ends_with,omitempty"`
+		Empty      sourceMappedValue[bool]     `yaml:"empty,omitempty"`
+	}
+
+	var i internal
+	dec := getDecoder(ctx)
+	err := dec.DecodeFromNodeContext(ctx, node, &i)
+	if err != nil {
+		return err
+	}
+
+	*check = CheckOutput{
+		Equals:     i.Equals.Value,
+		Contains:   make([]string, len(i.Contains)),
+		Matches:    make([]string, len(i.Matches)),
+		StartsWith: i.StartsWith.Value,
+		EndsWith:   i.EndsWith.Value,
+		Empty:      i.Empty.Value,
+
+		equalsSourceMap:     i.Equals.sourceMap,
+		startsWithSourceMap: i.StartsWith.sourceMap,
+		endsWithSourceMap:   i.EndsWith.sourceMap,
+		emptySourceMap:      i.Empty.sourceMap,
+		containsSourceMaps:  make([]*sourceMap, len(i.Contains)),
+		matchesSourceMaps:   make([]*sourceMap, len(i.Matches)),
+	}
+
+	for i, v := range i.Contains {
+		check.Contains[i] = v.Value
+		check.containsSourceMaps[i] = v.sourceMap
+	}
+
+	for i, v := range i.Matches {
+		check.Matches[i] = v.Value
+		check.matchesSourceMaps[i] = v.sourceMap
+	}
+
+	return nil
 }
 
 // CheckOutputError is used to build an error message for a failed output check for a test case.
@@ -236,58 +391,118 @@ func (c *FileCheckOutput) processBuildArgs(lex *shell.Lex, args map[string]strin
 func (c CheckOutput) Check(dt string, p string) (retErr error) {
 	if c.Empty {
 		if dt != "" {
-			return &CheckOutputError{Kind: "empty", Expected: "", Actual: dt, Path: p}
+			return &CheckOutputError{Kind: CheckOutputEmptyKind, Expected: "", Actual: dt, Path: p}
 		}
 
 		// Anything else would be nonsensical and it would make sense to return early...
 		// But we'll check it anyway and it should fail since this would be an invalid CheckOutput
 	}
 
+	var errs []error
 	if c.Equals != "" && c.Equals != dt {
-		return &CheckOutputError{Expected: c.Equals, Actual: dt, Path: p}
+		errs = append(errs, &CheckOutputError{Kind: CheckOutputEqualsKind, Expected: c.Equals, Actual: dt, Path: p})
 	}
 
 	for _, contains := range c.Contains {
 		if contains != "" && !strings.Contains(dt, contains) {
-			return &CheckOutputError{Kind: "contains", Expected: contains, Actual: dt, Path: p}
+			errs = append(errs, &CheckOutputError{Kind: CheckOutputContainsKind, Expected: contains, Actual: dt, Path: p})
 		}
 	}
 	for _, matches := range c.Matches {
 		regexp, err := regexp.Compile(matches)
 		if err != nil {
-			return err
+			errs = append(errs, &CheckOutputError{Kind: CheckOutputMatchesKind, Expected: matches, Actual: fmt.Sprintf("invalid regexp %q: %v", matches, err), Path: p})
+			continue
 		}
 
 		if !regexp.Match([]byte(dt)) {
-			return &CheckOutputError{Kind: "matches", Expected: matches, Actual: dt, Path: p}
+			errs = append(errs, &CheckOutputError{Kind: CheckOutputMatchesKind, Expected: matches, Actual: dt, Path: p})
 		}
 	}
 
 	if c.StartsWith != "" && !strings.HasPrefix(dt, c.StartsWith) {
-		return &CheckOutputError{Kind: "starts_with", Expected: c.StartsWith, Actual: dt, Path: p}
+		errs = append(errs, &CheckOutputError{Kind: CheckOutputStartsWithKind, Expected: c.StartsWith, Actual: dt, Path: p})
 	}
 
 	if c.EndsWith != "" && !strings.HasSuffix(dt, c.EndsWith) {
-		return &CheckOutputError{Kind: "ends_with", Expected: c.EndsWith, Actual: dt, Path: p}
+		errs = append(errs, &CheckOutputError{Kind: CheckOutputEndsWithKind, Expected: c.EndsWith, Actual: dt, Path: p})
+	}
+
+	return goerrors.Join(errs...)
+}
+
+// Check is used to check the output file.
+func (c FileCheckOutput) Check(dt string, mode fs.FileMode, isDir bool, p string) error {
+	var errs []error
+	if c.IsDir && !isDir {
+		errs = append(errs, &CheckOutputError{Kind: CheckFileIsDirKind, Expected: "ModeDir", Actual: "ModeFile", Path: p})
+	}
+
+	if !c.IsDir && isDir {
+		errs = append(errs, &CheckOutputError{Kind: CheckFileIsDirKind, Expected: "ModeFile", Actual: "ModeDir", Path: p})
+	}
+
+	perm := mode.Perm()
+	if c.Permissions != 0 && c.Permissions != perm {
+		errs = append(errs, &CheckOutputError{Kind: CheckFilePermissionsKind, Expected: c.Permissions.String(), Actual: perm.String(), Path: p})
+	}
+
+	errs = append(errs, c.CheckOutput.Check(dt, p))
+	return goerrors.Join(errs...)
+}
+
+// GetErrSource returns the most specific source map for the given error kind.
+// Falls back to the file-level mapping then to embedded content checks.
+func (c FileCheckOutput) GetErrSource(err *CheckOutputError) *errdefs.Source {
+	switch err.Kind {
+	case CheckFilePermissionsKind:
+		return c.permissionsSourceMap.GetErrdefsSource()
+	case CheckFileIsDirKind:
+		return c.isDirSourceMap.GetErrdefsSource()
+	case CheckFileNotExistsKind:
+		return c.notExistSourceMap.GetErrdefsSource()
+	default:
+		// Delegate to embedded CheckOutput (equals/contains/...)
+		return c.CheckOutput.GetErrSource(err)
+	}
+}
+
+func (c CheckOutput) GetErrSource(err *CheckOutputError) *errdefs.Source {
+	switch err.Kind {
+	case CheckOutputContainsKind:
+		// locate matching contains entry
+		for i, v := range c.Contains {
+			if v == err.Expected && i < len(c.containsSourceMaps) && c.containsSourceMaps[i] != nil {
+				return c.containsSourceMaps[i].GetErrdefsSource()
+			}
+		}
+	case CheckOutputMatchesKind:
+		for i, v := range c.Matches {
+			if v == err.Expected && i < len(c.matchesSourceMaps) && c.matchesSourceMaps[i] != nil {
+				return c.matchesSourceMaps[i].GetErrdefsSource()
+			}
+		}
+	case CheckOutputStartsWithKind:
+		return c.startsWithSourceMap.GetErrdefsSource()
+	case CheckOutputEndsWithKind:
+		return c.endsWithSourceMap.GetErrdefsSource()
+	case CheckOutputEmptyKind:
+		return c.emptySourceMap.GetErrdefsSource()
+	case CheckOutputEqualsKind:
+		return c.equalsSourceMap.GetErrdefsSource()
 	}
 
 	return nil
 }
 
-// Check is used to check the output file.
-func (c FileCheckOutput) Check(dt string, mode fs.FileMode, isDir bool, p string) error {
-	if c.IsDir && !isDir {
-		return &CheckOutputError{Kind: "mode", Expected: "ModeDir", Actual: "ModeFile", Path: p}
-	}
-
-	if !c.IsDir && isDir {
-		return &CheckOutputError{Kind: "mode", Expected: "ModeFile", Actual: "ModeDir", Path: p}
-	}
-
-	perm := mode.Perm()
-	if c.Permissions != 0 && c.Permissions != perm {
-		return &CheckOutputError{Kind: "permissions", Expected: c.Permissions.String(), Actual: perm.String(), Path: p}
-	}
-
-	return c.CheckOutput.Check(dt, p)
-}
+const (
+	CheckFileNotExistsKind    = "not_exist"
+	CheckFilePermissionsKind  = "permissions"
+	CheckFileIsDirKind        = "is_dir"
+	CheckOutputEmptyKind      = "empty"
+	CheckOutputEqualsKind     = "equals"
+	CheckOutputContainsKind   = "contains"
+	CheckOutputMatchesKind    = "matches"
+	CheckOutputStartsWithKind = "starts_with"
+	CheckOutputEndsWithKind   = "ends_with"
+)

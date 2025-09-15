@@ -251,35 +251,6 @@ func ProgressGroup(name string) llb.ConstraintsOpt {
 	})
 }
 
-func (s *Spec) GetRuntimeDeps(targetKey string) []string {
-	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		return nil
-	}
-
-	return SortMapKeys(deps.Runtime)
-}
-
-func (s *Spec) GetBuildDeps(targetKey string) map[string]PackageConstraints {
-	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		return nil
-	}
-
-	return deps.Build
-}
-
-func (s *Spec) GetTestDeps(targetKey string) []string {
-	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		return nil
-	}
-
-	out := slices.Clone(deps.Test)
-	slices.Sort(out)
-	return out
-}
-
 func (s *Spec) GetImagePost(target string) *PostInstall {
 	img := s.Targets[target].Image
 	if img != nil {
@@ -400,10 +371,10 @@ func SortedMapValues[T any](m map[string]T) []T {
 // MergeDependencies(nil, child) = child, MergeDependencies(parent, nil) = parent
 func MergeDependencies(base, target *PackageDependencies) *PackageDependencies {
 	var (
-		build      map[string]PackageConstraints
-		runtime    map[string]PackageConstraints
-		recommends map[string]PackageConstraints
-		test       []string
+		build      PackageDependencyList
+		runtime    PackageDependencyList
+		recommends PackageDependencyList
+		test       PackageDependencyList
 		extraRepos []PackageRepositoryConfig
 	)
 
@@ -458,9 +429,11 @@ func MergeDependencies(base, target *PackageDependencies) *PackageDependencies {
 // If the target does not have dependencies, the global dependencies are returned.
 func (s *Spec) GetPackageDeps(target string) *PackageDependencies {
 	if _, ok := s.Targets[target]; !ok {
+		if s.Dependencies == nil {
+			return &PackageDependencies{}
+		}
 		return s.Dependencies
 	}
-
 	return MergeDependencies(s.Dependencies, s.Targets[target].Dependencies)
 }
 
@@ -622,7 +595,7 @@ func Platform(platform *ocispecs.Platform) llb.ConstraintsOpt {
 }
 
 func HasGolang(spec *Spec, targetKey string) bool {
-	for dep := range spec.GetBuildDeps(targetKey) {
+	for dep := range spec.GetPackageDeps(targetKey).GetBuild() {
 		switch dep {
 		case "golang", "msft-golang":
 			return true
@@ -634,21 +607,21 @@ func HasGolang(spec *Spec, targetKey string) bool {
 	return false
 }
 
-func (s *Spec) GetProvides(targetKey string) map[string]PackageConstraints {
+func (s *Spec) GetProvides(targetKey string) PackageDependencyList {
 	if p := s.Targets[targetKey].Provides; p != nil {
 		return p
 	}
 	return s.Provides
 }
 
-func (s *Spec) GetReplaces(targetKey string) map[string]PackageConstraints {
+func (s *Spec) GetReplaces(targetKey string) PackageDependencyList {
 	if r := s.Targets[targetKey].Replaces; r != nil {
 		return r
 	}
 	return s.Replaces
 }
 
-func (s *Spec) GetConflicts(targetKey string) map[string]PackageConstraints {
+func (s *Spec) GetConflicts(targetKey string) PackageDependencyList {
 	if c := s.Targets[targetKey].Conflicts; c != nil {
 		return c
 	}
@@ -656,7 +629,7 @@ func (s *Spec) GetConflicts(targetKey string) map[string]PackageConstraints {
 }
 
 func HasNpm(spec *Spec, targetKey string) bool {
-	for dep := range spec.GetBuildDeps(targetKey) {
+	for dep := range spec.GetPackageDeps(targetKey).Build {
 		switch dep {
 		case "npm":
 			return true

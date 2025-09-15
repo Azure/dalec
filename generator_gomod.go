@@ -2,11 +2,13 @@ package dalec
 
 import (
 	"bytes"
+	"context"
 	goerrors "errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
@@ -100,6 +102,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, subPath string, cred
 				srcMount,
 				llb.AddMount(proxyPath, llb.Scratch(), llb.AsPersistentCacheDir(GomodCacheKey, llb.CacheMountShared)),
 				WithConstraints(opts...),
+				g.Gomod._sourceMap.GetLocation(in),
 			).AddMount(gomodCacheDir, in)
 		}
 
@@ -236,11 +239,27 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 		opts := append(opts, ProgressGroup("Fetch go module dependencies for source: "+key))
 		deps = deps.With(func(in llb.State) llb.State {
 			for _, gen := range src.Generate {
-				in = in.With(withGomod(gen, patched[key], worker, key, credHelperRunOpt, opts...))
+				if gen.Gomod != nil {
+					in = in.With(withGomod(gen, patched[key], worker, key, credHelperRunOpt, opts...))
+				}
 			}
 			return in
 		})
 	}
 
 	return &deps, nil
+}
+
+func (gen *GeneratorGomod) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal GeneratorGomod
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return err
+	}
+
+	*gen = GeneratorGomod(i)
+	gen._sourceMap = newSourceMap(ctx, node)
+	return nil
 }

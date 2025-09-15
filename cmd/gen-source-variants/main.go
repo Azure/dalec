@@ -51,41 +51,59 @@ type SourceField struct {
 
 func extractSourceFields() ([]SourceField, error) {
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, "spec.go", nil, parser.ParseComments)
+	packages, err := parser.ParseDir(fset, ".", nil, parser.ParseComments)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse spec.go: %w", err)
+		return nil, fmt.Errorf("failed to parse directory: %w", err)
 	}
 
 	var sourceFields []SourceField
 
-	// Find the Source struct
-	ast.Inspect(node, func(n ast.Node) bool {
-		if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == "Source" {
-			if st, ok := ts.Type.(*ast.StructType); ok {
-				for _, field := range st.Fields.List {
-					if len(field.Names) == 0 {
-						continue // Skip embedded fields
-					}
+	var found bool
 
-					fieldName := field.Names[0].Name
+	for _, pkg := range packages {
+		if found {
+			break
+		}
+		for _, node := range pkg.Files {
+			// Find the Source struct
+			if found {
+				break
+			}
 
-					// Check if this is a pointer to a type starting with "Source"
-					if ptr, ok := field.Type.(*ast.StarExpr); ok {
-						if ident, ok := ptr.X.(*ast.Ident); ok {
-							typeName := ident.Name
-							if strings.HasPrefix(typeName, "Source") {
-								sourceFields = append(sourceFields, SourceField{
-									Name:     fieldName,
-									TypeName: typeName,
-								})
+			ast.Inspect(node, func(n ast.Node) bool {
+				if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == "Source" {
+					found = true
+					if st, ok := ts.Type.(*ast.StructType); ok {
+						for _, field := range st.Fields.List {
+							if len(field.Names) == 0 {
+								continue // Skip embedded fields
+							}
+
+							fieldName := field.Names[0].Name
+
+							// Check if this is a pointer to a type starting with "Source"
+							if ptr, ok := field.Type.(*ast.StarExpr); ok {
+								if ident, ok := ptr.X.(*ast.Ident); ok {
+									typeName := ident.Name
+									if strings.HasPrefix(typeName, "Source") {
+										sourceFields = append(sourceFields, SourceField{
+											Name:     fieldName,
+											TypeName: typeName,
+										})
+									}
+								}
 							}
 						}
 					}
 				}
-			}
+				return true
+			})
 		}
-		return true
-	})
+	}
+
+	if !found {
+		fmt.Fprintln(os.Stderr, "source struct not found")
+	}
 
 	// Sort fields for consistent output
 	sort.Slice(sourceFields, func(i, j int) bool {
@@ -109,7 +127,10 @@ func generateCode(fields []SourceField) ([]byte, error) {
 package dalec
 
 import (
-	"fmt"
+    "context"
+    "fmt"
+
+    "github.com/goccy/go-yaml/ast"
 )
 
 `)
@@ -153,6 +174,29 @@ import (
 	}
 }
 `)
+
+	// Variant specific UnmarshalYAML methods
+	for _, f := range fields {
+		fmt.Fprintf(&buf, `
+func(s *%s) sourceMap() *sourceMap {
+	return s._sourceMap
+}
+
+func (s *%s) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+    type internal %s
+    var i internal
+
+	dec := getDecoder(ctx)
+    if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+        return err
+    }
+
+    *s = %s(i)
+    s._sourceMap = newSourceMap(ctx, node)
+    return nil
+}
+`, f.TypeName, f.TypeName, f.TypeName, f.TypeName)
+	}
 
 	// Format the generated code
 	formatted, err := format.Source(buf.Bytes())

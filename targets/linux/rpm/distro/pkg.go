@@ -63,7 +63,8 @@ func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		addGoCache(&cacheInfo)
 	}
 
-	st := rpm.Build(br, builder, specPath, cacheInfo, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))...)
+	buildOpts := append(opts, spec.Build.Steps.GetSourceLocation(builder), frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))
+	st := rpm.Build(br, builder, specPath, cacheInfo, buildOpts...)
 
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt, opts...)
 }
@@ -108,9 +109,9 @@ func (cfg *Config) RepoMounts(repos []dalec.PackageRepositoryConfig, sOpt dalec.
 }
 
 func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targetKey string, spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOption {
-	deps := spec.GetTestDeps(targetKey)
+	deps := spec.GetPackageDeps(targetKey).GetTest()
 	if len(deps) == 0 {
-		return func(s llb.State) llb.State { return s }
+		return dalec.NoopStateOption
 	}
 
 	return func(in llb.State) llb.State {
@@ -121,7 +122,8 @@ func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targ
 		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
 		return worker.Run(
 			dalec.WithConstraints(opts...),
-			cfg.Install(deps, importRepos...),
+			cfg.Install(dalec.SortMapKeys(deps), importRepos...),
+			deps.GetSourceLocation(in),
 		).AddMount("/tmp/rootfs", in)
 	}
 }
