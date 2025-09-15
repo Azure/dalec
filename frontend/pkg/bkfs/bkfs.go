@@ -6,13 +6,12 @@ import (
 	"io"
 	"io/fs"
 	"path"
-
-	gwclient "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/tonistiigi/fsutil/types"
-
-	"github.com/tonistiigi/fsutil"
+	"strings"
 
 	"github.com/moby/buildkit/client/llb"
+	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/tonistiigi/fsutil"
+	"github.com/tonistiigi/fsutil/types"
 )
 
 var (
@@ -176,6 +175,9 @@ func (st *StateRefFS) Open(name string) (fs.File, error) {
 		Path: name,
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			err = fmt.Errorf("%w: %w", fs.ErrNotExist, err)
+		}
 		return nil, &fs.PathError{Err: err, Op: "open", Path: name}
 	}
 
