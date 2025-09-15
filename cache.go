@@ -19,66 +19,36 @@ const (
 
 	BazelDefaultSocketID = "bazel-default" // Default ID for bazel socket
 
-	// sccacheVersion defines the version of sccache to install
-	sccacheVersion = "v0.10.0"
-
-	// sccacheDownloadURL is the base URL for downloading sccache releases
-	sccacheDownloadURL = "https://github.com/mozilla/sccache/releases/download"
-
-	// sccacheCacheSize is the default cache size for sccache
-	sccacheCacheSize = "10G"
-
-	// sccache target architectures
-	sccacheArchLinuxX64   = "x86_64-unknown-linux-musl"
-	sccacheArchLinuxArm64 = "aarch64-unknown-linux-musl"
-	sccacheArchLinuxArmV7 = "armv7-unknown-linux-musleabihf"
-
-	// sccache v0.10.0 SHA256 checksums for binary validation
-	sccacheChecksumLinuxX64   = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
-	sccacheChecksumLinuxArm64 = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
-	sccacheChecksumLinuxArmV7 = "TODO_NEED_ACTUAL_CHECKSUM"
 )
-
-// getSccacheURL returns the download URL for sccache based on the target platform
-func getSccacheURL(p *ocispecs.Platform) string {
-	arch := getSccacheArch(p)
-	return fmt.Sprintf("%s/%s/sccache-%s-%s.tar.gz", sccacheDownloadURL, sccacheVersion, sccacheVersion, arch)
-}
-
-// getSccacheArch returns the sccache architecture string for the given platform
-func getSccacheArch(p *ocispecs.Platform) string {
-	switch {
-	case p.Architecture == "amd64":
-		return sccacheArchLinuxX64
-	case p.Architecture == "arm64":
-		return sccacheArchLinuxArm64
-	case p.Architecture == "arm" && p.Variant == "v7":
-		return sccacheArchLinuxArmV7
-	default:
-		// Fallback to linux x64 for unsupported platforms
-		return sccacheArchLinuxX64
-	}
-}
-
-// getSccacheChecksum returns the SHA256 checksum for sccache based on the target platform
-func getSccacheChecksum(p *ocispecs.Platform) string {
-	switch {
-	case p.Architecture == "amd64":
-		return sccacheChecksumLinuxX64
-	case p.Architecture == "arm64":
-		return sccacheChecksumLinuxArm64
-	case p.Architecture == "arm" && p.Variant == "v7":
-		return sccacheChecksumLinuxArmV7
-	default:
-		// Fallback to linux x64 for unsupported platforms
-		return sccacheChecksumLinuxX64
-	}
-}
 
 // getSccacheSource returns a Source for downloading and verifying sccache using SourceHTTP
 func getSccacheSource(p *ocispecs.Platform) Source {
-	url := getSccacheURL(p)
-	checksum := getSccacheChecksum(p)
+	// sccache version and download configuration
+	const (
+		sccacheVersion     = "v0.10.0"
+		sccacheDownloadURL = "https://github.com/mozilla/sccache/releases/download"
+	)
+
+	// Determine architecture string and checksum based on platform
+	var arch, checksum string
+	switch {
+	case p.Architecture == "amd64":
+		arch = "x86_64-unknown-linux-musl"
+		checksum = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
+	case p.Architecture == "arm64":
+		arch = "aarch64-unknown-linux-musl"
+		checksum = "d6a1ce4acd02b937cd61bc675a8be029a60f7bc167594c33d75732bbc0a07400"
+	case p.Architecture == "arm" && p.Variant == "v7":
+		arch = "armv7-unknown-linux-musleabi"
+		checksum = "ab7af4e5c78aa71f38145e7bed41dd944d99ce5a00339424d927f8bbd8b61b78"
+	default:
+		// Fallback to linux x64 for unsupported platforms
+		arch = "x86_64-unknown-linux-musl"
+		checksum = "1fbb35e135660d04a2d5e42b59c7874d39b3deb17de56330b25b713ec59f849b"
+	}
+
+	// Build download URL
+	url := fmt.Sprintf("%s/%s/sccache-%s-%s.tar.gz", sccacheDownloadURL, sccacheVersion, sccacheVersion, arch)
 
 	return Source{
 		HTTP: &SourceHTTP{
@@ -407,6 +377,9 @@ func (c *GoBuildCache) ToRunOption(distroKey string, opts ...GoBuildCacheOption)
 
 // CargoSCCache is a cache for Rust/Cargo build artifacts.
 // It uses sccache to speed up Rust compilation by caching build artifacts.
+//
+// NOTE: This cache downloads a pre-compiled binary from GitHub and should be
+// explicitly enabled by the user due to security and external dependency considerations.
 type CargoSCCache struct {
 	// Scope adds extra information to the cache key.
 	// This is useful to differentiate between different build contexts if required.
@@ -414,10 +387,10 @@ type CargoSCCache struct {
 	// This is mainly intended for internal testing purposes.
 	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
 
-	// The cargosccache cache may be automatically injected into a build if
-	// rust is detected.
-	// Disabled explicitly turns this off.
-	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
+	// Enabled explicitly enables the cargo sccache.
+	// Since this downloads pre-compiled binaries from GitHub, it is opt-in only.
+	// Default is false (disabled).
+	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 func (c *CargoSCCache) validate() error {
@@ -438,25 +411,14 @@ func (f CargoSCCacheOptionFunc) SetCargoSCCacheOption(info *CargoSCCacheInfo) {
 	f(info)
 }
 
-func WithCargoCacheConstraints(opts ...llb.ConstraintsOpt) CacheConfigOption {
-	return CacheConfigOptionFunc(func(info *CacheInfo) {
-		var c llb.Constraints
-		for _, opt := range opts {
-			opt.SetConstraintsOption(&c)
-		}
-		info.CargoBuild.Platform = c.Platform
-	})
-}
-
 const (
 	sccacheCacheDir = "/tmp/dalec/sccache-cache"
-	sccacheBinDir   = "/tmp/internal/dalec/sccache"
 	sccacheBinary   = "/tmp/internal/dalec/sccache/sccache"
 )
 
 func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption) llb.RunOption {
 	return RunOptFunc(func(ei *llb.ExecInfo) {
-		if c.Disabled {
+		if !c.Enabled {
 			return
 		}
 
@@ -486,7 +448,6 @@ func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption)
 
 		// Set up environment variables
 		llb.AddEnv("SCCACHE_DIR", sccacheCacheDir).SetRunOption(ei)
-		llb.AddEnv("SCCACHE_CACHE_SIZE", sccacheCacheSize).SetRunOption(ei)
 
 		// Always download and set up precompiled sccache for consistent behavior
 		sccacheSource := getSccacheSource(platform)

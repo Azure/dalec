@@ -528,11 +528,11 @@
 		},
 		"CargoSCCache": {
 			"properties": {
-				"disabled": {
+				"enabled": {
 					"type": [
 						"boolean"
 					],
-					"description": "The cargosccache cache may be automatically injected into a build if\nrust is detected.\nDisabled explicitly turns this off."
+					"description": "Enabled explicitly enables the cargo sccache.\nSince this downloads pre-compiled binaries from GitHub, it is opt-in only.\nDefault is false (disabled)."
 				},
 				"scope": {
 					"type": [

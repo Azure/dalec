@@ -30,12 +30,6 @@ func addGoCache(info *rpm.CacheInfo) {
 	})
 }
 
-func addCargoCache(info *rpm.CacheInfo) {
-	info.Caches = append(info.Caches, dalec.CacheConfig{
-		CargoBuild: &dalec.CargoSCCache{},
-	})
-}
-
 func needsAutoGocache(spec *dalec.Spec, targetKey string) bool {
 	for _, c := range spec.Build.Caches {
 		if c.GoBuild != nil {
@@ -44,20 +38,6 @@ func needsAutoGocache(spec *dalec.Spec, targetKey string) bool {
 	}
 
 	if !spec.HasGomods() && !dalec.HasGolang(spec, targetKey) {
-		return false
-	}
-
-	return true
-}
-
-func needsAutoCargocache(spec *dalec.Spec, targetKey string) bool {
-	for _, c := range spec.Build.Caches {
-		if c.CargoBuild != nil {
-			return false
-		}
-	}
-
-	if !spec.HasCargohomes() && !dalec.HasRust(spec, targetKey) {
 		return false
 	}
 
@@ -79,10 +59,6 @@ func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 
 	if needsAutoGocache(spec, targetKey) {
 		addGoCache(&cacheInfo)
-	}
-
-	if needsAutoCargocache(spec, targetKey) {
-		addCargoCache(&cacheInfo)
 	}
 
 	st := rpm.Build(br, builder, specPath, cacheInfo, opts...)

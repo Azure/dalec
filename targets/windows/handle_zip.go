@@ -173,27 +173,6 @@ func addGoCache(spec *dalec.Spec, targetKey string) {
 	})
 }
 
-func addCargoCache(spec *dalec.Spec, targetKey string) {
-	if !spec.HasCargohomes() && !dalec.HasRust(spec, targetKey) {
-		return
-	}
-
-	addCache := true
-	for _, c := range spec.Build.Caches {
-		if c.CargoBuild != nil {
-			addCache = false
-			break
-		}
-	}
-	if !addCache {
-		return
-	}
-
-	spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
-		CargoBuild: &dalec.CargoSCCache{},
-	})
-}
-
 func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))
 	worker = worker.With(distroConfig.InstallBuildDeps(sOpt, spec, targetKey, opts...))
@@ -204,7 +183,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	}
 
 	addGoCache(spec, targetKey)
-	addCargoCache(spec, targetKey)
+	// No automatic cargo cache setup - cargo cache is opt-in only due to security considerations
 
 	patched := dalec.PatchSources(worker, spec, sources, opts...)
 	buildScript := createBuildScript(spec, opts...)

@@ -41,17 +41,7 @@ func (d *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		return worker, err
 	}
 
-	cargoExtraPaths, err := prepareCargo(ctx, client, &cfg, worker, spec, targetKey, opts...)
-	if err != nil {
-		return worker, err
-	}
-
-	// Combine the extra paths from both Go and Cargo preparations
-	combinedExtraPaths := func(in llb.State) llb.State {
-		return cargoExtraPaths(extraPaths(in))
-	}
-
-	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(combinedExtraPaths), spec, targetKey, versionID, cfg, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))...)
+	srcPkg, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))...)
 	if err != nil {
 		return worker, err
 	}
@@ -174,28 +164,6 @@ func findBinaryInCandidates(ctx context.Context, client gwclient.Client, in llb.
 	return "", nil
 }
 
-func prepareCargo(ctx context.Context, client gwclient.Client, cfg *deb.SourcePkgConfig, worker llb.State, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.StateOption, error) {
-	if !dalec.HasRust(spec, targetKey) && !spec.HasCargohomes() {
-		return noOpStateOpt, nil
-	}
-
-	addCargoCache := true
-	for _, c := range spec.Build.Caches {
-		if c.CargoBuild != nil {
-			addCargoCache = false
-		}
-	}
-
-	if addCargoCache {
-		spec.Build.Caches = append(spec.Build.Caches, dalec.CacheConfig{
-			CargoBuild: &dalec.CargoSCCache{},
-		})
-	}
-
-	return noOpStateOpt, nil
-}
-
-// prepends the provided values to $PATH
 func addPaths(paths []string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		if len(paths) == 0 {
@@ -264,17 +232,7 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 			return nil, nil, err
 		}
 
-		cargoExtraPaths, err := prepareCargo(ctx, client, &cfg, worker, spec, targetKey, pg, frontend.IgnoreCache(client))
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Combine the extra paths from both Go and Cargo preparations
-		combinedExtraPaths := func(in llb.State) llb.State {
-			return cargoExtraPaths(extraPaths(in))
-		}
-
-		st, err := deb.SourcePackage(ctx, sOpt, worker.With(combinedExtraPaths), spec, targetKey, versionID, cfg, pg, pc, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))
+		st, err := deb.SourcePackage(ctx, sOpt, worker.With(extraPaths), spec, targetKey, versionID, cfg, pg, pc, frontend.IgnoreCache(client, targets.IgnoreCacheKeySrcPkg))
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "error building source package")
 		}
