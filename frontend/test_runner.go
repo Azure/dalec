@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Run tests runs the tests defined in the spec against the given target container.
+// RunTests runs the tests defined in the spec against the given target container.
 func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref gwclient.Reference, withTestDeps llb.StateOption, target string, platform *ocispecs.Platform) error {
 	if skipVar := client.BuildOpts().Opts["build-arg:"+"DALEC_SKIP_TESTS"]; skipVar != "" {
 		skip, err := strconv.ParseBool(skipVar)
