@@ -33,6 +33,18 @@ func (g *GeneratorGomod) processBuildArgs(args map[string]string, allowArg func(
 			continue
 		}
 
+		// Process SSH known hosts for build arg expansion
+		if len(auth.SSHKnownHosts) > 0 {
+			for i, knownHost := range auth.SSHKnownHosts {
+				updated, err := expandArgs(lex, knownHost, args, allowArg)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				auth.SSHKnownHosts[i] = updated
+			}
+		}
+
 		g.Auth[subbed] = auth
 		if subbed != host {
 			delete(g.Auth, host)
@@ -59,6 +71,21 @@ func (s *Spec) HasGomods() bool {
 		}
 	}
 	return false
+}
+
+func (g *SourceGenerator) getGitSSHCommand() string {
+	if g.Gomod == nil {
+		return "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+	}
+
+	// Check if any auth has SSH known hosts
+	for _, auth := range g.Gomod.Auth {
+		if len(auth.SSHKnownHosts) > 0 {
+			return "ssh"
+		}
+	}
+
+	return "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 }
 
 func withGomod(g *SourceGenerator, srcSt, worker llb.State, subPath string, credHelper llb.RunOption, opts ...llb.ConstraintsOpt) func(llb.State) llb.State {
@@ -95,7 +122,7 @@ func withGomod(g *SourceGenerator, srcSt, worker llb.State, subPath string, cred
 				llb.AddEnv("GOPATH", "/go"),
 				credHelper,
 				llb.AddEnv("TMP_GOMODCACHE", proxyPath),
-				llb.AddEnv("GIT_SSH_COMMAND", "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"),
+				llb.AddEnv("GIT_SSH_COMMAND", g.getGitSSHCommand()),
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				llb.AddMount(proxyPath, llb.Scratch(), llb.AsPersistentCacheDir(GomodCacheKey, llb.CacheMountShared)),
@@ -117,6 +144,31 @@ func (g *SourceGenerator) gitconfigGeneratorScript(scriptPath string) llb.State 
 	}
 
 	goPrivate := []string{}
+
+	// First, set up SSH known hosts if any exist
+	hasKnownHosts := false
+	for _, host := range sortedHosts {
+		auth := g.Gomod.Auth[host]
+		if len(auth.SSHKnownHosts) > 0 {
+			hasKnownHosts = true
+			break
+		}
+	}
+
+	if hasKnownHosts {
+		fmt.Fprintln(&script, `# Setup SSH known hosts`)
+		fmt.Fprintln(&script, `mkdir -p ~/.ssh`)
+		fmt.Fprintln(&script, `chmod 700 ~/.ssh`)
+		for _, host := range sortedHosts {
+			auth := g.Gomod.Auth[host]
+			for _, knownHost := range auth.SSHKnownHosts {
+				fmt.Fprintf(&script, `echo "%s" >> ~/.ssh/known_hosts`, knownHost)
+				script.WriteRune('\n')
+			}
+		}
+		fmt.Fprintln(&script, `chmod 600 ~/.ssh/known_hosts`)
+		script.WriteRune('\n')
+	}
 
 	for _, host := range sortedHosts {
 		auth := g.Gomod.Auth[host]
@@ -185,7 +237,7 @@ func (g *SourceGenerator) withGomodSecretsAndSockets() llb.RunOption {
 
 				llb.AddEnv(
 					"GIT_SSH_COMMAND",
-					`ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`,
+					g.getGitSSHCommand(),
 				).SetRunOption(ei)
 			}
 		}

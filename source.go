@@ -254,18 +254,18 @@ func Sources(spec *Spec, sOpt SourceOpts, opts ...llb.ConstraintsOpt) (map[strin
 	return states, nil
 }
 
-func (g *SourceGenerator) fillDefaults(host string, authInfo *GitAuth) {
+func (g *SourceGenerator) fillDefaults(host string, authInfo *GitAuth, sshKnownHosts []string) {
 	if g == nil || authInfo == nil {
 		return
 	}
 
 	switch {
 	case g.Gomod != nil:
-		g.Gomod.fillDefaults(host, authInfo)
+		g.Gomod.fillDefaults(host, authInfo, sshKnownHosts)
 	}
 }
 
-func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth) {
+func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth, sshKnownHosts []string) {
 	// Don't overwrite explicitly-specified auth
 	_, ok := gm.Auth[host]
 	if ok {
@@ -285,7 +285,16 @@ func (gm *GeneratorGomod) fillDefaults(host string, authInfo *GitAuth) {
 			Username: defaultUsername,
 		}
 	default:
-		return
+		// If no auth is specified but we have SSH known hosts, still create an entry
+		if len(sshKnownHosts) == 0 {
+			return
+		}
+	}
+
+	// Copy SSH known hosts if available
+	if len(sshKnownHosts) > 0 {
+		gomodAuth.SSHKnownHosts = make([]string, len(sshKnownHosts))
+		copy(gomodAuth.SSHKnownHosts, sshKnownHosts)
 	}
 
 	if gm.Auth == nil {
