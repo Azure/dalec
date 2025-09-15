@@ -2,12 +2,10 @@ package testrunner
 
 import (
 	"encoding/json"
-	stderrs "errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/Azure/dalec"
 	"github.com/moby/buildkit/client/llb"
@@ -50,11 +48,20 @@ func CheckFilesCmd(args []string) {
 		os.Exit(1)
 	}
 
-	if err := checkFiles(strings.Join(flags.Args()[1:], " "), files); err != nil {
-		if err := writeFileAppend(outputPath, []byte(err.Error()), 0o600); err != nil {
-			fmt.Fprintln(os.Stderr, "error writing test result:", err)
-			os.Exit(2)
-		}
+	results := checkFiles(files)
+	if len(results) == 0 {
+		return
+	}
+
+	dt, err = json.Marshal(results)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error marshaling results:", err)
+		os.Exit(2)
+	}
+
+	if err := writeFileAppend(outputPath, dt, 0o600); err != nil {
+		fmt.Fprintln(os.Stderr, "error writing results:", err)
+		os.Exit(2)
 	}
 }
 
@@ -70,34 +77,46 @@ func writeFileAppend(path string, data []byte, mode os.FileMode) error {
 	return nil
 }
 
-func checkFiles(testName string, files map[string]dalec.FileCheckOutput) error {
-	var errs []error
+type FileCheckErrResult struct {
+	Filename  string
+	StepIndex *int
+	Checks    []*dalec.CheckOutputError
+}
 
+func checkFiles(files map[string]dalec.FileCheckOutput) []FileCheckErrResult {
+	var results []FileCheckErrResult
 	for path, check := range files {
 		if err := checkFile(path, check); err != nil {
-			errs = append(errs, err)
+			results = append(results, FileCheckErrResult{Filename: path, Checks: getFileCheckErrs(err)})
 		}
 	}
-
-	if len(errs) > 0 {
-		err := stderrs.Join(errs...)
-		return err
-	}
-
-	return nil
+	return results
 }
 
 func checkFile(p string, check dalec.FileCheckOutput) error {
 	stat, err := os.Lstat(p)
 	if err != nil {
-		if os.IsNotExist(err) && check.NotExist {
-			return nil
+		if os.IsNotExist(err) {
+			if check.NotExist {
+				return nil
+			}
+			return &dalec.CheckOutputError{
+				Kind:     dalec.CheckFileNotExistsKind,
+				Path:     p,
+				Expected: "exists=false",
+				Actual:   "exists=true",
+			}
 		}
 		return errors.Wrapf(err, "checking file %s", p)
 	}
 
 	if check.NotExist {
-		return errors.Errorf("file %s exists but should not", p)
+		return &dalec.CheckOutputError{
+			Kind:     dalec.CheckFileNotExistsKind,
+			Path:     p,
+			Expected: "exists=false",
+			Actual:   "exists=true",
+		}
 	}
 
 	var v string
@@ -140,4 +159,25 @@ func WithFileChecks(frontend llb.State, test *dalec.TestSpec, outputPath string)
 		llb.AddMount(fileChecksPath, st, llb.SourcePath("files.json")).SetRunOption(ei)
 		llb.Args([]string{checkFilesPath, CheckFilesCmdName, "--output", outputPath, fileChecksPath, test.Name}).SetRunOption(ei)
 	})
+}
+
+func getFileCheckErrs(err error) []*dalec.CheckOutputError {
+	if wrapped, ok := err.(interface{ Unwrap() []error }); ok {
+		var errs []*dalec.CheckOutputError
+		for _, e := range wrapped.Unwrap() {
+			errs = append(errs, getFileCheckErrs(e)...)
+		}
+		return errs
+	}
+
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return getFileCheckErrs(wrapped.Unwrap())
+	}
+
+	var ce *dalec.CheckOutputError
+	ok := errors.As(err, &ce)
+	if !ok {
+		return nil
+	}
+	return []*dalec.CheckOutputError{ce}
 }

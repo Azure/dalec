@@ -194,22 +194,25 @@ func (w *specWrapper) Requires() fmt.Stringer {
 	b.WriteString(getUserPostRequires(artifacts.Users, artifacts.Groups))
 
 	deps := w.GetPackageDeps(w.Target)
-	if deps == nil {
+	buildDeps := deps.GetBuild()
+	runtimeDeps := deps.GetRuntime()
+	if len(buildDeps) == 0 && len(runtimeDeps) == 0 {
 		return b
 	}
-	buildKeys := dalec.SortMapKeys(deps.Build)
+
+	buildKeys := dalec.SortMapKeys(buildDeps)
 	for _, name := range buildKeys {
-		constraints := deps.Build[name]
+		constraints := buildDeps[name]
 		writeDep(b, "BuildRequires", name, constraints)
 	}
 
-	if len(deps.Build) > 0 && len(deps.Runtime) > 0 {
+	if len(buildDeps) > 0 && len(runtimeDeps) > 0 {
 		b.WriteString("\n")
 	}
 
-	runtimeKeys := dalec.SortMapKeys(deps.Runtime)
+	runtimeKeys := dalec.SortMapKeys(runtimeDeps)
 	for _, name := range runtimeKeys {
-		constraints := deps.Runtime[name]
+		constraints := runtimeDeps[name]
 		// TODO: consider if it makes sense to support sources satisfying runtime deps
 		writeDep(b, "Requires", name, constraints)
 	}
@@ -221,11 +224,7 @@ func (w *specWrapper) Requires() fmt.Stringer {
 func (w *specWrapper) Recommends() fmt.Stringer {
 	b := &strings.Builder{}
 	deps := w.GetPackageDeps(w.Target)
-	if deps == nil {
-		return b
-	}
-
-	if len(deps.Recommends) == 0 {
+	if len(deps.GetRecommends()) == 0 {
 		return b
 	}
 

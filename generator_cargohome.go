@@ -1,8 +1,10 @@
 package dalec
 
 import (
+	"context"
 	"path/filepath"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
@@ -48,6 +50,7 @@ func withCargohome(g *SourceGenerator, srcSt, worker llb.State, subPath string, 
 				llb.Dir(filepath.Join(joinedWorkDir, path)),
 				srcMount,
 				WithConstraints(opts...),
+				g.Cargohome._sourceMap.GetLocation(in),
 			).AddMount(cargoHomeDir, in)
 		}
 		return in
@@ -102,4 +105,18 @@ func (s *Spec) CargohomeDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Cons
 	}
 
 	return &deps, nil
+}
+
+func (gen *GeneratorCargohome) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal GeneratorCargohome
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return err
+	}
+
+	*gen = GeneratorCargohome(i)
+	gen._sourceMap = newSourceMap(ctx, node)
+	return nil
 }

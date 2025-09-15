@@ -34,11 +34,19 @@ func FromRef(ctx context.Context, ref gwclient.Reference) *StateRefFS {
 }
 
 func FromState(ctx context.Context, state *llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) (fs.ReadDirFS, error) {
+	return fromState(ctx, state, client, false, opts...)
+}
+
+func EvalFromState(ctx context.Context, state *llb.State, client gwclient.Client, opts ...llb.ConstraintsOpt) (fs.ReadDirFS, error) {
+	return fromState(ctx, state, client, true, opts...)
+}
+
+func fromState(ctx context.Context, state *llb.State, client gwclient.Client, eval bool, opts ...llb.ConstraintsOpt) (fs.ReadDirFS, error) {
 	if state == nil {
 		return &nullFS{}, nil
 	}
 
-	res, err := fetchRef(client, *state, ctx, opts...)
+	res, err := fetchRef(ctx, client, *state, eval, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +59,7 @@ func FromState(ctx context.Context, state *llb.State, client gwclient.Client, op
 	return FromRef(ctx, ref), nil
 }
 
-func fetchRef(client gwclient.Client, st llb.State, ctx context.Context, opts ...llb.ConstraintsOpt) (*gwclient.Result, error) {
+func fetchRef(ctx context.Context, client gwclient.Client, st llb.State, eval bool, opts ...llb.ConstraintsOpt) (*gwclient.Result, error) {
 	def, err := st.Marshal(ctx, opts...)
 	if err != nil {
 		return nil, err
@@ -59,6 +67,7 @@ func fetchRef(client gwclient.Client, st llb.State, ctx context.Context, opts ..
 
 	res, err := client.Solve(ctx, gwclient.SolveRequest{
 		Definition: def.ToPB(),
+		Evaluate:   eval,
 	})
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package dalec
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	goerrors "errors"
 	"fmt"
@@ -11,9 +12,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/solver/errdefs"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -21,6 +24,59 @@ import (
 type FilterFunc = func(string, []string, []string, ...llb.ConstraintsOpt) llb.StateOption
 
 var errNoSourceVariant = fmt.Errorf("no source variant found")
+
+// Source defines a source to be used in the build.
+// A source can be a local directory, a git repositoryt, http(s) URL, etc.
+type Source struct {
+	// This is an embedded union representing all of the possible source types.
+	// Exactly one must be non-nil, with all other cases being errors.
+	//
+	// === Begin Source Variants ===
+	DockerImage *SourceDockerImage `yaml:"image,omitempty" json:"image,omitempty"`
+	Git         *SourceGit         `yaml:"git,omitempty" json:"git,omitempty"`
+	HTTP        *SourceHTTP        `yaml:"http,omitempty" json:"http,omitempty"`
+	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
+	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
+	Inline      *SourceInline      `yaml:"inline,omitempty" json:"inline,omitempty"`
+	// === End Source Variants ===
+
+	// Path is the path to the source after fetching it based on the identifier.
+	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+
+	// Includes is a list of paths underneath `Path` to include, everything else is execluded
+	// If empty, everything is included (minus the excludes)
+	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
+	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
+	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
+
+	// Generate specifies a list of dependency generators to apply to a given source.
+	//
+	// Generators are used to generate additional sources from this source.
+	// As an example the `gomod` generator can be used to generate a go module cache from a go source.
+	// How a generator operates is dependent on the actual generator.
+	// Generators may also cause modifications to the build environment.
+	//
+	// Currently supported generators are: "gomod", "cargohome", and "pip".
+	// The "gomod" generator will generate a go module cache from the source.
+	// The "cargohome" generator will generate a cargo home from the source.
+	// The "pip" generator will generate a pip cache from the source.
+	Generate []*SourceGenerator `yaml:"generate,omitempty" json:"generate,omitempty"`
+
+	_sourceMap *sourceMap `json:"-" yaml:"-"`
+}
+
+func (s *Source) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal Source
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return err
+	}
+	*s = Source(i)
+	s._sourceMap = newSourceMap(ctx, node)
+	return nil
+}
 
 // withFollowPath similar to using [llb.IncludePatterns] except that it will
 // follow symlinks at the provided path.
@@ -143,7 +199,7 @@ func (s Source) Doc(name string) io.Reader {
 	return buf
 }
 
-func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, subPath string, opts ...llb.ConstraintsOpt) llb.State {
+func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.State, patchNames []PatchSpec, subPath string, sources map[string]Source, sourceName string, opts ...llb.ConstraintsOpt) llb.State {
 	for _, p := range patchNames {
 		patchState := sourceToState[p.Source]
 		// on each iteration, mount source state to /src to run `patch`, and
@@ -151,10 +207,15 @@ func patchSource(worker, sourceState llb.State, sourceToState map[string]llb.Sta
 
 		patchPath := filepath.Join(p.Source, p.Path)
 
+		cmd := fmt.Sprintf("patch -p%d < /patch", *p.Strip)
 		sourceState = worker.Run(
 			llb.AddMount("/patch", patchState, llb.Readonly, llb.SourcePath(patchPath)),
 			llb.Dir(filepath.Join("src", subPath)),
-			ShArgs(fmt.Sprintf("patch -p%d < /patch", *p.Strip)),
+			ShArgs(cmd),
+			llb.WithCustomNamef("Apply patch %q to source %q: %s", p.Source, sourceName, cmd),
+			p._sourceMap.GetLocation(sourceState),                   // patch spec
+			sources[p.Source]._sourceMap.GetLocation(patchState),    // patch source
+			sources[sourceName]._sourceMap.GetLocation(sourceState), // patch target
 			WithConstraints(opts...),
 		).AddMount("/src", sourceState)
 	}
@@ -180,7 +241,7 @@ func PatchSources(worker llb.State, spec *Spec, sourceToState map[string]llb.Sta
 			continue
 		}
 		pg := llb.ProgressGroup(pgID, "Patch spec source: "+sourceName+" ", false)
-		states[sourceName] = patchSource(worker, sourceState, states, patches, sourceName, pg, withConstraints(opts))
+		states[sourceName] = patchSource(worker, sourceState, states, patches, sourceName, spec.Sources, sourceName, pg, withConstraints(opts))
 	}
 
 	return states
@@ -371,6 +432,7 @@ func (s *Source) validate() error {
 	var invalid bool
 	if err := s.validateSourceVariants(); err != nil {
 		invalid = true
+		err = errdefs.WithSource(err, s._sourceMap.GetErrdefsSource())
 		errs = append(errs, err)
 	}
 
@@ -550,4 +612,17 @@ func printDocf(w io.Writer, format string, args ...any) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (p *PatchSpec) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal PatchSpec
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return err
+	}
+	*p = PatchSpec(i)
+	p._sourceMap = newSourceMap(ctx, node)
+	return nil
 }

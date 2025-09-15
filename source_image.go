@@ -1,18 +1,23 @@
 package dalec
 
 import (
+	"context"
 	stderrors "errors"
 	"fmt"
 	"io"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/pkg/errors"
 )
 
 type SourceDockerImage struct {
 	Ref string   `yaml:"ref" json:"ref"`
 	Cmd *Command `yaml:"cmd,omitempty" json:"cmd,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 // Command is used to execute a command to generate a source from a docker image.
@@ -76,6 +81,8 @@ type BuildStep struct {
 
 	// Mounts is the list of sources to mount into the build step.
 	Mounts []SourceMount `yaml:"mounts,omitempty" json:"mounts,omitempty"`
+
+	_sourceMap *sourceMap `json:"-" yaml:"-"`
 }
 
 func (step *BuildStep) validate() error {
@@ -86,10 +93,33 @@ func (step *BuildStep) validate() error {
 	}
 
 	if len(errs) > 0 {
-		return stderrors.Join(errs...)
+		err := stderrors.Join(errs...)
+		err = errdefs.WithSource(err, step._sourceMap.GetErrdefsSource())
+		return err
 	}
 
 	return nil
+}
+
+func (step *BuildStep) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal BuildStep
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return err
+	}
+
+	*step = BuildStep(i)
+	step._sourceMap = newSourceMap(ctx, node)
+	return nil
+}
+
+// GetSourceLocation returns an llb.ConstraintsOpt representing the source map
+// location for this BuildStep. It returns a no-op if there is no source map or
+// the provided state is nil.
+func (step *BuildStep) GetSourceLocation(state llb.State) (ret llb.ConstraintsOpt) {
+	return step._sourceMap.GetLocation(state)
 }
 
 // SourceMount wraps a [Source] with a target mount point.
@@ -153,7 +183,9 @@ var errNoImageSourcePath = stderrors.New("docker image source path cannot be emp
 func (src *SourceDockerImage) validate(opts fetchOptions) error {
 	var errs []error
 	if src.Ref == "" {
-		errs = append(errs, errors.New("docker image source must have a ref"))
+		err := errors.New("docker image source must have a ref")
+		err = errdefs.WithSource(err, src._sourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	if src.Cmd != nil {
@@ -165,7 +197,9 @@ func (src *SourceDockerImage) validate(opts fetchOptions) error {
 	// If someone *really* wants to extract the entire rootfs, they need to say so explicitly.
 	// We won't fill this in for them, particularly because this is almost certainly not the user's intent.
 	if opts.Path == "" {
-		errs = append(errs, errNoImageSourcePath)
+		err := errNoImageSourcePath
+		err = errdefs.WithSource(err, src._sourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	if len(errs) > 0 {
@@ -179,7 +213,13 @@ func (src *SourceDockerImage) IsDir() bool {
 }
 
 func (src *SourceDockerImage) baseState(opts fetchOptions) llb.State {
-	base := llb.Image(src.Ref, llb.WithMetaResolver(opts.SourceOpt.Resolver), WithConstraints(opts.Constraints...))
+	base := llb.Image(
+		src.Ref,
+		llb.WithMetaResolver(opts.SourceOpt.Resolver),
+		WithConstraints(opts.Constraints...),
+		src._sourceMap.GetRootLocation(),
+	)
+
 	return base.With(src.Cmd.baseState(opts))
 }
 
@@ -253,7 +293,15 @@ func (cmd *Command) baseState(opts fetchOptions) llb.StateOption {
 				rOpts = append(rOpts, mnt.ToRunOption(opts.SourceOpt, WithConstraints(opts.Constraints...)))
 			}
 
-			rOpts = append(rOpts, WithConstraints(opts.Constraints...))
+			opts := opts.Constraints
+
+			v := img
+			if i != 0 {
+				v = out
+			}
+			opts = append(opts, step.GetSourceLocation(v))
+
+			rOpts = append(rOpts, WithConstraints(opts...))
 			cmdSt := img.Run(rOpts...)
 
 			// on first iteration with a root subpath

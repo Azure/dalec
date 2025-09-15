@@ -2,7 +2,9 @@ package frontend
 
 import (
 	"context"
+	"encoding/json"
 	stderrors "errors"
+	"io"
 	"io/fs"
 	"path"
 	"path/filepath"
@@ -16,6 +18,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/solver/errdefs"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -73,9 +76,9 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 
 	var group errGroup
 
-	const errorsOutputFile = "errors.txt"
-	const outputPath = "/tmp/dalec/test/output"
-	fullOutputPath := filepath.Join(outputPath, errorsOutputFile)
+	const errorsOutputFile = ".errors.txt"
+	const outputPath = "/tmp/dalec/internal/test/step/output"
+	errorsOutputFullPath := filepath.Join(outputPath, errorsOutputFile)
 
 	for _, test := range tests {
 		base := ctr
@@ -95,13 +98,16 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 		result = result.File(llb.Mkdir(outputPath, 0o755, llb.WithParents(true)), pg)
 
 		for i, step := range test.Steps {
-			opts := append(opts, testrunner.WithTestStep(frontendSt, &step, i, fullOutputPath))
+			opts := append(opts, testrunner.WithTestStep(frontendSt, &step, i, errorsOutputFullPath))
+			opts = append(opts, step.GetSourceLocation(result))
 			result = result.Run(opts...).Root()
 		}
 
 		if len(test.Files) > 0 {
-			runOpts := append(opts, testrunner.WithFileChecks(frontendSt, test, fullOutputPath))
-			result = result.Run(runOpts...).Root()
+			opts := append(opts, testrunner.WithFileChecks(frontendSt, test, errorsOutputFullPath))
+
+			opts = append(opts, llb.WithCustomNamef("Execute file checks for test: %s", test.Name))
+			result = result.Run(opts...).Root()
 		}
 
 		group.Go(func() (retErr error) {
@@ -112,27 +118,86 @@ func RunTests(ctx context.Context, client gwclient.Client, spec *dalec.Spec, ref
 				}
 			}()
 
-			resultFS, err := bkfs.FromState(ctx, &result, client, dalec.Platform(platform))
+			// Make sure we force evaluation here otherwise errors won't surface until
+			// later, e.g. when we try to read the output file.
+			resultFS, err := bkfs.EvalFromState(ctx, &result, client, dalec.Platform(platform))
 			if err != nil {
-				return errors.Wrap(err, "failed to run test "+test.Name)
+				err = testrunner.FilterStepError(err)
+				return errors.Wrapf(err, "%q", test.Name)
 			}
 
-			p := strings.TrimPrefix(fullOutputPath, "/")
-			dt, err := fs.ReadFile(resultFS, p)
+			p := strings.TrimPrefix(errorsOutputFullPath, "/")
+			f, err := resultFS.Open(p)
 			if err != nil {
 				if !stderrors.Is(err, fs.ErrNotExist) {
-					return errors.Wrapf(err, "failed to read file checks for test %q: %T", test.Name, err)
+					return errors.Wrapf(err, "failed to read test result for %q", test.Name)
 				}
+				// No errors file means no errors.
 				return nil
 			}
-			if len(dt) > 0 {
-				return errors.Errorf("test %q failed:\n%s", test.Name, string(dt))
+			defer f.Close()
+
+			dec := json.NewDecoder(f)
+
+			var errs []error
+			for {
+				var fileCheckResults []testrunner.FileCheckErrResult
+				err := dec.Decode(&fileCheckResults)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return errors.Wrapf(err, "failed to decode test result for %q", test.Name)
+				}
+
+				for _, r := range fileCheckResults {
+					for _, checkErr := range r.Checks {
+						var src *errdefs.Source
+						if r.StepIndex != nil {
+							idx := *r.StepIndex
+							step := test.Steps[idx]
+							err = errors.Wrapf(err, "step %d", idx)
+							err = errors.Wrapf(err, "%q", test.Name)
+							switch r.Filename {
+							case "stdout":
+								src = step.Stdout.GetErrSource(checkErr)
+							case "stderr":
+								src = step.Stderr.GetErrSource(checkErr)
+							default:
+								return errors.Wrapf(err, "unknown output stream name for step command check, if you see this it is a bug and should be reported: stream %q", r.Filename)
+							}
+
+							err = wrapWithSource(err, src)
+							errs = append(errs, err)
+							continue
+						}
+
+						f, ok := test.Files[r.Filename]
+						if ok {
+							src := f.GetErrSource(checkErr)
+							err = errors.Wrap(checkErr, r.Filename)
+							err = errors.Wrapf(err, "%q", test.Name)
+							err = wrapWithSource(err, src)
+							errs = append(errs, err)
+							continue
+						}
+						errs = append(errs, errors.Wrapf(err, "unknown file %q in test %q, if you see this it is a bug and should be reported", r.Filename, test.Name))
+					}
+				}
 			}
-			return nil
+
+			return stderrors.Join(errs...)
 		})
 	}
 
 	return group.Wait()
+}
+
+func wrapWithSource(err error, src *errdefs.Source) error {
+	if src != nil {
+		err = errors.Wrapf(err, "%s:%d", src.Info.Filename, src.Ranges[0].Start.Line)
+	}
+	return errdefs.WithSource(err, src)
 }
 
 type errGroup struct {
@@ -146,8 +211,9 @@ func (g *errGroup) Go(f func() error) {
 
 	go func() {
 		defer g.group.Done()
+		err := f()
 		g.mu.Lock()
-		g.errs = append(g.errs, f())
+		g.errs = append(g.errs, err)
 		g.mu.Unlock()
 	}()
 }
@@ -158,6 +224,7 @@ func (g *errGroup) Wait() error {
 	defer g.mu.Unlock()
 
 	err := stderrors.Join(g.errs...)
+
 	g.errs = g.errs[:0]
 	return err
 }

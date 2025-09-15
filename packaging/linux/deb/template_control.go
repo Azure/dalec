@@ -60,7 +60,7 @@ func formatVersionConstraint(v string) string {
 // AppendConstraints takes an input list of packages and returns a new list of
 // packages with the constraints appended for use in a debian/control file.
 // The output list is sorted lexicographically.
-func AppendConstraints(deps map[string]dalec.PackageConstraints) []string {
+func AppendConstraints(deps dalec.PackageDependencyList) []string {
 	if deps == nil {
 		return nil
 	}
@@ -97,10 +97,10 @@ func AppendConstraints(deps map[string]dalec.PackageConstraints) []string {
 func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDependencies) {
 	var (
 		needsClone bool
-		rtDeps     map[string]dalec.PackageConstraints
+		rtDeps     dalec.PackageDependencyList
 	)
 	if depsSpec == nil || depsSpec.Runtime == nil {
-		rtDeps = make(map[string]dalec.PackageConstraints)
+		rtDeps = make(dalec.PackageDependencyList)
 	} else {
 		rtDeps = depsSpec.Runtime
 		needsClone = true
