@@ -103,7 +103,7 @@ image that are not typically available in the base image. As an example, a
 package dependency may not be available in the default package repositories.
 
 You can have Dalec output an image with the target's worker image with
-`<target>/worker>` build target, e.g. `--target=mariner2/worker`. You can then
+`<target>/worker>` build target, e.g. `--target=azlinux3/worker`. You can then
 add any customizations and feed that back in via [source polices](#source-policies)
 or [named build contexts](#named-build-contexts).
 
@@ -114,11 +114,11 @@ or [named build contexts](#named-build-contexts).
 First, extract the base worker image for your target:
 
 ```shell
-# For mariner2
-docker buildx build --target=mariner2/worker --output=type=docker,name=dalec-mariner2-base - <<< "null"
-
 # For azlinux3  
 docker buildx build --target=azlinux3/worker --output=type=docker,name=dalec-azlinux3-base - <<< "null"
+
+# For mariner2
+docker buildx build --target=mariner2/worker --output=type=docker,name=dalec-mariner2-base - <<< "null"
 
 # For jammy
 docker buildx build --target=jammy/worker --output=type=docker,name=dalec-jammy-base - <<< "null"
@@ -129,7 +129,7 @@ docker buildx build --target=jammy/worker --output=type=docker,name=dalec-jammy-
 Create a Dockerfile that extends the base worker image:
 
 ```dockerfile
-FROM dalec-mariner2-base
+FROM dalec-azlinux3-base
 
 # Install additional packages
 RUN tdnf install -y \
@@ -155,7 +155,7 @@ ENV CUSTOM_VAR=value
 **Step 3: Build your custom worker image**
 
 ```shell
-docker build -t my-custom-worker:mariner2 .
+docker build -t my-custom-worker:azlinux3 .
 ```
 
 **Step 4: Use the custom worker image**
@@ -165,8 +165,8 @@ You can use your custom worker image in two ways:
 **Option A: Named Build Context (Recommended)**
 ```shell
 docker buildx build \
-    --build-context dalec-mariner2-worker=my-custom-worker:mariner2 \
-    --target=mariner2/rpm \
+    --build-context dalec-azlinux3-worker=my-custom-worker:azlinux3 \
+    --target=azlinux3/rpm \
     -f myspec.yml .
 ```
 
@@ -179,26 +179,25 @@ cat > source-policy.json << 'EOF'
     {
       "action": "CONVERT",
       "selector": {
-        "identifier": "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+        "identifier": "mcr.microsoft.com/azurelinux/base/core:3.0"
       },
       "updates": {
-        "identifier": "my-custom-worker:mariner2"
+        "identifier": "my-custom-worker:azlinux3"
       }
     }
   ]
 }
 EOF
 
-# Use with buildx (experimental feature)
-BUILDX_EXPERIMENTAL=1 docker buildx build \
-    --source-policy=source-policy.json \
-    --target=mariner2/rpm \
+# Use with buildx via environment variable
+EXPERIMENTAL_BUILDKIT_SOURCE_POLICY=source-policy.json docker buildx build \
+    --target=azlinux3/rpm \
     -f myspec.yml .
 ```
 
 #### Complete Example
 
-Here's a complete example that adds a custom package repository to the mariner2 worker:
+Here's a complete example that adds custom environment variables and build tools to the azlinux3 worker:
 
 **custom-worker.Dockerfile:**
 ```dockerfile
@@ -206,36 +205,38 @@ Here's a complete example that adds a custom package repository to the mariner2 
 FROM scratch AS base-worker
 
 FROM base-worker AS final
-# Install additional RPM repository
+# Install additional development tools that aren't available via dalec spec
 RUN tdnf install -y \
-    dnf-plugins-core \
+    strace \
+    valgrind \
+    systemd-devel \
     && tdnf clean all
 
-# Add custom repository
-COPY <<EOF /etc/yum.repos.d/custom.repo
-[custom-repo]
-name=Custom Repository
-baseurl=https://my.example.com/repo/mariner2/$basearch
-enabled=1
-gpgcheck=0
-EOF
+# Set custom environment variables needed for builds
+ENV CUSTOM_BUILD_FLAGS="-O2 -g"
+ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
 
-# Install packages from custom repo
-RUN tdnf install -y my-custom-package && tdnf clean all
+# Add custom build wrapper script
+COPY <<EOF /usr/local/bin/custom-build-wrapper
+#!/bin/bash
+export CFLAGS="\$CFLAGS \$CUSTOM_BUILD_FLAGS"
+exec "\$@"
+EOF
+RUN chmod +x /usr/local/bin/custom-build-wrapper
 ```
 
 **Build and use:**
 ```shell
 # 1. Extract base worker
-docker buildx build --target=mariner2/worker --output=type=docker,name=dalec-mariner2-base - <<< "null"
+docker buildx build --target=azlinux3/worker --output=type=docker,name=dalec-azlinux3-base - <<< "null"
 
 # 2. Build custom worker
-docker build --build-context base-worker=dalec-mariner2-base -t my-custom-worker:mariner2 -f custom-worker.Dockerfile .
+docker build --build-context base-worker=dalec-azlinux3-base -t my-custom-worker:azlinux3 -f custom-worker.Dockerfile .
 
 # 3. Use custom worker in dalec build
 docker buildx build \
-    --build-context dalec-mariner2-worker=my-custom-worker:mariner2 \
-    --target=mariner2/rpm \
+    --build-context dalec-azlinux3-worker=my-custom-worker:azlinux3 \
+    --target=azlinux3/rpm \
     -f myspec.yml .
 ```
 
@@ -272,95 +273,23 @@ docker buildx build \
 
 #### Advanced Integration Examples
 
-**Using BuildKit Go Client**
-
-For programmatic integration, you can use the BuildKit Go client directly:
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    
-    "github.com/moby/buildkit/client"
-    "github.com/moby/buildkit/client/llb"
-    "github.com/moby/buildkit/util/apicaps"
-)
-
-func buildCustomWorker(ctx context.Context, c *client.Client) error {
-    // Build the base worker first
-    workerDef, err := llb.Image("ghcr.io/azure/dalec/frontend:latest").
-        Run(llb.Args([]string{"--target=mariner2/worker"})).
-        Root().Marshal(ctx)
-    if err != nil {
-        return err
-    }
-    
-    workerResult, err := c.Solve(ctx, client.SolveRequest{
-        Definition: workerDef.ToPB(),
-    })
-    if err != nil {
-        return err
-    }
-    
-    // Export worker image
-    workerRef, err := workerResult.SingleRef()
-    if err != nil {
-        return err
-    }
-    
-    // Create custom worker with additional packages
-    customWorker := llb.Image("").
-        File(llb.Copy(workerRef, "/", "/")).
-        Run(llb.Shlex("tdnf install -y my-custom-package && tdnf clean all")).
-        Root()
-    
-    customDef, err := customWorker.Marshal(ctx)
-    if err != nil {
-        return err
-    }
-    
-    // Build the final package using custom worker
-    finalDef, err := llb.Image("ghcr.io/azure/dalec/frontend:latest").
-        Run(llb.Args([]string{"--target=mariner2/rpm"})).
-        AddMount("/var/lib/buildkit/context", llb.Local("context")).
-        AddMount("/tmp/worker", customWorker).
-        Root().Marshal(ctx)
-    if err != nil {
-        return err
-    }
-    
-    _, err = c.Solve(ctx, client.SolveRequest{
-        Definition: finalDef.ToPB(),
-        Frontend:   "gateway.v0",
-        FrontendOpt: map[string]string{
-            "requestid": "build-custom-worker",
-        },
-    })
-    
-    return err
-}
-```
-
 **Using Docker Buildx Bake**
 
 Create a `docker-bake.hcl` file that chains worker and package builds:
 
 ```hcl
 # docker-bake.hcl
-target "custom-worker" {
-    target = "mariner2/worker" 
-    dockerfile-inline = "{}"
+target "worker" {
+    target = "azlinux3/worker" 
+    dockerfile = "/path/to/spec.yml"
     args = {
         "BUILDKIT_SYNTAX" = "ghcr.io/azure/dalec/frontend:latest"
     }
-    output = ["type=docker,name=my-base-worker"]
 }
 
 target "enhanced-worker" {
     contexts = {
-        "base-worker" = "target:custom-worker"
+        "base-worker" = "target:worker"
     }
     dockerfile-inline = <<EOT
         FROM base-worker
@@ -369,27 +298,19 @@ target "enhanced-worker" {
             development-tools \
             && tdnf clean all
         
-        # Add custom repository
-        COPY <<EOF /etc/yum.repos.d/custom.repo
-[custom-repo]
-name=Custom Repository  
-baseurl=https://my.example.com/repo/mariner2/\$basearch
-enabled=1
-gpgcheck=0
-EOF
+        ENV CUSTOM_BUILD_FLAGS="-O2 -g"
     EOT
-    output = ["type=docker,name=my-enhanced-worker"]
 }
 
 target "build-package" {
-    dockerfile = "myspec.yml"
+    dockerfile = "/path/to/spec.yml"
     args = {
         "BUILDKIT_SYNTAX" = "ghcr.io/azure/dalec/frontend:latest"
     }
     contexts = {
-        "dalec-mariner2-worker" = "target:enhanced-worker"
+        "dalec-azlinux3-worker" = "target:enhanced-worker"
     }
-    target = "mariner2/rpm"
+    target = "azlinux3/rpm"
     output = ["_output"]
 }
 ```
@@ -401,50 +322,8 @@ Then build everything in sequence:
 docker buildx bake build-package
 
 # Or build specific targets
-docker buildx bake custom-worker enhanced-worker
+docker buildx bake worker enhanced-worker
 docker buildx bake build-package
-```
-
-**Ubuntu Pro Example**
-
-For Ubuntu targets that need Pro packages:
-
-```dockerfile
-FROM dalec-jammy-base
-
-# Enable Ubuntu Pro
-RUN apt-get update && apt-get install -y ubuntu-advantage-tools
-
-# Attach to Ubuntu Pro (requires token)
-ARG UA_TOKEN
-RUN ua attach $UA_TOKEN
-
-# Enable specific services
-RUN ua enable esm-infra
-RUN ua enable livepatch
-
-# Install Pro packages
-RUN apt-get update && apt-get install -y \
-    some-pro-package \
-    && rm -rf /var/lib/apt/lists/*
-
-# Optionally detach (for ephemeral builds)
-RUN ua detach --assume-yes || true
-```
-
-Use with:
-
-```shell
-# Build custom worker with Pro packages
-docker build --build-arg UA_TOKEN="$UBUNTU_PRO_TOKEN" \
-    -t my-ubuntu-pro-worker:jammy \
-    -f ubuntu-pro.Dockerfile .
-
-# Use in dalec build
-docker buildx build \
-    --build-context dalec-jammy-worker=my-ubuntu-pro-worker:jammy \
-    --target=jammy/deb \
-    -f myspec.yml .
 ```
 
 
@@ -487,8 +366,8 @@ docker buildx build \
 
 # Using base image replacement approach  
 docker buildx build \
-    --build-context mcr.microsoft.com/cbl-mariner/base/core:2.0=my-custom-worker:mariner2 \
-    --target=mariner2/rpm \
+    --build-context mcr.microsoft.com/azurelinux/base/core:3.0=my-custom-worker:azlinux3 \
+    --target=azlinux3/rpm \
     -f myspec.yml .
 ```
 
