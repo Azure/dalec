@@ -197,7 +197,7 @@ EXPERIMENTAL_BUILDKIT_SOURCE_POLICY=source-policy.json docker buildx build \
 
 #### Complete Example
 
-Here's a complete example that adds custom environment variables and build tools to the azlinux3 worker:
+Here's a complete example that demonstrates installing tools that can't be easily added via dalec spec:
 
 **custom-worker.Dockerfile:**
 ```dockerfile
@@ -205,24 +205,24 @@ Here's a complete example that adds custom environment variables and build tools
 FROM scratch AS base-worker
 
 FROM base-worker AS final
-# Install additional development tools that aren't available via dalec spec
-RUN tdnf install -y \
-    strace \
-    valgrind \
-    systemd-devel \
-    && tdnf clean all
+# Install a custom Rust toolchain from source (specific version not available in repos)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.75.0 \
+    && . ~/.cargo/env \
+    && rustup target add x86_64-unknown-linux-musl
 
-# Set custom environment variables needed for builds
-ENV CUSTOM_BUILD_FLAGS="-O2 -g"
-ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
+# Set up environment for the custom toolchain
+ENV PATH="/root/.cargo/bin:$PATH"
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER="x86_64-linux-musl-gcc"
 
-# Add custom build wrapper script
-COPY <<EOF /usr/local/bin/custom-build-wrapper
-#!/bin/bash
-export CFLAGS="\$CFLAGS \$CUSTOM_BUILD_FLAGS"
-exec "\$@"
-EOF
-RUN chmod +x /usr/local/bin/custom-build-wrapper
+# Install a proprietary tool from a custom source (example)
+COPY proprietary-tool.tar.gz /tmp/
+RUN cd /tmp && tar -xzf proprietary-tool.tar.gz \
+    && cp proprietary-tool/bin/* /usr/local/bin/ \
+    && rm -rf /tmp/proprietary-tool*
+
+# Configure custom CA certificates for corporate environment
+COPY custom-ca-certs.pem /usr/local/share/ca-certificates/custom.crt
+RUN update-ca-certificates
 ```
 
 **Build and use:**
