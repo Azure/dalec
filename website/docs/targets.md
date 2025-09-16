@@ -107,6 +107,172 @@ You can have Dalec output an image with the target's worker image with
 add any customizations and feed that back in via [source polices](#source-policies)
 or [named build contexts](#named-build-contexts).
 
+#### Step-by-step guide to build custom worker base images
+
+**Step 1: Extract the base worker image**
+
+First, extract the base worker image for your target:
+
+```shell
+# For mariner2
+docker buildx build --target=mariner2/worker --output=type=docker,name=dalec-mariner2-base - <<< "null"
+
+# For azlinux3  
+docker buildx build --target=azlinux3/worker --output=type=docker,name=dalec-azlinux3-base - <<< "null"
+
+# For jammy
+docker buildx build --target=jammy/worker --output=type=docker,name=dalec-jammy-base - <<< "null"
+```
+
+**Step 2: Create a custom Dockerfile**
+
+Create a Dockerfile that extends the base worker image:
+
+```dockerfile
+FROM dalec-mariner2-base
+
+# Install additional packages
+RUN tdnf install -y \
+    my-custom-package \
+    another-dependency \
+    && tdnf clean all
+
+# Or for Debian/Ubuntu based targets:
+# FROM dalec-jammy-base
+# RUN apt-get update && apt-get install -y \
+#     my-custom-package \
+#     another-dependency \
+#     && rm -rf /var/lib/apt/lists/*
+
+# Add custom repositories or files
+COPY custom-repo.repo /etc/yum.repos.d/
+COPY custom-config.conf /etc/myapp/
+
+# Set environment variables if needed
+ENV CUSTOM_VAR=value
+```
+
+**Step 3: Build your custom worker image**
+
+```shell
+docker build -t my-custom-worker:mariner2 .
+```
+
+**Step 4: Use the custom worker image**
+
+You can use your custom worker image in two ways:
+
+**Option A: Named Build Context (Recommended)**
+```shell
+docker buildx build \
+    --build-context dalec-mariner2-worker=my-custom-worker:mariner2 \
+    --target=mariner2/rpm \
+    -f myspec.yml .
+```
+
+**Option B: Source Policy (Advanced)**
+```shell
+# Create a source policy file
+cat > source-policy.json << 'EOF'
+{
+  "rules": [
+    {
+      "action": "CONVERT",
+      "selector": {
+        "identifier": "mcr.microsoft.com/cbl-mariner/base/core:2.0"
+      },
+      "updates": {
+        "identifier": "my-custom-worker:mariner2"
+      }
+    }
+  ]
+}
+EOF
+
+# Use with buildx (experimental feature)
+BUILDX_EXPERIMENTAL=1 docker buildx build \
+    --source-policy=source-policy.json \
+    --target=mariner2/rpm \
+    -f myspec.yml .
+```
+
+#### Complete Example
+
+Here's a complete example that adds a custom package repository to the mariner2 worker:
+
+**custom-worker.Dockerfile:**
+```dockerfile
+# syntax=docker/dockerfile:1
+FROM scratch AS base-worker
+# Extract the base worker image first
+ARG TARGETARCH
+ARG TARGETOS
+
+FROM base-worker AS final
+# Install additional RPM repository
+RUN tdnf install -y \
+    dnf-plugins-core \
+    && tdnf clean all
+
+# Add custom repository
+COPY <<EOF /etc/yum.repos.d/custom.repo
+[custom-repo]
+name=Custom Repository
+baseurl=https://my.example.com/repo/mariner2/$basearch
+enabled=1
+gpgcheck=0
+EOF
+
+# Install packages from custom repo
+RUN tdnf install -y my-custom-package && tdnf clean all
+```
+
+**Build and use:**
+```shell
+# 1. Extract base worker
+docker buildx build --target=mariner2/worker --output=type=docker,name=dalec-mariner2-base - <<< "null"
+
+# 2. Build custom worker
+docker build --build-context base-worker=dalec-mariner2-base -t my-custom-worker:mariner2 -f custom-worker.Dockerfile .
+
+# 3. Use custom worker in dalec build
+docker buildx build \
+    --build-context dalec-mariner2-worker=my-custom-worker:mariner2 \
+    --target=mariner2/rpm \
+    -f myspec.yml .
+```
+
+#### Troubleshooting Custom Worker Images
+
+**Common Issues:**
+
+1. **Worker image extraction fails:**
+   - Ensure you have the latest dalec frontend: `docker pull ghcr.io/azure/dalec/frontend:latest`
+   - Use `null` as the spec when extracting worker images
+
+2. **Custom packages not found:**
+   - Verify your custom repositories are properly configured
+   - Check that package cache is updated in your Dockerfile
+   - For RPM targets: run `tdnf clean all` after repository changes
+   - For DEB targets: run `apt-get update` after repository changes  
+
+3. **Build context not found:**
+   - Ensure your custom worker image is available locally or in a registry
+   - Use `docker images` to verify the image was built successfully
+   - Check the exact spelling of context names (they are case-sensitive)
+
+4. **Permission issues:**
+   - Custom worker images should maintain the same user/permissions as base workers
+   - Avoid changing the working directory unless necessary
+
+**Best Practices:**
+
+- Use multi-stage Dockerfiles to keep custom workers clean
+- Always clean package caches to reduce image size
+- Test custom workers with simple builds before complex ones
+- Document any custom repositories or dependencies added
+- Use specific image tags rather than `latest` for reproducible builds
+
 
 ### Source Policies
 
@@ -128,21 +294,43 @@ which allows you to provide additional build contexts apart from the main build
 context in the form of `<name>=<ref>`. See the prior linked documentation for
 what can go into `<ref>`.
 
-In the `mariner2` target, Dalec looks for a named context called either
+This is the **recommended approach** for using custom worker images. For each target, 
+Dalec looks for a named context called either:
 
-1. The actual base image used internally for mariner2
-  i. `--build-context mcr.microsoft.com/cbl-mariner/base/core:2.0=<new ref>`
-2. A build context named `dalec-mariner2-worker`
-  i. `--build-context dalec-mariner2-worker=<new ref>`
+1. The actual base image used internally for the target
+2. A build context named `dalec-<target>-worker`
 
-If 1 is provided, then 2 is ignored.
+If option 1 is provided, then option 2 is ignored.
 
-This works the same way in the `azlinux3`:
+**Named Build Context Examples:**
 
-1. The actual base image used internally for azlinux3
-  i. `--build-context mcr.microsoft.com/azurelinux/base/core:3.0=<new ref>`
-2. A build context named `dalec-mariner2-worker`
-  i. `--build-context dalec-azlinux3-worker=<new ref>`
+```shell
+# Using named build context approach (recommended)
+docker buildx build \
+    --build-context dalec-mariner2-worker=my-custom-worker:mariner2 \
+    --target=mariner2/rpm \
+    -f myspec.yml .
+
+# Using base image replacement approach  
+docker buildx build \
+    --build-context mcr.microsoft.com/cbl-mariner/base/core:2.0=my-custom-worker:mariner2 \
+    --target=mariner2/rpm \
+    -f myspec.yml .
+```
+
+**Supported targets and their context names:**
+
+| Target | Base Image | Named Context |
+|--------|------------|---------------|
+| `mariner2` | `mcr.microsoft.com/cbl-mariner/base/core:2.0` | `dalec-mariner2-worker` |
+| `azlinux3` | `mcr.microsoft.com/azurelinux/base/core:3.0` | `dalec-azlinux3-worker` |
+| `jammy` | `docker.io/library/ubuntu:jammy` | `dalec-jammy-worker` |
+| `noble` | `docker.io/library/ubuntu:noble` | `dalec-noble-worker` |
+| `focal` | `docker.io/library/ubuntu:focal` | `dalec-focal-worker` |
+| `bionic` | `docker.io/library/ubuntu:bionic` | `dalec-bionic-worker` |
+| `bookworm` | `docker.io/library/debian:bookworm` | `dalec-bookworm-worker` |
+| `bullseye` | `docker.io/library/debian:bullseye` | `dalec-bullseye-worker` |
+| `windowscross` | `docker.io/library/ubuntu:jammy` | `dalec-windowscross-worker` |
 
 ### Target Defined Artifacts
 
