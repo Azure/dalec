@@ -204,9 +204,6 @@ Here's a complete example that adds a custom package repository to the mariner2 
 ```dockerfile
 # syntax=docker/dockerfile:1
 FROM scratch AS base-worker
-# Extract the base worker image first
-ARG TARGETARCH
-ARG TARGETOS
 
 FROM base-worker AS final
 # Install additional RPM repository
@@ -272,6 +269,183 @@ docker buildx build \
 - Test custom workers with simple builds before complex ones
 - Document any custom repositories or dependencies added
 - Use specific image tags rather than `latest` for reproducible builds
+
+#### Advanced Integration Examples
+
+**Using BuildKit Go Client**
+
+For programmatic integration, you can use the BuildKit Go client directly:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    "github.com/moby/buildkit/client"
+    "github.com/moby/buildkit/client/llb"
+    "github.com/moby/buildkit/util/apicaps"
+)
+
+func buildCustomWorker(ctx context.Context, c *client.Client) error {
+    // Build the base worker first
+    workerDef, err := llb.Image("ghcr.io/azure/dalec/frontend:latest").
+        Run(llb.Args([]string{"--target=mariner2/worker"})).
+        Root().Marshal(ctx)
+    if err != nil {
+        return err
+    }
+    
+    workerResult, err := c.Solve(ctx, client.SolveRequest{
+        Definition: workerDef.ToPB(),
+    })
+    if err != nil {
+        return err
+    }
+    
+    // Export worker image
+    workerRef, err := workerResult.SingleRef()
+    if err != nil {
+        return err
+    }
+    
+    // Create custom worker with additional packages
+    customWorker := llb.Image("").
+        File(llb.Copy(workerRef, "/", "/")).
+        Run(llb.Shlex("tdnf install -y my-custom-package && tdnf clean all")).
+        Root()
+    
+    customDef, err := customWorker.Marshal(ctx)
+    if err != nil {
+        return err
+    }
+    
+    // Build the final package using custom worker
+    finalDef, err := llb.Image("ghcr.io/azure/dalec/frontend:latest").
+        Run(llb.Args([]string{"--target=mariner2/rpm"})).
+        AddMount("/var/lib/buildkit/context", llb.Local("context")).
+        AddMount("/tmp/worker", customWorker).
+        Root().Marshal(ctx)
+    if err != nil {
+        return err
+    }
+    
+    _, err = c.Solve(ctx, client.SolveRequest{
+        Definition: finalDef.ToPB(),
+        Frontend:   "gateway.v0",
+        FrontendOpt: map[string]string{
+            "requestid": "build-custom-worker",
+        },
+    })
+    
+    return err
+}
+```
+
+**Using Docker Buildx Bake**
+
+Create a `docker-bake.hcl` file that chains worker and package builds:
+
+```hcl
+# docker-bake.hcl
+target "custom-worker" {
+    target = "mariner2/worker" 
+    dockerfile-inline = "{}"
+    args = {
+        "BUILDKIT_SYNTAX" = "ghcr.io/azure/dalec/frontend:latest"
+    }
+    output = ["type=docker,name=my-base-worker"]
+}
+
+target "enhanced-worker" {
+    contexts = {
+        "base-worker" = "target:custom-worker"
+    }
+    dockerfile-inline = <<EOT
+        FROM base-worker
+        RUN tdnf install -y \
+            custom-package \
+            development-tools \
+            && tdnf clean all
+        
+        # Add custom repository
+        COPY <<EOF /etc/yum.repos.d/custom.repo
+[custom-repo]
+name=Custom Repository  
+baseurl=https://my.example.com/repo/mariner2/\$basearch
+enabled=1
+gpgcheck=0
+EOF
+    EOT
+    output = ["type=docker,name=my-enhanced-worker"]
+}
+
+target "build-package" {
+    dockerfile = "myspec.yml"
+    args = {
+        "BUILDKIT_SYNTAX" = "ghcr.io/azure/dalec/frontend:latest"
+    }
+    contexts = {
+        "dalec-mariner2-worker" = "target:enhanced-worker"
+    }
+    target = "mariner2/rpm"
+    output = ["_output"]
+}
+```
+
+Then build everything in sequence:
+
+```shell
+# Build all targets in dependency order
+docker buildx bake build-package
+
+# Or build specific targets
+docker buildx bake custom-worker enhanced-worker
+docker buildx bake build-package
+```
+
+**Ubuntu Pro Example**
+
+For Ubuntu targets that need Pro packages:
+
+```dockerfile
+FROM dalec-jammy-base
+
+# Enable Ubuntu Pro
+RUN apt-get update && apt-get install -y ubuntu-advantage-tools
+
+# Attach to Ubuntu Pro (requires token)
+ARG UA_TOKEN
+RUN ua attach $UA_TOKEN
+
+# Enable specific services
+RUN ua enable esm-infra
+RUN ua enable livepatch
+
+# Install Pro packages
+RUN apt-get update && apt-get install -y \
+    some-pro-package \
+    && rm -rf /var/lib/apt/lists/*
+
+# Optionally detach (for ephemeral builds)
+RUN ua detach --assume-yes || true
+```
+
+Use with:
+
+```shell
+# Build custom worker with Pro packages
+docker build --build-arg UA_TOKEN="$UBUNTU_PRO_TOKEN" \
+    -t my-ubuntu-pro-worker:jammy \
+    -f ubuntu-pro.Dockerfile .
+
+# Use in dalec build
+docker buildx build \
+    --build-context dalec-jammy-worker=my-ubuntu-pro-worker:jammy \
+    --target=jammy/deb \
+    -f myspec.yml .
+```
 
 
 ### Source Policies
