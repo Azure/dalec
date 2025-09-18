@@ -676,10 +676,10 @@ echo "$BAR" > bar.txt
 		testAutoGobuildCache(ctx, t, tcfg)
 	})
 
-	t.Run("auto cargobuild cache", func(t *testing.T) {
+	t.Run("auto rust cache", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
-		testAutoCargobuildCache(ctx, t, tcfg)
+		testAutoRustCache(ctx, t, tcfg)
 	})
 }
 

@@ -65,18 +65,18 @@ type CacheConfig struct {
 	// GoBuild specifies a cache for Go's incremental build artifacts.
 	// This should speed up repeated builds of Go projects.
 	GoBuild *GoBuildCache `json:"gobuild,omitempty" yaml:"gobuild,omitempty" jsonschema:"oneof_required=gobuild"`
-	// CargoBuild specifies a cache for Rust/Cargo build artifacts.
+	// RustSCCache specifies a cache for Rust build artifacts.
 	// This uses sccache to cache Rust compilation artifacts.
-	CargoBuild *CargoSCCache `json:"cargosccache,omitempty" yaml:"cargosccache,omitempty" jsonschema:"oneof_required=cargosccache"`
+	RustSCCache *SCCache `json:"rustsccache,omitempty" yaml:"rustsccache,omitempty" jsonschema:"oneof_required=rustsccache"`
 	// Bazel specifies a cache for bazel builds.
 	Bazel *BazelCache `json:"bazel,omitempty" yaml:"bazel,omitempty" jsonschema:"oneof_required=bazel-local"`
 }
 
 type CacheInfo struct {
-	DirInfo    CacheDirInfo
-	GoBuild    GoBuildCacheInfo
-	CargoBuild CargoSCCacheInfo
-	Bazel      BazelCacheInfo
+	DirInfo     CacheDirInfo
+	GoBuild     GoBuildCacheInfo
+	RustSCCache SCCacheInfo
+	Bazel       BazelCacheInfo
 }
 
 type CacheDirInfo struct {
@@ -136,13 +136,13 @@ func (c *CacheConfig) ToRunOption(worker llb.State, distroKey string, opts ...Ca
 		}))
 	}
 
-	if c.CargoBuild != nil {
-		return c.CargoBuild.ToRunOption(distroKey, CargoSCCacheOptionFunc(func(info *CargoSCCacheInfo) {
+	if c.RustSCCache != nil {
+		return c.RustSCCache.ToRunOption(distroKey, SCCacheOptionFunc(func(info *SCCacheInfo) {
 			var cacheInfo CacheInfo
 			for _, opt := range opts {
 				opt.SetCacheConfigOption(&cacheInfo)
 			}
-			*info = cacheInfo.CargoBuild
+			*info = cacheInfo.RustSCCache
 		}))
 	}
 
@@ -172,7 +172,7 @@ func (c *CacheConfig) validate() error {
 	if c.GoBuild != nil {
 		count++
 	}
-	if c.CargoBuild != nil {
+	if c.RustSCCache != nil {
 		count++
 	}
 	if c.Bazel != nil {
@@ -180,7 +180,7 @@ func (c *CacheConfig) validate() error {
 	}
 
 	if count != 1 {
-		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, cargosccache, bazel) must be set")
+		return fmt.Errorf("invalid cache config: exactly one of (dir, gobuild, rustsccache, bazel) must be set")
 	}
 
 	var errs []error
@@ -194,9 +194,9 @@ func (c *CacheConfig) validate() error {
 			errs = append(errs, fmt.Errorf("invalid go build cache config: %w", err))
 		}
 	}
-	if c.CargoBuild != nil {
-		if err := c.CargoBuild.validate(); err != nil {
-			errs = append(errs, fmt.Errorf("invalid cargo build cache config: %w", err))
+	if c.RustSCCache != nil {
+		if err := c.RustSCCache.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("invalid rust sccache config: %w", err))
 		}
 	}
 	if c.Bazel != nil {
@@ -375,43 +375,39 @@ func (c *GoBuildCache) ToRunOption(distroKey string, opts ...GoBuildCacheOption)
 	})
 }
 
-// CargoSCCache is a cache for Rust/Cargo build artifacts.
+// SCCache is a cache for Rust build artifacts.
 // It uses sccache to speed up Rust compilation by caching build artifacts.
 //
-// NOTE: This cache downloads a pre-compiled binary from GitHub and should be
-// explicitly enabled by the user due to security and external dependency considerations.
+// NOTE: This cache downloads a pre-compiled binary from GitHub. Users must
+// explicitly include this cache in their configuration to use it, which serves
+// as acknowledgment of the external dependency.
 //
 // Future enhancement: Add support for providing sccache via build context instead of
 // downloading from GitHub. This would add Source and BinaryPath fields to allow users
 // to include their own verified sccache binary in the build context.
-type CargoSCCache struct {
+type SCCache struct {
 	// Scope adds extra information to the cache key.
 	// This is useful to differentiate between different build contexts if required.
 	//
 	// This is mainly intended for internal testing purposes.
 	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
-
-	// Enabled explicitly enables the cargo sccache.
-	// Since this downloads pre-compiled binaries from GitHub, it is opt-in only.
-	// Default is false (disabled).
-	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
-func (c *CargoSCCache) validate() error {
+func (c *SCCache) validate() error {
 	return nil
 }
 
-type CargoSCCacheInfo struct {
+type SCCacheInfo struct {
 	Platform *ocispecs.Platform
 }
 
-type CargoSCCacheOption interface {
-	SetCargoSCCacheOption(*CargoSCCacheInfo)
+type SCCacheOption interface {
+	SetSCCacheOption(*SCCacheInfo)
 }
 
-type CargoSCCacheOptionFunc func(*CargoSCCacheInfo)
+type SCCacheOptionFunc func(*SCCacheInfo)
 
-func (f CargoSCCacheOptionFunc) SetCargoSCCacheOption(info *CargoSCCacheInfo) {
+func (f SCCacheOptionFunc) SetSCCacheOption(info *SCCacheInfo) {
 	f(info)
 }
 
@@ -420,7 +416,7 @@ const (
 	sccacheBinary   = "/tmp/internal/dalec/sccache/sccache"
 )
 
-func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption) llb.RunOption {
+func (c *SCCache) ToRunOption(distroKey string, opts ...SCCacheOption) llb.RunOption {
 	// TODO: Future improvement - allow pulling sccache from build context instead of GitHub
 	// This would provide better security and flexibility by allowing users to:
 	// 1. Bring their own verified sccache binary
@@ -428,16 +424,12 @@ func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption)
 	// 3. Work in offline environments
 	// 4. Avoid external downloads during build time
 	//
-	// Implementation would add Source and BinaryPath fields to CargoSCCache struct
+	// Implementation would add Source and BinaryPath fields to SCCache struct
 	// to allow specifying a context source like: { "context": { "name": "." }, "path": "tools/sccache" }
 	return RunOptFunc(func(ei *llb.ExecInfo) {
-		if !c.Enabled {
-			return
-		}
-
-		var info CargoSCCacheInfo
+		var info SCCacheInfo
 		for _, opt := range opts {
-			opt.SetCargoSCCacheOption(&info)
+			opt.SetSCCacheOption(&info)
 		}
 
 		// Ensure platform is set
@@ -451,7 +443,7 @@ func (c *CargoSCCache) ToRunOption(distroKey string, opts ...CargoSCCacheOption)
 			platform = &p
 		}
 
-		key := fmt.Sprintf("%s-%s-dalec-cargosccache", distroKey, platforms.Format(*platform))
+		key := fmt.Sprintf("%s-%s-dalec-rustsccache", distroKey, platforms.Format(*platform))
 		if c.Scope != "" {
 			key = fmt.Sprintf("%s-%s", key, c.Scope)
 		}

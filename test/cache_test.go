@@ -56,9 +56,8 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 			},
 		},
 		{
-			CargoBuild: &dalec.CargoSCCache{
-				Scope:   randKey,
-				Enabled: true,
+			RustSCCache: &dalec.SCCache{
+				Scope: randKey,
 			},
 		},
 		{
@@ -85,7 +84,7 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 		if c.GoBuild != nil {
 			return "${GOCACHE}"
 		}
-		if c.CargoBuild != nil {
+		if c.RustSCCache != nil {
 			return "${SCCACHE_DIR}"
 		}
 		if c.Bazel != nil {
@@ -156,7 +155,7 @@ func testArtifactBuildCacheDir(ctx context.Context, t *testing.T, cfg targetConf
 				// Use the *original* distro name here since that is what wrote the file
 				check := fmt.Sprintf("%s %d", distro, i)
 				cmds = append(cmds, fmt.Sprintf("grep %q %s", check, filepath.Join(dir, "hello")))
-			case c.GoBuild != nil || c.CargoBuild != nil || c.Bazel != nil:
+			case c.GoBuild != nil || c.RustSCCache != nil || c.Bazel != nil:
 				// This should not exist because the cache is not shared between distros
 				cmds = append(cmds, fmt.Sprintf("[ ! -f %q ]", filepath.Join(dir, "hello")))
 			}
@@ -356,7 +355,7 @@ func testAutoGobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 	})
 }
 
-func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {
+func testAutoRustCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 	ctx = startTestSpan(ctx, t)
 
 	specWithCommand := func(cmd string) *dalec.Spec {
@@ -378,7 +377,7 @@ func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig
 	}
 
 	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
-		// Test that cargo cache is NOT automatically enabled (it's opt-in only now)
+		// Test no cache
 		spec := specWithCommand("[ -z \"${SCCACHE_DIR}\" ] && [ -z \"${RUSTC_WRAPPER}\" ]")
 		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)
@@ -392,7 +391,7 @@ func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig
 
 		spec = specWithCommand(buf.String())
 		spec.Build.Caches = []dalec.CacheConfig{
-			{CargoBuild: &dalec.CargoSCCache{Enabled: true}},
+			{RustSCCache: &dalec.SCCache{}},
 		}
 		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)
@@ -404,7 +403,7 @@ func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig
 
 		spec = specWithCommand(buf.String())
 		spec.Build.Caches = []dalec.CacheConfig{
-			{CargoBuild: &dalec.CargoSCCache{Enabled: true}},
+			{RustSCCache: &dalec.SCCache{}},
 		}
 		// Set ignore cache to make sure we always run the command so the cache is guaranteed to be populated
 		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package), withIgnoreCache(targets.IgnoreCacheKeyPkg))
@@ -415,16 +414,16 @@ func testAutoCargobuildCache(ctx context.Context, t *testing.T, cfg targetConfig
 		buf.WriteString("[ -d \"$SCCACHE_DIR\" ]; grep hello ${SCCACHE_DIR}/hello\n")
 		spec = specWithCommand(buf.String())
 		spec.Build.Caches = []dalec.CacheConfig{
-			{CargoBuild: &dalec.CargoSCCache{Enabled: true}},
+			{RustSCCache: &dalec.SCCache{}},
 		}
 
 		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)
 
-		// Test that cargo cache is disabled when Enabled=false (default)
-		spec = specWithCommand("[ -z \"${SCCACHE_DIR}\" ] && [ -z \"${RUSTC_WRAPPER}\" ]")
+		// Test that rust sccache is enabled when specified in config
+		spec = specWithCommand("[ -n \"${SCCACHE_DIR}\" ] && [ -n \"${RUSTC_WRAPPER}\" ]")
 		spec.Build.Caches = []dalec.CacheConfig{
-			{CargoBuild: &dalec.CargoSCCache{}},
+			{RustSCCache: &dalec.SCCache{}},
 		}
 		sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Package))
 		solveT(ctx, t, client, sr)

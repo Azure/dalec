@@ -431,10 +431,6 @@
 					"$ref": "#/$defs/BazelCache",
 					"description": "Bazel specifies a cache for bazel builds."
 				},
-				"cargosccache": {
-					"$ref": "#/$defs/CargoSCCache",
-					"description": "CargoBuild specifies a cache for Rust/Cargo build artifacts.\nThis uses sccache to cache Rust compilation artifacts."
-				},
 				"dir": {
 					"$ref": "#/$defs/CacheDir",
 					"description": "Dir specifies a generic cache directory configuration."
@@ -442,6 +438,10 @@
 				"gobuild": {
 					"$ref": "#/$defs/GoBuildCache",
 					"description": "GoBuild specifies a cache for Go's incremental build artifacts.\nThis should speed up repeated builds of Go projects."
+				},
+				"rustsccache": {
+					"$ref": "#/$defs/SCCache",
+					"description": "RustSCCache specifies a cache for Rust build artifacts.\nThis uses sccache to cache Rust compilation artifacts."
 				}
 			},
 			"additionalProperties": {
@@ -466,9 +466,9 @@
 				},
 				{
 					"required": [
-						"cargosccache"
+						"rustsccache"
 					],
-					"title": "cargosccache"
+					"title": "rustsccache"
 				},
 				{
 					"required": [
@@ -525,31 +525,6 @@
 				"null"
 			],
 			"description": "CacheDir is a generic cache directory configuration."
-		},
-		"CargoSCCache": {
-			"properties": {
-				"enabled": {
-					"type": [
-						"boolean"
-					],
-					"description": "Enabled explicitly enables the cargo sccache.\nSince this downloads pre-compiled binaries from GitHub, it is opt-in only.\nDefault is false (disabled)."
-				},
-				"scope": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Scope adds extra information to the cache key.\nThis is useful to differentiate between different build contexts if required.\n\nThis is mainly intended for internal testing purposes."
-				}
-			},
-			"additionalProperties": {
-				"not": {}
-			},
-			"type": [
-				"object",
-				"null"
-			],
-			"description": "CargoSCCache is a cache for Rust/Cargo build artifacts."
 		},
 		"ChangelogEntry": {
 			"required": [
@@ -1471,6 +1446,25 @@
 				"null"
 			],
 			"description": "PostInstall is the post install configuration for the image."
+		},
+		"SCCache": {
+			"properties": {
+				"scope": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Scope adds extra information to the cache key.\nThis is useful to differentiate between different build contexts if required.\n\nThis is mainly intended for internal testing purposes."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			],
+			"description": "SCCache is a cache for Rust build artifacts."
 		},
 		"Source": {
 			"properties": {
