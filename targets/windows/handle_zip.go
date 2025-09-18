@@ -183,6 +183,7 @@ func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, clie
 	}
 
 	addGoCache(spec, targetKey)
+	// No automatic cargo cache setup - cargo cache is opt-in only due to security considerations
 
 	patched := dalec.PatchSources(worker, spec, sources, opts...)
 	buildScript := createBuildScript(spec, opts...)
