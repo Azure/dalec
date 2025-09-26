@@ -7,8 +7,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
+	"github.com/Azure/dalec/internal/plugins"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -217,4 +220,87 @@ func lookupProjectRoot(cur string) (string, error) {
 	}
 
 	return cur, nil
+}
+
+var (
+	ghaEnv   = os.Getenv("GITHUB_ACTIONS")
+	ghaEvent = os.Getenv("GITHUB_EVENT_NAME")
+	tokenEnv = os.Getenv("ACTIONS_RUNTIME_TOKEN")
+	urlEnv   = os.Getenv("ACTIONS_CACHE_URL")
+	isGHA    = ghaEnv == "true"
+
+	canAddGHACache = isGHA && tokenEnv != "" && urlEnv != ""
+	workerCaches   = sync.OnceValues(getWorkerCaches)
+)
+
+func loadWorkers() []string {
+	var workers []string
+	filter := func(r *plugins.Registration) bool {
+		return r.Type == plugins.TypeBuildTarget
+	}
+
+	for _, r := range plugins.Graph(filter) {
+		worker, _, _ := strings.Cut(r.ID, "/")
+		workers = append(workers, worker)
+	}
+	return workers
+}
+
+func getWorkerCaches() (cacheTo []client.CacheOptionsEntry, cacheFrom []client.CacheOptionsEntry) {
+	for _, worker := range loadWorkers() {
+		cacheFrom = append(cacheFrom, []client.CacheOptionsEntry{
+			{
+				Type: "registry",
+				Attrs: map[string]string{
+					"ref": "ghcr.io/azure/dalec/" + worker + "/worker:main",
+				},
+			},
+			{
+				Type: "registry",
+				Attrs: map[string]string{
+					"ref": "ghcr.io/azure/dalec/" + worker + "/worker:latest",
+				},
+			},
+		}...)
+
+		if canAddGHACache {
+			cacheFrom = append(cacheTo, client.CacheOptionsEntry{
+				Type: "gha",
+				Attrs: map[string]string{
+					"scope": "main." + worker,
+					"token": tokenEnv,
+					"url":   urlEnv,
+				},
+			})
+
+			if ghaEvent == "pull_request" {
+				cacheFrom = append(cacheTo, client.CacheOptionsEntry{
+					Type: "gha",
+					Attrs: map[string]string{
+						"scope": "main." + worker,
+						"token": tokenEnv,
+						"url":   urlEnv,
+					},
+				})
+
+				cacheTo = append(cacheFrom, client.CacheOptionsEntry{
+					Type: "gha",
+					Attrs: map[string]string{
+						"scope": "pr." + worker,
+						"token": tokenEnv,
+						"url":   urlEnv,
+						"mode":  "max",
+					},
+				})
+			}
+		}
+	}
+
+	return
+}
+
+func withCICache(opts *client.SolveOpt) {
+	cacheTo, cacheFrom := workerCaches()
+	opts.CacheImports = append(opts.CacheImports, cacheFrom...)
+	opts.CacheExports = append(opts.CacheExports, cacheTo...)
 }
