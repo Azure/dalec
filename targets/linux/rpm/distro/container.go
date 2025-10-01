@@ -7,6 +7,7 @@ import (
 
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
+	"github.com/Azure/dalec/targets"
 	"github.com/Azure/dalec/targets/linux"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -16,6 +17,8 @@ import (
 
 func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, rpmDir llb.State, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, dalec.ProgressGroup("Install RPMs"))
+	opts = append(opts, frontend.IgnoreCache(client))
+
 	const workPath = "/tmp/rootfs"
 
 	bi, err := spec.GetSingleBase(targetKey)
@@ -67,6 +70,7 @@ func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, w
 		cfg.Install(pkgs, installOpts...),
 		llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
 		llb.AddMount(baseMountPath, basePkgs, llb.SourcePath("/RPMS")),
+		frontend.IgnoreCache(client, targets.IgnoreCacheKeyContainer),
 	).AddMount(workPath, rootfs)
 
 	if post := spec.GetImagePost(targetKey); post != nil && len(post.Symlinks) > 0 {

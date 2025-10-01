@@ -22,7 +22,7 @@ func (cfg *Config) HandleWorker(ctx context.Context, client gwclient.Client) (*g
 		}
 
 		pc := dalec.Platform(platform)
-		st, err := cfg.Worker(sOpt, pc)
+		st, err := cfg.Worker(sOpt, pc, frontend.IgnoreCache(client))
 		if err != nil {
 			return nil, nil, err
 		}
