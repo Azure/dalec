@@ -57,7 +57,7 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 			},
 		}
 
-		basePkg, err := c.BuildPkg(ctx, client, worker, sOpt, basePkgSpec, targetKey)
+		basePkg, err := c.BuildPkg(ctx, client, worker, sOpt, basePkgSpec, targetKey, opts...)
 		if err != nil {
 			return llb.Scratch(), err
 		}

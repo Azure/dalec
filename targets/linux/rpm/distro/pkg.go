@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/packaging/linux/rpm"
+	"github.com/Azure/dalec/targets"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/pkg/errors"
@@ -45,6 +46,7 @@ func needsAutoGocache(spec *dalec.Spec, targetKey string) bool {
 }
 
 func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
+	opts = append(opts, frontend.IgnoreCache(client))
 	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, opts...))
 
 	br, err := rpm.SpecToBuildrootLLB(worker, spec, sOpt, targetKey, opts...)
@@ -61,7 +63,7 @@ func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker ll
 		addGoCache(&cacheInfo)
 	}
 
-	st := rpm.Build(br, builder, specPath, cacheInfo, opts...)
+	st := rpm.Build(br, builder, specPath, cacheInfo, append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))...)
 
 	return frontend.MaybeSign(ctx, client, st, spec, targetKey, sOpt, opts...)
 }
