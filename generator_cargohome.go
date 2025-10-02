@@ -113,7 +113,7 @@ func (gen *GeneratorCargohome) UnmarshalYAML(ctx context.Context, node ast.Node)
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode cargohome generator")
 	}
 
 	*gen = GeneratorCargohome(i)

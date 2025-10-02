@@ -145,7 +145,7 @@ func (gen *GeneratorPip) UnmarshalYAML(ctx context.Context, node ast.Node) error
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode pip generator")
 	}
 
 	*gen = GeneratorPip(i)

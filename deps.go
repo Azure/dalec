@@ -57,7 +57,36 @@ func (pc *PackageConstraints) UnmarshalYAML(ctx context.Context, node ast.Node) 
 func (l *PackageDependencyList) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 	mapNode, ok := node.(*ast.MappingNode)
 	if !ok {
-		return goerrors.New("expected a mapping node for package dependency list")
+		if node.Type() != ast.SequenceType {
+			// pass this through the yaml decoder so it can generate a useful error
+			type internal PackageDependencyList
+			var i internal
+			return yaml.NodeToValue(node, &i)
+		}
+
+		// Most likely this is due to a spec using the old list format.
+		// Upgrade the list to to the new format.
+		var ls []sourceMappedValue[string]
+
+		dec := getDecoder(ctx)
+
+		err := dec.DecodeFromNodeContext(ctx, node, &ls)
+		if err != nil {
+			return errors.Wrap(err, "error unmarshaling package dependency list")
+		}
+
+		if len(ls) == 0 {
+			return nil
+		}
+
+		result := make(PackageDependencyList, len(ls))
+		for _, v := range ls {
+			result[v.Value] = PackageConstraints{
+				_sourceMap: v.sourceMap,
+			}
+		}
+
+		return nil
 	}
 
 	result := make(PackageDependencyList)

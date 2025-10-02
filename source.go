@@ -71,8 +71,9 @@ func (s *Source) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode source")
 	}
+
 	*s = Source(i)
 	s._sourceMap = newSourceMap(ctx, node)
 	return nil
@@ -620,7 +621,7 @@ func (p *PatchSpec) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode patch spec")
 	}
 	*p = PatchSpec(i)
 	p._sourceMap = newSourceMap(ctx, node)

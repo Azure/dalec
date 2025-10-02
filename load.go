@@ -358,6 +358,11 @@ func getDecoder(ctx context.Context) *yaml.Decoder {
 
 // UnmarshalYAML implements the [yaml.NodeUnmarshaler] interface to provide custom unmarshaling.
 func (s *Spec) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	if node.Type() == ast.NullType {
+		*s = Spec{}
+		return nil
+	}
+
 	type internalSpec Spec
 	var s2 internalSpec
 
@@ -371,7 +376,7 @@ func (s *Spec) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 
 	err := dec.DecodeFromNodeContext(ctx, node, &s2)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error unmarshalling to spec")
 	}
 
 	*s = Spec(s2)
@@ -808,6 +813,9 @@ func errorIsOnly(err error, target error) bool {
 func (f *extensionFields) UnmarshalYAML(node ast.Node) error {
 	body, ok := node.(*ast.MappingNode)
 	if !ok {
+		if node.Type() == ast.NullType {
+			return nil
+		}
 		return errors.Errorf("expected a mapping node, got %T", node)
 	}
 

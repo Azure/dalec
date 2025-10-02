@@ -70,7 +70,7 @@ func (step *TestStep) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &ti); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode test step")
 	}
 
 	*step = TestStep(ti)
@@ -126,6 +126,11 @@ type FileCheckOutput struct {
 }
 
 func (check *FileCheckOutput) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	if node.Type() == ast.NullType {
+		*check = FileCheckOutput{}
+		return nil
+	}
+
 	// Custom unmarshallers with inline structs behave strangely (like fields not getting set properly, even on the main type).
 	// For now split it out manually.
 	type internal struct {
@@ -145,7 +150,7 @@ func (check *FileCheckOutput) UnmarshalYAML(ctx context.Context, node ast.Node) 
 	var i internal
 
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return fmt.Errorf("error unmarshalling file check output: %w", err)
+		return errors.Wrap(err, "error unmarshalling file check output")
 	}
 
 	// Now for a 2nd pass, remove the fields we have already processed
@@ -202,7 +207,7 @@ func (check *CheckOutput) UnmarshalYAML(ctx context.Context, node ast.Node) erro
 	dec := getDecoder(ctx)
 	err := dec.DecodeFromNodeContext(ctx, node, &i)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error unmarshalling check output")
 	}
 
 	*check = CheckOutput{

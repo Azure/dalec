@@ -60,8 +60,9 @@ func (s *SourceInlineFile) UnmarshalYAML(ctx context.Context, node ast.Node) err
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode inline file")
 	}
+
 	*s = SourceInlineFile{
 		Contents:    i.Contents,
 		Permissions: i.Permissions,
@@ -107,7 +108,7 @@ func (s *SourceInlineDir) UnmarshalYAML(ctx context.Context, node ast.Node) erro
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode inline dir")
 	}
 	*s = SourceInlineDir{
 		Files:       i.Files,
