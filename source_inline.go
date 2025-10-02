@@ -51,10 +51,10 @@ type SourceInlineFile struct {
 
 func (s *SourceInlineFile) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 	type internal struct {
-		Contents    string                 `yaml:"contents,omitempty"`
-		Permissions fs.FileMode            `yaml:"permissions,omitempty"`
-		UID         sourceMappedValue[int] `yaml:"uid,omitempty"`
-		GID         sourceMappedValue[int] `yaml:"gid,omitempty"`
+		Contents    string                 `yaml:"contents,omitempty" json:"contents,omitempty"`
+		Permissions fs.FileMode            `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+		UID         sourceMappedValue[int] `yaml:"uid,omitempty" json:"uid"`
+		GID         sourceMappedValue[int] `yaml:"gid,omitempty" json:"gid"`
 	}
 	var i internal
 
@@ -99,10 +99,10 @@ type SourceInlineDir struct {
 
 func (s *SourceInlineDir) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 	type internal struct {
-		Files       map[string]*SourceInlineFile `yaml:"files,omitempty"`
-		Permissions fs.FileMode                  `yaml:"permissions,omitempty"`
-		UID         sourceMappedValue[int]       `yaml:"uid,omitempty"`
-		GID         sourceMappedValue[int]       `yaml:"gid,omitempty"`
+		Files       map[string]*SourceInlineFile `yaml:"files,omitempty" json:"files"`
+		Permissions fs.FileMode                  `yaml:"permissions,omitempty" json:"permissions"`
+		UID         sourceMappedValue[int]       `yaml:"uid,omitempty" json:"uid"`
+		GID         sourceMappedValue[int]       `yaml:"gid,omitempty" json:"gid"`
 	}
 	var i internal
 
