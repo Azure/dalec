@@ -134,16 +134,16 @@ func (check *FileCheckOutput) UnmarshalYAML(ctx context.Context, node ast.Node) 
 	// Custom unmarshallers with inline structs behave strangely (like fields not getting set properly, even on the main type).
 	// For now split it out manually.
 	type internal struct {
-		Permissions sourceMappedValue[fs.FileMode] `yaml:"permissions,omitempty"`
-		IsDir       sourceMappedValue[bool]        `yaml:"is_dir,omitempty"`
-		NotExist    sourceMappedValue[bool]        `yaml:"not_exist,omitempty"`
+		Permissions sourceMappedValue[fs.FileMode] `yaml:"permissions,omitempty" json:"permissions"`
+		IsDir       sourceMappedValue[bool]        `yaml:"is_dir,omitempty" json:"is_dir"`
+		NotExist    sourceMappedValue[bool]        `yaml:"not_exist,omitempty" json:"not_exist"`
 
-		Equals     ast.Node `yaml:"equals,omitempty"`
-		Contains   ast.Node `yaml:"contains,omitempty"`
-		Matches    ast.Node `yaml:"matches,omitempty"`
-		StartsWith ast.Node `yaml:"starts_with,omitempty"`
-		EndsWith   ast.Node `yaml:"ends_with,omitempty"`
-		Empty      ast.Node `yaml:"empty,omitempty"`
+		Equals     ast.Node `yaml:"equals,omitempty" json:"equals"`
+		Contains   ast.Node `yaml:"contains,omitempty" json:"contains"`
+		Matches    ast.Node `yaml:"matches,omitempty" json:"matches"`
+		StartsWith ast.Node `yaml:"starts_with,omitempty" json:"starts_with"`
+		EndsWith   ast.Node `yaml:"ends_with,omitempty" json:"ends_with"`
+		Empty      ast.Node `yaml:"empty,omitempty" json:"empty"`
 	}
 
 	dec := getDecoder(ctx)
@@ -195,12 +195,12 @@ func (check *FileCheckOutput) UnmarshalYAML(ctx context.Context, node ast.Node) 
 
 func (check *CheckOutput) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 	type internal struct {
-		Equals     sourceMappedValue[string]   `yaml:"equals,omitempty"`
-		Contains   []sourceMappedValue[string] `yaml:"contains,omitempty"`
-		Matches    []sourceMappedValue[string] `yaml:"matches,omitempty"`
-		StartsWith sourceMappedValue[string]   `yaml:"starts_with,omitempty"`
-		EndsWith   sourceMappedValue[string]   `yaml:"ends_with,omitempty"`
-		Empty      sourceMappedValue[bool]     `yaml:"empty,omitempty"`
+		Equals     sourceMappedValue[string]   `yaml:"equals,omitempty" json:"equals"`
+		Contains   []sourceMappedValue[string] `yaml:"contains,omitempty" json:"contains"`
+		Matches    []sourceMappedValue[string] `yaml:"matches,omitempty" json:"matches"`
+		StartsWith sourceMappedValue[string]   `yaml:"starts_with,omitempty" json:"starts_with"`
+		EndsWith   sourceMappedValue[string]   `yaml:"ends_with,omitempty" json:"ends_with"`
+		Empty      sourceMappedValue[bool]     `yaml:"empty,omitempty" json:"empty"`
 	}
 
 	var i internal
