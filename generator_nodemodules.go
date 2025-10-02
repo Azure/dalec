@@ -118,7 +118,7 @@ func (gen *GeneratorNodeMod) UnmarshalYAML(ctx context.Context, node ast.Node) e
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode node module generator")
 	}
 
 	*gen = GeneratorNodeMod(i)

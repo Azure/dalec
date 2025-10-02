@@ -256,7 +256,7 @@ func (gen *GeneratorGomod) UnmarshalYAML(ctx context.Context, node ast.Node) err
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode gomod generator")
 	}
 
 	*gen = GeneratorGomod(i)

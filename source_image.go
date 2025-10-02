@@ -107,7 +107,7 @@ func (step *BuildStep) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 
 	dec := getDecoder(ctx)
 	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
-		return err
+		return errors.Wrap(err, "failed to decode build step")
 	}
 
 	*step = BuildStep(i)
