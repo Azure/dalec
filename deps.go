@@ -387,36 +387,15 @@ func GetExtraRepos(repos []PackageRepositoryConfig, env string) []PackageReposit
 
 func (s *Spec) GetBuildRepos(targetKey string) []PackageRepositoryConfig {
 	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
 	return deps.GetExtraRepos("build")
 }
 
 func (s *Spec) GetInstallRepos(targetKey string) []PackageRepositoryConfig {
 	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
 	return deps.GetExtraRepos("install")
 }
 
 func (s *Spec) GetTestRepos(targetKey string) []PackageRepositoryConfig {
 	deps := s.GetPackageDeps(targetKey)
-	if deps == nil {
-		deps = s.Dependencies
-		if deps == nil {
-			return nil
-		}
-	}
-
 	return deps.GetExtraRepos("test")
 }

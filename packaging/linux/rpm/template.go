@@ -223,14 +223,14 @@ func (w *specWrapper) Requires() fmt.Stringer {
 
 func (w *specWrapper) Recommends() fmt.Stringer {
 	b := &strings.Builder{}
-	deps := w.GetPackageDeps(w.Target)
-	if len(deps.GetRecommends()) == 0 {
+	deps := w.GetPackageDeps(w.Target).GetRecommends()
+	if len(deps) == 0 {
 		return b
 	}
 
-	keys := dalec.SortMapKeys(deps.Recommends)
+	keys := dalec.SortMapKeys(deps)
 	for _, name := range keys {
-		constraints := deps.Recommends[name]
+		constraints := deps[name]
 		writeDep(b, "Recommends", name, constraints)
 	}
 	b.WriteString("\n")

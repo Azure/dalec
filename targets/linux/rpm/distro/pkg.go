@@ -129,11 +129,8 @@ func (cfg *Config) InstallTestDeps(worker llb.State, sOpt dalec.SourceOpts, targ
 }
 
 func (cfg *Config) ExtractPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, rpmDir llb.State, opts ...llb.ConstraintsOpt) llb.State {
-	depRpms := llb.Scratch()
 	deps := spec.GetPackageDeps(targetKey)
-	if deps != nil {
-		depRpms = cfg.DownloadDeps(worker, sOpt, spec, targetKey, deps.Sysext, opts...)
-	}
+	depRpms := cfg.DownloadDeps(worker, sOpt, spec, targetKey, deps.GetSysext(), opts...)
 
 	opts = append(opts, dalec.ProgressGroup("Extracting RPMs"))
 

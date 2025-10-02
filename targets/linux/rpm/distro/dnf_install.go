@@ -205,7 +205,7 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 }
 
 func (cfg *Config) InstallBuildDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	deps := spec.GetPackageDeps(targetKey).Build
+	deps := spec.GetPackageDeps(targetKey).GetBuild()
 	if len(deps) == 0 {
 		return dalec.NoopStateOption
 	}

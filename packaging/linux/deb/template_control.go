@@ -95,17 +95,6 @@ func AppendConstraints(deps dalec.PackageDependencyList) []string {
 }
 
 func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDependencies) {
-	var (
-		needsClone bool
-		rtDeps     dalec.PackageDependencyList
-	)
-	if depsSpec == nil || depsSpec.Runtime == nil {
-		rtDeps = make(dalec.PackageDependencyList)
-	} else {
-		rtDeps = depsSpec.Runtime
-		needsClone = true
-	}
-
 	// Add in deps vars that will get resolved by debbuild
 	// In some cases these are not necessary (maybe even most), but when they are
 	// it is important.
@@ -122,6 +111,9 @@ func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDe
 		miscDeps = "${misc:Depends}"
 	)
 
+	rtDeps := depsSpec.GetRuntime()
+	needsClone := rtDeps != nil
+
 	artifacts := w.Spec.GetArtifacts(w.Target)
 	if !artifacts.DisableAutoRequires {
 		if _, exists := rtDeps[shlibsDeps]; !exists {
@@ -130,6 +122,9 @@ func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDe
 				needsClone = false
 			}
 
+			if rtDeps == nil {
+				rtDeps = make(dalec.PackageDependencyList)
+			}
 			rtDeps[shlibsDeps] = dalec.PackageConstraints{}
 		}
 	}
@@ -140,6 +135,9 @@ func (w *controlWrapper) depends(buf *strings.Builder, depsSpec *dalec.PackageDe
 	if _, exists := rtDeps[miscDeps]; !exists {
 		if needsClone {
 			rtDeps = maps.Clone(rtDeps)
+		}
+		if rtDeps == nil {
+			rtDeps = make(dalec.PackageDependencyList)
 		}
 		rtDeps[miscDeps] = dalec.PackageConstraints{}
 	}
@@ -166,12 +164,8 @@ func (w *controlWrapper) recommends(buf *strings.Builder, depsSpec *dalec.Packag
 func (w *controlWrapper) BuildDeps() fmt.Stringer {
 	b := &strings.Builder{}
 
-	depsSpec := w.Spec.GetPackageDeps(w.Target)
-
-	var deps []string
-	if depsSpec != nil {
-		deps = AppendConstraints(depsSpec.Build)
-	}
+	specDeps := w.Spec.GetPackageDeps(w.Target).GetBuild()
+	deps := AppendConstraints(specDeps)
 
 	deps = append(deps, fmt.Sprintf("debhelper-compat (= %s)", DebHelperCompat))
 
