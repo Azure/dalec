@@ -81,8 +81,8 @@ func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, w
 
 func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (*gwclient.Result, error) {
 	return frontend.BuildWithPlatform(ctx, client, func(ctx context.Context, client gwclient.Client, platform *ocispecs.Platform, spec *dalec.Spec, targetKey string) (gwclient.Reference, *dalec.DockerImageSpec, error) {
-		pkgDeps := spec.GetPackageDeps(targetKey)
-		if len(pkgDeps.Runtime) == 0 {
+		rtDeps := spec.GetPackageDeps(targetKey).GetRuntime()
+		if len(rtDeps) == 0 {
 			return nil, nil, fmt.Errorf("no runtime deps found for '%s'", targetKey)
 		}
 
@@ -99,10 +99,7 @@ func (cfg *Config) HandleDepsOnly(ctx context.Context, client gwclient.Client) (
 			return nil, nil, err
 		}
 
-		deps := make([]string, 0, len(pkgDeps.Runtime))
-		for dep := range pkgDeps.Runtime {
-			deps = append(deps, dep)
-		}
+		deps := dalec.SortMapKeys(rtDeps)
 
 		withDownloads := worker.Run(dalec.ShArgs("set -ex; mkdir -p /tmp/rpms/RPMS/$(uname -m)")).
 			Run(cfg.Install(deps,

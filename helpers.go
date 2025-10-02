@@ -629,7 +629,7 @@ func (s *Spec) GetConflicts(targetKey string) PackageDependencyList {
 }
 
 func HasNpm(spec *Spec, targetKey string) bool {
-	for dep := range spec.GetPackageDeps(targetKey).Build {
+	for dep := range spec.GetPackageDeps(targetKey).GetBuild() {
 		switch dep {
 		case "npm":
 			return true

@@ -112,7 +112,7 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 		return "", nil
 	}
 
-	deps := spec.GetPackageDeps(targetKey).Build
+	deps := spec.GetPackageDeps(targetKey).GetBuild()
 	if _, hasNormalGo := deps["golang"]; hasNormalGo {
 		return "", nil
 	}
@@ -261,7 +261,7 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 
 func (c *Config) ExtractPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, debSt llb.State, opts ...llb.ConstraintsOpt) llb.State {
 	depDebs := llb.Scratch()
-	deps := spec.GetPackageDeps(targetKey).Sysext
+	deps := spec.GetPackageDeps(targetKey).GetSysext()
 	if len(deps) > 0 {
 		opts = append(opts, deps.GetSourceLocation(worker))
 		depDebs = c.DownloadDeps(worker, sOpt, spec, targetKey, deps, opts...)
