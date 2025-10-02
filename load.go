@@ -10,6 +10,7 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/goccy/go-yaml/token"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/pkg/errors"
 	"golang.org/x/exp/maps"
@@ -291,7 +292,50 @@ func LoadSpec(dt []byte) (*Spec, error) {
 	}
 
 	spec.FillDefaults()
+	if err := spec.populateGomodPatchesFromExtensions(); err != nil {
+		return nil, err
+	}
 	return &spec, nil
+}
+
+func (s *Spec) populateGomodPatchesFromExtensions() error {
+	entries, err := s.gomodPatchExtensionEntries()
+	if err != nil {
+		return err
+	}
+
+	if len(entries) == 0 {
+		return nil
+	}
+
+	for _, entry := range entries {
+		if entry.Source == "" {
+			return errors.New("gomod patch extension entry missing source")
+		}
+		if entry.FileName == "" {
+			return errors.Errorf("gomod patch extension entry missing filename for source %q", entry.Source)
+		}
+
+		strip := entry.Strip
+		if strip == 0 {
+			strip = DefaultPatchStrip
+		}
+
+		contents := []byte(entry.Contents)
+		patchState := llb.Scratch().File(llb.Mkfile(entry.FileName, 0o644, contents))
+
+		patch := &GomodPatch{
+			SourceName: entry.Source,
+			FileName:   entry.FileName,
+			Strip:      strip,
+			State:      patchState,
+			Contents:   contents,
+		}
+
+		s.registerGomodPatch(patch)
+	}
+
+	return nil
 }
 
 // rawYAML is similar to json.RawMessage
