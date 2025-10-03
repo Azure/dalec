@@ -52,7 +52,7 @@ func TestGomodGitAuth(t *testing.T) {
 		HTTPServerBuildDir:     "/tmp/dalec/internal/dalec_coderoot",
 		HTTPServeCodeLocalPath: "./test/cmd/git_repo",
 		OutDir:                 "/tmp/dalec/internal/output",
-		ModFileGoVersion:       "1.23.5",
+		ModFileGoVersion:       "1.24.0",
 	}
 
 	// This is the go.mod file of the go module that *depends on our private go

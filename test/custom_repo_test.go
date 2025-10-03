@@ -67,10 +67,10 @@ func testCustomRepo(ctx context.Context, t *testing.T, workerCfg workerConfig, t
 					dep.Name: {},
 				},
 
-				Test: []string{
-					dep.Name,
-					"bash",
-					"coreutils",
+				Test: map[string]dalec.PackageConstraints{
+					dep.Name: {},
+					"bash":   {},
+					"coreutils": {},
 				},
 
 				ExtraRepos: []dalec.PackageRepositoryConfig{
@@ -248,8 +248,6 @@ func generateGPGKey(worker llb.State, armored bool) llb.State {
 		Run(dalec.ShArgs(`gpg --batch --gen-key <<EOF
 Key-Type: RSA
 Key-Length: 2048
-Subkey-Type: RSA
-Subkey-Length: 2048
 Name-Real: Test User
 Name-Comment: Test Key
 Name-Email: test@example.com

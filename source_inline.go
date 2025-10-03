@@ -1,6 +1,7 @@
 package dalec
 
 import (
+	"context"
 	goerrors "errors"
 	"fmt"
 	"io"
@@ -10,8 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/pkg/errors"
 )
 
@@ -40,6 +43,36 @@ type SourceInlineFile struct {
 	// GID is the group ID to set on the directory and all files and directories within it.
 	// UID must be greater than or equal to 0
 	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
+
+	_sourceMap    *sourceMap
+	_uidSourceMap *sourceMap
+	_gidSourceMap *sourceMap
+}
+
+func (s *SourceInlineFile) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal struct {
+		Contents    string                 `yaml:"contents,omitempty" json:"contents,omitempty"`
+		Permissions fs.FileMode            `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+		UID         sourceMappedValue[int] `yaml:"uid,omitempty" json:"uid"`
+		GID         sourceMappedValue[int] `yaml:"gid,omitempty" json:"gid"`
+	}
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return errors.Wrap(err, "failed to decode inline file")
+	}
+
+	*s = SourceInlineFile{
+		Contents:    i.Contents,
+		Permissions: i.Permissions,
+		UID:         i.UID.Value,
+		GID:         i.GID.Value,
+	}
+	s._sourceMap = newSourceMap(ctx, node)
+	s._uidSourceMap = i.UID.sourceMap
+	s._gidSourceMap = i.GID.sourceMap
+	return nil
 }
 
 // SourceInlineDir is used by by [SourceInline] to represent a filesystem directory.
@@ -58,6 +91,35 @@ type SourceInlineDir struct {
 	// GID is the group ID to set on the directory and all files and directories within it.
 	// UID must be greater than or equal to 0
 	GID int `yaml:"gid,omitempty" json:"gid,omitempty"`
+
+	_sourceMap    *sourceMap
+	_gidSourceMap *sourceMap
+	_uidSourceMap *sourceMap
+}
+
+func (s *SourceInlineDir) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	type internal struct {
+		Files       map[string]*SourceInlineFile `yaml:"files,omitempty" json:"files"`
+		Permissions fs.FileMode                  `yaml:"permissions,omitempty" json:"permissions"`
+		UID         sourceMappedValue[int]       `yaml:"uid,omitempty" json:"uid"`
+		GID         sourceMappedValue[int]       `yaml:"gid,omitempty" json:"gid"`
+	}
+	var i internal
+
+	dec := getDecoder(ctx)
+	if err := dec.DecodeFromNodeContext(ctx, node, &i); err != nil {
+		return errors.Wrap(err, "failed to decode inline dir")
+	}
+	*s = SourceInlineDir{
+		Files:       i.Files,
+		Permissions: i.Permissions,
+		UID:         i.UID.Value,
+		GID:         i.GID.Value,
+	}
+	s._sourceMap = newSourceMap(ctx, node)
+	s._uidSourceMap = i.UID.sourceMap
+	s._gidSourceMap = i.GID.sourceMap
+	return nil
 }
 
 // SourceInline is used to generate a source from inline content.
@@ -71,6 +133,8 @@ type SourceInline struct {
 	// [SourceIsDir] will return true when this is set.
 	// This is mutually exclusive with [File]
 	Dir *SourceInlineDir `yaml:"dir,omitempty" json:"dir,omitempty"`
+
+	_sourceMap *sourceMap
 }
 
 func (src *SourceInline) IsDir() bool {
@@ -86,11 +150,15 @@ func (s *SourceInline) validate(opts fetchOptions) (retErr error) {
 	var errs []error
 
 	if s.File == nil && s.Dir == nil {
-		errs = append(errs, errors.New("inline source is missing contents to inline"))
+		err := errors.New("inline source is missing contents to inline")
+		err = errdefs.WithSource(err, s._sourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	if s.File != nil && s.Dir != nil {
-		errs = append(errs, errors.New("inline source variant cannot have both a file and dir set"))
+		err := errors.New("inline source variant cannot have both a file and dir set")
+		err = errdefs.WithSource(err, s._sourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	if s.Dir != nil {
@@ -121,11 +189,15 @@ func (s *SourceInlineDir) validate() error {
 	var errs []error
 
 	if s.UID < 0 {
-		errs = append(errs, errors.Errorf("uid %d must be non-negative", s.UID))
+		err := errors.Errorf("uid %d must be non-negative", s.UID)
+		err = errdefs.WithSource(err, s._uidSourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	if s.GID < 0 {
-		errs = append(errs, errors.Errorf("gid %d must be non-negative", s.GID))
+		err := errors.Errorf("gid %d must be non-negative", s.GID)
+		err = errdefs.WithSource(err, s._gidSourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	for k, f := range s.Files {
@@ -144,11 +216,15 @@ func (s *SourceInlineFile) validate() error {
 	var errs []error
 
 	if s.UID < 0 {
-		errs = append(errs, errors.Errorf("uid %d must be non-negative", s.UID))
+		err := errors.Errorf("uid %d must be non-negative", s.UID)
+		err = errdefs.WithSource(err, s._uidSourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	if s.GID < 0 {
-		errs = append(errs, errors.Errorf("gid %d must be non-negative", s.GID))
+		err := errors.Errorf("gid %d must be non-negative", s.GID)
+		err = errdefs.WithSource(err, s._gidSourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	return goerrors.Join(errs...)

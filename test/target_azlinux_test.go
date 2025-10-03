@@ -175,15 +175,31 @@ func azlinuxListSignFiles(ver string) func(*dalec.Spec, ocispecs.Platform) []str
 func signRepoAzLinux(gpgKey llb.State, repoPath string) llb.StateOption {
 	// key should be a state that has a public key under /public.key
 	return func(in llb.State) llb.State {
+		// Sign packages first, then regenerate repo metadata, then sign metadata
+		// Depending on distro, the rpm itself may be verified on the client side
+		// rather than just the repo metadata, so we need to sign both.
 		return in.Run(
 			dalec.ShArgs("gpg --import < /tmp/gpg/private.key"),
 			llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
 			dalec.ProgressGroup("Importing gpg key")).
 			Run(
-				dalec.ShArgs(`ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2) && \
-					gpg --list-keys --keyid-format LONG && \
-					gpg --detach-sign --default-key "$ID" --armor --yes `+repoPath+`/repodata/repomd.xml`),
+				dalec.ShArgs(`set -ex
+ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2)
+echo "%_gpg_name $ID" > ~/.rpmmacros
+find `+repoPath+`/RPMS -name "*.rpm" -exec rpmsign --addsign {} \;`),
 				llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
+				dalec.ProgressGroup("Sign packages"),
+			).
+			Run(
+				dalec.ShArgs("rm -rf "+repoPath+"/repodata && createrepo --compatibility "+repoPath),
+				dalec.ProgressGroup("Regenerate repo metadata after signing"),
+			).
+			Run(
+				dalec.ShArgs(`set -ex
+ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'test@example.com' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2)
+gpg --detach-sign --default-key "$ID" --armor --yes `+repoPath+`/repodata/repomd.xml`),
+				llb.AddMount("/tmp/gpg", gpgKey, llb.Readonly),
+				dalec.ProgressGroup("Sign repo metadata"),
 			).Root()
 	}
 }

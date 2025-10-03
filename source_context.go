@@ -6,6 +6,7 @@ import (
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/pkg/errors"
 )
 
@@ -15,6 +16,8 @@ type SourceContext struct {
 	// Name is the name of the build context. By default, it is the magic name
 	// `context`, recognized by Docker as the default context.
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 func (src *SourceContext) validate(opts fetchOptions) error {
@@ -32,11 +35,14 @@ func (src *SourceContext) baseState(opts fetchOptions) llb.State {
 		}
 		st, err := opts.SourceOpt.GetContext(src.Name, opts)
 		if err != nil {
+			err = errdefs.WithSource(err, src._sourceMap.GetErrdefsSource())
 			return llb.Scratch(), err
 		}
 
 		if st == nil {
-			return llb.Scratch(), errors.Errorf("context %q not found", src.Name)
+			err := errors.Errorf("context %q not found", src.Name)
+			err = errdefs.WithSource(err, src._sourceMap.GetErrdefsSource())
+			return llb.Scratch(), err
 		}
 		return *st, nil
 	})

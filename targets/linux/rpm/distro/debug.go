@@ -27,7 +27,8 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 		return llb.Scratch(), err
 	}
 
-	deps := dalec.SortMapKeys(spec.GetBuildDeps(targetKey))
+	deps := spec.GetPackageDeps(targetKey).GetBuild()
+	pkgNames := dalec.SortMapKeys(deps)
 	if spec.HasGomods() {
 		if !dalec.HasGolang(spec, targetKey) {
 			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
@@ -38,8 +39,8 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 		hasRust := func(s string) bool {
 			return s == "rust"
 		}
-		if !slices.ContainsFunc(deps, hasRust) {
-			return llb.Scratch(), errors.New("spec contains go modules but does not have golang in build deps")
+		if !slices.ContainsFunc(pkgNames, hasRust) {
+			return llb.Scratch(), errors.New("spec contains cargo homes but does not have rust in build deps")
 		}
 	}
 
@@ -49,7 +50,8 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 		}
 	}
 
-	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey))
+	repos := spec.GetBuildRepos(targetKey)
+	worker = worker.With(c.WithDeps(sOpt, targetKey, spec.Name, deps, repos, opts...))
 	return worker, nil
 }
 
@@ -71,7 +73,7 @@ func (c *Config) HandleBuildroot(ctx context.Context, client gwclient.Client) (*
 			return nil, nil, errors.Wrap(err, "error building worker container")
 		}
 
-		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, pg, pc))
+		worker = worker.With(c.InstallBuildDeps(spec, sOpt, targetKey, pg, pc))
 
 		br, err := rpm.SpecToBuildrootLLB(worker, spec, sOpt, targetKey, pg)
 		if err != nil {

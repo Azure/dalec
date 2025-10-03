@@ -89,12 +89,7 @@
 					"description": "NetworkMode sets the network mode to use during the build phase.\nAccepted values: none, sandbox\nDefault: none"
 				},
 				"steps": {
-					"items": {
-						"$ref": "#/$defs/BuildStep"
-					},
-					"type": [
-						"array"
-					],
+					"$ref": "#/$defs/BuildStepList",
 					"description": "Steps is the list of commands to run to build the artifact(s).\nEach step is run sequentially and will be cached accordingly depending on the frontend implementation."
 				}
 			},
@@ -424,6 +419,14 @@
 				"null"
 			],
 			"description": "BuildStep is used to execute a command to build the artifact(s)."
+		},
+		"BuildStepList": {
+			"items": {
+				"$ref": "#/$defs/BuildStep"
+			},
+			"type": [
+				"array"
+			]
 		},
 		"CacheConfig": {
 			"properties": {
@@ -1221,13 +1224,7 @@
 		"PackageDependencies": {
 			"properties": {
 				"build": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Build is the list of packagese required to build the package."
 				},
 				"extra_repos": {
@@ -1240,45 +1237,20 @@
 					"description": "ExtraRepos is used to inject extra package repositories that may be used to\nsatisfy package dependencies in various stages."
 				},
 				"recommends": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Recommends is the list of packages recommended to install with the generated package.\nNote: Not all package managers support this (e.g. rpm)"
 				},
 				"runtime": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Runtime is the list of packages required to install/run the package."
 				},
 				"sysext": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Sysext is the list of packages to include in the generated system\nextension. No dependency resolution is performed when generating system\nextensions, so all required dependencies must be explicitly listed here."
 				},
 				"test": {
-					"items": {
-						"type": [
-							"string"
-						]
-					},
-					"type": [
-						"array"
-					],
-					"description": "Test lists any extra packages required for running tests\nThese packages are only installed for tests which have steps that require\nrunning a command in the built container.\nSee [TestSpec] for more information."
+					"$ref": "#/$defs/PackageDependencyList",
+					"description": "Test lists any extra packages required for running tests\nThese packages are only installed for tests which have steps that require\nrunning a command in the built container.\nUse a map so test dependencies can have PackageConstraints (and source maps)."
 				}
 			},
 			"additionalProperties": {
@@ -1289,6 +1261,15 @@
 				"null"
 			],
 			"description": "PackageDependencies is a list of dependencies for a package."
+		},
+		"PackageDependencyList": {
+			"additionalProperties": {
+				"$ref": "#/$defs/PackageConstraints"
+			},
+			"type": [
+				"object",
+				"null"
+			]
 		},
 		"PackageRepositoryConfig": {
 			"required": [
@@ -1893,13 +1874,7 @@
 					"description": "Changelog is the list of changes to the package."
 				},
 				"conflicts": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Conflicts is the list of packages that conflict with the generated package.\nThis will prevent the package from being installed if any of these packages are already installed or vice versa."
 				},
 				"dependencies": {
@@ -1961,23 +1936,11 @@
 					"description": "Patches is the list of patches to apply to the sources.\nThe map key is the name of the source to apply the patches to.\nThe value is the list of patches to apply to the source.\nThe patch must be present in the `Sources` map.\nEach patch is applied in order and the result is used as the source for the build."
 				},
 				"provides": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Provides is the list of things that the generated package provides.\nThis can be used to satisfy dependencies of other packages.\nAs an example, the moby-runc package provides \"runc\", other packages could depend on \"runc\" and be satisfied by moby-runc.\nThis is an advanced use case and consideration should be taken to ensure that the package actually provides the thing it claims to provide."
 				},
 				"replaces": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Replaces is the list of packages that are replaced by the generated package."
 				},
 				"revision": {
@@ -2206,13 +2169,7 @@
 					"description": "Artifacts describes all of the artifact configurations to include for this specific target."
 				},
 				"conflicts": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Conflicts is the list of packages that this target conflicts with."
 				},
 				"dependencies": {
@@ -2232,23 +2189,11 @@
 					"description": "PackageConfig is the configuration to use for artifact targets, such as\nrpms, debs, or zip files containing Windows binaries"
 				},
 				"provides": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Provides is the list of packages that this target provides."
 				},
 				"replaces": {
-					"additionalProperties": {
-						"$ref": "#/$defs/PackageConstraints"
-					},
-					"type": [
-						"object",
-						"null"
-					],
+					"$ref": "#/$defs/PackageDependencyList",
 					"description": "Replaces is the list of packages that this target replaces/obsoletes."
 				},
 				"tests": {
@@ -2365,18 +2310,18 @@
 				},
 				"stderr": {
 					"$ref": "#/$defs/CheckOutput",
-					"description": "Stderr is the expected output on stderr"
+					"description": "Stderr describes checks to perform against stderr"
 				},
 				"stdin": {
 					"type": [
 						"string",
 						"null"
 					],
-					"description": "Stdin is the input to pass to stdin for the command"
+					"description": "Stdin is the input to provide to the command when running tests"
 				},
 				"stdout": {
 					"$ref": "#/$defs/CheckOutput",
-					"description": "Stdout is the expected output on stdout"
+					"description": "Stdout describes checks to perform against stdout"
 				}
 			},
 			"additionalProperties": {

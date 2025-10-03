@@ -8,6 +8,7 @@ import (
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/gitutil"
 )
 
@@ -16,6 +17,8 @@ type SourceGit struct {
 	Commit     string  `yaml:"commit" json:"commit"`
 	KeepGitDir bool    `yaml:"keepGitDir,omitempty" json:"keepGitDir,omitempty"`
 	Auth       GitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 type GitAuth struct {
@@ -98,7 +101,9 @@ func (src *SourceGit) validate(opts fetchOptions) error {
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("invalid git source: %w", stderrors.Join(errs...))
+		err := fmt.Errorf("invalid git source: %w", stderrors.Join(errs...))
+		err = errdefs.WithSource(err, src._sourceMap.GetErrdefsSource())
+		return err
 	}
 
 	return nil
@@ -115,6 +120,7 @@ func (src *SourceGit) baseState(opts fetchOptions) llb.State {
 	}
 	gOpts = append(gOpts, WithConstraints(opts.Constraints...))
 	gOpts = append(gOpts, &src.Auth)
+	gOpts = append(gOpts, src._sourceMap.GetRootLocation())
 
 	return llb.Git(src.URL, src.Commit, gOpts...)
 }
@@ -156,14 +162,20 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 	if err != nil {
 		errs = append(errs, err)
 	}
-	if len(errs) > 1 {
-		return fmt.Errorf("failed to process build args for git source: %w", stderrors.Join(errs...))
+	if len(errs) > 0 {
+		err := fmt.Errorf("failed to process build args for git source: %w", stderrors.Join(errs...))
+		err = errdefs.WithSource(err, src._sourceMap.GetErrdefsSource())
+		return err
 	}
 	return nil
 }
 
 func (src *SourceGit) doc(w io.Writer, name string) {
-	ref, err := gitutil.ParseGitRef(src.URL)
+	url, err := url.Parse(src.URL)
+	if err != nil {
+		panic(err)
+	}
+	ref, err := gitutil.FromURL(url)
 	if err != nil {
 		// This should have always been validated before, so we panic here
 		panic(fmt.Errorf("could not parse git ref %q: %w", src.URL, err))

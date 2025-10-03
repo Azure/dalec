@@ -2967,15 +2967,15 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
 			_, err := client.Solve(ctx, sr)
-			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+			assert.ErrorContains(t, err, "expected \"/non-existing-file\" not_exist \"exists=false\"")
 			assert.ErrorContains(t, err, "expected \"/\" permissions \"-rw-r--r--\", got \"-rwxr-xr-x\"")
-			assert.ErrorContains(t, err, "expected \"/\" mode \"ModeFile\", got \"ModeDir\"")
+			assert.ErrorContains(t, err, "expected \"/\" is_dir \"ModeFile\", got \"ModeDir\"")
 
 			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
 			_, err = client.Solve(ctx, sr)
-			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+			assert.ErrorContains(t, err, "expected \"/non-existing-file\" not_exist \"exists=false\"")
 			assert.ErrorContains(t, err, "expected \"/\" permissions \"-rw-r--r--\", got \"-rwxr-xr-x\"")
-			assert.ErrorContains(t, err, "expected \"/\" mode \"ModeFile\", got \"ModeDir\"")
+			assert.ErrorContains(t, err, "expected \"/\" is_dir \"ModeFile\", got \"ModeDir\"")
 		})
 	})
 
@@ -2999,10 +2999,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 				},
 			},
 			Dependencies: &dalec.PackageDependencies{
-				Test: []string{
-					"bash",
-					"grep",
-				},
+				Test: map[string]dalec.PackageConstraints{"bash": {}, "grep": {}},
 			},
 			Artifacts: dalec.Artifacts{
 				DataDirs: map[string]dalec.ArtifactConfig{

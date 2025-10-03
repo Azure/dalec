@@ -14,6 +14,7 @@ var (
 		"mariner-rpm-macros",
 		"build-essential",
 		"ca-certificates",
+		"rpm-sign",
 	}
 
 	targets = map[string]gwclient.BuildFunc{
@@ -50,10 +51,10 @@ func basePackages(name string) []dalec.Spec {
 			License:     license,
 			Description: "DALEC base packages for " + name,
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: map[string]dalec.PackageConstraints{
+				Runtime: dalec.PackageDependencyList{
 					distMin: {},
 				},
-				Recommends: map[string]dalec.PackageConstraints{
+				Recommends: dalec.PackageDependencyList{
 					prebuilt: {},
 				},
 			},

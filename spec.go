@@ -2,12 +2,15 @@
 package dalec
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )
 
@@ -33,14 +36,14 @@ type Spec struct {
 
 	// Conflicts is the list of packages that conflict with the generated package.
 	// This will prevent the package from being installed if any of these packages are already installed or vice versa.
-	Conflicts map[string]PackageConstraints `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
+	Conflicts PackageDependencyList `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
 	// Replaces is the list of packages that are replaced by the generated package.
-	Replaces map[string]PackageConstraints `yaml:"replaces,omitempty" json:"replaces,omitempty"`
+	Replaces PackageDependencyList `yaml:"replaces,omitempty" json:"replaces,omitempty"`
 	// Provides is the list of things that the generated package provides.
 	// This can be used to satisfy dependencies of other packages.
 	// As an example, the moby-runc package provides "runc", other packages could depend on "runc" and be satisfied by moby-runc.
 	// This is an advanced use case and consideration should be taken to ensure that the package actually provides the thing it claims to provide.
-	Provides map[string]PackageConstraints `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Provides PackageDependencyList `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Sources is the list of sources to use to build the artifact(s).
 	// The map key is the name of the source and the value is the source configuration.
@@ -100,9 +103,12 @@ type Spec struct {
 	extensions extensionFields `yaml:"-" json:"-"`
 
 	decodeOpts []yaml.DecodeOption `yaml:"-" json:"-"`
+
+	// (previously used for side-table source maps) removed - per-object constraints stored on objects
 }
 
-type extensionFields map[string]rawYAML
+// extensionFields is a map for storing extension fields in the spec.
+type extensionFields map[string]ast.Node
 
 // PatchSpec is used to apply a patch to a source with a given set of options.
 // This is used in [Spec.Patches]
@@ -115,6 +121,8 @@ type PatchSpec struct {
 	// Optional subpath to the patch file inside the source
 	// This is only useful for directory-backed sources.
 	Path string `yaml:"path,omitempty" json:"path,omitempty"`
+
+	_sourceMap *sourceMap `json:"-" yaml:"-"`
 }
 
 // ChangelogEntry is an entry in the changelog.
@@ -196,56 +204,22 @@ type SymlinkTarget struct {
 	Group string `yaml:"group,omitempty" json:"group,omitempty"`
 }
 
-// Source defines a source to be used in the build.
-// A source can be a local directory, a git repositoryt, http(s) URL, etc.
-type Source struct {
-	// This is an embedded union representing all of the possible source types.
-	// Exactly one must be non-nil, with all other cases being errors.
-	//
-	// === Begin Source Variants ===
-	DockerImage *SourceDockerImage `yaml:"image,omitempty" json:"image,omitempty"`
-	Git         *SourceGit         `yaml:"git,omitempty" json:"git,omitempty"`
-	HTTP        *SourceHTTP        `yaml:"http,omitempty" json:"http,omitempty"`
-	Context     *SourceContext     `yaml:"context,omitempty" json:"context,omitempty"`
-	Build       *SourceBuild       `yaml:"build,omitempty" json:"build,omitempty"`
-	Inline      *SourceInline      `yaml:"inline,omitempty" json:"inline,omitempty"`
-	// === End Source Variants ===
-
-	// Path is the path to the source after fetching it based on the identifier.
-	Path string `yaml:"path,omitempty" json:"path,omitempty"`
-
-	// Includes is a list of paths underneath `Path` to include, everything else is execluded
-	// If empty, everything is included (minus the excludes)
-	Includes []string `yaml:"includes,omitempty" json:"includes,omitempty"`
-	// Excludes is a list of paths underneath `Path` to exclude, everything else is included
-	Excludes []string `yaml:"excludes,omitempty" json:"excludes,omitempty"`
-
-	// Generate specifies a list of dependency generators to apply to a given source.
-	//
-	// Generators are used to generate additional sources from this source.
-	// As an example the `gomod` generator can be used to generate a go module cache from a go source.
-	// How a generator operates is dependent on the actual generator.
-	// Generators may also cause modifications to the build environment.
-	//
-	// Currently supported generators are: "gomod", "cargohome", and "pip".
-	// The "gomod" generator will generate a go module cache from the source.
-	// The "cargohome" generator will generate a cargo home from the source.
-	// The "pip" generator will generate a pip cache from the source.
-	Generate []*SourceGenerator `yaml:"generate,omitempty" json:"generate,omitempty"`
-}
-
 // GeneratorGomod is used to generate a go module cache from go module sources
 type GeneratorGomod struct {
 	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
 	// Auth is the git authorization to use for gomods. The keys are the hosts, and the values are the auth to use for that host.
 	Auth map[string]GomodGitAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 // GeneratorCargohome is used to generate a cargo home from cargo sources
 type GeneratorCargohome struct {
 	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 type GeneratorPip struct {
@@ -260,12 +234,16 @@ type GeneratorPip struct {
 
 	// ExtraIndexUrls specifies additional PyPI index URLs
 	ExtraIndexUrls []string `yaml:"extra_index_urls,omitempty" json:"extra_index_urls,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 // GeneratorNodeMod is used to generate a node module cache for Yarn or npm.
 type GeneratorNodeMod struct {
 	// Paths is the list of paths to run the generator on. Used to generate multi-module in a single source.
 	Paths []string `yaml:"paths,omitempty" json:"paths,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 // SourceGenerator holds the configuration for a source generator.
@@ -291,7 +269,7 @@ type SourceGenerator struct {
 type ArtifactBuild struct {
 	// Steps is the list of commands to run to build the artifact(s).
 	// Each step is run sequentially and will be cached accordingly depending on the frontend implementation.
-	Steps []BuildStep `yaml:"steps" json:"steps" jsonschema:"required"`
+	Steps BuildStepList `yaml:"steps" json:"steps" jsonschema:"required"`
 	// Env is the list of environment variables to set for all commands in this step group.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 
@@ -303,6 +281,43 @@ type ArtifactBuild struct {
 	// Caches is the list of caches to use for the build.
 	// These apply to all steps.
 	Caches []CacheConfig `yaml:"caches,omitempty" json:"caches,omitempty"`
+}
+
+type BuildStepList []BuildStep
+
+func (ls *BuildStepList) UnmarshalYAML(ctx context.Context, node ast.Node) error {
+	seq, ok := node.(*ast.SequenceNode)
+	if !ok {
+		return errors.New("expected sequence node for build steps")
+	}
+
+	result := make([]BuildStep, 0, len(seq.Values))
+	for _, n := range seq.Values {
+		var step BuildStep
+
+		if err := yaml.NodeToValue(n, &step, decodeOpts(ctx)...); err != nil {
+			return err
+		}
+		step._sourceMap = newSourceMap(ctx, n)
+		result = append(result, step)
+	}
+
+	*ls = result
+	return nil
+}
+
+func (ls BuildStepList) GetSourceLocation(st llb.State) llb.ConstraintsOpt {
+	if len(ls) == 0 {
+		return ConstraintsOptFunc(func(c *llb.Constraints) {})
+	}
+
+	locs := make([]llb.ConstraintsOpt, 0, len(ls))
+	for _, step := range ls {
+		if c := step.GetSourceLocation(st); c != nil {
+			locs = append(locs, c)
+		}
+	}
+	return MergeSourceLocations(locs...)
 }
 
 // Frontend encapsulates the configuration for a frontend to forward a build target to.
@@ -387,7 +402,7 @@ func (s *Spec) Ext(key string, target interface{}, opts ...func(*ExtDecodeConfig
 		}
 	}
 
-	return yaml.UnmarshalWithOptions(v, target, yamlOpts...)
+	return yaml.NodeToValue(v, target, yamlOpts...)
 }
 
 // WithExtension adds an extension field to the spec.
@@ -404,18 +419,18 @@ func (s *Spec) WithExtension(key string, value interface{}) error {
 
 	dt, ok := value.([]byte)
 	if ok {
-		_, err := parser.ParseBytes(dt, parseModeIgnoreComments)
+		parsed, err := parser.ParseBytes(dt, parseModeIgnoreComments)
 		if err != nil {
 			return errors.Wrap(err, "extension value provided is a []byte but is not valid YAML")
 		}
-		s.extensions[key] = dt
+		s.extensions[key] = parsed.Docs[0].Body
 		return nil
 	}
 
-	dt, err := yaml.Marshal(value)
+	node, err := yaml.ValueToNode(value)
 	if err != nil {
-		return errors.Wrapf(err, "failed to marshal extension field %q", key)
+		return errors.Wrapf(err, "failed to convert extension field %q to AST node", key)
 	}
-	s.extensions[key] = dt
+	s.extensions[key] = node
 	return nil
 }
