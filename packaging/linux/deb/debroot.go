@@ -1,3 +1,4 @@
+// Package deb provides Debian/Ubuntu package building functionality for dalec.
 package deb
 
 import (
@@ -301,7 +302,13 @@ func fixupGenerators(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 		fmt.Fprintln(buf, "export GOSUMDB=off")
 	}
 
-	if script := dalec.GomodEditScript(spec); script != "" {
+	script, err := dalec.GomodEditScript(spec)
+	if err != nil {
+		// This should never happen due to early validation in LoadSpec,
+		// but if it does, we want to fail the build with a clear error.
+		panic(errors.Wrap(err, "error generating gomod edit script"))
+	}
+	if script != "" {
 		if spec.HasGomods() {
 			fmt.Fprintln(buf)
 		}
@@ -339,14 +346,7 @@ func createPatchScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 
 	writeScriptHeader(buf, cfg)
 
-	patchSources := make(map[string]struct{}, len(spec.Patches))
-	for name := range spec.Patches {
-		patchSources[name] = struct{}{}
-	}
-	for _, name := range spec.GomodPatchSources() {
-		patchSources[name] = struct{}{}
-	}
-
+	patchSources := dalec.GomodPatchSourceSet(spec)
 	sortedSources := dalec.SortMapKeys(patchSources)
 	for _, name := range sortedSources {
 		manual := spec.Patches[name]
@@ -357,7 +357,7 @@ func createPatchScript(spec *dalec.Spec, cfg *SourcePkgConfig) []byte {
 
 		for _, patch := range spec.GomodPatchesForSource(name) {
 			p := filepath.Join("${DEBIAN_DIR:=debian}/dalec/patches", name, patch.FileName)
-			fmt.Fprintf(buf, "if [ -s %q ]; then patch -N -d %q -p%d -s < %q; fi\n", p, name, patch.Strip, p)
+			fmt.Fprintln(buf, dalec.FormatGomodPatchCommand(p, name, patch.Strip, nil))
 		}
 	}
 
