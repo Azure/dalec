@@ -48,6 +48,14 @@ const sidebars: SidebarsConfig = {
         'editor-support',
       ],
     },
+    {
+      type: 'category',
+      label: 'Contributing',
+      collapsed: false,
+      items: [
+        'developers',
+      ],
+    },
   ],
 };
 
