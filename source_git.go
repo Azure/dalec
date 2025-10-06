@@ -163,13 +163,17 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 }
 
 func (src *SourceGit) doc(w io.Writer, name string) {
+	remote := src.URL
 	ref, err := gitutil.ParseGitRef(src.URL)
-	if err != nil {
-		// This should have always been validated before, so we panic here
-		panic(fmt.Errorf("could not parse git ref %q: %w", src.URL, err))
+	if err == nil {
+		// Use the parsed remote if parsing succeeds
+		remote = ref.Remote
 	}
+	// If parsing fails, we fall back to using the original URL as the remote
+	// This handles cases where the git URL doesn't follow the expected format
+	// but is still a valid git repository URL
 
 	printDocLn(w, "Generated from a git repository:")
-	printDocLn(w, "	Remote:", ref.Remote)
+	printDocLn(w, "	Remote:", remote)
 	printDocLn(w, "	Ref:", src.Commit)
 }
