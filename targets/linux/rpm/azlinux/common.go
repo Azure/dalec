@@ -14,6 +14,7 @@ var (
 		"mariner-rpm-macros",
 		"build-essential",
 		"ca-certificates",
+		"rpm-sign",
 	}
 
 	targets = map[string]gwclient.BuildFunc{

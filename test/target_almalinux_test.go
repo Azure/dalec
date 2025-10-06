@@ -38,7 +38,7 @@ func TestAlmalinux9(t *testing.T) {
 		Worker: workerConfig{
 			ContextName:    almalinux.ConfigV9.ContextRef,
 			CreateRepo:     createYumRepo(almalinux.ConfigV9),
-			SignRepo:       signRepoAzLinux,
+			SignRepo:       signRepoDnf,
 			TestRepoConfig: azlinuxTestRepoConfig,
 		},
 		Release: OSRelease{
@@ -83,7 +83,7 @@ func TestAlmalinux8(t *testing.T) {
 		Worker: workerConfig{
 			ContextName:    almalinux.ConfigV8.ContextRef,
 			CreateRepo:     createYumRepo(almalinux.ConfigV8),
-			SignRepo:       signRepoAzLinux,
+			SignRepo:       signRepoDnf,
 			TestRepoConfig: azlinuxTestRepoConfig,
 		},
 		Release: OSRelease{

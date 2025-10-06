@@ -248,12 +248,12 @@ func generateGPGKey(worker llb.State, armored bool) llb.State {
 		Run(dalec.ShArgs(`gpg --batch --gen-key <<EOF
 Key-Type: RSA
 Key-Length: 2048
-Subkey-Type: RSA
-Subkey-Length: 2048
 Name-Real: Test User
 Name-Comment: Test Key
 Name-Email: test@example.com
 Expire-Date: 0
+Subkey-Type: RSA
+Subkey-Length: 2048
 %no-protection
 %commit
 EOF

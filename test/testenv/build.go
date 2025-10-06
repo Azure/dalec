@@ -2,6 +2,7 @@ package testenv
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -21,6 +22,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 )
+
+var StreamLiveOutput bool
 
 func buildBaseFrontend(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 	dc, err := dockerui.NewClient(c)
@@ -132,18 +135,54 @@ func withDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.Sol
 	return nil
 }
 
-func displaySolveStatus(ctx context.Context, t *testing.T) chan *client.SolveStatus {
-	ch := make(chan *client.SolveStatus)
-	done := make(chan struct{})
+type testWriter struct {
+	t        *testing.T
+	buffered *bytes.Buffer
+}
+
+func (tw *testWriter) Write(p []byte) (n int, err error) {
+	tw.buffered.Write(p)
+
+	scanner := bufio.NewScanner(tw.buffered)
+	var reset bool
+	for scanner.Scan() {
+		if scanner.Text() == "" {
+			continue
+		}
+		tw.t.Log(scanner.Text())
+		reset = true
+	}
+
+	if reset {
+		tw.buffered.Reset()
+	}
+	if err := scanner.Err(); err != nil {
+		return -1, err
+	}
+
+	return len(p), nil
+}
+
+func (tw *testWriter) Flush() {
+	if tw.buffered.Len() == 0 {
+		return
+	}
+
+	tw.t.Log(tw.buffered.String())
+	tw.buffered.Reset()
+}
+
+func getBuildOutputWriter(ctx context.Context, t *testing.T, done <-chan struct{}) io.Writer {
+	if StreamLiveOutput {
+		w := &testWriter{t: t, buffered: &bytes.Buffer{}}
+		t.Cleanup(w.Flush)
+		return w
+	}
 
 	dir := t.TempDir()
 	f, err := os.OpenFile(filepath.Join(dir, "build.log"), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		t.Fatalf("error opening temp file: %v", err)
-	}
-	display, err := progressui.NewDisplay(f, progressui.AutoMode, progressui.WithPhase(t.Name()))
-	if err != nil {
-		t.Fatal(err)
 	}
 
 	t.Cleanup(func() {
@@ -163,12 +202,28 @@ func displaySolveStatus(ctx context.Context, t *testing.T) chan *client.SolveSta
 
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
+			if scanner.Text() == "" {
+				continue
+			}
 			t.Log(scanner.Text())
 		}
 		if err := scanner.Err(); err != nil {
 			t.Log(err)
 		}
+
 	})
+	return f
+}
+
+func displaySolveStatus(ctx context.Context, t *testing.T) chan *client.SolveStatus {
+	ch := make(chan *client.SolveStatus)
+	done := make(chan struct{})
+
+	w := getBuildOutputWriter(ctx, t, done)
+	display, err := progressui.NewDisplay(w, progressui.AutoMode, progressui.WithPhase(t.Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	go func() {
 		defer close(done)
