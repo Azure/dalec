@@ -38,7 +38,7 @@ func TestRockylinux9(t *testing.T) {
 		Worker: workerConfig{
 			ContextName:    rockylinux.ConfigV9.ContextRef,
 			CreateRepo:     createYumRepo(rockylinux.ConfigV9),
-			SignRepo:       signRepoAzLinux,
+			SignRepo:       signRepoDnf,
 			TestRepoConfig: azlinuxTestRepoConfig,
 		},
 		Release: OSRelease{
@@ -83,7 +83,7 @@ func TestRockylinux8(t *testing.T) {
 		Worker: workerConfig{
 			ContextName:    rockylinux.ConfigV8.ContextRef,
 			CreateRepo:     createYumRepo(rockylinux.ConfigV8),
-			SignRepo:       signRepoAzLinux,
+			SignRepo:       signRepoDnf,
 			TestRepoConfig: azlinuxTestRepoConfig,
 		},
 		Release: OSRelease{

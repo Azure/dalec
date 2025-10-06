@@ -1,7 +1,6 @@
 package distro
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -9,7 +8,6 @@ import (
 	"github.com/Azure/dalec"
 	"github.com/Azure/dalec/packaging/linux/rpm"
 	"github.com/moby/buildkit/client/llb"
-	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
 var dnfRepoPlatform = dalec.RepoPlatformConfig{
@@ -21,10 +19,6 @@ var dnfRepoPlatform = dalec.RepoPlatformConfig{
 type PackageInstaller func(*dnfInstallConfig, string, []string) llb.RunOption
 
 type dnfInstallConfig struct {
-	// Disables GPG checking when installing RPMs.
-	// this is needed when installing unsigned RPMs.
-	noGPGCheck bool
-
 	// path for gpg keys to import for using a repo. These files for these keys
 	// must also be added as mounts
 	keys []string
@@ -49,10 +43,6 @@ type dnfInstallConfig struct {
 }
 
 type DnfInstallOpt func(*dnfInstallConfig)
-
-func DnfNoGPGCheck(cfg *dnfInstallConfig) {
-	cfg.noGPGCheck = true
-}
 
 // see comment in tdnfInstall for why this additional option is needed
 func DnfImportKeys(keys []string) DnfInstallOpt {
@@ -96,10 +86,6 @@ func dnfInstallWithConstraints(opts []llb.ConstraintsOpt) DnfInstallOpt {
 func dnfInstallFlags(cfg *dnfInstallConfig) string {
 	var cmdOpts string
 
-	if cfg.noGPGCheck {
-		cmdOpts += " --nogpgcheck"
-	}
-
 	if cfg.root != "" {
 		cmdOpts += " --installroot=" + cfg.root
 		cmdOpts += " --setopt=reposdir=/etc/yum.repos.d"
@@ -137,7 +123,18 @@ func importGPGScript(keyPaths []string) string {
 	importScript := "#!/usr/bin/env sh\nset -eux\n"
 	for _, keyPath := range keyPaths {
 		keyName := filepath.Base(keyPath)
-		importScript += fmt.Sprintf("gpg --import %s\n", filepath.Join(keyRoot, keyName))
+		fullPath := filepath.Join(keyRoot, keyName)
+		// rpm --import requires armored keys, check if key is armored and convert if needed
+		importScript += fmt.Sprintf(`
+key_path="%s"
+gpg --import --armor "${key_path}"
+
+if ! head -1 "${key_path}" | grep -q 'BEGIN PGP PUBLIC KEY BLOCK'; then
+	gpg --armor --export > /tmp/key.asc
+	key_path="/tmp/key.asc"
+fi
+rpm --import "${key_path}"
+`, fullPath)
 	}
 
 	return importScript
@@ -207,8 +204,6 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 	return dnfCommand(cfg, releaseVer, "tdnf", append([]string{"install"}, pkgs...), nil)
 }
 
-type buildDepsInstallerFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.RunOption, error)
-
 func (cfg *Config) InstallBuildDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	deps := spec.GetPackageDeps(targetKey)
 	if deps == nil || len(deps.Build) == 0 {
@@ -243,19 +238,22 @@ func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, de
 		specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
 		cacheInfo := rpm.CacheInfo{TargetKey: targetKey, Caches: spec.Build.Caches}
 		rpmDir := rpm.Build(rpmSpec, in, specPath, cacheInfo, opts...)
+
 		const rpmMountDir = "/tmp/internal/dalec/deps/install/rpms"
 
 		repoMounts, keyPaths := cfg.RepoMounts(repos, sOpt, opts...)
 
 		installOpts := []DnfInstallOpt{
-			DnfNoGPGCheck,
 			DnfWithMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"), llb.Readonly)),
 			DnfWithMounts(repoMounts),
 			DnfImportKeys(keyPaths),
 		}
 
 		install := cfg.Install([]string{filepath.Join(rpmMountDir, "*/*.rpm")}, installOpts...)
-		return in.Run(install, dalec.WithConstraints(opts...)).Root()
+		return in.Run(
+			dalec.WithConstraints(opts...),
+			install,
+		).Root()
 	}
 }
 
