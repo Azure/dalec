@@ -355,7 +355,7 @@ func testAutoGobuildCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 	})
 }
 
-func testAutoRustCache(ctx context.Context, t *testing.T, cfg targetConfig) {
+func testRustCache(ctx context.Context, t *testing.T, cfg targetConfig) {
 	ctx = startTestSpan(ctx, t)
 
 	specWithCommand := func(cmd string) *dalec.Spec {

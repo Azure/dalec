@@ -1817,10 +1817,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		testAutoGobuildCache(ctx, t, testConfig.Target)
 	})
 
-	t.Run("auto rust cache", func(t *testing.T) {
+	t.Run("rust cache", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
-		testAutoRustCache(ctx, t, testConfig.Target)
+		testRustCache(ctx, t, testConfig.Target)
 	})
 
 	t.Run("bazel cache", func(t *testing.T) {
