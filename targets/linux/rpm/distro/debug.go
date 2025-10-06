@@ -49,7 +49,7 @@ func (c *Config) DebugWorker(ctx context.Context, client gwclient.Client, spec *
 		}
 	}
 
-	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey))
+	worker = worker.With(c.InstallBuildDeps(spec, sOpt, targetKey))
 	return worker, nil
 }
 
@@ -71,7 +71,7 @@ func (c *Config) HandleBuildroot(ctx context.Context, client gwclient.Client) (*
 			return nil, nil, errors.Wrap(err, "error building worker container")
 		}
 
-		worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, pg, pc))
+		worker = worker.With(c.InstallBuildDeps(spec, sOpt, targetKey, pg, pc))
 
 		br, err := rpm.SpecToBuildrootLLB(worker, spec, sOpt, targetKey, pg)
 		if err != nil {
