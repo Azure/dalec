@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/frontend/debug"
+	"github.com/Azure/dalec/internal/testrunner"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/bklog"
@@ -40,12 +41,20 @@ func main() {
 
 	subCmd := fs.Arg(1)
 
+	// NOTE: for subcommands we take args[2:]
+	// skip args[0] (the executable) and args[1] (the subcommand)
+
 	// each "sub-main" function handles its own exit
 	switch subCmd {
 	case credHelperSubcmd:
 		args := flag.Args()[2:]
-		// skip os.Args[0] and "credential-helper"
 		gomodMain(args)
+	case testrunner.StepRunnerCmdName:
+		args := flag.Args()[2:]
+		testrunner.StepCmd(args)
+	case testrunner.CheckFilesCmdName:
+		args := flag.Args()[2:]
+		testrunner.CheckFilesCmd(args)
 	default:
 		dalecMain()
 	}

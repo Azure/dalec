@@ -1,16 +1,13 @@
 package distro
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/packaging/linux/rpm"
 	"github.com/moby/buildkit/client/llb"
-	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 
 var dnfRepoPlatform = dalec.RepoPlatformConfig{
@@ -138,7 +135,20 @@ func importGPGScript(keyPaths []string) string {
 	importScript := "#!/usr/bin/env sh\nset -eux\n"
 	for _, keyPath := range keyPaths {
 		keyName := filepath.Base(keyPath)
-		importScript += fmt.Sprintf("gpg --import %s\n", filepath.Join(keyRoot, keyName))
+		fullPath := filepath.Join(keyRoot, keyName)
+		// rpm --import requires armored keys, check if key is armored and convert if needed
+		importScript += fmt.Sprintf(`
+if head -1 %s | grep -q 'BEGIN PGP PUBLIC KEY BLOCK'; then
+  gpg --import %s
+  rpm --import %s
+else
+  # Import to gpg
+  gpg --import %s
+  # Export to file then import to rpm (workaround for gpg export to stdout issues)
+  gpg --armor --export > /tmp/key.asc
+  rpm --import /tmp/key.asc
+fi
+`, fullPath, fullPath, fullPath, fullPath)
 	}
 
 	return importScript
@@ -208,75 +218,124 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 	return dnfCommand(cfg, releaseVer, "tdnf", append([]string{"install"}, pkgs...), nil)
 }
 
-type buildDepsInstallerFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.RunOption, error)
-
-func (cfg *Config) installBuildDepsPackage(worker llb.State, target string, packageName string, deps map[string]dalec.PackageConstraints, installOpts ...DnfInstallOpt) buildDepsInstallerFunc {
-	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
-	depsOnly := dalec.Spec{
-		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
-		Description: "Provides build dependencies for mariner2 and azlinux3",
-		Version:     "1.0",
-		License:     "Apache 2.0",
-		Revision:    "1",
-		Dependencies: &dalec.PackageDependencies{
-			Runtime: deps,
-		},
-	}
-
-	return func(ctx context.Context, client gwclient.Client, sOpt dalec.SourceOpts) (llb.RunOption, error) {
-		pg := dalec.ProgressGroup("Building container for build dependencies")
-
-		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := cfg.BuildPkg(ctx, client, worker, sOpt, &depsOnly, target, pg)
-		if err != nil {
-			return nil, err
-		}
-
-		var opts []llb.ConstraintsOpt
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-
-		rpmMountDir := "/tmp/rpms"
-
-		installOpts = append([]DnfInstallOpt{
-			DnfNoGPGCheck,
-			DnfWithMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
-			dnfInstallWithConstraints(opts),
-		}, installOpts...)
-
-		// install the built RPMs into the worker itself
-		return cfg.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
-	}
-}
-
-func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	deps := spec.GetBuildDeps(targetKey)
+func (cfg *Config) InstallBuildDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	deps := spec.GetPackageDeps(targetKey).GetBuild()
 	if len(deps) == 0 {
 		return dalec.NoopStateOption
 	}
-
 	repos := spec.GetBuildRepos(targetKey)
+	return cfg.WithDeps(sOpt, targetKey, spec.Name, deps, repos, opts...)
+}
 
-	sOpt, err := frontend.SourceOptFromClient(ctx, client, sOpt.TargetPlatform)
-	if err != nil {
-		return dalec.ErrorStateOption(err)
-	}
-
+func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, deps dalec.PackageDependencyList, repos []dalec.PackageRepositoryConfig, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
-		repoMounts, keyPaths := cfg.RepoMounts(repos, sOpt, opts...)
-		importRepos := []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
+		if len(deps) == 0 {
+			return in
+		}
 
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-		installOpt, err := cfg.installBuildDepsPackage(in, targetKey, spec.Name, deps,
-			append(importRepos, dnfInstallWithConstraints(opts))...)(ctx, client, sOpt)
+		spec := &dalec.Spec{
+			Name:        fmt.Sprintf("%s-dependencies", pkgName),
+			Description: "Wrapper for installing dependencies for " + pkgName,
+			Version:     "1.0",
+			License:     "Apache 2.0",
+			Revision:    "1",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: deps,
+			},
+		}
+
+		rpmSpec, err := rpm.ToSpecLLB(spec, in, targetKey, "", opts...)
 		if err != nil {
 			return dalec.ErrorState(in, err)
 		}
 
-		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
+		specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
+		builder := in.With(dalec.SetBuildNetworkMode(spec))
+		cacheInfo := rpm.CacheInfo{TargetKey: targetKey, Caches: spec.Build.Caches}
+		rpmDir := rpm.Build(rpmSpec, builder, specPath, cacheInfo, opts...)
+
+		const rpmMountDir = "/tmp/internal/dalec/deps/install/rpms"
+
+		// Sign the wrapper RPM so it can pass GPG checks
+		pg := dalec.ProgressGroup("Sign wrapper dependency package")
+
+		// Generate GPG key and export it
+		gpgKeyScriptDt := `#!/usr/bin/env sh
+set -exu
+
+gpg --batch --gen-key <<EOF
+Key-Type: RSA
+Key-Length: 2048
+Name-Real: Dalec Dependencies
+Name-Email: dalec-deps@local
+Expire-Date: 0
+%no-protection
+%commit
+EOF
+`
+		gpgKeyScript := llb.Scratch().File(
+			llb.Mkfile("create-gpg.sh", 0o700, []byte(gpgKeyScriptDt)),
+			pg,
+			dalec.WithConstraints(opts...),
+		)
+		const scriptPath = "/tmp/dalec/internal/dnf/create-gpg.sh"
+		inWithGPG := in.
+			Run(
+				llb.Args([]string{scriptPath}),
+				llb.AddMount(scriptPath, gpgKeyScript, llb.SourcePath("create-gpg.sh"), llb.Readonly),
+			)
+
+		gpgKey := inWithGPG.Run(
+			dalec.ShArgs(`gpg --armor --export dalec-deps@local > /tmp/out/deps.asc`),
+		).AddMount("/tmp/out", llb.Scratch())
+
+		const signPkgScriptDt = `
+if ! command -v rpmsign >/dev/null 2>&1; then
+	echo "rpmsign not found, cannot sign packages" >&2
+	echo "Package installation may fail if GPG checks are enabled" >&2
+	exit 0
+fi
+
+set -exu
+ID=$(gpg --list-keys --keyid-format LONG | grep -B 2 'dalec-deps@local' | grep 'pub' | awk '{print $2}' | cut -d'/' -f2)
+if [ -z "$ID" ]; then
+	echo "Failed to find GPG key ID" >&2
+	exit 42
+fi
+echo "%_gpg_name $ID" > ~/.rpmmacros
+find /tmp/out -name "*.rpm" -exec rpmsign --addsign {} \;
+`
+		signPkgScript := llb.Scratch().File(
+			llb.Mkfile("sign-packages.sh", 0o700, []byte(signPkgScriptDt)),
+			pg,
+			dalec.WithConstraints(opts...),
+		)
+		const signPkgScriptPath = "/tmp/dalec/internal/dnf/sign-packages.sh"
+
+		rpmDir = inWithGPG.Run(
+			dalec.ShArgs(signPkgScriptPath),
+			llb.AddMount(signPkgScriptPath, signPkgScript, llb.SourcePath("sign-packages.sh"), llb.Readonly),
+			pg,
+		).AddMount("/tmp/out", rpmDir)
+
+		repoMounts, keyPaths := cfg.RepoMounts(repos, sOpt, opts...)
+		keyMountPath := filepath.Join(cfg.RepoPlatformConfig.GPGKeyRoot, "_internal_dalec_deps.asc")
+		keyPaths = append(keyPaths, keyMountPath)
+
+		installOpts := []DnfInstallOpt{
+			DnfWithMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"), llb.Readonly)),
+			DnfWithMounts(llb.AddMount(keyMountPath, gpgKey, llb.SourcePath("/deps.asc"), llb.Readonly)),
+			DnfWithMounts(repoMounts),
+			DnfImportKeys(keyPaths),
+		}
+
+		install := cfg.Install([]string{filepath.Join(rpmMountDir, "*/*.rpm")}, installOpts...)
+		opts = append(opts, deps.GetSourceLocation(in))
+		return in.Run(install, dalec.WithConstraints(opts...)).Root()
 	}
 }
 
-func (cfg *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints map[string]dalec.PackageConstraints, opts ...llb.ConstraintsOpt) llb.State {
+func (cfg *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints dalec.PackageDependencyList, opts ...llb.ConstraintsOpt) llb.State {
 	if constraints == nil {
 		return llb.Scratch()
 	}

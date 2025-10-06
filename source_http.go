@@ -7,6 +7,7 @@ import (
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
@@ -21,6 +22,8 @@ type SourceHTTP struct {
 	Digest digest.Digest `yaml:"digest,omitempty" json:"digest,omitempty"`
 	// Permissions is the octal file permissions to set on the file.
 	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 func (src *SourceHTTP) validate(opts fetchOptions) error {
@@ -46,7 +49,9 @@ func (src *SourceHTTP) validate(opts fetchOptions) error {
 	}
 
 	if len(errs) > 0 {
-		return stderrors.Join(errs...)
+		err := stderrors.Join(errs...)
+		err = errdefs.WithSource(err, src._sourceMap.GetErrdefsSource())
+		return err
 	}
 
 	return nil
@@ -67,6 +72,7 @@ func (src *SourceHTTP) toState(opts fetchOptions) llb.State {
 	if opts.Rename != "" {
 		httpOpts = append(httpOpts, llb.Filename(opts.Rename))
 	}
+	httpOpts = append(httpOpts, src._sourceMap.GetRootLocation())
 	return llb.HTTP(src.URL, httpOpts...)
 }
 
@@ -91,7 +97,8 @@ func (src *SourceHTTP) fillDefaults(_ []*SourceGenerator) {}
 func (src *SourceHTTP) processBuildArgs(lex *shell.Lex, args map[string]string, allowArg func(key string) bool) error {
 	updated, err := expandArgs(lex, src.URL, args, allowArg)
 	if err != nil {
-		return errors.Wrap(err, "failed to expand HTTP URL")
+		err := errors.Wrap(err, "failed to expand HTTP URL")
+		return errdefs.WithSource(err, src._sourceMap.GetErrdefsSource())
 	}
 	src.URL = updated
 	return nil

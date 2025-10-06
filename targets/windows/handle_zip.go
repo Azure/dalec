@@ -175,7 +175,15 @@ func addGoCache(spec *dalec.Spec, targetKey string) {
 
 func buildBinaries(ctx context.Context, spec *dalec.Spec, worker llb.State, client gwclient.Client, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, frontend.IgnoreCache(client, targets.IgnoreCacheKeyPkg))
-	worker = worker.With(distroConfig.InstallBuildDeps(sOpt, spec, targetKey, opts...))
+
+	deps := spec.GetPackageDeps(targetKey).GetBuild()
+	if len(deps) > 0 {
+		opts := append(opts, deps.GetSourceLocation(worker))
+		worker = worker.With(distroConfig.InstallBuildDeps(ctx, sOpt, spec, targetKey, opts...))
+	}
+
+	// Apply source map constraints for build steps
+	opts = append(opts, spec.Build.Steps.GetSourceLocation(worker))
 
 	sources, err := specToSourcesLLB(worker, spec, sOpt, opts...)
 	if err != nil {
