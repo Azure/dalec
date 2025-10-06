@@ -1,9 +1,6 @@
 - source: "busybox:latest"
   dest: mirror/dockerhub/library/busybox:latest
 
-- source: "golang:1.23"
-  dest: mirror/dockerhub/library/golang:1.23
-
 - source: "golang:1.24"
   dest: mirror/dockerhub/library/golang:1.24
 
@@ -69,9 +66,6 @@
 
 - source: "mcr.microsoft.com/cbl-mariner/base/core:2.0"
   dest: mirror/mcr/cbl-mariner/base/core:2.0
-
-- source: "mcr.microsoft.com/oss/go/microsoft/golang:1.23"
-  dest: mirror/mcr/oss/go/microsoft/golang:1.23
 
 - source: "mcr.microsoft.com/oss/go/microsoft/golang:1.24"
   dest: mirror/mcr/oss/go/microsoft/golang:1.24

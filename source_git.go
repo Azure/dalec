@@ -163,7 +163,12 @@ func (src *SourceGit) processBuildArgs(lex *shell.Lex, args map[string]string, a
 }
 
 func (src *SourceGit) doc(w io.Writer, name string) {
-	ref, err := gitutil.ParseGitRef(src.URL)
+	u, err := url.Parse(src.URL)
+	if err != nil {
+		// This should have always been validated before, so we panic here
+		panic(fmt.Errorf("could not parse git ref %q: %w", src.URL, err))
+	}
+	ref, err := gitutil.FromURL(u)
 	if err != nil {
 		// This should have always been validated before, so we panic here
 		panic(fmt.Errorf("could not parse git ref %q: %w", src.URL, err))
