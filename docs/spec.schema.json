@@ -380,7 +380,7 @@
 				"object",
 				"null"
 			],
-			"description": "BazelCache sets up a cache for bazel builds."
+			"description": "Currently this only supports setting up a *local* bazel cache."
 		},
 		"BuildStep": {
 			"required": [
@@ -438,6 +438,10 @@
 				"gobuild": {
 					"$ref": "#/$defs/GoBuildCache",
 					"description": "GoBuild specifies a cache for Go's incremental build artifacts.\nThis should speed up repeated builds of Go projects."
+				},
+				"rustsccache": {
+					"$ref": "#/$defs/SCCache",
+					"description": "RustSCCache specifies a cache for Rust build artifacts.\nThis uses sccache to cache Rust compilation artifacts."
 				}
 			},
 			"additionalProperties": {
@@ -459,6 +463,12 @@
 						"gobuild"
 					],
 					"title": "gobuild"
+				},
+				{
+					"required": [
+						"rustsccache"
+					],
+					"title": "rustsccache"
 				},
 				{
 					"required": [
@@ -1446,6 +1456,25 @@
 				"null"
 			],
 			"description": "PostInstall is the post install configuration for the image."
+		},
+		"SCCache": {
+			"properties": {
+				"scope": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Scope adds extra information to the cache key.\nThis is useful to differentiate between different build contexts if required.\n\nThis is mainly intended for internal testing purposes."
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			],
+			"description": "SCCache is a cache for Rust build artifacts."
 		},
 		"Source": {
 			"properties": {

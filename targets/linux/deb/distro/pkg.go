@@ -109,15 +109,22 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 	if !spec.HasGomods() {
 		return "", nil
 	}
-	var candidates []string
 
 	deps := spec.GetBuildDeps(targetKey)
 	if _, hasNormalGo := deps["golang"]; hasNormalGo {
 		return "", nil
 	}
 
+	candidates := buildCandidatePaths(deps, "golang", "usr/lib/go", "/bin")
+	return findBinaryInCandidates(ctx, client, in, candidates, "go", opts...)
+}
+
+// buildCandidatePaths extracts version-specific package paths from dependencies
+func buildCandidatePaths(deps map[string]dalec.PackageConstraints, prefix, basePath, suffix string) []string {
+	var candidates []string
+
 	for dep := range deps {
-		if strings.HasPrefix(dep, "golang-") {
+		if strings.HasPrefix(dep, prefix+"-") {
 			// Get the base version component
 			_, ver, _ := strings.Cut(dep, "-")
 			// Trim off any potential extra stuff like `golang-1.20-go` (ie the `-go` bit)
@@ -126,10 +133,15 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 			// something else like `-doc` since we are still going to check the
 			// binary exists anyway (plus this would be highly unlikely in any case).
 			ver, _, _ = strings.Cut(ver, "-")
-			candidates = append(candidates, "usr/lib/go-"+ver+"/bin")
+			candidates = append(candidates, basePath+"-"+ver+suffix)
 		}
 	}
 
+	return candidates
+}
+
+// findBinaryInCandidates searches for a binary in a list of candidate paths
+func findBinaryInCandidates(ctx context.Context, client gwclient.Client, in llb.State, candidates []string, binaryName string, opts ...llb.ConstraintsOpt) (string, error) {
 	if len(candidates) == 0 {
 		return "", nil
 	}
@@ -140,7 +152,7 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 	}
 
 	for _, p := range candidates {
-		_, err := fs.Stat(stfs, filepath.Join(p, "go"))
+		_, err := fs.Stat(stfs, filepath.Join(p, binaryName))
 		if err == nil {
 			// bkfs does not allow a leading `/` in the stat path per spec for [fs.FS]
 			// Add that in here
@@ -152,7 +164,6 @@ func searchForAltGolang(ctx context.Context, client gwclient.Client, spec *dalec
 	return "", nil
 }
 
-// prepends the provided values to $PATH
 func addPaths(paths []string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
 		if len(paths) == 0 {
