@@ -38,7 +38,6 @@ func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, w
 	installOpts := []DnfInstallOpt{DnfAtRoot(workPath)}
 	installOpts = append(installOpts, importRepos...)
 	installOpts = append(installOpts, []DnfInstallOpt{
-		DnfNoGPGCheck,
 		IncludeDocs(spec.GetArtifacts(targetKey).HasDocs()),
 		dnfInstallWithConstraints(opts),
 	}...)
