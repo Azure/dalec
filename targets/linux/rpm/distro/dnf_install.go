@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend"
 	"github.com/Azure/dalec/packaging/linux/rpm"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
@@ -210,69 +209,53 @@ func TdnfInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.Ru
 
 type buildDepsInstallerFunc func(context.Context, gwclient.Client, dalec.SourceOpts) (llb.RunOption, error)
 
-func (cfg *Config) installBuildDepsPackage(worker llb.State, target string, packageName string, deps map[string]dalec.PackageConstraints, installOpts ...DnfInstallOpt) buildDepsInstallerFunc {
-	// depsOnly is a simple dalec spec that only includes build dependencies and their constraints
-	depsOnly := dalec.Spec{
-		Name:        fmt.Sprintf("%s-build-dependencies", packageName),
-		Description: "Provides build dependencies for mariner2 and azlinux3",
-		Version:     "1.0",
-		License:     "Apache 2.0",
-		Revision:    "1",
-		Dependencies: &dalec.PackageDependencies{
-			Runtime: deps,
-		},
-	}
-
-	return func(ctx context.Context, client gwclient.Client, sOpt dalec.SourceOpts) (llb.RunOption, error) {
-		pg := dalec.ProgressGroup("Building container for build dependencies")
-
-		// create an RPM with just the build dependencies, using our same base worker
-		rpmDir, err := cfg.BuildPkg(ctx, client, worker, sOpt, &depsOnly, target, pg)
-		if err != nil {
-			return nil, err
-		}
-
-		var opts []llb.ConstraintsOpt
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-
-		rpmMountDir := "/tmp/rpms"
-
-		installOpts = append([]DnfInstallOpt{
-			DnfNoGPGCheck,
-			DnfWithMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"))),
-			dnfInstallWithConstraints(opts),
-		}, installOpts...)
-
-		// install the built RPMs into the worker itself
-		return cfg.Install([]string{"/tmp/rpms/*/*.rpm"}, installOpts...), nil
-	}
-}
-
-func (cfg *Config) InstallBuildDeps(ctx context.Context, client gwclient.Client, spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
-	deps := spec.GetBuildDeps(targetKey)
-	if len(deps) == 0 {
+func (cfg *Config) InstallBuildDeps(spec *dalec.Spec, sOpt dalec.SourceOpts, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+	deps := spec.GetPackageDeps(targetKey)
+	if deps == nil || len(deps.Build) == 0 {
 		return dalec.NoopStateOption
 	}
-
 	repos := spec.GetBuildRepos(targetKey)
+	return cfg.WithDeps(sOpt, targetKey, spec.Name, deps.Build, repos, opts...)
+}
 
-	sOpt, err := frontend.SourceOptFromClient(ctx, client, sOpt.TargetPlatform)
-	if err != nil {
-		return dalec.ErrorStateOption(err)
-	}
-
+func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, deps map[string]dalec.PackageConstraints, repos []dalec.PackageRepositoryConfig, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
-		repoMounts, keyPaths := cfg.RepoMounts(repos, sOpt, opts...)
-		importRepos := []DnfInstallOpt{DnfWithMounts(repoMounts), DnfImportKeys(keyPaths)}
+		if len(deps) == 0 {
+			return in
+		}
 
-		opts = append(opts, dalec.ProgressGroup("Install build deps"))
-		installOpt, err := cfg.installBuildDepsPackage(in, targetKey, spec.Name, deps,
-			append(importRepos, dnfInstallWithConstraints(opts))...)(ctx, client, sOpt)
+		spec := &dalec.Spec{
+			Name:        fmt.Sprintf("%s-dependencies", pkgName),
+			Description: "Virtual Package to install dependencies",
+			Version:     "1.0",
+			License:     "Apache 2.0",
+			Revision:    "1",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: deps,
+			},
+		}
+
+		rpmSpec, err := rpm.ToSpecLLB(spec, in, targetKey, "", opts...)
 		if err != nil {
 			return dalec.ErrorState(in, err)
 		}
 
-		return in.Run(installOpt, dalec.WithConstraints(opts...)).Root()
+		specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
+		cacheInfo := rpm.CacheInfo{TargetKey: targetKey, Caches: spec.Build.Caches}
+		rpmDir := rpm.Build(rpmSpec, in, specPath, cacheInfo, opts...)
+		const rpmMountDir = "/tmp/internal/dalec/deps/install/rpms"
+
+		repoMounts, keyPaths := cfg.RepoMounts(repos, sOpt, opts...)
+
+		installOpts := []DnfInstallOpt{
+			DnfNoGPGCheck,
+			DnfWithMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"), llb.Readonly)),
+			DnfWithMounts(repoMounts),
+			DnfImportKeys(keyPaths),
+		}
+
+		install := cfg.Install([]string{filepath.Join(rpmMountDir, "*/*.rpm")}, installOpts...)
+		return in.Run(install, dalec.WithConstraints(opts...)).Root()
 	}
 }
 
