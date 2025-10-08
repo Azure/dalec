@@ -139,13 +139,72 @@
 			],
 			"description": "ArtifactConfig is the configuration for a given artifact type."
 		},
+		"ArtifactConfigWithOwner": {
+			"properties": {
+				"group": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Group is the group name that should own the artifact"
+				},
+				"name": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Name is file or dir name to use for the artifact in the package.\nIf empty, the file or dir name from the produced artifact will be used."
+				},
+				"permissions": {
+					"type": [
+						"integer"
+					],
+					"description": "Permissions is the file permissions to set on the artifact.\nIf not set, the default value will depend on the kind of artifact or the underlying artifact's already set permissions."
+				},
+				"subpath": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Subpath is the subpath to use in the package for the artifact type.\n\nAs an example, binaries are typically placed in /usr/bin when installed.\nIf you want to nest them in a subdirectory, you can specify it here."
+				},
+				"user": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "User is the user name that should own the artifact"
+				}
+			},
+			"additionalProperties": {
+				"not": {}
+			},
+			"type": [
+				"object",
+				"null"
+			]
+		},
 		"ArtifactDirConfig": {
 			"properties": {
+				"group": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Group is the group name that should own the directory"
+				},
 				"mode": {
 					"type": [
 						"integer"
 					],
 					"description": "Mode is used to set the file permission bits of the final created directory to the specified mode.\nMode is the octal permissions to set on the dir."
+				},
+				"user": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "User is the user name that should own the directory"
 				}
 			},
 			"additionalProperties": {
@@ -210,7 +269,7 @@
 				},
 				"configFiles": {
 					"additionalProperties": {
-						"$ref": "#/$defs/ArtifactConfig"
+						"$ref": "#/$defs/ArtifactConfigWithOwner"
 					},
 					"type": [
 						"object",
@@ -224,7 +283,7 @@
 				},
 				"data_dirs": {
 					"additionalProperties": {
-						"$ref": "#/$defs/ArtifactConfig"
+						"$ref": "#/$defs/ArtifactConfigWithOwner"
 					},
 					"type": [
 						"object",

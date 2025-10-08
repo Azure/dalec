@@ -17,11 +17,11 @@ type Artifacts struct {
 	// Manpages is the list of manpages to include in the package.
 	Manpages map[string]ArtifactConfig `yaml:"manpages,omitempty" json:"manpages,omitempty"`
 	// DataDirs is a list of read-only architecture-independent data files, to be placed in /usr/share/
-	DataDirs map[string]ArtifactConfig `yaml:"data_dirs,omitempty" json:"data_dirs,omitempty"`
+	DataDirs map[string]ArtifactConfigWithOwner `yaml:"data_dirs,omitempty" json:"data_dirs,omitempty"`
 	// Directories is a list of various directories that should be created by the package.
 	Directories *CreateArtifactDirectories `yaml:"createDirectories,omitempty" json:"createDirectories,omitempty"`
 	// ConfigFiles is a list of files that should be marked as config files in the package.
-	ConfigFiles map[string]ArtifactConfig `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
+	ConfigFiles map[string]ArtifactConfigWithOwner `yaml:"configFiles,omitempty" json:"configFiles,omitempty"`
 	// Docs is a list of doc files included in the package
 	Docs map[string]ArtifactConfig `yaml:"docs,omitempty" json:"docs,omitempty"`
 	// Licenses is a list of doc files included in the package
@@ -108,6 +108,10 @@ type ArtifactDirConfig struct {
 	// Mode is used to set the file permission bits of the final created directory to the specified mode.
 	// Mode is the octal permissions to set on the dir.
 	Mode fs.FileMode `yaml:"mode,omitempty" json:"mode,omitempty"`
+	// User is the user name that should own the directory
+	User string `yaml:"user,omitempty" json:"user,omitempty"`
+	// Group is the group name that should own the directory
+	Group string `yaml:"group,omitempty" json:"group,omitempty"`
 }
 
 // ArtifactConfig is the configuration for a given artifact type.
@@ -124,6 +128,14 @@ type ArtifactConfig struct {
 	// Permissions is the file permissions to set on the artifact.
 	// If not set, the default value will depend on the kind of artifact or the underlying artifact's already set permissions.
 	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+}
+
+type ArtifactConfigWithOwner struct {
+	ArtifactConfig `yaml:",inline" json:",inline"`
+	// User is the user name that should own the artifact
+	User string `yaml:"user,omitempty" json:"user,omitempty"`
+	// Group is the group name that should own the artifact
+	Group string `yaml:"group,omitempty" json:"group,omitempty"`
 }
 
 func (a *ArtifactConfig) ResolveName(path string) string {
