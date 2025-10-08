@@ -157,8 +157,11 @@ jobs:
         run: docker run --rm --privileged tonistiigi/binfmt:latest --install all
       - name: Setup source policy
         uses: ./.github/actions/setup-source-policy
+      - name: Expose GitHub tokens for caching
+        uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Run integration tests
         run: |
+          env | grep GITHUB
           set -ex
           if [ -n "${TEST_SUITE}" ] && [ ! "${TEST_SUITE}" = "other" ]; then
             run="-run=${TEST_SUITE}"

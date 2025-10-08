@@ -73,6 +73,8 @@ const (
 {"Time":"2025-06-04T09:51:34.185052-07:00","Action":"output","Package":"some_package","Test":"TestGenTimeout","Output":"exit status 2\n"}
 {"Time":"2025-03-31T09:46:20.328007-07:00","Action":"output","Package":"some_package","Output":"FAIL\n"}
 {"Time":"2025-03-31T09:46:20.328475-07:00","Action":"output","Package":"some_package","Output":"FAIL\tsome_package\t0.249s\n"}
+{"Time": "2025-03-31T09:46:20.32851-07:00","Action":"output","Package":"some_package","Output":"::warning file=foo_test.go,line=38::hello warning\n"}
+{"Time": "2025-03-31T09:46:20.32851-07:00","Action":"output","Package":"some_package","Output":"::notice::hello notice\n"}
 {"Time":"2025-03-31T09:46:20.32851-07:00","Action":"fail","Package":"some_package","Elapsed":0.25}
 `
 
@@ -122,6 +124,8 @@ exit status 2
 	testLogsAnnotation = "    foo_test.go:42: some error\n    foo_test.go:43: some fatal error\n"
 
 	testPackageName = "some_package"
+
+	ghaCommandsOutput = "::warning file=foo_test.go,line=38::hello warning\n::notice::hello notice\n"
 )
 
 func mockTestResults(t *testing.T) iter.Seq[*TestResult] {
@@ -274,4 +278,16 @@ func TestWriteLogs(t *testing.T) {
 		assert.NilError(t, err)
 		assert.Equal(t, string(content), string(output), "log file content does not match expected output")
 	}
+}
+
+func TestGithubActionsPassthrough(t *testing.T) {
+	var output strings.Builder
+	out := &githubActionsCommandPassthrough{out: &output}
+
+	for event := range readTestEvents(t) {
+		err := out.HandleEvent(event)
+		assert.NilError(t, err)
+	}
+
+	assert.Equal(t, output.String(), ghaCommandsOutput)
 }

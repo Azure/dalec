@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 const (
@@ -28,11 +29,13 @@ func TestDo(t *testing.T) {
 		input := strings.NewReader(testEventJSON)
 		var output bytes.Buffer
 
+		ghaBuff := bytes.NewBuffer(nil)
 		cfg := config{
-			slowThreshold: 200 * time.Millisecond,
-			modName:       testModuleName,
-			verbose:       false,
-			stream:        false,
+			slowThreshold:  200 * time.Millisecond,
+			modName:        testModuleName,
+			verbose:        false,
+			stream:         false,
+			ghaCommandsOut: ghaBuff,
 		}
 
 		anyFail, err := do(input, &output, cfg)
@@ -41,18 +44,21 @@ func TestDo(t *testing.T) {
 
 		// Non-verbose output should only include the grouped fail events + error annotations
 		expected := failGroup + timeoutGroup + annotation
-		assert.Equal(t, expected, output.String())
+		assert.Check(t, cmp.Equal(expected, output.String()))
+		assert.Check(t, cmp.Equal(ghaCommandsOutput, ghaBuff.String()))
 	})
 
 	t.Run("verbose=true", func(t *testing.T) {
 		input := strings.NewReader(testEventJSON)
 		var output bytes.Buffer
 
+		ghaBuff := bytes.NewBuffer(nil)
 		cfg := config{
-			slowThreshold: 200 * time.Millisecond,
-			modName:       testModuleName,
-			verbose:       true,
-			stream:        false,
+			slowThreshold:  200 * time.Millisecond,
+			modName:        testModuleName,
+			verbose:        true,
+			stream:         false,
+			ghaCommandsOut: ghaBuff,
 		}
 
 		anyFail, err := do(input, &output, cfg)
@@ -62,17 +68,21 @@ func TestDo(t *testing.T) {
 		// verbose output should include grouped events for all test results + error annotations
 		expected := failGroup + passGroup + skipGroup + timeoutGroup + annotation
 		assert.Equal(t, output.String(), expected)
+		assert.Check(t, cmp.Equal(expected, output.String()))
+		assert.Check(t, cmp.Equal(ghaCommandsOutput, ghaBuff.String()))
 	})
 
 	t.Run("stream=true", func(t *testing.T) {
 		input := strings.NewReader(testEventJSON)
 		var output bytes.Buffer
 
+		ghaBuff := bytes.NewBuffer(nil)
 		cfg := config{
-			slowThreshold: 200 * time.Millisecond,
-			modName:       testModuleName,
-			verbose:       false,
-			stream:        true,
+			slowThreshold:  200 * time.Millisecond,
+			modName:        testModuleName,
+			verbose:        false,
+			stream:         true,
+			ghaCommandsOut: ghaBuff,
 		}
 
 		anyFail, err := do(input, &output, cfg)
@@ -81,7 +91,8 @@ func TestDo(t *testing.T) {
 
 		// Stream output should include all the raw events + the grouped fail events + the annotation
 		expected := testEventPassOutput + testEventFailOutput + testEventSkipOutput + testEventTimeoutOutput + testEventPackageOutput + failGroup + timeoutGroup + annotation
-		assert.Equal(t, output.String(), expected)
+		assert.Check(t, cmp.Equal(expected, output.String()))
+		assert.Check(t, cmp.Equal(ghaCommandsOutput, ghaBuff.String()))
 	})
 
 	t.Run("summary", func(t *testing.T) {
@@ -94,11 +105,13 @@ func TestDo(t *testing.T) {
 
 		input := strings.NewReader(testEventJSON)
 
+		ghaBuff := bytes.NewBuffer(nil)
 		cfg := config{
-			slowThreshold: 200 * time.Millisecond,
-			modName:       testModuleName,
-			verbose:       false,
-			stream:        false,
+			slowThreshold:  200 * time.Millisecond,
+			modName:        testModuleName,
+			verbose:        false,
+			stream:         false,
+			ghaCommandsOut: ghaBuff,
 		}
 
 		anyFail, err := do(input, io.Discard, cfg)
@@ -125,7 +138,8 @@ some_package: 0.250s
 
 `
 
-		assert.Equal(t, string(output), expect)
+		assert.Check(t, cmp.Equal(string(output), expect))
+		assert.Check(t, cmp.Equal(ghaCommandsOutput, ghaBuff.String()))
 	})
 
 	t.Run("LogDir", func(t *testing.T) {
@@ -133,12 +147,14 @@ some_package: 0.250s
 		var output bytes.Buffer
 
 		logDir := t.TempDir()
+		ghaBuff := bytes.NewBuffer(nil)
 		cfg := config{
-			slowThreshold: 500,
-			modName:       "github.com/Azure/dalec/cmd/test2json2gha",
-			verbose:       false,
-			stream:        false,
-			logDir:        logDir,
+			slowThreshold:  500,
+			modName:        "github.com/Azure/dalec/cmd/test2json2gha",
+			verbose:        false,
+			stream:         false,
+			logDir:         logDir,
+			ghaCommandsOut: ghaBuff,
 		}
 
 		anyFail, err := do(input, &output, cfg)
@@ -148,6 +164,7 @@ some_package: 0.250s
 		// Validate that logs are written to the specified directory
 		entries, err := os.ReadDir(logDir)
 		assert.NilError(t, err)
-		assert.Assert(t, len(entries) > 0, "expected log files to be written to the log directory")
+		assert.Check(t, len(entries) > 0, "expected log files to be written to the log directory")
+		assert.Check(t, cmp.Equal(ghaCommandsOutput, ghaBuff.String()))
 	})
 }
