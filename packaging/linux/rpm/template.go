@@ -477,12 +477,15 @@ func (w *specWrapper) Post() fmt.Stringer {
 	users := w.postUsers()
 	groups := w.postGroups()
 	symlinkOwnership := w.getSymlinkOwnership()
+	artifactOwnership := w.getArtifactOwnership()
+	directoryOwnership := w.getDirectoryOwnership()
 
 	if systemd == "" && users == "" && groups == "" && symlinkOwnership == "" {
 		return b
 	}
 
 	b.WriteString("%post\n")
+
 	if systemd != "" {
 		b.WriteString(systemd)
 	}
@@ -495,6 +498,13 @@ func (w *specWrapper) Post() fmt.Stringer {
 	if symlinkOwnership != "" {
 		b.WriteString(symlinkOwnership)
 	}
+	if artifactOwnership != "" {
+		b.WriteString(artifactOwnership)
+	}
+	if directoryOwnership != "" {
+		b.WriteString(directoryOwnership)
+	}
+	
 
 	b.WriteString("\n")
 	return b
@@ -523,6 +533,90 @@ func (w *specWrapper) postGroups() string {
 	for _, group := range artifacts.Groups {
 		fmt.Fprintf(b, "getent group %s >/dev/null || groupadd --system %s\n", group.Name, group.Name)
 	}
+	return b.String()
+}
+
+func (w *specWrapper) getDirectoryOwnership() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if artifacts.Directories == nil {
+		return ""
+	}
+	b := &strings.Builder{}
+	setDirOwnership := func(root, p string, cfg *dalec.ArtifactDirConfig) {
+		if cfg == nil {
+			return
+		}
+		user := cfg.User
+		group := cfg.Group
+		targetDir := filepath.Join(root, p)
+		if user != "" {
+			fmt.Fprintf(b, "chown -R %s %s\n", user, targetDir)
+		}
+		if group != "" {
+			fmt.Fprintf(b, "chgrp -R %s %s\n", group, targetDir)
+		}
+	}
+	configKeys := dalec.SortMapKeys(artifacts.Directories.Config)
+	for _, p := range configKeys {
+		cfg := artifacts.Directories.Config[p]
+		setDirOwnership(`/%{_sysconfdir}`, p, &cfg)
+	}
+	stateKeys := dalec.SortMapKeys(artifacts.Directories.State)
+	for _, p := range stateKeys {
+		cfg := artifacts.Directories.State[p]
+		setDirOwnership(`/%{_sharedstatedir}`, p, &cfg)
+	}
+	return b.String()
+}
+
+func (w *specWrapper) getArtifactOwnership() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	b := &strings.Builder{}
+
+	setArtifactOwnership := func(root, p string, cfg *dalec.ArtifactConfigWithOwner) {
+		if cfg == nil {
+			return
+		}
+		user := cfg.User
+		group := cfg.Group
+		targetDir := filepath.Join(root, cfg.SubPath)
+		var targetPath string
+		file := cfg.ResolveName(p)
+		if !strings.Contains(file, "*") {
+			targetPath = filepath.Join(targetDir, file)
+		} else {
+			targetPath = targetDir + "/"
+		}
+		if user != "" {
+			fmt.Fprintf(b, "chown -R %s %s\n", user, targetPath)
+		}
+		if group != "" {
+			fmt.Fprintf(b, "chgrp -R %s %s\n", group, targetPath)
+		}
+	}
+
+	if artifacts.ConfigFiles != nil {
+		configKeys := dalec.SortMapKeys(artifacts.ConfigFiles)
+		for _, c := range configKeys {
+			cfg := artifacts.ConfigFiles[c]
+			setArtifactOwnership(`/%{_sysconfdir}`, c, &cfg)
+		}
+	}
+	if artifacts.DataDirs != nil {
+		dataFileKeys := dalec.SortMapKeys(artifacts.DataDirs)
+		for _, k := range dataFileKeys {
+			df := artifacts.DataDirs[k]
+			setArtifactOwnership(`/%{_datadir}`, k, &df)
+		}
+	}
+	// if artifacts.Directories != nil && artifacts.Directories.Config != nil {
+	// 	configKeys := dalec.SortMapKeys(artifacts.Directories.Config)
+	// 	for _, p := range configKeys {
+	// 		cfg := artifacts.Directories.Config[p]
+	// 		// setOwnership(b, cfg.User, cfg.Group, `/%{_sysconfdir}`, p, nil)
+	// 	}
+	// }
+
 	return b.String()
 }
 
@@ -669,7 +763,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		dataFileKeys := dalec.SortMapKeys(artifacts.DataDirs)
 		for _, k := range dataFileKeys {
 			df := artifacts.DataDirs[k]
-			copyArtifact(`%{buildroot}/%{_datadir}`, k, &df)
+			copyArtifact(`%{buildroot}/%{_datadir}`, k, &df.ArtifactConfig)
 		}
 	}
 
@@ -684,7 +778,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 	configKeys := dalec.SortMapKeys(artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := artifacts.ConfigFiles[c]
-		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, &cfg)
+		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, &cfg.ArtifactConfig)
 	}
 
 	if artifacts.Systemd != nil {
