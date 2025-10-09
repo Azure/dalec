@@ -88,7 +88,7 @@ func appendConstraints(deps map[string]dalec.PackageConstraints) []string {
 			}
 		}
 
-		out[i] = strings.Join(versionConstraints, " | ")
+		out[i] = strings.Join(versionConstraints, ", ")
 	}
 
 	return out
