@@ -1,4 +1,4 @@
-# dalec-reirectio
+# dalec-redirectio
 
 This binary is used in the test phase of the dalec build process to redirect
 stdio streams to a file that can be read by the test harness.
