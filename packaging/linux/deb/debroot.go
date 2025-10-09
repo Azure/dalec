@@ -244,15 +244,24 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 		}
 	}
 
+	configFiles := make(map[string]dalec.ArtifactConfig)
+	for k, v := range artifacts.ConfigFiles {
+		configFiles[k] = v.ArtifactConfig
+	}
+	dataDirs := make(map[string]dalec.ArtifactConfig)
+	for k, v := range artifacts.DataDirs {
+		dataDirs[k] = v.ArtifactConfig
+	}
+
 	checkAndWritePerms(artifacts.Binaries, BinariesPath)
-	checkAndWritePerms(artifacts.ConfigFiles, ConfigFilesPath)
+	checkAndWritePerms(configFiles, ConfigFilesPath)
 	checkAndWritePerms(artifacts.Manpages, filepath.Join(ManpagesPath, spec.Name))
 	checkAndWritePerms(artifacts.Headers, HeadersPath)
 	checkAndWritePerms(artifacts.Licenses, filepath.Join(LicensesPath, spec.Name))
 	checkAndWritePerms(artifacts.Docs, filepath.Join(DocsPath, spec.Name))
 	checkAndWritePerms(artifacts.Libs, filepath.Join(LibsPath))
 	checkAndWritePerms(artifacts.Libexec, LibexecPath)
-	checkAndWritePerms(artifacts.DataDirs, DataDirsPath)
+	checkAndWritePerms(dataDirs, DataDirsPath)
 
 	if artifacts.Directories != nil {
 		sorted := dalec.SortMapKeys(artifacts.Directories.GetConfig())
