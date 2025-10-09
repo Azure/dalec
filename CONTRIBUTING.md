@@ -2,6 +2,15 @@
 
 Dalec welcomes contributions and suggestions!
 
+## For Developers
+
+If you're looking to contribute code to Dalec, please see the [Developer Guide](https://azure.github.io/dalec/developers) for detailed information about:
+
+- Setting up your development environment
+- Recommended dev/test workflows
+- Running tests and validation
+- Using the Makefile for common tasks
+
 ## Terms
 
 Most contributions require you to agree to a Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
