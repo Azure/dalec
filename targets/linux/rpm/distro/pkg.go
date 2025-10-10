@@ -47,7 +47,7 @@ func needsAutoGocache(spec *dalec.Spec, targetKey string) bool {
 
 func (c *Config) BuildPkg(ctx context.Context, client gwclient.Client, worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) (llb.State, error) {
 	opts = append(opts, frontend.IgnoreCache(client))
-	worker = worker.With(c.InstallBuildDeps(ctx, client, spec, sOpt, targetKey, opts...))
+	worker = worker.With(c.InstallBuildDeps(spec, sOpt, targetKey, opts...))
 
 	br, err := rpm.SpecToBuildrootLLB(worker, spec, sOpt, targetKey, opts...)
 	if err != nil {

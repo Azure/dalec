@@ -12,6 +12,7 @@ var (
 	builderPackages = []string{
 		"rpm-build",
 		"ca-certificates",
+		"rpm-sign",
 	}
 
 	targets = map[string]gwclient.BuildFunc{

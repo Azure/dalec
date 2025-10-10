@@ -38,7 +38,6 @@ func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, w
 	installOpts := []DnfInstallOpt{DnfAtRoot(workPath)}
 	installOpts = append(installOpts, importRepos...)
 	installOpts = append(installOpts, []DnfInstallOpt{
-		DnfNoGPGCheck,
 		IncludeDocs(spec.GetArtifacts(targetKey).HasDocs()),
 		dnfInstallWithConstraints(opts),
 	}...)
@@ -65,13 +64,14 @@ func (cfg *Config) BuildContainer(ctx context.Context, client gwclient.Client, w
 		pkgs = append(pkgs, filepath.Join(baseMountPath, "**/*.rpm"))
 	}
 
-	rootfs = worker.Run(
-		dalec.WithConstraints(opts...), // Make sure constraints (and platform specifically) are applied before install is set
-		cfg.Install(pkgs, installOpts...),
-		llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
-		llb.AddMount(baseMountPath, basePkgs, llb.SourcePath("/RPMS")),
-		frontend.IgnoreCache(client, targets.IgnoreCacheKeyContainer),
-	).AddMount(workPath, rootfs)
+	rootfs = worker.
+		Run(
+			dalec.WithConstraints(opts...), // Make sure constraints (and platform specifically) are applied before install is set
+			cfg.Install(pkgs, installOpts...),
+			llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS")),
+			llb.AddMount(baseMountPath, basePkgs, llb.SourcePath("/RPMS")),
+			frontend.IgnoreCache(client, targets.IgnoreCacheKeyContainer),
+		).AddMount(workPath, rootfs)
 
 	if post := spec.GetImagePost(targetKey); post != nil && len(post.Symlinks) > 0 {
 		rootfs = rootfs.With(dalec.InstallPostSymlinks(post, worker, opts...))

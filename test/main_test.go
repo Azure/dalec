@@ -30,6 +30,7 @@ func TestMain(m *testing.M) {
 		externalTestHost = "https://github.com"
 	}
 	flag.StringVar(&externalTestHost, "external-test-host", externalTestHost, "http server to use for validating network access")
+	flag.BoolVar(&testenv.StreamLiveOutput, "stream", false, "stream live output from build commands")
 
 	flag.Parse()
 
