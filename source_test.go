@@ -97,6 +97,20 @@ func TestSourceGitSSH(t *testing.T) {
 		checkGitOp(t, ops, &src)
 	})
 
+	t.Run("with known hosts", func(t *testing.T) {
+		knownHosts := "github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7"
+		src := Source{
+			Git: &SourceGit{
+				URL:           fmt.Sprintf("user@%s:test.git", addr),
+				Commit:        t.Name(),
+				SSHKnownHosts: []string{knownHosts},
+			},
+		}
+
+		ops := getSourceOp(ctx, t, src)
+		checkGitOp(t, ops, &src)
+	})
+
 }
 
 func TestSourceGitHTTP(t *testing.T) {
@@ -177,14 +191,20 @@ func TestSourceGitHTTP(t *testing.T) {
 
 	t.Run("gomod auth", func(t *testing.T) {
 		const (
-			numSecrets = 2
+			numSecrets = 3 // Updated to account for localhost auto-filled auth
 			numSSH     = 1
 		)
 
+		knownHosts := []string{
+			"github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbZ...",
+			"dev.azure.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...",
+		}
+
 		src := Source{
 			Git: &SourceGit{
-				URL:    "https://localhost/test.git",
-				Commit: t.Name(),
+				URL:           "https://localhost/test.git",
+				Commit:        t.Name(),
+				SSHKnownHosts: knownHosts,
 				Auth: GitAuth{
 					Header: "some header",
 				},
@@ -218,8 +238,24 @@ func TestSourceGitHTTP(t *testing.T) {
 			},
 		}
 
+		// Check that SSH known hosts are properly copied during fillDefaults
+		srcInSpec := spec.Sources[srcName]
+		srcInSpec.fillDefaults()
+		spec.Sources[srcName] = srcInSpec
+		srcAfterDefaults := spec.Sources[srcName]
+		
+		// Verify that SSH known hosts were propagated to localhost (from git URL)
+		localhostAuth, ok := srcAfterDefaults.Generate[0].Gomod.Auth["localhost"]
+		if !ok {
+			t.Fatal("Expected git auth to be auto-filled for localhost from git source URL")
+		}
+		
+		if !reflect.DeepEqual(localhostAuth.SSHKnownHosts, knownHosts) {
+			t.Fatalf("SSH known hosts not properly propagated. Expected %v, got %v", knownHosts, localhostAuth.SSHKnownHosts)
+		}
+
 		m, ops := getGomodLLBOps(ctx, t, spec)
-		checkGitAuth(t, m, ops, &src, numSecrets, numSSH)
+		checkGitAuth(t, m, ops, &srcAfterDefaults, numSecrets, numSSH)
 	})
 }
 
@@ -1060,6 +1096,18 @@ func checkGitOp(t *testing.T, ops []*pb.Op, src *Source) {
 			ssh = src.Git.Auth.SSH
 		}
 		assert.Check(t, cmp.Equal(op.Attrs["git.mountsshsock"], ssh), op)
+	}
+
+	// Check known hosts if set
+	if len(src.Git.SSHKnownHosts) > 0 {
+		// BuildKit's KnownSSHHosts option may add formatting like newlines
+		actualKnownHosts := op.Attrs["git.knownsshhosts"]
+		expectedKnownHosts := strings.Join(src.Git.SSHKnownHosts, "\n")
+
+		// Remove trailing whitespace for comparison since BuildKit may add formatting
+		actualTrimmed := strings.TrimSpace(actualKnownHosts)
+		expectedTrimmed := strings.TrimSpace(expectedKnownHosts)
+		assert.Check(t, cmp.Equal(actualTrimmed, expectedTrimmed), "Expected: %q, Got: %q", expectedKnownHosts, actualKnownHosts)
 	}
 }
 
