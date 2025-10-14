@@ -504,7 +504,6 @@ func (w *specWrapper) Post() fmt.Stringer {
 	if directoryOwnership != "" {
 		b.WriteString(directoryOwnership)
 	}
-	
 
 	b.WriteString("\n")
 	return b
@@ -573,7 +572,7 @@ func (w *specWrapper) getArtifactOwnership() string {
 	artifacts := w.Spec.GetArtifacts(w.Target)
 	b := &strings.Builder{}
 
-	setArtifactOwnership := func(root, p string, cfg *dalec.ArtifactConfigWithOwner) {
+	setArtifactOwnership := func(root, p string, cfg *dalec.ArtifactConfig) {
 		if cfg == nil {
 			return
 		}
@@ -609,13 +608,42 @@ func (w *specWrapper) getArtifactOwnership() string {
 			setArtifactOwnership(`/%{_datadir}`, k, &df)
 		}
 	}
-	// if artifacts.Directories != nil && artifacts.Directories.Config != nil {
-	// 	configKeys := dalec.SortMapKeys(artifacts.Directories.Config)
-	// 	for _, p := range configKeys {
-	// 		cfg := artifacts.Directories.Config[p]
-	// 		// setOwnership(b, cfg.User, cfg.Group, `/%{_sysconfdir}`, p, nil)
-	// 	}
-	// }
+	if artifacts.Directories != nil && artifacts.Directories.Config != nil {
+		configKeys := dalec.SortMapKeys(artifacts.Directories.Config)
+		for _, p := range configKeys {
+			cfg := artifacts.Directories.Config[p]
+			if cfg.User != "" {
+				fmt.Fprintf(b, "chown -R %s %s\n", cfg.User, filepath.Join(`/%{_sysconfdir}`, p))
+			}
+			if cfg.Group != "" {
+				fmt.Fprintf(b, "chgrp -R %s %s\n", cfg.Group, filepath.Join(`/%{_sysconfdir}`, p))
+			}
+		}
+		stateKeys := dalec.SortMapKeys(artifacts.Directories.State)
+		for _, p := range stateKeys {
+			cfg := artifacts.Directories.Config[p]
+			if cfg.User != "" {
+				fmt.Fprintf(b, "chown -R %s %s\n", cfg.User, filepath.Join(`/%{_sysconfdir}`, p))
+			}
+			if cfg.Group != "" {
+				fmt.Fprintf(b, "chgrp -R %s %s\n", cfg.Group, filepath.Join(`/%{_sysconfdir}`, p))
+			}
+		}
+	}
+	if artifacts.Libs != nil {
+		libs := dalec.SortMapKeys(artifacts.Libs)
+		for _, l := range libs {
+			cfg := artifacts.Libs[l]
+			setArtifactOwnership(`/%{_libdir}`, l, &cfg)
+		}
+	}
+	if artifacts.Binaries != nil {
+		binKeys := dalec.SortMapKeys(artifacts.Binaries)
+		for _, p := range binKeys {
+			cfg := artifacts.Binaries[p]
+			setArtifactOwnership(`/%{_bindir}`, p, &cfg)
+		}
+	}
 
 	return b.String()
 }
@@ -763,7 +791,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 		dataFileKeys := dalec.SortMapKeys(artifacts.DataDirs)
 		for _, k := range dataFileKeys {
 			df := artifacts.DataDirs[k]
-			copyArtifact(`%{buildroot}/%{_datadir}`, k, &df.ArtifactConfig)
+			copyArtifact(`%{buildroot}/%{_datadir}`, k, &df)
 		}
 	}
 
@@ -778,7 +806,7 @@ func (w *specWrapper) Install() fmt.Stringer {
 	configKeys := dalec.SortMapKeys(artifacts.ConfigFiles)
 	for _, c := range configKeys {
 		cfg := artifacts.ConfigFiles[c]
-		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, &cfg.ArtifactConfig)
+		copyArtifact(`%{buildroot}/%{_sysconfdir}`, c, &cfg)
 	}
 
 	if artifacts.Systemd != nil {

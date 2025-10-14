@@ -147,7 +147,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/build.sh"), 0o700, createBuildScript(spec, &cfg)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/patch.sh"), 0o700, createPatchScript(spec, &cfg)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_generators.sh"), 0o700, fixupGenerators(spec, &cfg)), opts...))
-	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPerms(spec, target, &cfg)), opts...))
+	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPermsAndOwnership(spec, target, &cfg)), opts...))
 
 	customEnable, err := customDHInstallSystemdPostinst(spec, target)
 	if err != nil {
@@ -163,7 +163,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	artifacts := spec.GetArtifacts(target)
 	writeUsersPostInst(postinst, artifacts.Users)
 	writeGroupsPostInst(postinst, artifacts.Groups)
-	setSymlinkOwnershipPostInst(postinst, spec, target)
+	setArtifactOwnershipPostInst(postinst, spec, target)
 
 	if postinst.Len() > 0 {
 		dt := []byte("#!/usr/bin/env sh\nset -e\n")
@@ -194,14 +194,14 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	return dalec.MergeAtPath(in, states, "/"), nil
 }
 
-func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) []byte {
+func fixupArtifactPermsAndOwnership(spec *dalec.Spec, target string, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
 	writeScriptHeader(buf, cfg)
 
 	basePath := filepath.Join("debian", spec.Name)
 	artifacts := spec.GetArtifacts(target)
 
-	checkAndWritePerms := func(artifacts map[string]dalec.ArtifactConfig, dir string) {
+	checkAndWritePermsAndOwnership := func(artifacts map[string]dalec.ArtifactConfig, dir string) {
 		if artifacts == nil {
 			return
 		}
@@ -211,6 +211,12 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 			resolvedName := cfg.ResolveName(key)
 			p := filepath.Join(basePath, dir, resolvedName)
 
+			if cfg.User != "" {
+				fmt.Fprintf(buf, "chown -R %s %q\n", cfg.User, p)
+			}
+			if cfg.Group != "" {
+				fmt.Fprintf(buf, "chgrp -R %s %q\n", cfg.Group, p)
+			}
 			if cfg.Permissions.Perm() != 0 {
 				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Permissions.Perm(), p)
 				continue
@@ -244,24 +250,15 @@ func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) [
 		}
 	}
 
-	configFiles := make(map[string]dalec.ArtifactConfig)
-	for k, v := range artifacts.ConfigFiles {
-		configFiles[k] = v.ArtifactConfig
-	}
-	dataDirs := make(map[string]dalec.ArtifactConfig)
-	for k, v := range artifacts.DataDirs {
-		dataDirs[k] = v.ArtifactConfig
-	}
-
-	checkAndWritePerms(artifacts.Binaries, BinariesPath)
-	checkAndWritePerms(configFiles, ConfigFilesPath)
-	checkAndWritePerms(artifacts.Manpages, filepath.Join(ManpagesPath, spec.Name))
-	checkAndWritePerms(artifacts.Headers, HeadersPath)
-	checkAndWritePerms(artifacts.Licenses, filepath.Join(LicensesPath, spec.Name))
-	checkAndWritePerms(artifacts.Docs, filepath.Join(DocsPath, spec.Name))
-	checkAndWritePerms(artifacts.Libs, filepath.Join(LibsPath))
-	checkAndWritePerms(artifacts.Libexec, LibexecPath)
-	checkAndWritePerms(dataDirs, DataDirsPath)
+	checkAndWritePermsAndOwnership(artifacts.Binaries, BinariesPath)
+	checkAndWritePermsAndOwnership(artifacts.ConfigFiles, ConfigFilesPath)
+	checkAndWritePermsAndOwnership(artifacts.Manpages, filepath.Join(ManpagesPath, spec.Name))
+	checkAndWritePermsAndOwnership(artifacts.Headers, HeadersPath)
+	checkAndWritePermsAndOwnership(artifacts.Licenses, filepath.Join(LicensesPath, spec.Name))
+	checkAndWritePermsAndOwnership(artifacts.Docs, filepath.Join(DocsPath, spec.Name))
+	checkAndWritePermsAndOwnership(artifacts.Libs, filepath.Join(LibsPath))
+	checkAndWritePermsAndOwnership(artifacts.Libexec, LibexecPath)
+	checkAndWritePermsAndOwnership(artifacts.DataDirs, DataDirsPath)
 
 	if artifacts.Directories != nil {
 		sorted := dalec.SortMapKeys(artifacts.Directories.GetConfig())
@@ -672,7 +669,7 @@ func writeGroupsPostInst(w *bytes.Buffer, groups []dalec.AddGroupConfig) {
 	}
 }
 
-func setSymlinkOwnershipPostInst(w *bytes.Buffer, spec *dalec.Spec, target string) {
+func setArtifactOwnershipPostInst(w *bytes.Buffer, spec *dalec.Spec, target string) {
 	artifacts := spec.GetArtifacts(target)
 
 	if len(artifacts.Links) > 0 {

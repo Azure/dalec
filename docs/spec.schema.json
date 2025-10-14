@@ -109,38 +109,6 @@
 		},
 		"ArtifactConfig": {
 			"properties": {
-				"name": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Name is file or dir name to use for the artifact in the package.\nIf empty, the file or dir name from the produced artifact will be used."
-				},
-				"permissions": {
-					"type": [
-						"integer"
-					],
-					"description": "Permissions is the file permissions to set on the artifact.\nIf not set, the default value will depend on the kind of artifact or the underlying artifact's already set permissions."
-				},
-				"subpath": {
-					"type": [
-						"string",
-						"null"
-					],
-					"description": "Subpath is the subpath to use in the package for the artifact type.\n\nAs an example, binaries are typically placed in /usr/bin when installed.\nIf you want to nest them in a subdirectory, you can specify it here."
-				}
-			},
-			"additionalProperties": {
-				"not": {}
-			},
-			"type": [
-				"object",
-				"null"
-			],
-			"description": "ArtifactConfig is the configuration for a given artifact type."
-		},
-		"ArtifactConfigWithOwner": {
-			"properties": {
 				"group": {
 					"type": [
 						"string",
@@ -182,7 +150,8 @@
 			"type": [
 				"object",
 				"null"
-			]
+			],
+			"description": "ArtifactConfig is the configuration for a given artifact type."
 		},
 		"ArtifactDirConfig": {
 			"properties": {
@@ -269,7 +238,7 @@
 				},
 				"configFiles": {
 					"additionalProperties": {
-						"$ref": "#/$defs/ArtifactConfigWithOwner"
+						"$ref": "#/$defs/ArtifactConfig"
 					},
 					"type": [
 						"object",
@@ -283,7 +252,7 @@
 				},
 				"data_dirs": {
 					"additionalProperties": {
-						"$ref": "#/$defs/ArtifactConfigWithOwner"
+						"$ref": "#/$defs/ArtifactConfig"
 					},
 					"type": [
 						"object",

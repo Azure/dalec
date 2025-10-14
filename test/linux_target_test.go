@@ -441,11 +441,11 @@ echo "$BAR" > bar.txt
 					"foo1.txt": {},
 					"bar.txt":  {},
 				},
-				ConfigFiles: map[string]dalec.ArtifactConfigWithOwner{
-					"foo0.txt": {ArtifactConfig: dalec.ArtifactConfig{}, User: "need", Group: "coffee"},
+				ConfigFiles: map[string]dalec.ArtifactConfig{
+					"foo0.txt": {User: "need", Group: "coffee"},
 				},
-				DataDirs: map[string]dalec.ArtifactConfigWithOwner{
-					"foo1.txt": {ArtifactConfig: dalec.ArtifactConfig{}, User: "need", Group: "coffee"},
+				DataDirs: map[string]dalec.ArtifactConfig{
+					"foo1.txt": {User: "need", Group: "coffee"},
 				},
 				Links: []dalec.ArtifactSymlinkConfig{
 					{
@@ -1861,12 +1861,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				Binaries: map[string]dalec.ArtifactConfig{
 					"bin": {},
 				},
-				DataDirs: map[string]dalec.ArtifactConfigWithOwner{
+				DataDirs: map[string]dalec.ArtifactConfig{
 					"data_dir": {},
 					"another_data_dir": {
-						ArtifactConfig: dalec.ArtifactConfig{
-							SubPath: "subpath",
-						},
+						SubPath: "subpath",
 					},
 					"owned_data_dir": {
 						User:  "myuser",
@@ -2065,18 +2063,14 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			},
 			Build: dalec.ArtifactBuild{},
 			Artifacts: dalec.Artifacts{
-				ConfigFiles: map[string]dalec.ArtifactConfigWithOwner{
+				ConfigFiles: map[string]dalec.ArtifactConfig{
 					"src1": {},
 					"src2": {
-						ArtifactConfig: dalec.ArtifactConfig{
-							SubPath: "sysconfig",
-						},
+						SubPath: "sysconfig",
 					},
 					"src3": {},
 					"src4": {
-						ArtifactConfig: dalec.ArtifactConfig{
-							SubPath: "dirWithSubpath",
-						},
+						SubPath: "dirWithSubpath",
 					},
 				},
 			},
@@ -3031,7 +3025,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 				},
 			},
 			Artifacts: dalec.Artifacts{
-				DataDirs: map[string]dalec.ArtifactConfigWithOwner{
+				DataDirs: map[string]dalec.ArtifactConfig{
 					"test-file": {},
 				},
 			},
@@ -3826,7 +3820,7 @@ func testPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinu
 			// If the marker file is present in the later container check,
 			// it means the pre-built package was not used and was rebuilt
 			// with this updated spec.
-			preBuiltSpec.Artifacts.DataDirs = map[string]dalec.ArtifactConfigWithOwner{
+			preBuiltSpec.Artifacts.DataDirs = map[string]dalec.ArtifactConfig{
 				"/etc/marker.txt": {},
 			}
 

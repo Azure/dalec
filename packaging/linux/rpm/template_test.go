@@ -477,14 +477,12 @@ fi
 		w := &specWrapper{Spec: &dalec.Spec{
 			Name: "test-pkg",
 			Artifacts: dalec.Artifacts{
-				ConfigFiles: map[string]dalec.ArtifactConfigWithOwner{
+				ConfigFiles: map[string]dalec.ArtifactConfig{
 					"/src/config.env": {
-						ArtifactConfig: dalec.ArtifactConfig{
-							Name:    "config",
-							SubPath: "sysconfig",
-						},
-						User: "myuser",
-						Group: "mygroup",
+						Name:    "config",
+						SubPath: "sysconfig",
+						User:    "myuser",
+						Group:   "mygroup",
 					},
 				},
 			},
@@ -503,7 +501,7 @@ fi
 		w := &specWrapper{Spec: &dalec.Spec{
 			Name: "test-pkg",
 			Artifacts: dalec.Artifacts{
-				ConfigFiles: map[string]dalec.ArtifactConfigWithOwner{
+				ConfigFiles: map[string]dalec.ArtifactConfig{
 					"/src/config.env": {},
 				},
 			},

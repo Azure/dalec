@@ -94,24 +94,16 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 		}
 		return false
 	}
-	configFiles := map[string]dalec.ArtifactConfig{}
-	for k, v := range artifacts.ConfigFiles {
-		configFiles[k] = v.ArtifactConfig
-	}
-	dataDirs := map[string]dalec.ArtifactConfig{}
-	for k, v := range artifacts.DataDirs {
-		dataDirs[k] = v.ArtifactConfig
-	}
 	fixPerms = checkPerms(artifacts.Binaries) ||
 
-		checkPerms(configFiles) ||
+		checkPerms(artifacts.ConfigFiles) ||
 		checkPerms(artifacts.Manpages) ||
 		checkPerms(artifacts.Headers) ||
 		checkPerms(artifacts.Licenses) ||
 		checkPerms(artifacts.Docs) ||
 		checkPerms(artifacts.Libs) ||
 		checkPerms(artifacts.Libexec) ||
-		checkPerms(dataDirs) ||
+		checkPerms(artifacts.DataDirs) ||
 		checkDirPerms(artifacts.Directories.GetConfig()) ||
 		checkDirPerms(artifacts.Directories.GetState())
 
