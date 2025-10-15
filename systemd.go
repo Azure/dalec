@@ -25,6 +25,8 @@ type SystemdUnitConfig struct {
 
 	// Start can be optionally used to start the systemd unit on install
 	// This determines what will be written to a systemd preset file
+	// Note that depending on distribution there may be different
+	// expectations as to if the package should be responsible for this
 	Start bool `yaml:"start,omitempty" json:"start"`
 }
 

@@ -2211,7 +2211,7 @@
 					"type": [
 						"boolean"
 					],
-					"description": "Start can be optionally used to start the systemd unit on install\nThis determines what will be written to a systemd preset file"
+					"description": "Start can be optionally used to start the systemd unit on install\nThis determines what will be written to a systemd preset file\nNote that depending on distribution there may be different\nexpectations as to if the package should be responsible for this"
 				},
 				"enable": {
 					"type": [
