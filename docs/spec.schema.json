@@ -2204,10 +2204,15 @@
 		"SystemdUnitConfig": {
 			"required": [
 				"name",
-				"enable",
-				"start"
+				"enable"
 			],
 			"properties": {
+				"start": {
+					"type": [
+						"boolean"
+					],
+					"description": "Start is used to start the systemd unit on install\nThis determines what will be written to a systemd preset file"
+				},
 				"enable": {
 					"type": [
 						"boolean"
