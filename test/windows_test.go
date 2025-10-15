@@ -392,7 +392,7 @@ echo "$BAR" > bar.txt
 					t.Fatal(err)
 				}
 				validateSymlinks(ctx, t, ref, spec)
-				if err := validatePathAndPermissions(ctx, ref, "/Windows/System32/src-change", 0o644); err != nil {
+				if err := validatePathAndPermissions(ctx, ref, "/Windows/System32/src-change", 0o644, "root", "root"); err != nil {
 					t.Fatal(err)
 				}
 

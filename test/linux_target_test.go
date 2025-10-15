@@ -1717,13 +1717,16 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/etc/test", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/etc/test", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithPerms", 0o700); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithPerms", 0o700, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithUsers", 0o755, "myuser", "mygroup"); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1791,11 +1794,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-original-perm", 0o644); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-original-perm", 0o644, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-change-perm", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-change-perm", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1847,6 +1850,18 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						},
 					},
 				},
+				"another_data_dir2": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"another_nested_data_file2": {
+									Contents:    "lorem ipsum dolor sit amet\n",
+									Permissions: 0o644,
+								},
+							},
+						},
+					},
+				},
 				"data_file": {
 					Inline: &dalec.SourceInline{
 						File: &dalec.SourceInlineFile{
@@ -1866,9 +1881,10 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					"another_data_dir": {
 						SubPath: "subpath",
 					},
-					"owned_data_dir": {
+					"another_data_dir2": {
 						User:  "myuser",
 						Group: "mygroup",
+						Permissions: 0o777,
 					},
 					"data_file": {},
 				},
@@ -1884,16 +1900,22 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o644); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o644, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o644); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o644, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o644); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir2/another_nested_data_file", 0o644, "myuser", "mygroup"); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir2", 0o700, "myuser", "mygroup"); err != nil {
+				t.Fatal(err)
+			}
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o644, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1987,19 +2009,19 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/no_name_no_subpath", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/no_name_no_subpath", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/this_is_the_name_only", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/this_is_the_name_only", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/subpath/custom_name", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/subpath/custom_name", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath_only", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath_only", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/abcdefg/nested_subpath", 0o755); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/abcdefg/nested_subpath", 0o755, "root", "root"); err != nil {
 				t.Fatal(err)
 			}
 		})

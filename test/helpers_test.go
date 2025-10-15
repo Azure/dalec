@@ -2,11 +2,13 @@ package test
 
 import (
 	"bytes"
+	"strconv"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -375,16 +377,31 @@ func readDefaultPlatform(ctx context.Context, t *testing.T, gwc gwclient.Client)
 	return p
 }
 
-func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expected os.FileMode) error {
+func validatePathAndPermissions(ctx context.Context, ref gwclient.Reference, path string, expectedMode os.FileMode, expectedUser string, expectedGroup string) error {
 	stat, err := ref.StatFile(ctx, gwclient.StatRequest{Path: path})
 	if err != nil {
 		return err
 	}
 
-	got := os.FileMode(stat.Mode).Perm()
-
-	if expected != got {
-		return fmt.Errorf("expected permissions %o to equal expected %o", got, expected)
+	gotMode := os.FileMode(stat.Mode).Perm()
+	gotUser, err := user.LookupId(strconv.Itoa(int(stat.Uid)))
+	if err != nil {
+		return err
 	}
+	gotGroup, err := user.LookupGroupId(strconv.Itoa(int(stat.Gid)))
+	if err != nil {
+		return err
+	}
+
+	if expectedMode != gotMode {
+		return fmt.Errorf("expected permissions %o to equal expected %o", gotMode, expectedMode)
+	}
+	if expectedUser != gotUser.Username {
+		return fmt.Errorf("expected user %q to equal expected %q", gotUser.Username, expectedUser)
+	}
+	if expectedGroup != gotGroup.Name {
+		return fmt.Errorf("expected group %q to equal expected %q", gotGroup.Name, expectedGroup)
+	}
+
 	return nil
 }
