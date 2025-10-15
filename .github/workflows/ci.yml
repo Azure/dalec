@@ -74,10 +74,9 @@ jobs:
         run: go run ./cmd/lint ./...
       - name: validate generated files
         run: |
-          go generate || exit $?
-          git diff --exit-code
-          if [ $? -ne 0 ]; then
-            echo "::error::Missing updates to generated files. Please run 'go generate' and commit the changes"
+          go generate ./... || exit $?
+          if ! git diff --exit-code; then
+            echo "::error::Missing updates to generated files. Please run 'go generate ./...' and commit the changes"
             exit 1
           fi
 
