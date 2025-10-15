@@ -481,9 +481,9 @@ func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
 
 	// should be equivalent to the systemd_post scriptlet in the rpm spec,
 	// but without the use of a .preset file
-	s := fmt.Sprintf(`
+	s := `
 if [ $1 -eq 1 ]; then
-    # initial installation`)
+    # initial installation`
 
 	// Enable/start service when package is installed
 	if cfg.Start {
@@ -494,9 +494,9 @@ if [ $1 -eq 1 ]; then
     systemctl enable %s`, unitName)
 	}
 
-	s = s + fmt.Sprintf(`
+	s = s + `
 fi
-`)
+`
 
 	return s
 }
