@@ -2204,7 +2204,8 @@
 		"SystemdUnitConfig": {
 			"required": [
 				"name",
-				"enable"
+				"enable",
+				"start"
 			],
 			"properties": {
 				"enable": {

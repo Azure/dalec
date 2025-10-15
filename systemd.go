@@ -22,6 +22,10 @@ type SystemdUnitConfig struct {
 	// Enable is used to enable the systemd unit on install
 	// This determines what will be written to a systemd preset file
 	Enable bool `yaml:"enable,omitempty" json:"enable"`
+
+	// Start is used to start the systemd unit on install
+	// This determines what will be written to a systemd preset file
+	Start bool `yaml:"start,omitempty" json:"start"`
 }
 
 func (s SystemdUnitConfig) Artifact() *ArtifactConfig {
