@@ -2207,12 +2207,6 @@
 				"enable"
 			],
 			"properties": {
-				"start": {
-					"type": [
-						"boolean"
-					],
-					"description": "Start can be optionally used to start the systemd unit on install\nThis determines what will be written to a systemd preset file\nNote that depending on distribution there may be different\nexpectations as to if the package should be responsible for this"
-				},
 				"enable": {
 					"type": [
 						"boolean"
@@ -2224,6 +2218,12 @@
 						"string"
 					],
 					"description": "Name is the name systemd unit should be copied under.\nNested paths are not supported. It is the user's responsibility\nto name the service with the appropriate extension, i.e. .service, .timer, etc."
+				},
+				"start": {
+					"type": [
+						"boolean"
+					],
+					"description": "Start can be optionally used to start the systemd unit on install\nThis determines what will be written to a systemd preset file\nNote that depending on distribution there may be different\nexpectations as to if the package should be responsible for this"
 				}
 			},
 			"additionalProperties": {
