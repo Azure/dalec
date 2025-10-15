@@ -30,6 +30,7 @@ func TestMain(m *testing.M) {
 		externalTestHost = "https://github.com"
 	}
 	flag.StringVar(&externalTestHost, "external-test-host", externalTestHost, "http server to use for validating network access")
+	flag.BoolVar(&testenv.InlineBuildOutput, "inline-build-output", testenv.InlineBuildOutput, "Stream the test's build output as it happens instead of waiting until the end. Note: parallel tests will interleave output.")
 
 	flag.Parse()
 
