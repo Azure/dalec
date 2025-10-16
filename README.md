@@ -46,3 +46,5 @@ Any use of third-party trademarks or logos are subject to those third-party's po
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10703/badge)](https://www.bestpractices.dev/projects/10703)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/Azure/dalec/badge)](https://scorecard.dev/viewer/?uri=github.com/Azure/dalec)
+
+Copyright © contributors to Dalec, established as Dalec a Series of LF Projects, LLC.
