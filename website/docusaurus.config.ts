@@ -69,7 +69,8 @@ const config: Config = {
     footer: {
       style: 'dark',
       links: [],
-      copyright: `Copyright © ${new Date().getFullYear()} Azure Container Upstream.`,
+      copyright: `Copyright Dalec a Series of LF Projects, LLC
+      For website terms of use, trademark policy and other project policies please see lfprojects.org/policies/.`
     },
     prism: {
       theme: prismThemes.github,
