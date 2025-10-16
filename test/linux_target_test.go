@@ -1912,8 +1912,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				{
 					Name: "Check data directory ownership in post-install",
 					Steps: []dalec.TestStep{
-						{Command: "/bin/bash -exc 'MYUSER_UID=$(awk -F: \"/^myuser:/{print \$3}\" /etc/passwd); MYGROUP_GID=$(awk -F: \"/^mygroup:/{print \$3}\" /etc/group); OWNER=$(stat -c \"%u:%g\" /usr/share/another_data_dir2); [ \"$OWNER\" = \"$MYUSER_UID:$MYGROUP_GID\" ]'"},
-						{Command: "/bin/bash -exc 'MYUSER_UID=$(awk -F: \"/^myuser:/{print \$3}\" /etc/passwd); MYGROUP_GID=$(awk -F: \"/^mygroup:/{print \$3}\" /etc/group); OWNER=$(stat -c \"%u:%g\" /usr/share/another_data_dir2/another_nested_data_file2); [ \"$OWNER\" = \"$MYUSER_UID:$MYGROUP_GID\" ]'"},
+						{Command: "/bin/bash -exc 'IFS=:; while read u x uid gid rest; do [ \"$u\" = myuser ] && MYUSER_UID=$uid; done < /etc/passwd; IFS=:; while read g x gid members; do [ \"$g\" = mygroup ] && MYGROUP_GID=$gid; done < /etc/group; OWNER=$(stat -c \"%u:%g\" /usr/share/another_data_dir2); [ \"$OWNER\" = \"$MYUSER_UID:$MYGROUP_GID\" ]'"},
+						{Command: "/bin/bash -exc 'IFS=:; while read u x uid gid rest; do [ \"$u\" = myuser ] && MYUSER_UID=$uid; done < /etc/passwd; IFS=:; while read g x gid members; do [ \"$g\" = mygroup ] && MYGROUP_GID=$gid; done < /etc/group; OWNER=$(stat -c \"%u:%g\" /usr/share/another_data_dir2/another_nested_data_file2); [ \"$OWNER\" = \"$MYUSER_UID:$MYGROUP_GID\" ]'"},
 					},
 				},
 			},
