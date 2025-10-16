@@ -78,6 +78,15 @@ package_config:
     cmdline: "/signer"
 ```
 
+## Responsibilities of the Signer
+
+Dalec sends the output of the package build as the build context to the
+signer.
+The signer should provide in the response an `llb.State` with the signed
+artifacts as the result.
+Dalec then merges the signed artifacts back into the original package build
+result.
+
 ## Build Time customization
 
 Signing artifacts may require passing through build-time customizations.

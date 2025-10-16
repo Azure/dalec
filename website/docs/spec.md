@@ -145,7 +145,7 @@ targets:
               - /my-binary
     package_config:
       signer:
-        image: azcutools.azurecr.io/azcu-dalec/signer:latest
+        image: example.com/signer:latest
   azlinux3:
     # same fields as above
   windowscross:
