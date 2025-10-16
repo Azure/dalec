@@ -1705,6 +1705,20 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						"one/with/slashes": {},
 					},
 				},
+				Users: []dalec.AddUserConfig{
+					{Name: "myuser"},
+				},
+				Groups: []dalec.AddGroupConfig{
+					{Name: "mygroup"},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check directory ownership in post-install",
+					Steps: []dalec.TestStep{
+						{Command: "/bin/bash -exc 'MYUSER_UID=$(getent passwd myuser | cut -d: -f3); MYGROUP_GID=$(getent group mygroup | cut -d: -f3); OWNER=$(stat -c \"%u:%g\" /etc/testWithUsers); [ \"$OWNER\" = \"$MYUSER_UID:$MYGROUP_GID\" ]'"},
+					},
+				},
 			},
 		}
 
@@ -1717,16 +1731,15 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/etc/test", 0o755, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/etc/test", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithPerms", 0o700, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithPerms", 0o700); err != nil {
 				t.Fatal(err)
 			}
-			// if err := validatePathAndPermissions(ctx, ref, "/etc/testWithUsers", 0o755, "myuser", "mygroup"); err != nil {
-			// 	t.Fatal(err)
-			// }
-			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755, "root", "root"); err != nil {
+			// validatePathAndPermissions doesn't work for container-only users because it runs on the host
+			// Ownership for /etc/testWithUsers is validated in the PostInstall test above
+			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1794,11 +1807,11 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-original-perm", 0o644, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-original-perm", 0o644); err != nil {
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-change-perm", 0o755, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/bin/src-change-perm", 0o755); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -1882,11 +1895,26 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						SubPath: "subpath",
 					},
 					"another_data_dir2": {
-						User:  "myuser",
-						Group: "mygroup",
+						User:        "myuser",
+						Group:       "mygroup",
 						Permissions: 0o777,
 					},
 					"data_file": {},
+				},
+				Users: []dalec.AddUserConfig{
+					{Name: "myuser"},
+				},
+				Groups: []dalec.AddGroupConfig{
+					{Name: "mygroup"},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check data directory ownership in post-install",
+					Steps: []dalec.TestStep{
+						{Command: "/bin/bash -exc 'MYUSER_UID=$(getent passwd myuser | cut -d: -f3); MYGROUP_GID=$(getent group mygroup | cut -d: -f3); OWNER=$(stat -c \"%u:%g\" /usr/share/another_data_dir2); [ \"$OWNER\" = \"$MYUSER_UID:$MYGROUP_GID\" ]'"},
+						{Command: "/bin/bash -exc 'MYUSER_UID=$(getent passwd myuser | cut -d: -f3); MYGROUP_GID=$(getent group mygroup | cut -d: -f3); OWNER=$(stat -c \"%u:%g\" /usr/share/another_data_dir2/another_nested_data_file2); [ \"$OWNER\" = \"$MYUSER_UID:$MYGROUP_GID\" ]'"},
+					},
 				},
 			},
 		}
@@ -1900,22 +1928,18 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir", 0o755, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o644, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_dir/nested_data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o644, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
-			// if err := validatePathAndPermissions(ctx, ref, "/usr/share/another_data_dir2/another_nested_data_file2", 0o644, "myuser", "mygroup"); err != nil {
-			// 	t.Fatal(err)
-			// }
-			// if err := validatePathAndPermissions(ctx, ref, "/usr/share/another_data_dir2", 0o777, "myuser", "mygroup"); err != nil {
-			// 	t.Fatal(err)
-			// }
-			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o644, "root", "root"); err != nil {
+			// validatePathAndPermissions doesn't work for container-only users because it runs on the host
+			// Ownership for another_data_dir2 is validated in the PostInstall test above
+			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -2009,19 +2033,19 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 				t.Fatal(err)
 			}
 
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/no_name_no_subpath", 0o755, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/no_name_no_subpath", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/this_is_the_name_only", 0o755, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/this_is_the_name_only", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/subpath/custom_name", 0o755, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/subpath/custom_name", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath_only", 0o755, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/custom/subpath_only", 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/abcdefg/nested_subpath", 0o755, "root", "root"); err != nil {
+			if err := validatePathAndPermissions(ctx, ref, "/usr/libexec/libexec-test/abcdefg/nested_subpath", 0o755); err != nil {
 				t.Fatal(err)
 			}
 		})
