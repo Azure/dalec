@@ -144,9 +144,24 @@ sources:
       name: "context"
 ```
 
+
 Where `name: "context"`, not to be confused with the source type `context`, is named by convention by the docker CLI.
 Additionally contexts can be passed in from the docker cli: `docker build --build-context <name>=<path>`.
-The `<name>` would be the name to use in your yaml to access it.
+Example, for `--build-context myContext=./someDir`:
+
+```yaml
+sources:
+  someSource:
+    context:
+      name: "myContext"
+```
+
+:::note
+Note the "name" field in the context source type has nothing to do with the name
+of the source in the sources mapping (e.g. `someSource` in the above example).
+It is used to tell Dalec the name the *client* has provided the content as in
+the build request.
+:::
 
 This could also be written as below, since the `name: context` is the default and is the main build context passed in by the client:
 
