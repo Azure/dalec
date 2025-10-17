@@ -1,4 +1,4 @@
-# syntax=ghcr.io/azure/dalec/frontend:latest
+#syntax=ghcr.io/azure/dalec/frontend:latest
 
 name: go-md2man
 version: 2.0.3
@@ -8,7 +8,6 @@ vendor: Dalec Example
 license: MIT
 description: A tool to convert markdown into man pages (roff).
 website: https://github.com/cpuguy83/go-md2man
-
 
 sources:
   src:
