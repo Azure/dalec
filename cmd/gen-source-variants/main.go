@@ -70,8 +70,9 @@ func extractSourceFields() ([]SourceField, error) {
 				break
 			}
 
+			const sourceTypeRef = "Source"
 			ast.Inspect(node, func(n ast.Node) bool {
-				if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == "Source" {
+				if ts, ok := n.(*ast.TypeSpec); ok && ts.Name.Name == sourceTypeRef {
 					found = true
 					if st, ok := ts.Type.(*ast.StructType); ok {
 						for _, field := range st.Fields.List {
@@ -85,7 +86,7 @@ func extractSourceFields() ([]SourceField, error) {
 							if ptr, ok := field.Type.(*ast.StarExpr); ok {
 								if ident, ok := ptr.X.(*ast.Ident); ok {
 									typeName := ident.Name
-									if strings.HasPrefix(typeName, "Source") {
+									if strings.HasPrefix(typeName, sourceTypeRef) {
 										sourceFields = append(sourceFields, SourceField{
 											Name:     fieldName,
 											TypeName: typeName,
