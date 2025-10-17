@@ -145,14 +145,15 @@ targets:
               - /my-binary
     package_config:
       signer:
-        image: azcutools.azurecr.io/azcu-dalec/signer:latest
+        image: example.com/signer:latest
   azlinux3:
     # same fields as above
   windowscross:
     # same fields as above
 ```
 
-Valid targets are `mariner2`, `azlinux3`, `windowscross`.
+Targets can either be built-in or reference an external image reference that
+handles the target build.
 
 For more information, please see [Targets](targets.md).
 

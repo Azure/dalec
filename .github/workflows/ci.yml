@@ -60,7 +60,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: false
       # Use the golang-ci lint action which automattically sets up GHA caching and other things
       # Note: There is also a "lint" target in docker-bake.hcl for local linting
@@ -74,10 +74,9 @@ jobs:
         run: go run ./cmd/lint ./...
       - name: validate generated files
         run: |
-          go generate || exit $?
-          git diff --exit-code
-          if [ $? -ne 0 ]; then
-            echo "::error::Missing updates to generated files. Please run 'go generate' and commit the changes"
+          go generate ./... || exit $?
+          if ! git diff --exit-code; then
+            echo "::error::Missing updates to generated files. Please run 'go generate ./...' and commit the changes"
             exit 1
           fi
 
@@ -115,7 +114,7 @@ jobs:
 
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: false
 
       - name: checkout
@@ -128,7 +127,7 @@ jobs:
           set -e
           docker run -d --net=host --restart=always --name jaeger -e COLLECTOR_OTLP_ENABLED=true jaegertracing/all-in-one:1.62.0
           docker0_ip="$(ip -f inet addr show docker0 | grep -Po 'inet \K[\d.]+')"
-          echo "OTEL_EXPORTER_OTLP_ENDPOINT=http://${docker0_ip}:4318" >> "${GITHUB_ENV}"
+          echo "OTEL_EXPORTER_OTLP_ENDPOINT=ghcr.io/azure/dalec/mirror/dockerhub/jaegertracing/all-in-one:1.62.0" >> "${GITHUB_ENV}"
           echo "OTEL_SERVICE_NAME=dalec-integration-test" >> "${GITHUB_ENV}"
 
           tmp="$(mktemp)"
@@ -144,7 +143,7 @@ jobs:
           sudo systemctl restart containerd
           sudo systemctl restart docker
 
-      - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         name: Login to GHCR
         with:
           registry: ghcr.io
@@ -222,7 +221,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: false
       - name: download deps
         run: go mod download
@@ -255,7 +254,7 @@ jobs:
         uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3.1.0
       - name: Setup source policy
         uses: ./.github/actions/setup-source-policy
-      - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         name: Login to GHCR
         with:
           registry: ghcr.io

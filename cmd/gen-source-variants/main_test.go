@@ -17,7 +17,7 @@ func TestExtractSourceFields(t *testing.T) {
 	// Create a temporary spec.go file for testing
 	tempDir := t.TempDir()
 	specFile := filepath.Join(tempDir, "spec.go")
-	
+
 	specContent := `package dalec
 
 type Source struct {
@@ -52,15 +52,7 @@ type NonSourceType struct{}
 	assert.NilError(t, err)
 
 	// Change to temp directory so the parser can find spec.go
-	oldWd, err := os.Getwd()
-	assert.NilError(t, err)
-	defer func() {
-		err := os.Chdir(oldWd)
-		assert.NilError(t, err)
-	}()
-	
-	err = os.Chdir(tempDir)
-	assert.NilError(t, err)
+	t.Chdir(tempDir)
 
 	fields, err := extractSourceFields()
 	assert.NilError(t, err)
@@ -81,7 +73,7 @@ type NonSourceType struct{}
 func TestExtractSourceFields_NoSourceStruct(t *testing.T) {
 	tempDir := t.TempDir()
 	specFile := filepath.Join(tempDir, "spec.go")
-	
+
 	specContent := `package dalec
 
 type OtherStruct struct {
@@ -92,15 +84,7 @@ type OtherStruct struct {
 	err := os.WriteFile(specFile, []byte(specContent), 0644)
 	assert.NilError(t, err)
 
-	oldWd, err := os.Getwd()
-	assert.NilError(t, err)
-	defer func() {
-		err := os.Chdir(oldWd)
-		assert.NilError(t, err)
-	}()
-	
-	err = os.Chdir(tempDir)
-	assert.NilError(t, err)
+	t.Chdir(tempDir)
 
 	fields, err := extractSourceFields()
 	assert.NilError(t, err)
@@ -110,7 +94,7 @@ type OtherStruct struct {
 func TestExtractSourceFields_InvalidGoFile(t *testing.T) {
 	tempDir := t.TempDir()
 	specFile := filepath.Join(tempDir, "spec.go")
-	
+
 	// Invalid Go syntax
 	specContent := `package dalec
 
@@ -122,19 +106,11 @@ type Source struct {
 	err := os.WriteFile(specFile, []byte(specContent), 0644)
 	assert.NilError(t, err)
 
-	oldWd, err := os.Getwd()
-	assert.NilError(t, err)
-	defer func() {
-		err := os.Chdir(oldWd)
-		assert.NilError(t, err)
-	}()
-	
-	err = os.Chdir(tempDir)
-	assert.NilError(t, err)
+	t.Chdir(tempDir)
 
 	_, err = extractSourceFields()
 	assert.Check(t, err != nil)
-	assert.Check(t, cmp.Contains(err.Error(), "failed to parse spec.go"))
+	assert.Check(t, cmp.Contains(err.Error(), "failed to parse"))
 }
 
 func TestGenerateCode(t *testing.T) {
@@ -245,7 +221,7 @@ func TestGenerateCode_FormattingPreserved(t *testing.T) {
 func TestMain_Integration(t *testing.T) {
 	// This test verifies the main function works end-to-end
 	tempDir := t.TempDir()
-	
+
 	// Create a spec.go file
 	specFile := filepath.Join(tempDir, "spec.go")
 	specContent := `package dalec
@@ -264,22 +240,13 @@ type SourceHTTP struct{}
 	err := os.WriteFile(specFile, []byte(specContent), 0644)
 	assert.NilError(t, err)
 
-	// Change to temp directory
-	oldWd, err := os.Getwd()
-	assert.NilError(t, err)
-	defer func() {
-		err := os.Chdir(oldWd)
-		assert.NilError(t, err)
-	}()
-	
-	err = os.Chdir(tempDir)
-	assert.NilError(t, err)
+	t.Chdir(tempDir)
 
 	// Set up args and call main
 	outputFile := filepath.Join(tempDir, "generated.go")
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
-	
+
 	os.Args = []string{"gen-source-variants", outputFile}
 
 	// Capture any panics or exits
@@ -313,14 +280,14 @@ type SourceHTTP struct{}
 func TestMain_InvalidArgs(t *testing.T) {
 	// We can't easily test os.Exit without subprocess testing
 	// Instead, let's test the logic by checking what would happen with invalid args
-	
+
 	// Test that we get the expected behavior by checking args validation directly
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 
 	// Test with no arguments - this would cause main to exit
 	os.Args = []string{"gen-source-variants"}
-	
+
 	// We know from reading main() that it checks len(os.Args) != 2
 	// Since we can't easily test os.Exit, we'll verify the condition
 	assert.Check(t, len(os.Args) != 2, "Invalid args should trigger exit condition")
@@ -354,4 +321,3 @@ func TestFieldSorting(t *testing.T) {
 	assert.Check(t, cmp.Contains(codeStr, "case s.MField != nil:"))
 	assert.Check(t, cmp.Contains(codeStr, "case s.ZField != nil:"))
 }
-

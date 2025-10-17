@@ -2,11 +2,13 @@ package testenv
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/moby/buildkit/client"
@@ -21,6 +23,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 )
+
+var InlineBuildOutput bool
 
 func buildBaseFrontend(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 	dc, err := dockerui.NewClient(c)
@@ -132,20 +136,69 @@ func withDalecInput(ctx context.Context, gwc gwclient.Client, opts *gwclient.Sol
 	return nil
 }
 
-func displaySolveStatus(ctx context.Context, t *testing.T) chan *client.SolveStatus {
-	ch := make(chan *client.SolveStatus)
-	done := make(chan struct{})
+type testWriter struct {
+	t   *testing.T
+	buf *bytes.Buffer
+}
+
+func (tw *testWriter) Write(p []byte) (n int, err error) {
+	n, err = tw.buf.Write(p)
+	if err != nil {
+		return n, err
+	}
+
+	// Flush complete lines only
+	for {
+		dt := tw.buf.Bytes()
+		idx := bytes.IndexRune(dt, '\n')
+		if idx < 0 {
+			break
+		}
+		tw.t.Log(string(dt[:idx]))
+		tw.buf.Next(idx + 1)
+	}
+
+	return n, nil
+}
+
+func (tw *testWriter) Flush() {
+	if tw.buf.Len() == 0 {
+		return
+	}
+	scanner := bufio.NewScanner(tw.buf)
+	for scanner.Scan() {
+		tw.t.Log(scanner.Text())
+	}
+	tw.buf.Reset()
+}
+
+var logBufferPool = &sync.Pool{New: func() any {
+	return bytes.NewBuffer(nil)
+}}
+
+func getBuildOutputStream(ctx context.Context, t *testing.T, done <-chan struct{}) io.Writer {
+	t.Helper()
+
+	if InlineBuildOutput {
+		buf := logBufferPool.Get().(*bytes.Buffer)
+		tw := &testWriter{t: t, buf: buf}
+		t.Cleanup(func() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+			}
+			tw.Flush()
+			logBufferPool.Put(buf)
+		})
+		return tw
+	}
 
 	dir := t.TempDir()
 	f, err := os.OpenFile(filepath.Join(dir, "build.log"), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		t.Fatalf("error opening temp file: %v", err)
 	}
-	display, err := progressui.NewDisplay(f, progressui.AutoMode, progressui.WithPhase(t.Name()))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	t.Cleanup(func() {
 		defer f.Close()
 
@@ -169,6 +222,19 @@ func displaySolveStatus(ctx context.Context, t *testing.T) chan *client.SolveSta
 			t.Log(err)
 		}
 	})
+
+	return f
+}
+
+func displaySolveStatus(ctx context.Context, t *testing.T) chan *client.SolveStatus {
+	ch := make(chan *client.SolveStatus)
+	done := make(chan struct{})
+
+	output := getBuildOutputStream(ctx, t, done)
+	display, err := progressui.NewDisplay(output, progressui.AutoMode, progressui.WithPhase(t.Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	go func() {
 		defer close(done)

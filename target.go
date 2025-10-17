@@ -44,13 +44,13 @@ type Target struct {
 	Artifacts *Artifacts `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 
 	// Provides is the list of packages that this target provides.
-	Provides map[string]PackageConstraints `yaml:"provides,omitempty" json:"provides,omitempty"`
+	Provides PackageDependencyList `yaml:"provides,omitempty" json:"provides,omitempty"`
 
 	// Replaces is the list of packages that this target replaces/obsoletes.
-	Replaces map[string]PackageConstraints `yaml:"replaces,omitempty" json:"replaces,omitempty"`
+	Replaces PackageDependencyList `yaml:"replaces,omitempty" json:"replaces,omitempty"`
 
 	// Conflicts is the list of packages that this target conflicts with.
-	Conflicts map[string]PackageConstraints `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
+	Conflicts PackageDependencyList `yaml:"conflicts,omitempty" json:"conflicts,omitempty"`
 }
 
 func (t *Target) validate() error {

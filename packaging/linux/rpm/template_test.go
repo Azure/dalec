@@ -279,6 +279,10 @@ func TestTemplate_Artifacts(t *testing.T) {
 						"test2.service": {
 							Enable: true,
 						},
+						"test3.service": {
+							Enable: true,
+							Start: true,
+						},
 					},
 				},
 			},
@@ -290,6 +294,11 @@ func TestTemplate_Artifacts(t *testing.T) {
 if [ $1 -eq 1 ]; then
     # initial installation
     systemctl enable test2.service
+fi
+
+if [ $1 -eq 1 ]; then
+    # initial installation
+    systemctl enable --now test3.service
 fi
 
 `)
@@ -308,6 +317,54 @@ fi
 		}}
 
 		assert.Equal(t, w.Post().String(), ``)
+	})
+
+	t.Run("test systemd preun", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"test1.service": {},
+						"test2.service": {
+							Enable: true,
+						},
+						"test3.service": {
+							Enable: true,
+							Start: true,
+						},
+					},
+				},
+			},
+		}}
+
+		assert.Equal(t, w.PreUn().String(),
+			`%preun
+
+if [ $1 -eq 0 ]; then
+    # complete uninstallation
+    systemctl disable --now test2.service
+fi
+
+if [ $1 -eq 0 ]; then
+    # complete uninstallation
+    systemctl disable --now test3.service
+fi
+`)
+	})
+
+	t.Run("test systemd preun, no enabled units", func(t *testing.T) {
+		w := &specWrapper{Spec: &dalec.Spec{
+			Artifacts: dalec.Artifacts{
+				Systemd: &dalec.SystemdConfiguration{
+					Units: map[string]dalec.SystemdUnitConfig{
+						"test1.service": {},
+						"test2.service": {},
+					},
+				},
+			},
+		}}
+
+		assert.Equal(t, w.PreUn().String(), ``)
 	})
 
 	t.Run("test systemd unit postun", func(t *testing.T) {
@@ -481,6 +538,8 @@ fi
 					"/src/config.env": {
 						Name:    "config",
 						SubPath: "sysconfig",
+						User:    "myuser",
+						Group:   "mygroup",
 					},
 				},
 			},

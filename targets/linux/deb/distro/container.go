@@ -42,7 +42,7 @@ func (c *Config) BuildContainer(ctx context.Context, client gwclient.Client, wor
 
 	// If we have base packages to install, create a meta-package to install them.
 	if len(c.BasePackages) > 0 {
-		runtimePkgs := make(map[string]dalec.PackageConstraints, len(c.BasePackages))
+		runtimePkgs := make(dalec.PackageDependencyList, len(c.BasePackages))
 		for _, pkgName := range c.BasePackages {
 			runtimePkgs[pkgName] = dalec.PackageConstraints{}
 		}

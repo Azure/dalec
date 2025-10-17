@@ -194,22 +194,25 @@ func (w *specWrapper) Requires() fmt.Stringer {
 	b.WriteString(getUserPostRequires(artifacts.Users, artifacts.Groups))
 
 	deps := w.GetPackageDeps(w.Target)
-	if deps == nil {
+	buildDeps := deps.GetBuild()
+	runtimeDeps := deps.GetRuntime()
+	if len(buildDeps) == 0 && len(runtimeDeps) == 0 {
 		return b
 	}
-	buildKeys := dalec.SortMapKeys(deps.Build)
+
+	buildKeys := dalec.SortMapKeys(buildDeps)
 	for _, name := range buildKeys {
-		constraints := deps.Build[name]
+		constraints := buildDeps[name]
 		writeDep(b, "BuildRequires", name, constraints)
 	}
 
-	if len(deps.Build) > 0 && len(deps.Runtime) > 0 {
+	if len(buildDeps) > 0 && len(runtimeDeps) > 0 {
 		b.WriteString("\n")
 	}
 
-	runtimeKeys := dalec.SortMapKeys(deps.Runtime)
+	runtimeKeys := dalec.SortMapKeys(runtimeDeps)
 	for _, name := range runtimeKeys {
-		constraints := deps.Runtime[name]
+		constraints := runtimeDeps[name]
 		// TODO: consider if it makes sense to support sources satisfying runtime deps
 		writeDep(b, "Requires", name, constraints)
 	}
@@ -220,18 +223,14 @@ func (w *specWrapper) Requires() fmt.Stringer {
 
 func (w *specWrapper) Recommends() fmt.Stringer {
 	b := &strings.Builder{}
-	deps := w.GetPackageDeps(w.Target)
-	if deps == nil {
+	deps := w.GetPackageDeps(w.Target).GetRecommends()
+	if len(deps) == 0 {
 		return b
 	}
 
-	if len(deps.Recommends) == 0 {
-		return b
-	}
-
-	keys := dalec.SortMapKeys(deps.Recommends)
+	keys := dalec.SortMapKeys(deps)
 	for _, name := range keys {
-		constraints := deps.Recommends[name]
+		constraints := deps[name]
 		writeDep(b, "Recommends", name, constraints)
 	}
 	b.WriteString("\n")
@@ -435,11 +434,28 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	return b
 }
 
+func systemdPreUnScript(unitName string, cfg dalec.SystemdUnitConfig) string {
+	// if service isn't explicitly specified as enabled in the spec,
+	// then we don't need to do anything in the preun script
+	if !cfg.Enable {
+		return ""
+	}
+
+	// should be equivalent to the systemd_preun scriptlet in the rpm spec,
+	// but without the use of a .preset file
+	return fmt.Sprintf(`
+if [ $1 -eq 0 ]; then
+    # complete uninstallation
+    systemctl disable --now %s
+fi
+`, unitName)
+}
+
 func (w *specWrapper) PreUn() fmt.Stringer {
 	b := &strings.Builder{}
 
 	artifacts := w.GetArtifacts(w.Target)
-	if artifacts.Systemd.IsEmpty() {
+	if artifacts.Systemd.IsEmpty() || (len(artifacts.Systemd.EnabledUnits()) == 0) {
 		return b
 	}
 
@@ -447,9 +463,11 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 	keys := dalec.SortMapKeys(artifacts.Systemd.Units)
 	for _, servicePath := range keys {
 		serviceName := filepath.Base(servicePath)
-		fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
+		unitConf := artifacts.Systemd.Units[servicePath]
+		b.WriteString(
+			systemdPreUnScript(serviceName, unitConf),
+		)
 	}
-	b.WriteString("\n")
 	return b
 }
 
@@ -462,12 +480,24 @@ func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
 
 	// should be equivalent to the systemd_post scriptlet in the rpm spec,
 	// but without the use of a .preset file
-	return fmt.Sprintf(`
+	s := `
 if [ $1 -eq 1 ]; then
-    # initial installation
-    systemctl enable %s
+    # initial installation`
+
+	// Enable/start service when package is installed
+	if cfg.Start {
+		s = s + fmt.Sprintf(`
+    systemctl enable --now %s`, unitName)
+	} else {
+		s = s + fmt.Sprintf(`
+    systemctl enable %s`, unitName)
+	}
+
+	s = s + `
 fi
-`, unitName)
+`
+
+	return s
 }
 
 func (w *specWrapper) Post() fmt.Stringer {
@@ -477,8 +507,10 @@ func (w *specWrapper) Post() fmt.Stringer {
 	users := w.postUsers()
 	groups := w.postGroups()
 	symlinkOwnership := w.getSymlinkOwnership()
+	artifactOwnership := w.getArtifactOwnership()
+	directoryOwnership := w.getDirectoryOwnership()
 
-	if systemd == "" && users == "" && groups == "" && symlinkOwnership == "" {
+	if systemd == "" && users == "" && groups == "" && symlinkOwnership == "" && artifactOwnership == "" && directoryOwnership == "" {
 		return b
 	}
 
@@ -494,6 +526,12 @@ func (w *specWrapper) Post() fmt.Stringer {
 	}
 	if symlinkOwnership != "" {
 		b.WriteString(symlinkOwnership)
+	}
+	if artifactOwnership != "" {
+		b.WriteString(artifactOwnership)
+	}
+	if directoryOwnership != "" {
+		b.WriteString(directoryOwnership)
 	}
 
 	b.WriteString("\n")
@@ -523,6 +561,98 @@ func (w *specWrapper) postGroups() string {
 	for _, group := range artifacts.Groups {
 		fmt.Fprintf(b, "getent group %s >/dev/null || groupadd --system %s\n", group.Name, group.Name)
 	}
+	return b.String()
+}
+
+func (w *specWrapper) getDirectoryOwnership() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	if artifacts.Directories == nil {
+		return ""
+	}
+	b := &strings.Builder{}
+	setDirOwnership := func(root, p string, cfg *dalec.ArtifactDirConfig) {
+		if cfg == nil {
+			return
+		}
+		user := cfg.User
+		group := cfg.Group
+		targetDir := filepath.Join(root, p)
+		if user != "" {
+			fmt.Fprintf(b, "chown -R %s %s\n", user, targetDir)
+		}
+		if group != "" {
+			fmt.Fprintf(b, "chgrp -R %s %s\n", group, targetDir)
+		}
+	}
+	configKeys := dalec.SortMapKeys(artifacts.Directories.Config)
+	for _, p := range configKeys {
+		cfg := artifacts.Directories.Config[p]
+		setDirOwnership(`/%{_sysconfdir}`, p, &cfg)
+	}
+	stateKeys := dalec.SortMapKeys(artifacts.Directories.State)
+	for _, p := range stateKeys {
+		cfg := artifacts.Directories.State[p]
+		setDirOwnership(`/%{_sharedstatedir}`, p, &cfg)
+	}
+	return b.String()
+}
+
+func (w *specWrapper) getArtifactOwnership() string {
+	artifacts := w.Spec.GetArtifacts(w.Target)
+	b := &strings.Builder{}
+
+	setArtifactOwnership := func(root, p string, cfg *dalec.ArtifactConfig) {
+		if cfg == nil {
+			return
+		}
+		user := cfg.User
+		group := cfg.Group
+		targetDir := filepath.Join(root, cfg.SubPath)
+		var targetPath string
+		file := cfg.ResolveName(p)
+		if !strings.Contains(file, "*") {
+			targetPath = filepath.Join(targetDir, file)
+		} else {
+			targetPath = targetDir + "/"
+		}
+		if user != "" {
+			fmt.Fprintf(b, "chown -R %s %s\n", user, targetPath)
+		}
+		if group != "" {
+			fmt.Fprintf(b, "chgrp -R %s %s\n", group, targetPath)
+		}
+	}
+
+	if artifacts.ConfigFiles != nil {
+		configKeys := dalec.SortMapKeys(artifacts.ConfigFiles)
+		for _, c := range configKeys {
+			cfg := artifacts.ConfigFiles[c]
+			setArtifactOwnership(`/%{_sysconfdir}`, c, &cfg)
+		}
+	}
+	if artifacts.DataDirs != nil {
+		dataFileKeys := dalec.SortMapKeys(artifacts.DataDirs)
+		for _, k := range dataFileKeys {
+			df := artifacts.DataDirs[k]
+			setArtifactOwnership(`/%{_datadir}`, k, &df)
+		}
+	}
+	// Directory ownership is handled in getDirectoryOwnership; do not duplicate here.
+	if artifacts.Libs != nil {
+		libs := dalec.SortMapKeys(artifacts.Libs)
+		for _, l := range libs {
+			cfg := artifacts.Libs[l]
+			setArtifactOwnership(`/%{_libdir}`, l, &cfg)
+		}
+	}
+	if artifacts.Binaries != nil {
+		binKeys := dalec.SortMapKeys(artifacts.Binaries)
+		for _, p := range binKeys {
+			cfg := artifacts.Binaries[p]
+			setArtifactOwnership(`/%{_bindir}`, p, &cfg)
+		}
+	}
+
 	return b.String()
 }
 

@@ -36,6 +36,9 @@ func TestWindows(t *testing.T) {
 		ListExpectedSignFiles: func(spec *dalec.Spec, platform ocispecs.Platform) []string {
 			return maps.Keys(spec.Artifacts.Binaries)
 		},
+		PackageOverrides: map[string]string{
+			"rust": "rust-all",
+		},
 	})
 
 	tcfg := targetConfig{
@@ -671,6 +674,12 @@ echo "$BAR" > bar.txt
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 		testAutoGobuildCache(ctx, t, tcfg)
+	})
+
+	t.Run("rust cache", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testRustCache(ctx, t, tcfg)
 	})
 }
 

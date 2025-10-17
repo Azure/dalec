@@ -1282,6 +1282,12 @@ build:
 		assert.NilError(t, err)
 		assert.Check(t, cmp.Equal(spec.Build.Env["SOURCE_DATE_EPOCH"], "888888888"))
 	})
+
+	t.Run("null", func(t *testing.T) {
+		dt := []byte(`null`)
+		_, err := LoadSpec(dt)
+		assert.NilError(t, err)
+	})
 }
 
 func Test_validatePatch(t *testing.T) {
@@ -1891,7 +1897,7 @@ func TestArtifactBuildValidation(t *testing.T) {
 				Steps:  []BuildStep{{Command: "echo hello"}},
 				Caches: []CacheConfig{{}},
 			},
-			expectErr: "cache 0: invalid cache config: exactly one of (dir, gobuild, bazel) must be set",
+			expectErr: "cache 0: invalid cache config: exactly one of (dir, gobuild, rustsccache, bazel) must be set",
 		},
 		{
 			name: "empty dest",
@@ -1980,7 +1986,7 @@ func TestArtifactBuildValidation(t *testing.T) {
 					},
 				},
 			},
-			expectErr: "cache 0: invalid cache config: exactly one of (dir, gobuild, bazel) must be set",
+			expectErr: "cache 0: invalid cache config: exactly one of (dir, gobuild, rustsccache, bazel) must be set",
 		},
 		{
 			name: "multiple go build caches",

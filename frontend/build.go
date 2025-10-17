@@ -59,9 +59,10 @@ func LoadSpec(ctx context.Context, client *dockerui.Client, platform *ocispecs.P
 		return nil, fmt.Errorf("could not read spec file: %w", err)
 	}
 
-	spec, err := dalec.LoadSpec(bytes.TrimSpace(src.Data))
+	data := bytes.TrimSpace(src.Data)
+	spec, err := dalec.LoadSpecWithSourceMap(src.Filename, data)
 	if err != nil {
-		return nil, fmt.Errorf("error loading spec: %w", err)
+		return nil, errors.Wrap(err, "error loading spec")
 	}
 
 	args := dalec.DuplicateMap(client.BuildArgs)
@@ -152,6 +153,7 @@ func BuildWithPlatformFromUIClient(ctx context.Context, client gwclient.Client, 
 		if err != nil {
 			return nil, nil, nil, err
 		}
+
 		targetKey := GetTargetKey(dc)
 
 		ref, cfg, err := f(ctx, client, platform, spec, targetKey)

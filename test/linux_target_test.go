@@ -1713,6 +1713,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			if err := validatePathAndPermissions(ctx, ref, "/etc/testWithPerms", 0o700); err != nil {
 				t.Fatal(err)
 			}
+			// validatePathAndPermissions doesn't work for container-only users because it runs on the host
+			// Ownership for /etc/testWithUsers is validated in the PostInstall test above
 			if err := validatePathAndPermissions(ctx, ref, "/var/lib/one/with/slashes", 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -1837,6 +1839,18 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						},
 					},
 				},
+				"another_data_dir2": {
+					Inline: &dalec.SourceInline{
+						Dir: &dalec.SourceInlineDir{
+							Files: map[string]*dalec.SourceInlineFile{
+								"another_nested_data_file2": {
+									Contents:    "lorem ipsum dolor sit amet\n",
+									Permissions: 0o644,
+								},
+							},
+						},
+					},
+				},
 				"data_file": {
 					Inline: &dalec.SourceInline{
 						File: &dalec.SourceInlineFile{
@@ -1856,7 +1870,32 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 					"another_data_dir": {
 						SubPath: "subpath",
 					},
+					"another_data_dir2": {
+						User:        "myuser",
+						Group:       "mygroup",
+						Permissions: 0o777,
+					},
 					"data_file": {},
+				},
+				Users: []dalec.AddUserConfig{
+					{Name: "myuser"},
+				},
+				Groups: []dalec.AddGroupConfig{
+					{Name: "mygroup"},
+				},
+			},
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: map[string]dalec.PackageConstraints{
+					"coreutils": {},
+				},
+			},
+			Tests: []*dalec.TestSpec{
+				{
+					Name: "Check data directory ownership in post-install",
+					Steps: []dalec.TestStep{
+						{Command: "/bin/bash -exc 'ls -ld /usr/share/another_data_dir2 | grep -E \" myuser[[:space:]]+mygroup[[:space:]]\"'"},
+						{Command: "/bin/bash -exc 'ls -l /usr/share/another_data_dir2/another_nested_data_file2 | grep -E \" myuser[[:space:]]+mygroup[[:space:]]\"'"},
+					},
 				},
 			},
 		}
@@ -1879,6 +1918,8 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			if err := validatePathAndPermissions(ctx, ref, "/usr/share/subpath/another_data_dir/another_nested_data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
+			// validatePathAndPermissions doesn't work for container-only users because it runs on the host
+			// Ownership for another_data_dir2 is validated in the PostInstall test above
 			if err := validatePathAndPermissions(ctx, ref, "/usr/share/data_file", 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -2333,6 +2374,12 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
 		testAutoGobuildCache(ctx, t, testConfig.Target)
+	})
+
+	t.Run("rust cache", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testRustCache(ctx, t, testConfig.Target)
 	})
 
 	t.Run("bazel cache", func(t *testing.T) {
@@ -2967,15 +3014,15 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
 			_, err := client.Solve(ctx, sr)
-			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+			assert.ErrorContains(t, err, "expected \"/non-existing-file\" not_exist \"exists=false\"")
 			assert.ErrorContains(t, err, "expected \"/\" permissions \"-rw-r--r--\", got \"-rwxr-xr-x\"")
-			assert.ErrorContains(t, err, "expected \"/\" mode \"ModeFile\", got \"ModeDir\"")
+			assert.ErrorContains(t, err, "expected \"/\" is_dir \"ModeFile\", got \"ModeDir\"")
 
 			sr = newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
 			_, err = client.Solve(ctx, sr)
-			assert.ErrorContains(t, err, "lstat /non-existing-file: no such file or directory")
+			assert.ErrorContains(t, err, "expected \"/non-existing-file\" not_exist \"exists=false\"")
 			assert.ErrorContains(t, err, "expected \"/\" permissions \"-rw-r--r--\", got \"-rwxr-xr-x\"")
-			assert.ErrorContains(t, err, "expected \"/\" mode \"ModeFile\", got \"ModeDir\"")
+			assert.ErrorContains(t, err, "expected \"/\" is_dir \"ModeFile\", got \"ModeDir\"")
 		})
 	})
 
@@ -2999,10 +3046,7 @@ func testLinuxPackageTestsFail(ctx context.Context, t *testing.T, cfg testLinuxC
 				},
 			},
 			Dependencies: &dalec.PackageDependencies{
-				Test: []string{
-					"bash",
-					"grep",
-				},
+				Test: map[string]dalec.PackageConstraints{"bash": {}, "grep": {}},
 			},
 			Artifacts: dalec.Artifacts{
 				DataDirs: map[string]dalec.ArtifactConfig{

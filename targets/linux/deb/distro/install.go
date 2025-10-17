@@ -129,10 +129,10 @@ aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject ${pkg_name}
 	})
 }
 
-func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
+func (d *Config) InstallBuildDeps(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, opts ...llb.ConstraintsOpt) llb.StateOption {
 	return func(in llb.State) llb.State {
-		buildDeps := spec.GetBuildDeps(targetKey)
-		if len(buildDeps) == 0 {
+		deps := spec.GetPackageDeps(targetKey).GetBuild()
+		if len(deps) == 0 {
 			return in
 		}
 
@@ -142,42 +142,39 @@ func (d *Config) InstallBuildDeps(sOpt dalec.SourceOpts, spec *dalec.Spec, targe
 			Version:  spec.Version,
 			Revision: spec.Revision,
 			Dependencies: &dalec.PackageDependencies{
-				Runtime: buildDeps,
+				Runtime: deps,
 			},
 			Description: "Build dependencies for " + spec.Name,
 		}
 
-		return in.Async(func(ctx context.Context, in llb.State, c *llb.Constraints) (llb.State, error) {
-			opts := append(opts, dalec.ProgressGroup("Install build dependencies"))
-			opts = append([]llb.ConstraintsOpt{dalec.WithConstraint(c)}, opts...)
+		opts := append(opts, dalec.ProgressGroup("Install build dependencies"))
+		debRoot, err := deb.Debroot(ctx, sOpt, depsSpec, in, llb.Scratch(), targetKey, "", d.VersionID, deb.SourcePkgConfig{}, opts...)
+		if err != nil {
+			return dalec.ErrorState(in, err)
+		}
 
-			debRoot, err := deb.Debroot(ctx, sOpt, depsSpec, in, llb.Scratch(), targetKey, "", d.VersionID, deb.SourcePkgConfig{}, opts...)
-			if err != nil {
-				return in, err
-			}
+		pkg, err := deb.BuildDebBinaryOnly(in, depsSpec, debRoot, "", opts...)
+		if err != nil {
+			return dalec.ErrorState(in, errors.Wrap(err, "error creating intermediate package for installing build dependencies"))
+		}
 
-			pkg, err := deb.BuildDebBinaryOnly(in, depsSpec, debRoot, "", opts...)
-			if err != nil {
-				return in, errors.Wrap(err, "error creating intermediate package for installing build dependencies")
-			}
+		repos := dalec.GetExtraRepos(d.ExtraRepos, "build")
+		repos = append(repos, spec.GetBuildRepos(targetKey)...)
 
-			repos := dalec.GetExtraRepos(d.ExtraRepos, "build")
-			repos = append(repos, spec.GetBuildRepos(targetKey)...)
+		customRepos := d.RepoMounts(repos, sOpt, opts...)
 
-			customRepos := d.RepoMounts(repos, sOpt, opts...)
-
-			return in.Run(
-				dalec.WithConstraints(opts...),
-				customRepos,
-				InstallLocalPkg(pkg, false, opts...),
-				dalec.WithMountedAptCache(d.AptCachePrefix),
-			).Root(), nil
-		})
+		return in.Run(
+			dalec.WithConstraints(opts...),
+			customRepos,
+			InstallLocalPkg(pkg, false, opts...),
+			dalec.WithMountedAptCache(d.AptCachePrefix),
+			deps.GetSourceLocation(in),
+		).Root()
 	}
 }
 
 func (d *Config) InstallTestDeps(sOpt dalec.SourceOpts, targetKey string, spec *dalec.Spec, opts ...llb.ConstraintsOpt) llb.StateOption {
-	deps := spec.GetTestDeps(targetKey)
+	deps := spec.GetPackageDeps(targetKey).GetTest()
 	if len(deps) == 0 {
 		return func(s llb.State) llb.State { return s }
 	}
@@ -191,14 +188,15 @@ func (d *Config) InstallTestDeps(sOpt dalec.SourceOpts, targetKey string, spec *
 		opts = append(opts, dalec.ProgressGroup("Install test dependencies"))
 		return in.Run(
 			dalec.WithConstraints(opts...),
-			AptInstall(deps, opts...),
+			AptInstall(dalec.SortMapKeys(deps), opts...),
 			withRepos,
 			dalec.WithMountedAptCache(d.AptCachePrefix),
+			deps.GetSourceLocation(in),
 		).Root()
 	}
 }
 
-func (d *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints map[string]dalec.PackageConstraints, opts ...llb.ConstraintsOpt) llb.State {
+func (d *Config) DownloadDeps(worker llb.State, sOpt dalec.SourceOpts, spec *dalec.Spec, targetKey string, constraints dalec.PackageDependencyList, opts ...llb.ConstraintsOpt) llb.State {
 	if constraints == nil {
 		return llb.Scratch()
 	}

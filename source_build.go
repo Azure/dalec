@@ -9,6 +9,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/shell"
 	"github.com/moby/buildkit/frontend/dockerui"
+	"github.com/moby/buildkit/solver/errdefs"
 )
 
 // SourceBuild is used to generate source from a DockerFile build.
@@ -26,12 +27,16 @@ type SourceBuild struct {
 	Target string `yaml:"target,omitempty" json:"target,omitempty"`
 	// Args are the build args to pass to the build.
 	Args map[string]string `yaml:"args,omitempty" json:"args,omitempty"`
+
+	_sourceMap *sourceMap `yaml:"-" json:"-"`
 }
 
 func (s *SourceBuild) validate(fetchOptions) error {
 	var errs []error
 	if s.Source.Build != nil {
-		errs = append(errs, fmt.Errorf("build sources cannot be recursive"))
+		err := fmt.Errorf("build sources cannot be recursive")
+		err = errdefs.WithSource(err, s.Source.Build._sourceMap.GetErrdefsSource())
+		errs = append(errs, err)
 	}
 
 	if err := s.Source.validate(); err != nil {
@@ -60,6 +65,7 @@ func (src *SourceBuild) baseState(opts fetchOptions) llb.State {
 		// prepend the constraints passed into the async call to the ones from the source
 		cOpts := []llb.ConstraintsOpt{WithConstraint(c)}
 		cOpts = append(cOpts, opts.Constraints...)
+		cOpts = append(cOpts, src._sourceMap.GetLocation(st))
 		return opts.SourceOpt.Forward(in, src, cOpts...)
 	})
 }
