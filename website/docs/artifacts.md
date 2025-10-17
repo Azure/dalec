@@ -220,10 +220,12 @@ artifacts:
       src/contrib/init/my_service.service:
         enable: false
         name: ""
+        start: false
     dropins:
       src/contrib/init/customize-a-thing.service:
         enable: false
         name: ""
+        start: false
 ```
 
 ### Libs
