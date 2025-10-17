@@ -18,7 +18,7 @@ SUITE ?=
 
 .PHONY: generate
 generate: ## Generate required source files
-	$(GO) generate ./.../cmd/lin
+	$(GO) generate ./...
 
 .PHONY: lint
 lint: ## Run linters
@@ -46,7 +46,7 @@ examples: ## Build example specs
 
 .PHONY: test
 test: ## Run unit tests
-	$(GO) test --test.short --timeout=$(TIMEOUT) ./...
+	$(GO) test --test.short -race --timeout=$(TIMEOUT) ./...
 
 .PHONY: test-integration
 test-integration: ## Run integration tests. Use SUITE=<name> to run specific test suite (e.g., make test-integration SUITE=Mariner2)
