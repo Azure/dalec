@@ -109,6 +109,13 @@
 		},
 		"ArtifactConfig": {
 			"properties": {
+				"group": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Group is the group name that should own the artifact"
+				},
 				"name": {
 					"type": [
 						"string",
@@ -128,6 +135,13 @@
 						"null"
 					],
 					"description": "Subpath is the subpath to use in the package for the artifact type.\n\nAs an example, binaries are typically placed in /usr/bin when installed.\nIf you want to nest them in a subdirectory, you can specify it here."
+				},
+				"user": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "User is the user name that should own the artifact"
 				}
 			},
 			"additionalProperties": {
@@ -141,11 +155,25 @@
 		},
 		"ArtifactDirConfig": {
 			"properties": {
+				"group": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "Group is the group name that should own the directory"
+				},
 				"mode": {
 					"type": [
 						"integer"
 					],
 					"description": "Mode is used to set the file permission bits of the final created directory to the specified mode.\nMode is the octal permissions to set on the dir."
+				},
+				"user": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "User is the user name that should own the directory"
 				}
 			},
 			"additionalProperties": {

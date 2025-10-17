@@ -108,6 +108,10 @@ type ArtifactDirConfig struct {
 	// Mode is used to set the file permission bits of the final created directory to the specified mode.
 	// Mode is the octal permissions to set on the dir.
 	Mode fs.FileMode `yaml:"mode,omitempty" json:"mode,omitempty"`
+	// User is the user name that should own the directory
+	User string `yaml:"user,omitempty" json:"user,omitempty"`
+	// Group is the group name that should own the directory
+	Group string `yaml:"group,omitempty" json:"group,omitempty"`
 }
 
 // ArtifactConfig is the configuration for a given artifact type.
@@ -124,6 +128,10 @@ type ArtifactConfig struct {
 	// Permissions is the file permissions to set on the artifact.
 	// If not set, the default value will depend on the kind of artifact or the underlying artifact's already set permissions.
 	Permissions fs.FileMode `yaml:"permissions,omitempty" json:"permissions,omitempty"`
+	// User is the user name that should own the artifact
+	User string `yaml:"user,omitempty" json:"user,omitempty"`
+	// Group is the group name that should own the artifact
+	Group string `yaml:"group,omitempty" json:"group,omitempty"`
 }
 
 func (a *ArtifactConfig) ResolveName(path string) string {

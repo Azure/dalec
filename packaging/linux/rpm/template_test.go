@@ -481,6 +481,8 @@ fi
 					"/src/config.env": {
 						Name:    "config",
 						SubPath: "sysconfig",
+						User:    "myuser",
+						Group:   "mygroup",
 					},
 				},
 			},
