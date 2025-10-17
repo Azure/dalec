@@ -480,7 +480,7 @@ func (w *specWrapper) Post() fmt.Stringer {
 	artifactOwnership := w.getArtifactOwnership()
 	directoryOwnership := w.getDirectoryOwnership()
 
-	if systemd == "" && users == "" && groups == "" && symlinkOwnership == "" {
+	if systemd == "" && users == "" && groups == "" && symlinkOwnership == "" && artifactOwnership == "" && directoryOwnership == "" {
 		return b
 	}
 
@@ -608,28 +608,7 @@ func (w *specWrapper) getArtifactOwnership() string {
 			setArtifactOwnership(`/%{_datadir}`, k, &df)
 		}
 	}
-	if artifacts.Directories != nil && artifacts.Directories.Config != nil {
-		configKeys := dalec.SortMapKeys(artifacts.Directories.Config)
-		for _, p := range configKeys {
-			cfg := artifacts.Directories.Config[p]
-			if cfg.User != "" {
-				fmt.Fprintf(b, "chown -R %s %s\n", cfg.User, filepath.Join(`/%{_sysconfdir}`, p))
-			}
-			if cfg.Group != "" {
-				fmt.Fprintf(b, "chgrp -R %s %s\n", cfg.Group, filepath.Join(`/%{_sysconfdir}`, p))
-			}
-		}
-		stateKeys := dalec.SortMapKeys(artifacts.Directories.State)
-		for _, p := range stateKeys {
-			cfg := artifacts.Directories.Config[p]
-			if cfg.User != "" {
-				fmt.Fprintf(b, "chown -R %s %s\n", cfg.User, filepath.Join(`/%{_sysconfdir}`, p))
-			}
-			if cfg.Group != "" {
-				fmt.Fprintf(b, "chgrp -R %s %s\n", cfg.Group, filepath.Join(`/%{_sysconfdir}`, p))
-			}
-		}
-	}
+	// Directory ownership is handled in getDirectoryOwnership; do not duplicate here.
 	if artifacts.Libs != nil {
 		libs := dalec.SortMapKeys(artifacts.Libs)
 		for _, l := range libs {
