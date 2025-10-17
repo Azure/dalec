@@ -11,21 +11,10 @@ Before you start, make sure you have the following installed:
 ### Required Tools
 
 - **Go**: [Download Go](https://go.dev/dl/)
-  - Verify installation: `go version`
-- **Docker with BuildKit support**: [Install Docker](https://docs.docker.com/engine/install/)
-  - Verify installation: `docker version` and `docker buildx version`
+- **Docker**: [Install Docker](https://docs.docker.com/engine/install/)
+  - It is recommended to enable [Containerd Image Store](https://docs.docker.com/engine/storage/containerd/) for local image support. It is enabled by default in new installations.
 - **Git**: For version control
-  - Verify installation: `git --version`
 - **Make**: For running development tasks (usually pre-installed on Linux/macOS)
-  - Verify installation: `make --version`
-
-### Optional Tools
-
-- **Node.js 18+**: For building and running the documentation site locally
-  - Verify installation: `node --version`
-  - [Download Node.js](https://nodejs.org/)
-- **golangci-lint**: For additional linting (the Makefile can run linting in Docker if not installed)
-  - [Install golangci-lint](https://golangci-lint.run/usage/install/)
 
 ## Setting Up Your Development Environment
 
@@ -115,16 +104,22 @@ make test-integration
 
 ### 5. Test Frontend Image
 
-If you need to test the frontend as a Docker image:
+If you want to test the frontend with your spec files:
 
 ```bash
 # Build the frontend image
 make frontend
 
-# Build examples
-make examples
-
 # Build and test with a specific target
+
+# Container example
+docker build -t go-md2man:test \
+  --build-arg BUILDKIT_SYNTAX=local/dalec/frontend \
+  -f docs/examples/go-md2man.yml \
+  --target=azlinux3/container \
+  -t go-md2man:test .
+
+# RPM example
 docker build -t go-md2man:test \
   --build-arg BUILDKIT_SYNTAX=local/dalec/frontend \
   -f docs/examples/go-md2man.yml \
@@ -133,8 +128,6 @@ docker build -t go-md2man:test \
 ```
 
 ## Available Make Targets
-
-The Makefile leverages `docker-bake.hcl` for build orchestration. Run `make help` to see all available targets:
 
 ```bash
 make help
@@ -168,13 +161,6 @@ Key targets include:
   - `make check-generated` - Verify generated files are up to date
 
 ## Testing Your Changes
-
-### Quick Tests (Run Frequently)
-
-```bash
-# Unit tests only
-make test
-```
 
 ### Understanding the Test Structure
 
@@ -226,21 +212,6 @@ The integration tests use a custom framework in `test/testenv/` that:
 - `windows_test.go` - Windows container build tests
 - And more...
 
-### Validation Before Committing
-
-**Always run before creating a pull request:**
-
-```bash
-make verify
-```
-
-This ensures:
-
-- ✅ All unit tests pass
-- ✅ Code passes custom linters
-- ✅ Generated files are up to date
-- ✅ No formatting issues
-
 ### Integration Tests (Run for Significant Changes)
 
 Integration tests are comprehensive and time-consuming. Run them for significant changes or when modifying target-specific code:
@@ -270,23 +241,6 @@ go test -v -run TestSpecLoad ./...
 # Test with race detection
 go test -race ./...
 ```
-
-## Using the Makefile
-
-The Makefile provides convenient shortcuts for common development tasks.
-
-### Essential Commands
-
-| Command         | Description                        |
-| --------------- | ---------------------------------- |
-| `make help`     | Show all available commands        |
-| `make generate` | Generate required source files     |
-| `make lint`     | Run custom linters                 |
-| `make lint-all` | Run golangci-lint + custom linters |
-| `make test`     | Run unit tests                     |
-| `make build`    | Build all binaries                 |
-| `make verify`   | Run all verification steps         |
-| `make clean`    | Clean build artifacts              |
 
 ## Common Development Tasks
 
@@ -318,11 +272,6 @@ The Makefile provides convenient shortcuts for common development tasks.
 ### Working on Documentation
 
 ```bash
-# Install Node.js dependencies (first time only)
-cd website
-npm install
-cd ..
-
 # Start the documentation server
 make docs-serve
 
@@ -332,18 +281,10 @@ make docs-serve
 
 ## Best Practices
 
-### Before Committing
-
-Always run:
-
-```bash
-make verify
-```
-
 ### Code Style
 
 - Follow standard Go conventions
-- Run `gofmt` (included in `make lint-all`)
+- Run `gofmt` (included in `make lint`)
 - Add comments for exported functions and types
 - Write tests for new functionality
 
@@ -371,10 +312,3 @@ make verify
 - **Documentation**: [https://azure.github.io/dalec/](https://azure.github.io/dalec/)
 - **Issues**: [https://github.com/Azure/dalec/issues](https://github.com/Azure/dalec/issues)
 - **Discussions**: [https://github.com/Azure/dalec/discussions](https://github.com/Azure/dalec/discussions)
-
-## Next Steps
-
-- Read the [main CONTRIBUTING.md](https://github.com/Azure/dalec/blob/main/CONTRIBUTING.md) for CLA and contribution guidelines
-- Explore the documentation to understand Dalec's features
-- Look at [example specs](https://github.com/Azure/dalec/tree/main/docs/examples) to understand the declarative format
-- Check out [good first issues](https://github.com/Azure/dalec/labels/good%20first%20issue)

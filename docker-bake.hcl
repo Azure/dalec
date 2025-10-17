@@ -207,8 +207,8 @@ target "build" {
 target "examples" {
     name = "examples-${f}"
     matrix = {
-        distro = ["mariner2"]
-        f = ["go-md2man-2"]
+        distro = ["azlinux3"]
+        f = ["go-md2man"]
     }
     args = {
         "BUILDKIT_SYNTAX" = "dalec_frontend"
