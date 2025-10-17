@@ -2203,8 +2203,7 @@
 		},
 		"SystemdUnitConfig": {
 			"required": [
-				"name",
-				"enable"
+				"name"
 			],
 			"properties": {
 				"enable": {

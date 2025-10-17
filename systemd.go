@@ -21,7 +21,7 @@ type SystemdUnitConfig struct {
 
 	// Enable is used to enable the systemd unit on install
 	// This determines what will be written to a systemd preset file
-	Enable bool `yaml:"enable" json:"enable"`
+	Enable bool `yaml:"enable,omitempty" json:"enable,omitempty"`
 
 	// Start can be optionally used to start the systemd unit on install
 	// This determines what will be written to a systemd preset file
