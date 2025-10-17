@@ -435,11 +435,28 @@ func (w *specWrapper) BuildSteps() fmt.Stringer {
 	return b
 }
 
+func systemdPreUnScript(unitName string, cfg dalec.SystemdUnitConfig) string {
+	// if service isn't explicitly specified as enabled in the spec,
+	// then we don't need to do anything in the preun script
+	if !cfg.Enable {
+		return ""
+	}
+
+	// should be equivalent to the systemd_preun scriptlet in the rpm spec,
+	// but without the use of a .preset file
+	return fmt.Sprintf(`
+if [ $1 -eq 0 ]; then
+    # complete uninstallation
+    systemctl disable --now %s
+fi
+`, unitName)
+}
+
 func (w *specWrapper) PreUn() fmt.Stringer {
 	b := &strings.Builder{}
 
 	artifacts := w.GetArtifacts(w.Target)
-	if artifacts.Systemd.IsEmpty() {
+	if artifacts.Systemd.IsEmpty() || (len(artifacts.Systemd.EnabledUnits()) == 0) {
 		return b
 	}
 
@@ -447,9 +464,11 @@ func (w *specWrapper) PreUn() fmt.Stringer {
 	keys := dalec.SortMapKeys(artifacts.Systemd.Units)
 	for _, servicePath := range keys {
 		serviceName := filepath.Base(servicePath)
-		fmt.Fprintf(b, "%%systemd_preun %s\n", serviceName)
+		unitConf := artifacts.Systemd.Units[servicePath]
+		b.WriteString(
+			systemdPreUnScript(serviceName, unitConf),
+		)
 	}
-	b.WriteString("\n")
 	return b
 }
 
@@ -462,12 +481,24 @@ func systemdPostScript(unitName string, cfg dalec.SystemdUnitConfig) string {
 
 	// should be equivalent to the systemd_post scriptlet in the rpm spec,
 	// but without the use of a .preset file
-	return fmt.Sprintf(`
+	s := `
 if [ $1 -eq 1 ]; then
-    # initial installation
-    systemctl enable %s
+    # initial installation`
+
+	// Enable/start service when package is installed
+	if cfg.Start {
+		s = s + fmt.Sprintf(`
+    systemctl enable --now %s`, unitName)
+	} else {
+		s = s + fmt.Sprintf(`
+    systemctl enable %s`, unitName)
+	}
+
+	s = s + `
 fi
-`, unitName)
+`
+
+	return s
 }
 
 func (w *specWrapper) Post() fmt.Stringer {
