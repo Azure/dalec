@@ -194,8 +194,6 @@ func getBuildOutputStream(ctx context.Context, t *testing.T, done <-chan struct{
 		return tw
 	}
 
-
-
 	dir := t.TempDir()
 	f, err := os.OpenFile(filepath.Join(dir, "build.log"), os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
