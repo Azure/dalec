@@ -21,6 +21,12 @@ Configuration options shared by most artifacts:
                      installed to.
 - *permissions*(octal): file permissions to apply to the artifact.
 
+- *user*(string): user owner to apply to the artifact. This user must exist
+                  on the target system.
+
+- *group*(string): group owner to apply to the artifact. This group must exist
+                   on the target system.
+
 
 ### Binaries
 
