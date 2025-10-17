@@ -147,7 +147,7 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/build.sh"), 0o700, createBuildScript(spec, &cfg)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/patch.sh"), 0o700, createPatchScript(spec, &cfg)), opts...))
 	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_generators.sh"), 0o700, fixupGenerators(spec, &cfg)), opts...))
-	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPermsAndOwnership(spec, target, &cfg)), opts...))
+	states = append(states, dalecDir.File(llb.Mkfile(filepath.Join(dir, "dalec/fix_perms.sh"), 0o700, fixupArtifactPerms(spec, target, &cfg)), opts...))
 
 	customEnable, err := customDHInstallSystemdPostinst(spec, target)
 	if err != nil {
@@ -194,14 +194,14 @@ func Debroot(ctx context.Context, sOpt dalec.SourceOpts, spec *dalec.Spec, worke
 	return dalec.MergeAtPath(in, states, "/"), nil
 }
 
-func fixupArtifactPermsAndOwnership(spec *dalec.Spec, target string, cfg *SourcePkgConfig) []byte {
+func fixupArtifactPerms(spec *dalec.Spec, target string, cfg *SourcePkgConfig) []byte {
 	buf := bytes.NewBuffer(nil)
 	writeScriptHeader(buf, cfg)
 
 	basePath := filepath.Join("debian", spec.Name)
 	artifacts := spec.GetArtifacts(target)
 
-	checkAndWritePermsAndOwnership := func(artifacts map[string]dalec.ArtifactConfig, dir string) {
+	checkAndWritePerms := func(artifacts map[string]dalec.ArtifactConfig, dir string) {
 		if artifacts == nil {
 			return
 		}
@@ -210,11 +210,11 @@ func fixupArtifactPermsAndOwnership(spec *dalec.Spec, target string, cfg *Source
 			cfg := artifacts[key]
 			resolvedName := cfg.ResolveName(key)
 			p := filepath.Join(basePath, dir, resolvedName)
+			// TODO: do i need this?
 			if cfg.SubPath != "" {
 				p = filepath.Join(basePath, dir, cfg.SubPath, resolvedName)
 			}
 
-			// Ownership applied in postinst after users/groups created
 			if cfg.Permissions.Perm() != 0 {
 				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Permissions.Perm(), p)
 				continue
@@ -248,15 +248,15 @@ func fixupArtifactPermsAndOwnership(spec *dalec.Spec, target string, cfg *Source
 		}
 	}
 
-	checkAndWritePermsAndOwnership(artifacts.Binaries, BinariesPath)
-	checkAndWritePermsAndOwnership(artifacts.ConfigFiles, ConfigFilesPath)
-	checkAndWritePermsAndOwnership(artifacts.Manpages, filepath.Join(ManpagesPath, spec.Name))
-	checkAndWritePermsAndOwnership(artifacts.Headers, HeadersPath)
-	checkAndWritePermsAndOwnership(artifacts.Licenses, filepath.Join(LicensesPath, spec.Name))
-	checkAndWritePermsAndOwnership(artifacts.Docs, filepath.Join(DocsPath, spec.Name))
-	checkAndWritePermsAndOwnership(artifacts.Libs, filepath.Join(LibsPath))
-	checkAndWritePermsAndOwnership(artifacts.Libexec, LibexecPath)
-	checkAndWritePermsAndOwnership(artifacts.DataDirs, DataDirsPath)
+	checkAndWritePerms(artifacts.Binaries, BinariesPath)
+	checkAndWritePerms(artifacts.ConfigFiles, ConfigFilesPath)
+	checkAndWritePerms(artifacts.Manpages, filepath.Join(ManpagesPath, spec.Name))
+	checkAndWritePerms(artifacts.Headers, HeadersPath)
+	checkAndWritePerms(artifacts.Licenses, filepath.Join(LicensesPath, spec.Name))
+	checkAndWritePerms(artifacts.Docs, filepath.Join(DocsPath, spec.Name))
+	checkAndWritePerms(artifacts.Libs, LibsPath)
+	checkAndWritePerms(artifacts.Libexec, LibexecPath)
+	checkAndWritePerms(artifacts.DataDirs, DataDirsPath)
 
 	if artifacts.Directories != nil {
 		sorted := dalec.SortMapKeys(artifacts.Directories.GetConfig())
@@ -697,6 +697,24 @@ func setArtifactOwnershipPostInst(w *bytes.Buffer, spec *dalec.Spec, target stri
 	apply(artifacts.Libs, LibsPath)
 	apply(artifacts.Libexec, LibexecPath)
 	apply(artifacts.DataDirs, DataDirsPath)
+
+	applyDir := func(dirs map[string]dalec.ArtifactDirConfig, root string) {
+		sorted := dalec.SortMapKeys(dirs)
+		for _, key := range sorted {
+			cfg := dirs[key]
+			p := filepath.Join(root, key)
+			if cfg.User != "" {
+				fmt.Fprintf(w, "chown -R %s \"$DESTDIR%s\"\n", cfg.User, p)
+			}
+			if cfg.Group != "" {
+				fmt.Fprintf(w, "chgrp -R %s \"$DESTDIR%s\"\n", cfg.Group, p)
+			}
+		}
+	}
+	if artifacts.Directories != nil {
+		applyDir(artifacts.Directories.Config, ConfigFilesPath)
+		applyDir(artifacts.Directories.State, "/var/lib")
+	}
 
 	if len(artifacts.Links) > 0 {
 		fmt.Fprintf(w, "# Set ownership for artifact symlinks\n")

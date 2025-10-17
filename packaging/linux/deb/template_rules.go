@@ -94,8 +94,8 @@ func (w *rulesWrapper) OverridePerms() fmt.Stringer {
 		}
 		return false
 	}
-	fixPerms = checkPerms(artifacts.Binaries) ||
 
+	fixPerms = checkPerms(artifacts.Binaries) ||
 		checkPerms(artifacts.ConfigFiles) ||
 		checkPerms(artifacts.Manpages) ||
 		checkPerms(artifacts.Headers) ||

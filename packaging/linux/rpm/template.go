@@ -485,7 +485,6 @@ func (w *specWrapper) Post() fmt.Stringer {
 	}
 
 	b.WriteString("%post\n")
-
 	if systemd != "" {
 		b.WriteString(systemd)
 	}

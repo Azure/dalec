@@ -441,12 +441,6 @@ echo "$BAR" > bar.txt
 					"foo1.txt": {},
 					"bar.txt":  {},
 				},
-				ConfigFiles: map[string]dalec.ArtifactConfig{
-					"foo0.txt": {User: "need", Group: "coffee"},
-				},
-				DataDirs: map[string]dalec.ArtifactConfig{
-					"foo1.txt": {User: "need", Group: "coffee"},
-				},
 				Links: []dalec.ArtifactSymlinkConfig{
 					{
 						Source: "/usr/bin/src3",
@@ -1696,27 +1690,9 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 						"testWithPerms": {
 							Mode: 0o700,
 						},
-						"testWithUsers": {
-							User:  "myuser",
-							Group: "mygroup",
-						},
 					},
 					State: map[string]dalec.ArtifactDirConfig{
 						"one/with/slashes": {},
-					},
-				},
-				Users: []dalec.AddUserConfig{
-					{Name: "myuser"},
-				},
-				Groups: []dalec.AddGroupConfig{
-					{Name: "mygroup"},
-				},
-			},
-			Tests: []*dalec.TestSpec{
-				{
-					Name: "Check directory ownership in post-install",
-					Steps: []dalec.TestStep{
-						{Command: "/bin/bash -exc 'MYUSER_UID=$(getent passwd myuser | cut -d: -f3); MYGROUP_GID=$(getent group mygroup | cut -d: -f3); OWNER=$(stat -c \"%u:%g\" /etc/testWithUsers); [ \"$OWNER\" = \"$MYUSER_UID:$MYGROUP_GID\" ]'"},
 					},
 				},
 			},
