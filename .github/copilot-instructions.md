@@ -56,7 +56,7 @@ Always reference these instructions first and fallback to search or bash command
 .
 ├── cmd/                    # CLI tools and binaries
 │   ├── frontend/          # Main BuildKit frontend
-│   ├── gen-jsonschema/    # JSON schema generator  
+│   ├── gen-jsonschema/    # JSON schema generator
 │   ├── lint/              # Custom linters
 │   └── ...                # Other tools
 ├── docs/examples/         # Example Dalec specs
@@ -84,7 +84,7 @@ Always reference these instructions first and fallback to search or bash command
 ## Development Environment Requirements
 
 ### Required Tools
-- Go 1.23+ (check with `go version`)
+- Go (check with `go version`)
 - Docker with BuildKit support (check with `docker buildx version`)
 - Standard Unix tools (git, make, etc.)
 
@@ -99,7 +99,7 @@ Always reference these instructions first and fallback to search or bash command
 
 ### Time Expectations
 - Unit tests: ~1 minute
-- Custom linting: ~3 seconds  
+- Custom linting: ~3 seconds
 - Code generation: ~1 second
 - Frontend binary build: ~1 second
 - Docker frontend build: 2-5 minutes (when working)

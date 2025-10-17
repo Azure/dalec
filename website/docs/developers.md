@@ -10,7 +10,7 @@ Before you start, make sure you have the following installed:
 
 ### Required Tools
 
-- **Go 1.23 or later**: [Download Go](https://go.dev/dl/)
+- **Go**: [Download Go](https://go.dev/dl/)
   - Verify installation: `go version`
 - **Docker with BuildKit support**: [Install Docker](https://docs.docker.com/engine/install/)
   - Verify installation: `docker version` and `docker buildx version`
@@ -106,14 +106,11 @@ make verify
 After you're satisfied with your changes, run more comprehensive tests:
 
 ```bash
-# Run all unit tests with verbose output
-make test-verbose
-
 # Run integration tests for a specific distribution
 make test-integration SUITE=Mariner2
 
-# Run all integration tests
-make test-integration-all
+# Run all integration tests (takes 30-60+ minutes)
+make test-integration
 ```
 
 ### 5. Build Docker Images (Optional)
@@ -121,8 +118,11 @@ make test-integration-all
 If you need to test the frontend as a Docker image:
 
 ```bash
-# Build the frontend Docker image
-make docker-frontend
+# Build the frontend Docker image (uses docker buildx bake)
+make frontend
+
+# Build examples
+make examples
 
 # Build and test with a specific target
 docker build -t go-md2man:test \
@@ -131,7 +131,42 @@ docker build -t go-md2man:test \
   --output=_output .
 ```
 
-**Note**: Docker builds may fail in some environments due to TLS certificate issues with proxy.golang.org. This is an environmental limitation. For development, host-compiled binaries (via `make build`) are usually sufficient.
+**Note**: Docker builds may fail in some environments due to TLS certificate issues with proxy.golang.org. This is an environmental limitation. For development, host-compiled binaries are usually sufficient.
+
+## Available Make Targets
+
+The Makefile leverages `docker-bake.hcl` for build orchestration. Run `make help` to see all available targets:
+
+```bash
+make help
+```
+
+Key targets include:
+
+- **Development:**
+  - `make generate` - Generate required source files
+  - `make lint` - Run linters via docker buildx bake
+  - `make lint-local` - Run custom linters locally without Docker
+  - `make fmt` - Format Go code
+
+- **Building:**
+  - `make build` - Build frontend image
+  - `make frontend` - Build frontend Docker image using docker buildx bake
+  - `make examples` - Build example specs
+
+- **Testing:**
+  - `make test` - Run unit tests
+  - `make test-integration` - Run integration tests (use `SUITE=name` for specific test)
+  - `make test-bake` - Run tests via docker buildx bake
+
+- **Documentation:**
+  - `make docs-serve` - Run documentation server (requires Node.js)
+  - `make docs-build` - Build documentation static site
+  - `make schema` - Generate JSON schema
+
+- **Validation:**
+  - `make verify` - Run all verification steps (generate, lint, test, check-generated)
+  - `make check-generated` - Verify generated files are up to date
 
 ## Testing Your Changes
 
@@ -140,10 +175,57 @@ docker build -t go-md2man:test \
 ```bash
 # Unit tests only
 make test
-
-# With verbose output
-make test-verbose
 ```
+
+### Understanding the Test Structure
+
+Dalec has two types of tests:
+
+#### Unit Tests (`--test.short`)
+
+Located throughout the codebase alongside source files (e.g., `spec_test.go`, `source_test.go`). These tests:
+
+- Run quickly (< 1 minute total)
+- Don't require Docker or network access
+- Test individual functions and components in isolation
+- Are marked with the `-test.short` flag
+- Should always pass before committing
+
+```bash
+# Run all unit tests
+go test --test.short ./...
+
+# Or use the Makefile
+make test
+```
+
+#### Integration Tests
+
+Located in the `test/` directory. These tests:
+
+- Require Docker with BuildKit support
+- Test full end-to-end build scenarios
+- Take 30-60+ minutes to complete
+- Test multiple Linux distributions and Windows
+- Build actual packages and containers
+
+**Integration Test Framework:**
+
+The integration tests use a custom framework in `test/testenv/` that:
+
+- Manages temporary Docker build contexts
+- Provides helpers for building specs and inspecting results
+- Runs tests in parallel where possible
+- Supports testing against different target distributions
+
+**Test files in `test/`:**
+
+- `linux_target_test.go` - Tests for Linux package builds
+- `target_*_test.go` - Distribution-specific tests (Debian, RPM, etc.)
+- `source_test.go` - Tests for source fetching and generation
+- `gomod_git_auth_test.go` - Tests for Go module authentication
+- `windows_test.go` - Windows container build tests
+- And more...
 
 ### Validation Before Committing
 
@@ -165,14 +247,14 @@ This ensures:
 Integration tests are comprehensive and time-consuming. Run them for significant changes or when modifying target-specific code:
 
 ```bash
-# Test a specific distribution
+# Run all integration tests (45+ minutes)
+make test-integration
+
+# Or test a specific distribution
 make test-integration SUITE=Mariner2
 make test-integration SUITE=Azlinux3
 make test-integration SUITE=Jammy
 make test-integration SUITE=Bookworm
-
-# Run all integration tests
-make test-integration-all
 ```
 
 **Available test suites**: Mariner2, Azlinux3, Bookworm, Bullseye, Bionic, Focal, Jammy, Noble, Windows, Almalinux8, Almalinux9, Rockylinux8, Rockylinux9
@@ -207,40 +289,6 @@ The Makefile provides convenient shortcuts for common development tasks.
 | `make verify`   | Run all verification steps         |
 | `make clean`    | Clean build artifacts              |
 
-### Build Commands
-
-| Command                 | Description                                   |
-| ----------------------- | --------------------------------------------- |
-| `make build`            | Build all binaries                            |
-| `make build-frontend`   | Build frontend binary only                    |
-| `make build-redirectio` | Build dalec-redirectio only                   |
-| `make install`          | Install binaries to `$GOBIN` or `$GOPATH/bin` |
-
-### Docker Commands
-
-| Command                | Description                 |
-| ---------------------- | --------------------------- |
-| `make docker-frontend` | Build frontend Docker image |
-| `make docker-lint`     | Run linting in Docker       |
-
-### Test Commands
-
-| Command                              | Description                              |
-| ------------------------------------ | ---------------------------------------- |
-| `make test`                          | Run unit tests                           |
-| `make test-verbose`                  | Run unit tests with verbose output       |
-| `make test-short`                    | Run short unit tests only                |
-| `make test-integration SUITE=<name>` | Run integration tests for specific suite |
-| `make test-integration-all`          | Run all integration tests                |
-
-### Documentation Commands
-
-| Command           | Description                                          |
-| ----------------- | ---------------------------------------------------- |
-| `make docs-serve` | Serve documentation locally at http://localhost:3000 |
-| `make docs-build` | Build documentation for production                   |
-| `make schema`     | Generate JSON schema                                 |
-
 ## Common Development Tasks
 
 ### Adding a New Source Type
@@ -263,9 +311,9 @@ The Makefile provides convenient shortcuts for common development tasks.
 ### Modifying the Frontend
 
 1. Make changes in `cmd/frontend/` or `frontend/`
-2. Run `make build-frontend` to compile
+2. Run `make build` to compile the frontend image
 3. Test with `make test`
-4. For Docker testing: `make docker-frontend`
+4. For Docker testing: `make frontend`
 5. Run integration tests if modifying core logic
 
 ### Working on Documentation
