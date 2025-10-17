@@ -11,7 +11,7 @@ TIMEOUT ?= 10m
 INTEGRATION_TIMEOUT ?= 59m
 GO ?= go
 
-# Integration test suite (can be overridden: make test-integration SUITE=Mariner2)
+# Integration test suite (can be overridden: make test-integration SUITE=Azlinux3)
 SUITE ?=
 
 ##@ Development

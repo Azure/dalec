@@ -107,18 +107,18 @@ After you're satisfied with your changes, run more comprehensive tests:
 
 ```bash
 # Run integration tests for a specific distribution
-make test-integration SUITE=Mariner2
+make test-integration SUITE=Azlinux3
 
 # Run all integration tests (takes 30-60+ minutes)
 make test-integration
 ```
 
-### 5. Build Docker Images (Optional)
+### 5. Test Frontend Image
 
 If you need to test the frontend as a Docker image:
 
 ```bash
-# Build the frontend Docker image (uses docker buildx bake)
+# Build the frontend image
 make frontend
 
 # Build examples
@@ -126,12 +126,11 @@ make examples
 
 # Build and test with a specific target
 docker build -t go-md2man:test \
+  --build-arg BUILDKIT_SYNTAX=local/dalec/frontend \
   -f docs/examples/go-md2man.yml \
   --target=azlinux3/rpm \
   --output=_output .
 ```
-
-**Note**: Docker builds may fail in some environments due to TLS certificate issues with proxy.golang.org. This is an environmental limitation. For development, host-compiled binaries are usually sufficient.
 
 ## Available Make Targets
 
