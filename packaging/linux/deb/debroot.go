@@ -210,13 +210,11 @@ func fixupArtifactPermsAndOwnership(spec *dalec.Spec, target string, cfg *Source
 			cfg := artifacts[key]
 			resolvedName := cfg.ResolveName(key)
 			p := filepath.Join(basePath, dir, resolvedName)
+			if cfg.SubPath != "" {
+				p = filepath.Join(basePath, dir, cfg.SubPath, resolvedName)
+			}
 
-			if cfg.User != "" {
-				fmt.Fprintf(buf, "chown -R %s %q\n", cfg.User, p)
-			}
-			if cfg.Group != "" {
-				fmt.Fprintf(buf, "chgrp -R %s %q\n", cfg.Group, p)
-			}
+			// Ownership applied in postinst after users/groups created
 			if cfg.Permissions.Perm() != 0 {
 				fmt.Fprintf(buf, "chmod %o %q\n", cfg.Permissions.Perm(), p)
 				continue
@@ -671,6 +669,34 @@ func writeGroupsPostInst(w *bytes.Buffer, groups []dalec.AddGroupConfig) {
 
 func setArtifactOwnershipPostInst(w *bytes.Buffer, spec *dalec.Spec, target string) {
 	artifacts := spec.GetArtifacts(target)
+
+	apply := func(artifacts map[string]dalec.ArtifactConfig, root string) {
+		if artifacts == nil {
+			return
+		}
+		sorted := dalec.SortMapKeys(artifacts)
+		for _, key := range sorted {
+			cfg := artifacts[key]
+			resolved := cfg.ResolveName(key)
+			p := filepath.Join(root, cfg.SubPath, resolved)
+			if cfg.User != "" {
+				fmt.Fprintf(w, "chown -R %s \"$DESTDIR%s\"\n", cfg.User, p)
+			}
+			if cfg.Group != "" {
+				fmt.Fprintf(w, "chgrp -R %s \"$DESTDIR%s\"\n", cfg.Group, p)
+			}
+		}
+	}
+
+	apply(artifacts.Binaries, BinariesPath)
+	apply(artifacts.ConfigFiles, ConfigFilesPath)
+	apply(artifacts.Manpages, filepath.Join(ManpagesPath, spec.Name))
+	apply(artifacts.Headers, HeadersPath)
+	apply(artifacts.Licenses, filepath.Join(LicensesPath, spec.Name))
+	apply(artifacts.Docs, filepath.Join(DocsPath, spec.Name))
+	apply(artifacts.Libs, LibsPath)
+	apply(artifacts.Libexec, LibexecPath)
+	apply(artifacts.DataDirs, DataDirsPath)
 
 	if len(artifacts.Links) > 0 {
 		fmt.Fprintf(w, "# Set ownership for artifact symlinks\n")
