@@ -263,3 +263,39 @@ build:
     - command: |
         GOOS=linux go build -o _output/bin/dalec_example
 ```
+
+## Tips
+
+### Overriding default debian rules
+Debian-based distros currently use dpkg-buildpackage to produce the deb package.
+This brings a lot of functionality with it, sometimes perhaps too much.
+dpkg-buildpackage, under the covers, is driven by a `rules` at `debian/rules`.
+Dalec generates this file for the rules it needs to inject to make the build behave per the dalec spec.
+
+Some of the rules followed by dpkg-buildpackage, most in fact, are implicit and not actually in `debian/rules`
+explicitly.
+You can override some of these rules from within the build, though not all.
+See the [debian rules file docs](https://www.debian.org/doc/manuals/maint-guide/dreq.en.html#rules)
+for details on these rules and how to override them.
+
+Example override from a dalec spec:
+
+```yaml
+build:
+  steps:
+    - command: |
+        # If the debian directory doesn't exist, then there is nothing to do
+        [ -d debian ] || exit 0
+
+        # Add a makefile rule to override how dpkg-shlibdeps is executed
+        echo "override_dh_shlibdeps:" >> debian/rules
+        # Ignore errors from dh_shlibdeps
+        echo "	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info" >> debian/rules
+```
+
+Note that at the point your build steps are run some of the rules have already been applied.
+This is considered a "break glass" way to work around issues when building on Debian-based distributions.
+Overriding some rules, such as `dh_install`, will also interfere with dalec functionality.
+
+In the future dalec may stop using dpkg-buildpackage and these rules would not be applicable anymore.
+
