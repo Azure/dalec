@@ -7,7 +7,6 @@ There are different types of artifacts which are installed to different location
 on the target system.
 What location this is depends on the target OS/distro and the kind of artifact.
 
-
 ## Artifact Configuration
 
 Most artifact types share a common data type so can be configured similarly.
@@ -26,6 +25,17 @@ Configuration options shared by most artifacts:
 
 - *group*(string): group owner to apply to the artifact. This group must exist
                    on the target system.
+
+Artifacts are gathered after the [build](spec.md#build-section) phase.
+The paths provided to artifacts must be relative to the base directory used
+during the build.
+
+:::note
+Builds are not required to define a [build section](spec.md#build-section).
+In this case the build phase output is the same as the build phase input, where
+the build phase input is a directory with the [sources](spec.md#sources-section)
+added based on their source name.
+:::
 
 
 ### Binaries
