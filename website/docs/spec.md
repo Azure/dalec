@@ -285,6 +285,11 @@ TARGETOS is a built-in argument that Dalec will substitute with the target OS va
 Set `network_mode` to `sandbox` to allow internet access during build
 :::
 
+The input of a build is a directory with all [sources](#sources-section) laid out based on their source name.
+The output of a build is the content of the input with all the provided steps executed against it.
+A spec is not required to define a build section, in which case the output is the same as the input.
+This feeds directly into the [artifacts section](#artifacts-section).
+
 ## Artifacts section
 
 Artifacts section is used to define the artifacts for the spec. These artifacts can be used to define the output of the build, such as the package or container image.
