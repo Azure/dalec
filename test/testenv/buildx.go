@@ -16,15 +16,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/project-dalec/dalec/sessionutil/socketprovider"
+	"github.com/docker/cli/cli/config"
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/solver/pb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/opencontainers/go-digest"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/project-dalec/dalec/sessionutil/socketprovider"
 	"google.golang.org/protobuf/proto"
 	"gotest.tools/v3/assert"
 )
@@ -370,6 +373,7 @@ func (b *BuildxEnv) RunTest(ctx context.Context, t *testing.T, f TestFunc, opts 
 	withProjectRoot(t, &so)
 	withResolveLocal(&so)
 	withSocketProxies(t, cfg.SocketProxies)(&so)
+	withDockerAuth(t, &so)
 
 	err = withSourcePolicy(&so)
 	assert.NilError(t, err)
@@ -520,4 +524,33 @@ func withSocketProxies(t *testing.T, proxies []socketprovider.ProxyConfig) func(
 		assert.NilError(t, err)
 		so.Session = append(so.Session, handler)
 	}
+}
+
+type bufErr struct {
+	fmt.Stringer
+}
+
+func (b *bufErr) Error() string {
+	return b.String()
+}
+
+func getRegistryAuth() (session.Attachable, error) {
+	errBuf := bytes.NewBuffer(nil)
+	cfg := authprovider.DockerAuthProviderConfig{
+		ConfigFile: config.LoadDefaultConfigFile(errBuf),
+	}
+
+	auth := authprovider.NewDockerAuthProvider(cfg)
+	if errBuf.Len() > 0 {
+		return nil, &bufErr{errBuf}
+	}
+	return auth, nil
+}
+
+var registryAuthOnce = sync.OnceValues(getRegistryAuth)
+
+func withDockerAuth(t *testing.T, so *client.SolveOpt) {
+	auth, err := registryAuthOnce()
+	assert.NilError(t, err)
+	so.Session = append(so.Session, auth)
 }
