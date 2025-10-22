@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/opencontainers/go-digest"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/frontend/pkg/bkfs"
 	"gotest.tools/v3/assert"
 )
 
@@ -418,7 +418,7 @@ EOF
 func TestSourceHTTP(t *testing.T) {
 	t.Parallel()
 
-	url := "https://raw.githubusercontent.com/Azure/dalec/0ae22acf69ab6ef0a0503affed1a8952c9dd1384/README.md"
+	url := "https://raw.githubusercontent.com/project-dalec/dalec/0ae22acf69ab6ef0a0503affed1a8952c9dd1384/README.md"
 	const badDigest = digest.Digest("sha256:000084c7170b4cfbad0690412259b5e252f84c0ccff79aaca023beb3f3ed0000")
 	const goodDigest = digest.Digest("sha256:b0fa84c7170b4cfbad0690412259b5e252f84c0ccff79aaca023beb3f3ed6380")
 

@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
 	"github.com/cavaliergopher/rpm"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
@@ -27,6 +25,8 @@ import (
 	"github.com/moby/go-archive/compression"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	pkgerrors "github.com/pkg/errors"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/frontend/pkg/bkfs"
 	"golang.org/x/exp/maps"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
@@ -147,7 +147,7 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing builds commands that fail cause the whole build to fail",
@@ -251,7 +251,7 @@ index 0000000..5260cb1
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing container target",
@@ -729,7 +729,7 @@ index 0000000..5260cb1
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing sysext target",
@@ -1193,7 +1193,7 @@ echo "$BAR" > bar.txt
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
 			Description: "Test systemd unit",
-			Website:     "https://www.github.com/Azure/dalec",
+			Website:     "https://www.github.com/project-dalec/dalec",
 			Version:     "0.0.1",
 			Revision:    "1",
 			Vendor:      "Microsoft",
@@ -1318,7 +1318,7 @@ WantedBy=multi-user.target
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
 			Description: "Test systemd unit",
-			Website:     "https://www.github.com/Azure/dalec",
+			Website:     "https://www.github.com/project-dalec/dalec",
 			Version:     "0.0.1",
 			Revision:    "1",
 			Vendor:      "Microsoft",
@@ -1434,7 +1434,7 @@ Environment="FOO_ARGS=--some-foo-args"
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
 			Description: "Test systemd unit",
-			Website:     "https://www.github.com/Azure/dalec",
+			Website:     "https://www.github.com/project-dalec/dalec",
 			Version:     "0.0.1",
 			Revision:    "1",
 			Vendor:      "Microsoft",
@@ -1493,7 +1493,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing container target",
@@ -1547,7 +1547,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing container target with Cargo",
@@ -1601,7 +1601,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing container target with pip",
@@ -1660,7 +1660,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Should Create Specified Directories",
@@ -1729,7 +1729,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Should Create Specified Directories",
@@ -1802,7 +1802,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Should install specified data files",
@@ -1935,7 +1935,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Should install specified data files",
@@ -2041,7 +2041,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Should Create Specified Directories",
@@ -2134,7 +2134,7 @@ Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/boot
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Docs should be placed",
@@ -2401,7 +2401,7 @@ func testNodeNpmGenerator(ctx context.Context, t *testing.T, targetCfg targetCon
 		Version:     "0.0.1",
 		Revision:    "1",
 		License:     "MIT",
-		Website:     "https://github.com/azure/dalec",
+		Website:     "https://github.com/project-dalec/dalec",
 		Vendor:      "Dalec",
 		Packager:    "Dalec",
 		Description: "Testing container target with node npm generator",
@@ -3797,7 +3797,7 @@ func testPrebuiltPackages(ctx context.Context, t *testing.T, testConfig testLinu
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Test using pre-built packages",

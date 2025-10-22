@@ -15,7 +15,7 @@ The result is a single [EROFS](https://erofs.docs.kernel.org) image file. This c
 ## Example: System extension with jq and zsh
 
 ```yaml
-# syntax=ghcr.io/azure/dalec/frontend:latest
+# syntax=ghcr.io/project-dalec/dalec/frontend:latest
 name: my-sysext
 version: 0.1.0
 revision: 1

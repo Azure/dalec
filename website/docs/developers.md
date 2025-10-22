@@ -26,7 +26,7 @@ git clone https://github.com/<your-username>/dalec.git
 cd dalec
 
 # Add the upstream repository
-git remote add upstream https://github.com/Azure/dalec.git
+git remote add upstream https://github.com/project-dalec/dalec.git
 ```
 
 ### Verify Your Setup
@@ -309,6 +309,6 @@ make docs-serve
 
 ## Getting Help
 
-- **Documentation**: [https://azure.github.io/dalec/](https://azure.github.io/dalec/)
-- **Issues**: [https://github.com/Azure/dalec/issues](https://github.com/Azure/dalec/issues)
-- **Discussions**: [https://github.com/Azure/dalec/discussions](https://github.com/Azure/dalec/discussions)
+- **Documentation**: [https://project-dalec.github.io/dalec/](https://project-dalec.github.io/dalec/)
+- **Issues**: [https://github.com/project-dalec/dalec/issues](https://github.com/project-dalec/dalec/issues)
+- **Discussions**: [https://github.com/project-dalec/dalec/discussions](https://github.com/project-dalec/dalec/discussions)

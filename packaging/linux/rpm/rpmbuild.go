@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	"github.com/moby/buildkit/client/llb"
 )
 

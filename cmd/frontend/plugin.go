@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 
-	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/internal/plugins"
+	"github.com/project-dalec/dalec/frontend"
+	"github.com/project-dalec/dalec/internal/plugins"
 	"github.com/containerd/plugin"
 
-	_ "github.com/Azure/dalec/targets/plugin"
+	_ "github.com/project-dalec/dalec/targets/plugin"
 )
 
 func loadPlugins(ctx context.Context, mux *frontend.BuildMux) error {

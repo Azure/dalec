@@ -2,7 +2,7 @@
 title: Editor Support
 ---
 
-We provide a [JSON schema file](https://github.com/Azure/dalec/blob/main/docs/spec.schema.json) to integrate with your editor.
+We provide a [JSON schema file](https://github.com/project-dalec/dalec/blob/main/docs/spec.schema.json) to integrate with your editor.
 This will help validate your yaml files and provide intellisense for the spec.
 
 ## VSCode
@@ -39,7 +39,7 @@ Here are some examples of vscode workspace configs `settings.json` enabling the 
 ```json
 {
     "yaml.schemas": {
-        "https://raw.githubusercontent.com/Azure/dalec/<version>/docs/spec.schema.json" : "test/fixtures/*.yml"
+        "https://raw.githubusercontent.com/project-dalec/dalec/<version>/docs/spec.schema.json" : "test/fixtures/*.yml"
     }
 }
 ```
@@ -95,7 +95,7 @@ similar to the vscode example above:
 		"schemas": [
 			{
 				"fileMatch": ["test/fixtures/*.yml"],
-				"url": "https://raw.githubusercontent.com/Azure/dalec/<version>/docs/spec.schema.json"
+				"url": "https://raw.githubusercontent.com/project-dalec/dalec/<version>/docs/spec.schema.json"
 			}
 		],
 		"completion": true,

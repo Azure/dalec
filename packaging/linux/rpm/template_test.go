@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 )
@@ -627,7 +627,7 @@ fi
 		spec := &dalec.Spec{
 			Name:        "test-systemd-unit",
 			Description: "Test systemd unit",
-			Website:     "https://www.github.com/Azure/dalec",
+			Website:     "https://www.github.com/project-dalec/dalec",
 			Version:     "0.0.1",
 			Revision:    "1",
 			Vendor:      "Microsoft",

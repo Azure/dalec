@@ -91,7 +91,7 @@ jobs:
 
           echo "EXTRA_FLAGS=${EXTRA_FLAGS}" >> $GITHUB_ENV
 
-          docker run -d --net=host ghcr.io/${{ steps.source-policy.outputs.formatted-repo }}/dockerhub/mirror/library/registry:latest
+          docker run -d --net=host ghcr.io/${{ steps.source-policy.outputs.formatted-repo }}/mirror/dockerhub/library/registry:latest
       - if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event_name == 'workflow_dispatch' }}
         name: Setup (tagged)
         env:

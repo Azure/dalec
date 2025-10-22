@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/client/llb"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"

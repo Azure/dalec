@@ -9,14 +9,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	"github.com/atombender/go-jsonschema/pkg/schemas"
 	"github.com/invopop/jsonschema"
 )
 
 func main() {
 	var r jsonschema.Reflector
-	if err := r.AddGoComments("github.com/Azure/dalec", "./"); err != nil {
+	if err := r.AddGoComments("github.com/project-dalec/dalec", "./"); err != nil {
 		panic(err)
 	}
 

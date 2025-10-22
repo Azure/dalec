@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/targets/linux/deb/debian"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/targets/linux/deb/debian"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 

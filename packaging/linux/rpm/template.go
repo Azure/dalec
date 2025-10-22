@@ -10,7 +10,7 @@ import (
 	"sync"
 	"text/template"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 )
 
 const (

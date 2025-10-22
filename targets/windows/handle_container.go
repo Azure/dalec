@@ -9,8 +9,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/frontend"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"

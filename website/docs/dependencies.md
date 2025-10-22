@@ -39,10 +39,10 @@ title: Dependencies
     ```
 
 :::note
-Each of the above fields is a list of [PackageConstraints](https://pkg.go.dev/github.com/Azure/dalec#PackageConstraints).
+Each of the above fields is a list of [PackageConstraints](https://pkg.go.dev/github.com/project-dalec/dalec#PackageConstraints).
 :::
 
-- **Test**: Lists and extra packages required for running tests. These are only installed for tests which have steps that require running a command in the built container. See [TestSpec](https://pkg.go.dev/github.com/Azure/dalec#TestSpec) for more information
+- **Test**: Lists and extra packages required for running tests. These are only installed for tests which have steps that require running a command in the built container. See [TestSpec](https://pkg.go.dev/github.com/project-dalec/dalec#TestSpec) for more information
     ```yaml
     test:
       - package_name_1

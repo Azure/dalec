@@ -9,7 +9,7 @@ import (
 
 	githttp "github.com/AaronO/go-git-http"
 	"github.com/AaronO/go-git-http/auth"
-	"github.com/Azure/dalec/test/cmd/git_repo/passwd"
+	"github.com/project-dalec/dalec/test/cmd/git_repo/passwd"
 )
 
 var errUsage = errors.New(`usage:  host [directory] [ip] [port]`)

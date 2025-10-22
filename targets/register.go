@@ -1,7 +1,7 @@
 package targets
 
 import (
-	"github.com/Azure/dalec/internal/plugins"
+	"github.com/project-dalec/dalec/internal/plugins"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 

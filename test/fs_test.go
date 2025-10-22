@@ -8,7 +8,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/project-dalec/dalec/frontend/pkg/bkfs"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/moby/buildkit/client/llb"

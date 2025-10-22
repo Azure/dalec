@@ -1,4 +1,4 @@
-module github.com/Azure/dalec/website
+module github.com/project-dalec/dalec/website
 
 go 1.24.0
 

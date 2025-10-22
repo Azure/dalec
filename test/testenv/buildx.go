@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/dalec/sessionutil/socketprovider"
+	"github.com/project-dalec/dalec/sessionutil/socketprovider"
 	"github.com/moby/buildkit/client"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"

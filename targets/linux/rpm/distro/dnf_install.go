@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/packaging/linux/rpm"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/packaging/linux/rpm"
 	"github.com/moby/buildkit/client/llb"
 )
 

@@ -3,7 +3,7 @@ package windows
 import (
 	"fmt"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 )
 
 func validateRuntimeDeps(s *dalec.Spec, targetKey string) error {

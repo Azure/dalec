@@ -3,8 +3,8 @@ package debug
 import (
 	"context"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"

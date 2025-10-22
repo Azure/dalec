@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/frontend"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/frontend"
 	"github.com/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/moby/buildkit/client/llb"
@@ -232,7 +232,7 @@ func withSpec(ctx context.Context, t *testing.T, spec *dalec.Spec) srOpt {
 				spec.Packager = "test"
 			}
 			if spec.Website == "" {
-				spec.Website = "https://github.com/Azure/dalec"
+				spec.Website = "https://github.com/project-dalec/dalec"
 			}
 		}
 		specToSolveRequest(ctx, t, spec, cfg.req)

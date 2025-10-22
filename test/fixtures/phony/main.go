@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/Azure/dalec/frontend"
+	"github.com/project-dalec/dalec/frontend"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Azure/dalec/frontend"
-	"github.com/Azure/dalec/frontend/debug"
-	"github.com/Azure/dalec/internal/testrunner"
+	"github.com/project-dalec/dalec/frontend"
+	"github.com/project-dalec/dalec/frontend/debug"
+	"github.com/project-dalec/dalec/internal/testrunner"
 	"github.com/moby/buildkit/frontend/gateway/grpcclient"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/bklog"
@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	Package = "github.com/Azure/dalec/cmd/frontend"
+	Package = "github.com/project-dalec/dalec/cmd/frontend"
 
 	credHelperSubcmd = "credential-helper"
 )
