@@ -122,6 +122,13 @@ jobs:
 
       - uses: ./.github/actions/enable-containerd
 
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        name: Login to GHCR
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup jaeger
         run: |
           set -e
@@ -142,13 +149,6 @@ jobs:
           sudo systemctl daemon-reload
           sudo systemctl restart containerd
           sudo systemctl restart docker
-
-      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
-        name: Login to GHCR
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: download deps
         run: go mod download
