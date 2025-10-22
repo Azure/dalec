@@ -44,7 +44,7 @@ func CheckFilesCmd(args []string) {
 	}
 
 	if err := json.Unmarshal(dt, &files); err != nil {
-		fmt.Fprintln(os.Stderr, "error unmarshaling file checks:", err)
+		fmt.Fprintln(os.Stderr, "error unmarshalling file checks:", err)
 		os.Exit(1)
 	}
 

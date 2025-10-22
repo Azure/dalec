@@ -59,7 +59,7 @@ func StepCmd(args []string) {
 
 	var step dalec.TestStep
 	if err := json.Unmarshal(dt, &step); err != nil {
-		fmt.Fprintln(os.Stderr, "error unmarshaling test step:", err)
+		fmt.Fprintln(os.Stderr, "error unmarshalling test step:", err)
 		return
 	}
 

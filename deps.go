@@ -72,7 +72,7 @@ func (l *PackageDependencyList) UnmarshalYAML(ctx context.Context, node ast.Node
 
 		err := dec.DecodeFromNodeContext(ctx, node, &ls)
 		if err != nil {
-			return errors.Wrap(err, "error unmarshaling package dependency list")
+			return errors.Wrap(err, "error unmarshalling package dependency list")
 		}
 
 		if len(ls) == 0 {
