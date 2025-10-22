@@ -35,7 +35,7 @@ the underlying target implementation.
 To print a list of available build targets:
 
 ```shell
-$ docker buildx build --call targets --build-arg BUILDKIT_SYNTAX=ghcr.io/azure/dalec/frontend:latest - <<< "null"
+$ docker buildx build --call targets --build-arg BUILDKIT_SYNTAX=ghcr.io/project-dalec/dalec/frontend:latest - <<< "null"
 ```
 
 import TargetsCLIOut from './examples/targets.md'

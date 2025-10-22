@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 )
 

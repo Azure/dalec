@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	"github.com/stretchr/testify/require"
 )
 

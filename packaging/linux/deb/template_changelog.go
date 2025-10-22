@@ -10,7 +10,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	"github.com/moby/buildkit/client/llb"
 	"golang.org/x/exp/slices"
 )

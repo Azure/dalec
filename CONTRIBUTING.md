@@ -4,7 +4,7 @@ Dalec welcomes contributions and suggestions!
 
 ## For Developers
 
-If you're looking to contribute code to Dalec, please see the [Developer Guide](https://azure.github.io/dalec/developers) for detailed information about:
+If you're looking to contribute code to Dalec, please see the [Developer Guide](https://project-dalec.github.io/dalec/developers) for detailed information about:
 
 - Setting up your development environment
 - Recommended dev/test workflows

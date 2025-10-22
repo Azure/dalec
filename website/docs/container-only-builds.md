@@ -11,7 +11,7 @@ When you specify only runtime dependencies in a Dalec spec (no sources or build 
 ## Example: Minimal Image with curl and bash
 
 ```yaml
-# syntax=ghcr.io/azure/dalec/frontend:latest
+# syntax=ghcr.io/project-dalec/dalec/frontend:latest
 name: my-minimal-image
 version: 0.1.0
 revision: 1
@@ -46,7 +46,7 @@ The `--target=azlinux3` flag tells Dalec to use Azure Linux 3 repositories for p
 Alternatively, you can omit creating a Dalec spec file by passing the dependencies directly in the command line. This is useful for quick builds without needing a spec file.
 
 ```bash
-docker build -t my-minimal-image:0.1.0 --build-arg BUILDKIT_SYNTAX=ghcr.io/azure/dalec/frontend:latest --target=azlinux3/container/depsonly -<<<"$(jq -c '.dependencies.runtime = {"curl": {}, "bash": {}} | .image.entrypoint = "/bin/bash"' <<<"{}" )"
+docker build -t my-minimal-image:0.1.0 --build-arg BUILDKIT_SYNTAX=ghcr.io/project-dalec/dalec/frontend:latest --target=azlinux3/container/depsonly -<<<"$(jq -c '.dependencies.runtime = {"curl": {}, "bash": {}} | .image.entrypoint = "/bin/bash"' <<<"{}" )"
 ```
 
 :::

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/test/testenv"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/test/testenv"
 	"github.com/containerd/platforms"
 	"github.com/goccy/go-yaml"
 	"github.com/google/go-cmp/cmp"

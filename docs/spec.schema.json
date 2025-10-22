@@ -4,7 +4,7 @@
 	"patternProperties": {
 		"^x-": {}
 	},
-	"$id": "https://github.com/Azure/dalec/spec",
+	"$id": "https://github.com/project-dalec/dalec/spec",
 	"id": "",
 	"$defs": {
 		"AddGroupConfig": {

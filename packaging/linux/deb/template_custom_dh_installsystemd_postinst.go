@@ -6,7 +6,7 @@ import (
 	"io"
 	"text/template"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	"github.com/pkg/errors"
 )
 

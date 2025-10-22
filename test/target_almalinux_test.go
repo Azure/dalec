@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/Azure/dalec/targets/linux/rpm/almalinux"
+	"github.com/project-dalec/dalec/targets/linux/rpm/almalinux"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 

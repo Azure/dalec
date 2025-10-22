@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/test/cmd/git_repo/build"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/test/cmd/git_repo/build"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"

@@ -1,8 +1,8 @@
 package debian
 
 import (
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/targets/linux/deb/distro"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/targets/linux/deb/distro"
 )
 
 const (

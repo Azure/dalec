@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Azure/dalec"
+	"github.com/project-dalec/dalec"
 	"golang.org/x/exp/slices"
 )
 

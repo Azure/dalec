@@ -9,7 +9,7 @@ Virtual packages are packages that don't install files themselves but reference 
 Here's a simple virtual package that installs two dependencies:
 
 ```yaml
-# syntax=ghcr.io/azure/dalec/frontend:latest
+# syntax=ghcr.io/project-dalec/dalec/frontend:latest
 name: my-package
 version: 1.0.0
 revision: "1"
@@ -42,7 +42,7 @@ You can also pass the spec via stdin: `docker build -t my-package-image:1.0.0 -<
 Use a different base image instead of scratch:
 
 ```yaml
-# syntax=ghcr.io/azure/dalec/frontend:latest
+# syntax=ghcr.io/project-dalec/dalec/frontend:latest
 name: my-package
 version: 1.0.0
 revision: "1"
@@ -68,7 +68,7 @@ targets:
 Set image properties like entrypoint, environment variables, and working directory:
 
 ```yaml
-# syntax=ghcr.io/azure/dalec/frontend:latest
+# syntax=ghcr.io/project-dalec/dalec/frontend:latest
 name: my-package
 version: 1.0.0
 revision: "1"

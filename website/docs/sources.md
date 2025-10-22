@@ -315,7 +315,7 @@ sources:
     build:
       source: # Specify another source to use as the build context of this build operation
         git:
-          url: https://github.com/Azure/dalec.git
+          url: https://github.com/project-dalec/dalec.git
           commit: v0.1.0
 ```
 
@@ -413,7 +413,7 @@ sources:
   src:
     path: ./
     git:
-      url: https://github.com/Azure/dalec.git
+      url: https://github.com/project-dalec/dalec.git
       commit: main
       auth:
         token: GIT_AUTH_TOKEN
@@ -665,7 +665,7 @@ patches:
 
 ## Advanced Source Configurations
 
-You can see more advanced configurations in our [test fixtures](https://github.com/Azure/dalec/tree/main/test/fixtures).
+You can see more advanced configurations in our [test fixtures](https://github.com/project-dalec/dalec/tree/main/test/fixtures).
 These are in here to test lots of different edge cases and are only mentioned to provide examples of what might be possible
 when these simple configurations are not enough.
 The examples in that directory are not exhaustive and are not guaranteed to work in all cases or with all inputs and are

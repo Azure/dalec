@@ -9,9 +9,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/targets/linux/deb/ubuntu"
-	"github.com/Azure/dalec/targets/windows"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
@@ -19,6 +16,9 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/targets/linux/deb/ubuntu"
+	"github.com/project-dalec/dalec/targets/windows"
 	"golang.org/x/exp/maps"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
@@ -144,7 +144,7 @@ func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing builds commands that fail cause the whole build to fail",
@@ -175,7 +175,7 @@ func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Should not have internet access during build",
@@ -208,7 +208,7 @@ func testWindows(ctx context.Context, t *testing.T, tcfg targetConfig) {
 				Version:     "0.0.1",
 				Revision:    "1",
 				License:     "MIT",
-				Website:     "https://github.com/azure/dalec",
+				Website:     "https://github.com/project-dalec/dalec",
 				Vendor:      "Dalec",
 				Packager:    "Dalec",
 				Description: "Testing container target",
@@ -484,7 +484,7 @@ echo "$BAR" > bar.txt
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing container target",
@@ -540,7 +540,7 @@ echo "$BAR" > bar.txt
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing container target",
@@ -594,7 +594,7 @@ echo "$BAR" > bar.txt
 			Version:     "0.0.1",
 			Revision:    "1",
 			License:     "MIT",
-			Website:     "https://github.com/azure/dalec",
+			Website:     "https://github.com/project-dalec/dalec",
 			Vendor:      "Dalec",
 			Packager:    "Dalec",
 			Description: "Testing container target",

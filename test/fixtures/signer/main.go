@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Azure/dalec/frontend/pkg/bkfs"
+	"github.com/project-dalec/dalec/frontend/pkg/bkfs"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"

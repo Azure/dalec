@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/targets/linux/rpm/azlinux"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/targets/linux/rpm/azlinux"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/test/testenv"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/test/testenv"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"

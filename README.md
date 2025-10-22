@@ -8,7 +8,7 @@ Our goal is to provide a secure way to build packages and containers, with a foc
 
 - 🐳 No additional tools are needed except for [Docker](https://docs.docker.com/engine/install/)!
 - 🚀 Easy to use declarative configuration
-- 📦 Build packages and/or containers for a number of different [targets](https://azure.github.io/dalec/targets)
+- 📦 Build packages and/or containers for a number of different [targets](https://project-dalec.github.io/dalec/targets)
   - DEB-based: Debian, and Ubuntu
   - RPM-based: Azure Linux, Rocky Linux, and Alma Linux
   - Windows containers (cross compilation only)
@@ -18,7 +18,7 @@ Our goal is to provide a secure way to build packages and containers, with a foc
 - ✍️ Support for signed packages
 - 🔐 Ensure supply chain security with build time SBOMs, and Provenance attestations
 
-👉 To get started, please see [Dalec documentation](https://azure.github.io/dalec/)!
+👉 To get started, please see [Dalec documentation](https://project-dalec.github.io/dalec/)!
 
 ## Contributing
 
@@ -45,4 +45,4 @@ Any use of third-party trademarks or logos are subject to those third-party's po
 ### Badges
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10703/badge)](https://www.bestpractices.dev/projects/10703)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/Azure/dalec/badge)](https://scorecard.dev/viewer/?uri=github.com/Azure/dalec)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/project-dalec/dalec/badge)](https://scorecard.dev/viewer/?uri=github.com/project-dalec/dalec)

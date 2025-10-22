@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/Azure/dalec"
-	"github.com/Azure/dalec/packaging/linux/deb"
+	"github.com/project-dalec/dalec"
+	"github.com/project-dalec/dalec/packaging/linux/deb"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/pkg/errors"
 )

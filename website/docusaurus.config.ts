@@ -8,14 +8,14 @@ const config: Config = {
   favicon: 'img/favicon.ico',
 
   // Set the production url of your site here
-  url: 'https://Azure.github.io',
+  url: 'https://project-dalec.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/dalec/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'Azure', // Usually your GitHub org/user name.
+  organizationName: 'project-dalec', // Usually your GitHub org/user name.
   projectName: 'dalec', // Usually your repo name.
 
   onBrokenLinks: 'throw',
@@ -39,7 +39,7 @@ const config: Config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/Azure/dalec/blob/main/website/',
+            'https://github.com/project-dalec/dalec/blob/main/website/',
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -59,7 +59,7 @@ const config: Config = {
       },
       items: [
         {
-          href: 'https://github.com/Azure/dalec',
+          href: 'https://github.com/project-dalec/dalec',
           position: 'right',
           className: 'header-github-link',
           'aria-label': 'GitHub repository',
@@ -83,7 +83,7 @@ const config: Config = {
     },
     announcementBar: {
       id: 'announcementBar-1', // Increment on change
-      content: `⭐️ If you like Dalec, please give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/Azure/dalec">GitHub</a>!</a>`,
+      content: `⭐️ If you like Dalec, please give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/project-dalec/dalec">GitHub</a>!</a>`,
     },
     algolia: {
       appId: 'QB3RJK7I77',

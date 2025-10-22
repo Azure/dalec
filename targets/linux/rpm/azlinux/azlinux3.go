@@ -1,7 +1,7 @@
 package azlinux
 
 import (
-	"github.com/Azure/dalec/targets/linux/rpm/distro"
+	"github.com/project-dalec/dalec/targets/linux/rpm/distro"
 )
 
 const (

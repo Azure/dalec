@@ -135,7 +135,7 @@ some_package: 0.250s
 		logDir := t.TempDir()
 		cfg := config{
 			slowThreshold: 500,
-			modName:       "github.com/Azure/dalec/cmd/test2json2gha",
+			modName:       "github.com/project-dalec/dalec/cmd/test2json2gha",
 			verbose:       false,
 			stream:        false,
 			logDir:        logDir,
