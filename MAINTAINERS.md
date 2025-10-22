@@ -4,5 +4,6 @@
 |----------------|--------------|-----------------------------------------------|
 | Brian Goff     | Microsoft    | [@cpuguy83](https://github.com/cpuguy83)      | 
 | Jeremy Rickard | Microsoft    | [@jrrickard](https://github.com/jrrickard)    | 
+| Peter Engelbert| Microsoft    | [@pmengelbert](https://github.com/pmengelbert)|
 | Sertac Ozercan | Microsoft    | [@sozercan](https://github.com/sozercan)      |
-| Adam Perlin    | Microsoft    | [@adamperlin](https://github.com/adamperlin)|
+
