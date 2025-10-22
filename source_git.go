@@ -141,7 +141,7 @@ func (git *SourceGit) fillDefaults(ls []*SourceGenerator) {
 		host = u.Host
 	}
 
-	// Thes the git auth from the git source is autofilled for the gomods, so
+	// The git auth from the git source is autofilled for the gomods, so
 	// the user doesn't have to repeat themselves.
 	for _, gen := range ls {
 		gen.fillDefaults(host, &git.Auth)

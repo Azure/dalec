@@ -356,7 +356,7 @@ func getDecoder(ctx context.Context) *yaml.Decoder {
 	return yaml.NewDecoder(bytes.NewBuffer(nil), opts...)
 }
 
-// UnmarshalYAML implements the [yaml.NodeUnmarshaler] interface to provide custom unmarshaling.
+// UnmarshalYAML implements the [yaml.NodeUnmarshaler] interface to provide custom unmarshalling.
 func (s *Spec) UnmarshalYAML(ctx context.Context, node ast.Node) error {
 	if node.Type() == ast.NullType {
 		*s = Spec{}
