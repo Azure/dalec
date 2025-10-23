@@ -4,7 +4,7 @@ Each of the contributor roles below is organized into lists of three types of th
 
 ## Contributor
 
-Description: A Contributor contributes directly to the project and adds value to it. Contributions doesn't only mean code contributions. Other types of contributions are valid, such as documentation improvements or community involvement as an example. People at the Contributor level may be new contributors, or they may only contribute occasionally.
+Description: A Contributor contributes directly to the project and adds value to it. Contributions don't only mean code contributions. Other types of contributions are valid, such as documentation improvements or community involvement as an example. People at the Contributor level may be new contributors, or they may only contribute occasionally.
 
 - Responsibilities include:
   - Follow the CNCF CoC
