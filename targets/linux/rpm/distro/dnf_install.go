@@ -153,9 +153,8 @@ func dnfCommand(cfg *dnfInstallConfig, releaseVer string, exe string, dnfSubCmd 
 	clearMetadata := `
 $cmd clean metadata
 `
-
 	if !cfg.refreshMetadata {
-		clearMetadata = "\necho 'Skipping metadata refresh'\n"
+		clearMetadata = ""
 	}
 
 	cacheDir := "/var/cache/" + exe
