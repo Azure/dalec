@@ -40,6 +40,8 @@ type dnfInstallConfig struct {
 
 	// When true, don't omit docs from the installed RPMs.
 	includeDocs bool
+
+	refreshMetadata bool
 }
 
 type DnfInstallOpt func(*dnfInstallConfig)
@@ -54,6 +56,12 @@ func DnfImportKeys(keys []string) DnfInstallOpt {
 func DnfWithMounts(opts ...llb.RunOption) DnfInstallOpt {
 	return func(cfg *dnfInstallConfig) {
 		cfg.mounts = append(cfg.mounts, opts...)
+	}
+}
+
+func DnfRefreshMetadata(v bool) DnfInstallOpt {
+	return func(cfg *dnfInstallConfig) {
+		cfg.refreshMetadata = v
 	}
 }
 
@@ -142,6 +150,13 @@ rpm --import "${key_path}"
 
 func dnfCommand(cfg *dnfInstallConfig, releaseVer string, exe string, dnfSubCmd []string, dnfArgs []string) llb.RunOption {
 	const importKeysPath = "/tmp/dalec/internal/dnf/import-keys.sh"
+	clearMetadata := `
+$cmd clean metadata
+`
+
+	if !cfg.refreshMetadata {
+		clearMetadata = "\necho 'Skipping metadata refresh'\n"
+	}
 
 	cacheDir := "/var/cache/" + exe
 	if cfg.root != "" {
@@ -160,8 +175,9 @@ cache_dir="` + cacheDir + `"
 
 if [ -x "$import_keys_path" ]; then
 	"$import_keys_path"
-fi
-
+fi` +
+		clearMetadata +
+		`
 $cmd $dnf_sub_cmd $install_flags "${@}"
 `
 	var runOpts []llb.RunOption
@@ -247,6 +263,7 @@ func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, de
 			DnfWithMounts(llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"), llb.Readonly)),
 			DnfWithMounts(repoMounts),
 			DnfImportKeys(keyPaths),
+			DnfRefreshMetadata(true),
 		}
 
 		install := cfg.Install([]string{filepath.Join(rpmMountDir, "*/*.rpm")}, installOpts...)
