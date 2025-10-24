@@ -69,7 +69,7 @@ const config: Config = {
     footer: {
       style: 'dark',
       links: [],
-      copyright: `Copyright Dalec a Series of LF Projects, LLC
+      copyright: `Copyright © ${new Date().getFullYear()} Dalec, a Series of LF Projects, LLC.
       For website terms of use, trademark policy and other project policies please see lfprojects.org/policies/.`
     },
     prism: {
