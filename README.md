@@ -30,8 +30,8 @@ When you submit a pull request, a CLA bot will automatically determine whether y
 a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
 provided by the bot. You will only need to do this once across all repos using our CLA.
 
-Dalec has adopted the CNCF Code of Conduct. Refer to our [Community Code of Conduct](https://github.com/project-dalec/dalec/blob/main/CODE_OF_CONDUCT.md) for details. 
-For more information see the Code of Conduct FAQ or contact opencode@microsoft.com with any additional questions or comments.
+Dalec has adopted the CNCF Code of Conduct. Refer to our [Community Code of Conduct](https://github.com/project-dalec/dalec/blob/main/CODE_OF_CONDUCT.md) for details.
+For more information, see the [CNCF Code of Conduct FAQ](https://github.com/cncf/foundation/blob/main/code-of-conduct-faq.md) or contact conduct@cncf.io with any additional questions or comments.
 
 ## Trademarks
 
