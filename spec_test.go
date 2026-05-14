@@ -34,3 +34,23 @@ func TestDate(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Check(t, cmp.Equal(d3.Format(time.DateOnly), expect))
 }
+
+func TestSourceFilterConfig(t *testing.T) {
+	t.Parallel()
+
+	var cfg SourceFilterConfig
+	err := yaml.Unmarshal([]byte(`
+global_excludes:
+  - github.com/klauspost/compress@*/zip/corpus/14.zip
+  - cache/download/github.com/klauspost/compress/@v/*.zip
+`), &cfg)
+	assert.NilError(t, err)
+	assert.Check(t, cmp.DeepEqual(cfg.GlobalExcludes, []string{
+		"github.com/klauspost/compress@*/zip/corpus/14.zip",
+		"cache/download/github.com/klauspost/compress/@v/*.zip",
+	}))
+	assert.Check(t, !cfg.IsEmpty())
+
+	var empty SourceFilterConfig
+	assert.Check(t, empty.IsEmpty())
+}
