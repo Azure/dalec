@@ -107,7 +107,7 @@ func (s *Spec) NodeModDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constr
 			}
 			merged = merged.With(withNodeMod(gen, worker, key, opts...))
 		}
-		result[key] = merged
+		result[key] = merged.With(sourceFilterAtPath(sOpt, key, opts...))
 	}
 	return result, nil
 }
