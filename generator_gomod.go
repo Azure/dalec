@@ -247,6 +247,7 @@ func (s *Spec) GomodDeps(sOpt SourceOpts, worker llb.State, opts ...llb.Constrai
 		})
 	}
 
+	deps = deps.With(sourceFilter(sOpt, opts...))
 	return &deps, nil
 }
 
