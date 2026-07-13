@@ -2,36 +2,31 @@ package dalec
 
 import (
 	"context"
+	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/moby/buildkit/client/llb"
 	"github.com/project-dalec/dalec/internal/test"
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/assert/cmp"
 )
 
 func TestNodeModRegistry(t *testing.T) {
 	t.Parallel()
 
-	t.Run("registry is passed as a single literal arg without a shell", func(t *testing.T) {
+	t.Run("registry is shell-quoted", func(t *testing.T) {
 		t.Parallel()
-		// URL deliberately contains shell metacharacters (& and $). If the
-		// command were built with sh -c, these would be interpreted by the
-		// shell and truncate the value or run unintended commands. As an argv
-		// element the URL must survive verbatim.
-		const registry = "https://example.test/npm/?a=1&b=$c"
+		const registry = "https://example.test/npm/?a=1&b=$c'quoted"
 		args := nodeModInstallArgs(t.Context(), t, &GeneratorNodeMod{Registry: registry})
-		assert.Check(t, cmp.Contains(args, "--registry="+registry))
-		assert.Check(t, args[0] != "sh" && args[0] != "bash",
-			"expected npm to be invoked directly without a shell; got: %v", args)
+		assert.Assert(t, strings.Contains(strings.Join(args, " "), "--registry='https://example.test/npm/?a=1&b=$c'\"'\"'quoted'"), args)
 	})
 
 	t.Run("registry unset omits --registry flag", func(t *testing.T) {
 		t.Parallel()
 		args := nodeModInstallArgs(t.Context(), t, &GeneratorNodeMod{})
 		for _, a := range args {
-			assert.Check(t, !strings.HasPrefix(a, "--registry"),
+			assert.Assert(t, !strings.Contains(a, "--registry="),
 				"expected no --registry flag when Registry is unset; got: %v", args)
 		}
 	})
@@ -74,4 +69,78 @@ func nodeModInstallArgs(ctx context.Context, t *testing.T, gen *GeneratorNodeMod
 
 	t.Fatal("no npm install command found in generated LLB")
 	return nil
+}
+
+func TestConfigureNpmProxySetsProxyConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a POSIX shell")
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", npmProxyConfigScript+`
+configure_npm_proxy
+	printf 'proxy=%s\nhttps_proxy=%s\nnoproxy=%s\ncafile=%s\nextra_ca=%s\n' \
+	"${npm_config_proxy:-}" \
+	"${npm_config_https_proxy:-}" \
+	"${npm_config_noproxy:-}" \
+	"${npm_config_cafile:-}" \
+	"${NODE_EXTRA_CA_CERTS:-}"
+`)
+	cmd.Env = []string{
+		"PATH=/bin:/usr/bin",
+		"HTTP_PROXY=http://proxy.example:3128",
+		"HTTPS_PROXY=https://proxy.example:8443",
+		"NO_PROXY=localhost,127.0.0.1",
+	}
+
+	out, err := cmd.CombinedOutput()
+	assert.NilError(t, err, string(out))
+
+	config := string(out)
+	assert.Assert(t, strings.Contains(config, "proxy=http://proxy.example:3128\n"), config)
+	assert.Assert(t, strings.Contains(config, "https_proxy=https://proxy.example:8443\n"), config)
+	assert.Assert(t, strings.Contains(config, "noproxy=localhost,127.0.0.1\n"), config)
+	assert.Assert(t, strings.Contains(config, "cafile=/"), config)
+	assert.Assert(t, strings.Contains(config, "extra_ca=/"), config)
+}
+
+func TestConfigureNpmProxyDoesNotTraceProxyValues(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a POSIX shell")
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", "set -x\n"+npmProxyConfigScript+"\nconfigure_npm_proxy\n")
+	cmd.Env = []string{
+		"PATH=/bin:/usr/bin",
+		"HTTP_PROXY=http://user:secret@proxy.example:3128",
+	}
+
+	out, err := cmd.CombinedOutput()
+	assert.NilError(t, err, string(out))
+	assert.Assert(t, !strings.Contains(string(out), "secret"), string(out))
+}
+
+func TestConfigureNpmProxyDisabled(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a POSIX shell")
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", npmProxyConfigScript+`
+configure_npm_proxy
+	printf 'proxy=%s\nhttps_proxy=%s\nnoproxy=%s\ncafile=%s\nextra_ca=%s\n' \
+	"${npm_config_proxy:-}" \
+	"${npm_config_https_proxy:-}" \
+	"${npm_config_noproxy:-}" \
+	"${npm_config_cafile:-}" \
+	"${NODE_EXTRA_CA_CERTS:-}"
+`)
+	cmd.Env = []string{
+		"PATH=/bin:/usr/bin",
+		"HTTP_PROXY=http://proxy.example:3128",
+		"HTTPS_PROXY=https://proxy.example:8443",
+		"DALEC_DISABLE_PROXY_CONFIG=1",
+	}
+
+	out, err := cmd.CombinedOutput()
+	assert.NilError(t, err, string(out))
+	assert.Equal(t, string(out), "proxy=\nhttps_proxy=\nnoproxy=\ncafile=\nextra_ca=\n")
 }
