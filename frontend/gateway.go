@@ -107,7 +107,6 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 		TargetPlatform: platform,
 		Resolver:       c,
 		Forward:        ForwarderFromClient(ctx, c),
-		BuildArgs:      dalec.DuplicateMap(dc.BuildArgs),
 		GetContext: func(ref string, opts ...llb.LocalOption) (*llb.State, error) {
 			if ref == dockerui.DefaultLocalNameContext {
 				return dc.MainContext(ctx, opts...)
@@ -129,6 +128,9 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 			return st, err
 		},
 		GitCredHelperOpt: withCredHelper(c),
+	}
+	if dc != nil {
+		sOpt.BuildArgs = dalec.DuplicateMap(dc.BuildArgs)
 	}
 
 	sOpt.SourceFilter = sync.OnceValues(func() (dalec.SourceFilterConfig, error) {
