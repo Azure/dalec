@@ -1,0 +1,11 @@
+:root {
+  --primary-hue: 150deg;
+  --primary-saturation: 49%;
+  --primary-lightness: 35%;
+}
+
+.dark {
+  --primary-hue: 166deg;
+  --primary-saturation: 68%;
+  --primary-lightness: 45%;
+}

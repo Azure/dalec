@@ -1,0 +1,72 @@
+baseURL: https://project-dalec.github.io/dalec/
+title: Dalec
+locale: en-US
+enableRobotsTXT: true
+disableKinds:
+  - taxonomy
+  - term
+
+module:
+  hugoVersion:
+    extended: true
+    min: 0.146.0
+  imports:
+    - path: github.com/imfing/hextra
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    noClasses: false
+
+menu:
+  main:
+    - name: Docs
+      pageRef: /
+      weight: 1
+    - name: Search
+      weight: 2
+      params:
+        type: search
+    - name: GitHub
+      url: https://github.com/project-dalec/dalec
+      weight: 3
+      params:
+        icon: github
+
+params:
+  description: Exterminate!
+  banner:
+    key: star-dalec
+    message: >-
+      ⭐ If you like Dalec, please give it a star on
+      [GitHub](https://github.com/project-dalec/dalec)!
+  navbar:
+    displayTitle: true
+    displayLogo: true
+    width: full
+    logo:
+      path: img/logo.svg
+      width: 32
+      height: 32
+  theme:
+    default: dark
+    displayToggle: true
+  footer:
+    enable: true
+    displayCopyright: true
+    displayPoweredBy: false
+    width: full
+  search:
+    enable: true
+    type: flexsearch
+    flexsearch:
+      index: content
+      tokenize: forward
+  editURL:
+    enable: true
+    base: https://github.com/project-dalec/dalec/edit/main/website/content
+  page:
+    displayPagination: false
+    width: full

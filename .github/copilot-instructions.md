@@ -62,7 +62,7 @@ Always reference these instructions first and fallback to search or bash command
 ├── docs/examples/         # Example Dalec specs
 ├── test/                  # Integration tests
 ├── targets/               # Target-specific implementations
-├── website/               # Documentation (Docusaurus)
+├── website/               # Documentation (Hugo)
 ├── docker-bake.hcl        # Docker Buildx configuration
 ├── Dockerfile             # Frontend container definition
 └── go.mod                 # Go module definition
@@ -79,7 +79,7 @@ Always reference these instructions first and fallback to search or bash command
 - `test/` - Comprehensive integration test suite
 - `targets/` - Platform-specific build logic (Linux RPM/DEB, Windows)
 - `frontend/` - Core BuildKit frontend implementation
-- `website/docs/` - User documentation and examples
+- `website/content/` - User documentation
 
 ## Development Environment Requirements
 
@@ -89,7 +89,7 @@ Always reference these instructions first and fallback to search or bash command
 - Standard Unix tools (git, make, etc.)
 
 ### Optional but Recommended
-- Node.js 18+ for documentation site (`cd website && npm start`)
+- Hugo Extended 0.164.0+ for direct documentation builds
 - golangci-lint for additional linting (custom linter is used in addition to golangci-lint)
 
 ### Environment Limitations

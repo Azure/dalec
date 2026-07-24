@@ -65,8 +65,8 @@ test-bake: ## Run tests via docker buildx bake
 ##@ Documentation
 
 .PHONY: docs-serve
-docs-serve: ## Build and serve documentation locally at http://localhost:3000
-	$(GO) -C ./website run .
+docs-serve: ## Build and serve documentation locally at http://localhost:3000/dalec/
+	$(GO) run ./cmd/website
 
 .PHONY: schema
 schema: ## Generate JSON schema
