@@ -94,35 +94,23 @@ if [ -x "$import_keys_path" ]; then
 	"$import_keys_path"
 fi
 
-{{ if not .IncludeDocs }}
 # zypper/libzypp has no command-line flag equivalent to dnf's
-# --setopt=tsflags=nodocs: passing "--rpm-installexcludedocs" is rejected as an
-# unknown option and fails the whole install before any package is laid down.
+# --setopt=tsflags=nodocs (passing "--rpm-installexcludedocs" is rejected as an
+# unknown option and fails the whole install before any package is laid down).
 # libzypp (not the zypper CLI) controls documentation exclusion via the
 # rpm.install.excludedocs option in zypp.conf. With --installroot, libzypp still
-# reads its configuration from the host, so enable the option in the host
-# /etc/zypp/zypp.conf.
+# reads its configuration from the host, so set the option in the host
+# /etc/zypp/zypp.conf. bci-base ships zypp.conf with
+# "rpm.install.excludedocs = yes" enabled, so when docs ARE requested we must
+# explicitly force it to "no" to override that base-image default.
+excludedocs={{ if .IncludeDocs }}no{{ else }}yes{{ end }}
 zypp_conf="/etc/zypp/zypp.conf"
 mkdir -p "$(dirname "$zypp_conf")"
 if [ -f "$zypp_conf" ] && grep -Eq '^[[:space:]]*#?[[:space:]]*rpm\.install\.excludedocs' "$zypp_conf"; then
-	sed -i -E 's|^[[:space:]]*#?[[:space:]]*rpm\.install\.excludedocs.*|rpm.install.excludedocs = yes|' "$zypp_conf"
+	sed -i -E "s|^[[:space:]]*#?[[:space:]]*rpm\.install\.excludedocs.*|rpm.install.excludedocs = $excludedocs|" "$zypp_conf"
 else
-	printf '\nrpm.install.excludedocs = yes\n' >> "$zypp_conf"
+	printf '\nrpm.install.excludedocs = %s\n' "$excludedocs" >> "$zypp_conf"
 fi
-{{ else }}
-# When docs are requested, explicitly force rpm.install.excludedocs = no.
-# bci-base ships /etc/zypp/zypp.conf with "rpm.install.excludedocs = yes" enabled
-# by default, so unlike dnf (which keeps docs unless told otherwise) libzypp would
-# strip documentation even though the caller asked to include it. Override the
-# base-image default so documentation artifacts are actually installed.
-zypp_conf="/etc/zypp/zypp.conf"
-mkdir -p "$(dirname "$zypp_conf")"
-if [ -f "$zypp_conf" ] && grep -Eq '^[[:space:]]*#?[[:space:]]*rpm\.install\.excludedocs' "$zypp_conf"; then
-	sed -i -E 's|^[[:space:]]*#?[[:space:]]*rpm\.install\.excludedocs.*|rpm.install.excludedocs = no|' "$zypp_conf"
-else
-	printf '\nrpm.install.excludedocs = no\n' >> "$zypp_conf"
-fi
-{{ end }}
 
 # zypper does not expand shell globs in local-file operands the way dnf does
 # (dnf expands "*/*.rpm" internally). The container install path passes glob
@@ -162,7 +150,16 @@ zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
 		IncludeDocs:    cfg.includeDocs,
 	})
 	if err != nil {
-		panic(fmt.Errorf("rendering zypper install script: %w", err))
+		// The template is a compile-time constant, so Execute realistically only
+		// fails on a programmer error. Rather than panicking (which would crash the
+		// frontend), surface the failure at build time as a run step that prints
+		// the error and exits non-zero.
+		msg := fmt.Sprintf("rendering zypper install script: %v", err)
+		// Wrap in single quotes for the shell, escaping any embedded single quotes.
+		quoted := "'" + strings.ReplaceAll(msg, "'", `'\''`) + "'"
+		return dalec.WithRunOptions(llb.Args([]string{
+			"/bin/sh", "-c", "echo " + quoted + " >&2; exit 1",
+		}))
 	}
 
 	installScript := llb.Scratch().File(llb.Mkfile("install.sh", 0o700, installScriptBuf.Bytes()), cfg.constraints...)

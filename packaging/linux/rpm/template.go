@@ -85,6 +85,17 @@ type SpecMacro struct {
 	Define bool
 }
 
+// String renders the macro as a single rpm spec directive line. It uses
+// "%define" (deferred expansion) when Define is true and "%global" (eager
+// expansion) otherwise. See the type doc for when to use each.
+func (m SpecMacro) String() string {
+	directive := "%global"
+	if m.Define {
+		directive = "%define"
+	}
+	return fmt.Sprintf("%s %s %s", directive, m.Name, m.Value)
+}
+
 type specWrapper struct {
 	*dalec.Spec
 	Target       string
@@ -1264,15 +1275,11 @@ func (w *specWrapper) DistroMacros() string {
 		return ""
 	}
 
-	b := &strings.Builder{}
+	lines := make([]string, 0, len(w.Macros))
 	for _, m := range w.Macros {
-		directive := "%global"
-		if m.Define {
-			directive = "%define"
-		}
-		fmt.Fprintf(b, "%s %s %s\n", directive, m.Name, m.Value)
+		lines = append(lines, m.String())
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return strings.Join(lines, "\n")
 }
 
 func (w *specWrapper) DisableAutoReq() string {
@@ -1289,12 +1296,12 @@ func WriteSpec(spec *dalec.Spec, target string, w io.Writer) error {
 }
 
 func WriteSpecWithSourceFilter(spec *dalec.Spec, target string, filter dalec.SourceFilterConfig, w io.Writer) error {
-	return WriteSpecWithMacros(spec, target, filter, nil, w)
+	return writeSpecWithMacros(spec, target, filter, nil, w)
 }
 
-// WriteSpecWithMacros is like [WriteSpecWithSourceFilter] but also emits the
+// writeSpecWithMacros is like [WriteSpecWithSourceFilter] but also emits the
 // provided distro-specific rpm macro overrides at the top of the spec.
-func WriteSpecWithMacros(spec *dalec.Spec, target string, filter dalec.SourceFilterConfig, macros []SpecMacro, w io.Writer) error {
+func writeSpecWithMacros(spec *dalec.Spec, target string, filter dalec.SourceFilterConfig, macros []SpecMacro, w io.Writer) error {
 	s := &specWrapper{Spec: spec, Target: target, SourceFilter: filter, Macros: macros}
 
 	err := specTmpl.Execute(w, s)
