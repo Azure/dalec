@@ -51,20 +51,16 @@ func zypperCommand(cfg *dnfInstallConfig, zypperSubCmd []string, zypperArgs []st
 		// look for repos under the empty target root and fail with "no enabled
 		// repositories". This mirrors dnf's --installroot behavior.
 		globalFlags = append(globalFlags, "--installroot", cfg.root)
-
-		// The --installroot path is used when assembling a container from a
-		// custom base image: dalec's own freshly built rpm files are installed as
-		// command-line operands into a fresh rootfs. Those rpms may be signed
-		// (rpmsign --addsign) with a key that is not present in the target
-		// rootfs's rpm keyring, so zypper would reject them. --allow-unsigned-rpm
-		// only covers *unsigned* files, not signed-but-untrusted ones, so add
-		// --no-gpg-checks for this path only. This mirrors dnf/tdnf, whose default
-		// localpkg_gpgcheck=0 skips GPG verification for command-line package
-		// files while still verifying repository packages. The repository-verified
-		// negative tests use the worker install path (cfg.root == "") and are
-		// therefore unaffected.
-		globalFlags = append(globalFlags, "--no-gpg-checks")
 	}
+	// dalec builds its own rpm files and installs them as command-line file
+	// operands (into the worker, or into a fresh rootfs via --installroot when
+	// assembling a container from a custom base image). dalec does not sign those
+	// rpms, so they are installed via the --allow-unsigned-rpm install flag
+	// below, which permits *unsigned* command-line rpm files only. libzypp has no
+	// per-file GPG bypass equivalent to dnf's localpkg_gpgcheck=0, so a local rpm
+	// that is *signed* with a key absent from the target keyring cannot install
+	// without the global --no-gpg-checks (deliberately avoided above) -- but dalec
+	// never produces such files, so --allow-unsigned-rpm is sufficient.
 
 	// Global zypper flags: run unattended and auto-import repo signing keys.
 	globalFlagsStr := strings.Join(globalFlags, " ")
@@ -151,15 +147,12 @@ zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
 	})
 	if err != nil {
 		// The template is a compile-time constant, so Execute realistically only
-		// fails on a programmer error. Rather than panicking (which would crash the
-		// frontend), surface the failure at build time as a run step that prints
-		// the error and exits non-zero.
-		msg := fmt.Sprintf("rendering zypper install script: %v", err)
-		// Wrap in single quotes for the shell, escaping any embedded single quotes.
-		quoted := "'" + strings.ReplaceAll(msg, "'", `'\''`) + "'"
-		return dalec.WithRunOptions(llb.Args([]string{
-			"/bin/sh", "-c", "echo " + quoted + " >&2; exit 1",
-		}))
+		// fails on a programmer error. Surface it as an errored llb state (which
+		// fails the solve with this error) rather than panicking.
+		// llb.StateOption implements llb.RunOption (its SetRunOption applies the
+		// option to the exec's state), so returning ErrorStateOption directly is
+		// sufficient.
+		return dalec.ErrorStateOption(fmt.Errorf("rendering zypper install script: %w", err))
 	}
 
 	installScript := llb.Scratch().File(llb.Mkfile("install.sh", 0o700, installScriptBuf.Bytes()), cfg.constraints...)
