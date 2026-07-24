@@ -1,0 +1,6 @@
+{{- $path := .Get 0 -}}
+{{- with resources.Get $path -}}
+<pre><code>{{ .Content | htmlEscape | safeHTML }}</code></pre>
+{{- else -}}
+{{- errorf "The %q shortcode could not find %q at %s" $.Name $path $.Position -}}
+{{- end -}}
