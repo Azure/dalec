@@ -16,6 +16,8 @@ on:
       - main
       - release/**
     paths-ignore:
+      - 'cmd/website/**'
+      - 'netlify.toml'
       - 'website/**'
       - 'docs/**'
       - '*.md'
@@ -37,6 +39,8 @@ on:
       - main
       - release/**
     paths-ignore:
+      - 'cmd/website/**'
+      - 'netlify.toml'
       - 'website/**'
       - 'docs/**'
       - '*.md'
