@@ -13,22 +13,23 @@ import (
 
 func TestNodeModRegistry(t *testing.T) {
 	t.Parallel()
-	ctx := t.Context()
 
 	t.Run("registry is passed as a single literal arg without a shell", func(t *testing.T) {
+		t.Parallel()
 		// URL deliberately contains shell metacharacters (& and $). If the
 		// command were built with sh -c, these would be interpreted by the
 		// shell and truncate the value or run unintended commands. As an argv
 		// element the URL must survive verbatim.
 		const registry = "https://example.test/npm/?a=1&b=$c"
-		args := nodeModInstallArgs(ctx, t, &GeneratorNodeMod{Registry: registry})
+		args := nodeModInstallArgs(t.Context(), t, &GeneratorNodeMod{Registry: registry})
 		assert.Check(t, cmp.Contains(args, "--registry="+registry))
 		assert.Check(t, args[0] != "sh" && args[0] != "bash",
 			"expected npm to be invoked directly without a shell; got: %v", args)
 	})
 
 	t.Run("registry unset omits --registry flag", func(t *testing.T) {
-		args := nodeModInstallArgs(ctx, t, &GeneratorNodeMod{})
+		t.Parallel()
+		args := nodeModInstallArgs(t.Context(), t, &GeneratorNodeMod{})
 		for _, a := range args {
 			assert.Check(t, !strings.HasPrefix(a, "--registry"),
 				"expected no --registry flag when Registry is unset; got: %v", args)
