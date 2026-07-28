@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +40,6 @@ import (
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 	"gotest.tools/v3/skip"
-	"pault.ag/go/debian/deb"
 )
 
 type workerConfig struct {
@@ -5186,28 +5186,40 @@ func testTargetPlatform(ctx context.Context, t *testing.T, cfg testLinuxConfig) 
 	})
 }
 
-func extractDebControlFile(t *testing.T, f io.ReaderAt) io.ReadCloser {
+// extractDebControlFile reads the control member from a .deb, which is a Unix
+// ar archive: an 8-byte magic followed by entries, each with a 60-byte header
+// and payload padded to a 2-byte boundary.
+func extractDebControlFile(t *testing.T, f io.Reader) io.ReadCloser {
 	t.Helper()
 
-	ar, err := deb.LoadAr(f)
+	const arMagic = "!<arch>\n"
+	magic := make([]byte, len(arMagic))
+	_, err := io.ReadFull(f, magic)
 	assert.NilError(t, err)
+	assert.Equal(t, string(magic), arMagic, "not an ar archive")
 
 	for {
-		entry, err := ar.Next()
-		if err == io.EOF {
+		var hdr [60]byte
+		if _, err := io.ReadFull(f, hdr[:]); err == io.EOF {
 			break
+		} else {
+			assert.NilError(t, err)
 		}
+
+		// Name is bytes 0-16 (GNU ar terminates it with a trailing "/");
+		// size is the decimal byte count at bytes 48-58.
+		name := strings.TrimRight(strings.TrimRight(string(hdr[0:16]), " "), "/")
+		size, err := strconv.ParseInt(strings.TrimSpace(string(hdr[48:58])), 10, 64)
 		assert.NilError(t, err)
 
-		if entry == nil {
-			break
-		}
-
-		if !strings.HasPrefix(entry.Name, "control.") {
+		if !strings.HasPrefix(name, "control.") {
+			// Skip the payload plus its odd-size padding byte.
+			_, err := io.CopyN(io.Discard, f, size+size%2)
+			assert.NilError(t, err)
 			continue
 		}
 
-		rdr, err := compression.DecompressStream(entry.Data)
+		rdr, err := compression.DecompressStream(io.LimitReader(f, size))
 		assert.NilError(t, err)
 		return rdr
 	}
@@ -5312,7 +5324,7 @@ func testPackageProvidesReplaces(ctx context.Context, t *testing.T, cfg testLinu
 			assert.NilError(t, err)
 			defer f.Close()
 
-			cf := extractDebControlFile(t, f.(io.ReaderAt))
+			cf := extractDebControlFile(t, f)
 			assert.Assert(t, cf != nil, "control file not found in deb")
 			defer cf.Close()
 
@@ -5513,7 +5525,7 @@ int main() {
 				}
 				defer f.Close()
 
-				cf := extractDebControlFile(t, f.(io.ReaderAt))
+				cf := extractDebControlFile(t, f)
 				defer cf.Close()
 
 				buf := bytes.NewBuffer(nil)
