@@ -106,3 +106,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	pault.ag/go/topsort v0.1.1 // indirect
 )
+
+replace github.com/kjk/lzma => salsa.debian.org/go-team/packages/golang-github-kjk-lzma v0.0.0-20211201122250-73cfdbf7cdfb
