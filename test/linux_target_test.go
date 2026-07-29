@@ -737,6 +737,37 @@ index 0000000..5260cb1
 				solveT(ctx, t, gwc, sr)
 			})
 		})
+
+		t.Run("step_env_vars_are_passed_to_the_command", func(t *testing.T) {
+			t.Parallel()
+			ctx := startTestSpan(baseCtx, t)
+
+			spec := testLinuxSpec(t, dalec.Spec{
+				Tests: []*dalec.TestSpec{
+					{
+						Name: "Verify step env vars are passed to the command",
+						Steps: []dalec.TestStep{
+							{
+								Command: `/bin/sh -c 'echo -n "${EMPTY-empty}_${FOO-foo}_${UNDEFINED-undefined}"'`,
+								Env: map[string]string{
+									"FOO":   "bar",
+									"EMPTY": "",
+								},
+								Stdout: dalec.CheckOutput{Equals: "_bar_undefined"},
+							},
+						},
+					},
+				},
+			})
+
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				sr := newSolveRequest(
+					withSpec(ctx, t, &spec),
+					withBuildTarget(testConfig.Target.Package),
+				)
+				solveT(ctx, t, gwc, sr)
+			})
+		})
 	})
 
 	t.Run("depsonly", func(t *testing.T) {

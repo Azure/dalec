@@ -43,6 +43,14 @@ func TestTestEnvProducesDeterministicLLB(t *testing.T) {
 	})
 }
 
+func TestStepEnvProducesDeterministicLLB(t *testing.T) {
+	step := dalec.TestStep{Command: "true", Env: manyTestEnv()}
+
+	requireDeterministicDef(t, func() *llb.Definition {
+		return definitionFromStateOption(t, stepRunner.withTestStep(step, withTestFrontend()))
+	})
+}
+
 func marshalState(t *testing.T, st llb.State) *llb.Definition {
 	t.Helper()
 	def, err := st.Marshal(context.Background())
