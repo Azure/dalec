@@ -97,12 +97,16 @@ func (c stepRunnerCommand) withTestStep(step dalec.TestStep, opts ...ValidationO
 			string(c),
 		}
 
-		out := in.Run(
+		runOptions := []llb.RunOption{
 			llb.AddMount(c.stepJSONPath(), st, llb.SourcePath("step.json")),
 			testRunner(args, opts...),
 			step.GetSourceLocation(in),
 			llb.WithCustomName(step.Command),
-		).Root()
+		}
+		for k, v := range dalec.SortedMapIter(step.Env) {
+			runOptions = append(runOptions, llb.AddEnv(k, v))
+		}
+		out := in.Run(runOptions...).Root()
 
 		// Do any stdout/stderr checks
 		var stateOpts []llb.StateOption
