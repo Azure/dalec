@@ -109,7 +109,7 @@ func dnfInstallOptions(cfg *dnfInstallConfig, opts []DnfInstallOpt) {
 	}
 }
 
-func importGPGScript(keyPaths []string) string {
+func importGPGScript(keyPaths []string, installRoots ...string) string {
 	// all keys that are included should be mounted under this path
 	keyRoot := "/etc/pki/rpm-gpg"
 
@@ -128,6 +128,12 @@ if ! head -1 "${key_path}" | grep -q 'BEGIN PGP PUBLIC KEY BLOCK'; then
 fi
 rpm --import "${key_path}"
 `, fullPath)
+		for _, root := range installRoots {
+			if root == "" {
+				continue
+			}
+			importScript += fmt.Sprintf("rpm --root %q --import \"${key_path}\"\n", root)
+		}
 	}
 
 	return importScript

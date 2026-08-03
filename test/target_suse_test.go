@@ -51,6 +51,7 @@ func TestSLES15(t *testing.T) {
 		LibexecDir: "/usr/lib",
 		Worker: workerConfig{
 			ContextName:    suse.ConfigSLES15.ContextRef,
+			BaseImageRef:   suse.ConfigSLES15.ImageRef,
 			CreateRepo:     createZypperRepo(suse.ConfigSLES15),
 			SignRepo:       signRepoZypper,
 			TestRepoConfig: azlinuxTestRepoConfig,
@@ -66,23 +67,7 @@ func TestSLES15(t *testing.T) {
 }
 
 func testSuseExtra(ctx context.Context, t *testing.T, cfg testLinuxConfig, distroImageRef string) {
-	// NOTE: testSignedRPMCustomBaseImage is intentionally NOT run for SUSE.
-	//
-	// That test signs rpms with a throwaway key that is never imported into the
-	// target rootfs's keyring, then installs them into a custom base image as
-	// local command-line file operands. dnf/tdnf pass it because their default
-	// localpkg_gpgcheck=0 skips GPG verification for *command-line file* operands
-	// only, while keeping *repository* packages verified.
-	//
-	// libzypp has no per-file equivalent: the only knob that lets a
-	// signed-but-untrusted local rpm install is the global --no-gpg-checks, which
-	// also disables *repository* signature verification. Rather than weaken repo
-	// security to satisfy this test, the zypper install path keeps repos verified
-	// and only accepts *unsigned* local rpm files (--allow-unsigned-rpm) -- which
-	// is all dalec ever produces, since dalec does not sign its built rpms.
-	// zypper correctly rejecting a signed rpm whose key it does not trust is the
-	// stricter, more secure behavior, so this dnf-shaped test does not apply.
-	_ = distroImageRef
+	testSignedRPMCustomBaseImage(ctx, t, cfg.Target, distroImageRef, true)
 }
 
 // suseListSignFiles lists the rpm artifacts expected to be signed for SUSE.

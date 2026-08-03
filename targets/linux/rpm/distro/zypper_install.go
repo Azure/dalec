@@ -52,16 +52,6 @@ func zypperCommand(cfg *dnfInstallConfig, zypperSubCmd []string, zypperArgs []st
 		// repositories". This mirrors dnf's --installroot behavior.
 		globalFlags = append(globalFlags, "--installroot", cfg.root)
 	}
-	// dalec builds its own rpm files and installs them as command-line file
-	// operands (into the worker, or into a fresh rootfs via --installroot when
-	// assembling a container from a custom base image). dalec does not sign those
-	// rpms, so they are installed via the --allow-unsigned-rpm install flag
-	// below, which permits *unsigned* command-line rpm files only. libzypp has no
-	// per-file GPG bypass equivalent to dnf's localpkg_gpgcheck=0, so a local rpm
-	// that is *signed* with a key absent from the target keyring cannot install
-	// without the global --no-gpg-checks (deliberately avoided above) -- but dalec
-	// never produces such files, so --allow-unsigned-rpm is sufficient.
-
 	// Global zypper flags: run unattended and auto-import repo signing keys.
 	globalFlagsStr := strings.Join(globalFlags, " ")
 	// Install-time flags: accept licenses non-interactively, tolerate the
@@ -167,7 +157,9 @@ zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
 	// zypper's --gpg-auto-import-keys covers most cases, but importing up front
 	// keeps parity with the dnf path for repos that reference keys via file://.
 	if len(cfg.keys) > 0 {
-		importScript := importGPGScript(cfg.keys)
+		// zypper --installroot verifies local RPMs against the target root's RPM
+		// keyring, so import install-time keys into both the worker and target.
+		importScript := importGPGScript(cfg.keys, cfg.root)
 		runOpts = append(runOpts, llb.AddMount(importKeysPath,
 			llb.Scratch().File(llb.Mkfile("/import-keys.sh", 0755, []byte(importScript)), cfg.constraints...),
 			llb.Readonly,

@@ -652,8 +652,8 @@ find /tmp/rpms/RPMS -name "*.rpm" -exec rpmsign --addsign {} \;
 // The distroImageRef parameter is the image reference for the distro's base
 // image (e.g., azlinux.Azlinux3Ref), which is used as the custom base image
 // in the spec.
-func testSignedRPMCustomBaseImage(ctx context.Context, t *testing.T, targetCfg targetConfig, distroImageRef string) {
-	t.Run("signed rpm with custom base image", func(t *testing.T) {
+func testSignedRPMCustomBaseImage(ctx context.Context, t *testing.T, targetCfg targetConfig, distroImageRef string, installKeyRequired bool) {
+	run := func(t *testing.T, withKey, wantFailure bool) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
 
@@ -690,13 +690,47 @@ func testSignedRPMCustomBaseImage(ctx context.Context, t *testing.T, targetCfg t
 				},
 			}
 
-			containerSr := newSolveRequest(
+			containerOpts := []srOpt{
 				withSpec(ctx, t, spec),
 				withBuildTarget(targetCfg.Container),
 				withBuildContext(ctx, t, dalec.GenericPkg, signedPkgSt),
-			)
+			}
+			if withKey {
+				const keyContext = "signed-rpm-public-key"
+				spec.Dependencies = &dalec.PackageDependencies{
+					ExtraRepos: []dalec.PackageRepositoryConfig{
+						{
+							Keys: map[string]dalec.Source{
+								"dalec-signing-key.asc": {
+									Context: &dalec.SourceContext{Name: keyContext},
+									Path:    "public.asc",
+								},
+							},
+							Envs: []string{"install"},
+						},
+					},
+				}
+				containerOpts = append(containerOpts, withBuildContext(ctx, t, keyContext, gpgKey))
+			}
 
+			containerSr := newSolveRequest(containerOpts...)
+			if wantFailure {
+				if _, err := client.Solve(ctx, containerSr); err == nil {
+					t.Fatal("expected signed RPM installation without its public key to fail")
+				}
+				return
+			}
 			solveT(ctx, t, client, containerSr)
 		})
+	}
+
+	t.Run("signed rpm with custom base image", func(t *testing.T) {
+		run(t, installKeyRequired, false)
 	})
+
+	if installKeyRequired {
+		t.Run("signed rpm with custom base image without key", func(t *testing.T) {
+			run(t, false, true)
+		})
+	}
 }
