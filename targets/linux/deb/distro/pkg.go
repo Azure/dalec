@@ -205,6 +205,11 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 
 		worker = worker.With(cfg.InstallBuildDeps(ctx, sOpt, spec, targetKey, pg, frontend.IgnoreCache(client)))
 
+		// Preprocess after build deps are installed so generators can use build tools.
+		if err := spec.Preprocess(sOpt, worker, pg); err != nil {
+			return nil, nil, err
+		}
+
 		var cfg deb.SourcePkgConfig
 		extraPaths := prepareGo(ctx, client, &cfg, worker, spec, targetKey, pg, frontend.IgnoreCache(client))
 
