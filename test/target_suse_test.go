@@ -67,7 +67,7 @@ func TestSLES15(t *testing.T) {
 }
 
 func testSuseExtra(ctx context.Context, t *testing.T, cfg testLinuxConfig, distroImageRef string) {
-	testSignedRPMCustomBaseImage(ctx, t, cfg.Target, distroImageRef, true)
+	testSignedRPMCustomBaseImage(ctx, t, cfg.Target, distroImageRef, true, cfg.Worker)
 }
 
 // suseListSignFiles lists the rpm artifacts expected to be signed for SUSE.

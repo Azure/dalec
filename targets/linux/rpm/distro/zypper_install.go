@@ -54,13 +54,10 @@ func zypperCommand(cfg *dnfInstallConfig, zypperSubCmd []string, zypperArgs []st
 	}
 	// Global zypper flags: run unattended and auto-import repo signing keys.
 	globalFlagsStr := strings.Join(globalFlags, " ")
-	// Install-time flags: accept licenses non-interactively, tolerate the
+	// Install-time flags: accept licenses non-interactively and tolerate the
 	// vendor/version differences that arise when pulling from the Microsoft
-	// prod repos alongside the base SUSE repos, and silently install the
-	// unsigned, locally-built dalec rpm files given as command-line operands
-	// (--allow-unsigned-rpm applies only to command-line rpm files, not to
-	// packages resolved from repositories, which remain signature-verified).
-	installFlags := []string{"--auto-agree-with-licenses", "--allow-downgrade", "--allow-vendor-change", "--allow-unsigned-rpm"}
+	// prod repos alongside the base SUSE repos.
+	installFlags := []string{"--auto-agree-with-licenses", "--allow-downgrade", "--allow-vendor-change"}
 	installFlagsStr := strings.Join(installFlags, " ")
 	zypperSubCmdStr := strings.Join(zypperSubCmd, " ")
 
@@ -98,25 +95,72 @@ else
 	printf '\nrpm.install.excludedocs = %s\n' "$excludedocs" >> "$zypp_conf"
 fi
 
-# zypper does not expand shell globs in local-file operands the way dnf does
-# (dnf expands "*/*.rpm" internally). The container install path passes glob
-# patterns like /tmp/rpms/**/*.rpm, so expand them here before invoking zypper.
-# Plain package names (no glob metacharacters) pass through unchanged; a glob
-# that matches nothing is dropped (nullglob) rather than sent literally, which
-# zypper would reject as a nonexistent local path.
+# Put locally-built Dalec RPMs in an ephemeral plaindir repository rather than
+# installing them as command-line files. This lets us disable package GPG checks
+# only for the trusted mounted artifacts; external repositories keep their
+# configured verification policy, and no build-time signing key is imported
+# into the target root's RPM database.
 shopt -s globstar nullglob
 install_args=()
+local_rpms=()
 for arg in "${@}"; do
 	case "$arg" in
 	*[*?[]*)
 		expanded=( $arg )
-		install_args+=( "${expanded[@]}" )
+		for expanded_arg in "${expanded[@]}"; do
+			if [[ "$expanded_arg" == *.rpm && -f "$expanded_arg" ]]; then
+				local_rpms+=( "$expanded_arg" )
+			else
+				install_args+=( "$expanded_arg" )
+			fi
+		done
 		;;
 	*)
-		install_args+=( "$arg" )
+		if [[ "$arg" == *.rpm && -f "$arg" ]]; then
+			local_rpms+=( "$arg" )
+		else
+			install_args+=( "$arg" )
+		fi
 		;;
 	esac
 done
+
+if (( ${#local_rpms[@]} > 0 )); then
+	local_repo_alias="dalec-local"
+	local_repo_dir="/tmp/dalec/internal/zypper/local-repo"
+	repos_dir="/tmp/dalec/internal/zypper/repos.d"
+	mkdir -p "$local_repo_dir" "$repos_dir"
+
+	if [ -d /etc/zypp/repos.d ]; then
+		cp -a /etc/zypp/repos.d/. "$repos_dir/"
+	fi
+
+	for rpm_path in "${local_rpms[@]}"; do
+		ln -sf "$rpm_path" "$local_repo_dir/$(basename "$rpm_path")"
+
+		read -r name epoch version release arch < <(
+			rpm -qp --queryformat '%{NAME} %{EPOCHNUM} %{VERSION} %{RELEASE} %{ARCH}\n' "$rpm_path"
+		)
+		if [[ "$epoch" != "0" && "$epoch" != "(none)" ]]; then
+			version="${epoch}:${version}"
+		fi
+		install_args+=( "${local_repo_alias}:${name}-${version}-${release}.${arch}" )
+	done
+
+	cat > "$repos_dir/${local_repo_alias}.repo" <<EOF
+[${local_repo_alias}]
+name=Dalec mounted RPMs
+enabled=1
+autorefresh=1
+baseurl=dir:${local_repo_dir}
+type=plaindir
+gpgcheck=0
+priority=1
+EOF
+
+	global_flags="$global_flags --reposd-dir $repos_dir"
+	zypper $global_flags refresh "$local_repo_alias"
+fi
 
 zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
 `))
@@ -157,9 +201,7 @@ zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
 	// zypper's --gpg-auto-import-keys covers most cases, but importing up front
 	// keeps parity with the dnf path for repos that reference keys via file://.
 	if len(cfg.keys) > 0 {
-		// zypper --installroot verifies local RPMs against the target root's RPM
-		// keyring, so import install-time keys into both the worker and target.
-		importScript := importGPGScript(cfg.keys, cfg.root)
+		importScript := importGPGScript(cfg.keys)
 		runOpts = append(runOpts, llb.AddMount(importKeysPath,
 			llb.Scratch().File(llb.Mkfile("/import-keys.sh", 0755, []byte(importScript)), cfg.constraints...),
 			llb.Readonly,
