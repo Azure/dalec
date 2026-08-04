@@ -226,7 +226,7 @@ func (cfg *Config) HandleSourcePkg(ctx context.Context, client gwclient.Client) 
 		if err != nil {
 			return nil, nil, err
 		}
-		return ref, nil, nil
+		return ref, &dalec.DockerImageSpec{}, nil
 	})
 }
 
