@@ -68,7 +68,11 @@ func createPatches(spec *dalec.Spec, sources map[string]llb.State, worker llb.St
 				// Remove any .git directories to prevent git from treating them as submodules.
 				// Use -prune to avoid descending into .git directories, which is more efficient
 				// and avoids errors when nested .git directories (e.g., submodules) exist.
-				dalec.ShArgs("set -e; find . -name .git -type d -prune -exec rm -rf {} +; git init .; git add .; git commit -m 'Initial commit'; \"${DEBIAN_DIR}/dalec/patch.sh\"; git add .; git commit -m 'With patch'; git diff HEAD~1 >> /work/out/dalec-changes.patch; echo 'dalec-changes.patch' > /work/out/series"),
+				// `git diff --text` emits textual hunks for files git heuristically flags as
+				// binary (e.g. generated *.pb.go, or files a source marks `-diff` in
+				// .gitattributes), which patch/dpkg-source can apply; otherwise they are
+				// dropped as "Binary files differ" and never updated.
+				dalec.ShArgs("set -e; find . -name .git -type d -prune -exec rm -rf {} +; git init .; git add --all; git commit -m 'Initial commit'; \"${DEBIAN_DIR}/dalec/patch.sh\"; git add --all; git commit -m 'With patch'; git diff --text HEAD~1 >> /work/out/dalec-changes.patch; echo 'dalec-changes.patch' > /work/out/series"),
 				llb.Dir("/work/sources"),
 				mountSources(sources, "/work/sources", nil),
 				// DEBIAN_DIR is used by the patch script to find the debian directory where we actually have the patches
