@@ -188,6 +188,12 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 		testSourceOutputBuilds(ctx, t, testConfig.Target)
 	})
 
+	t.Run("source-output-applies-gomod-edits", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testSourceOutputAppliesGomodEdits(ctx, t, testConfig.Target)
+	})
+
 	t.Run("test-dalec-empty-artifacts", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
