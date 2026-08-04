@@ -182,6 +182,12 @@ func testLinuxDistro(ctx context.Context, t *testing.T, testConfig testLinuxConf
 		testPrebuiltPackages(ctx, t, testConfig)
 	})
 
+	t.Run("source-output-builds", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testSourceOutputBuilds(ctx, t, testConfig.Target)
+	})
+
 	t.Run("test-dalec-empty-artifacts", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
