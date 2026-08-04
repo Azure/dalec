@@ -129,10 +129,20 @@ func SourceOptFromUIClient(ctx context.Context, c gwclient.Client, dc *dockerui.
 		},
 		GitCredHelperOpt: withCredHelper(c),
 	}
+	if dc != nil {
+		sOpt.BuildArgs = dalec.DuplicateMap(dc.BuildArgs)
+	}
 
 	sOpt.SourceFilter = sync.OnceValues(func() (dalec.SourceFilterConfig, error) {
 		return loadSourceFilterConfig(ctx, c, sOpt.GetContext)
 	})
+
+	if gomodProxy, ok := GetBuildArg(c, dalec.BuildArgDalecGomodProxy); ok {
+		if sOpt.ExtraEnvs == nil {
+			sOpt.ExtraEnvs = map[string]string{}
+		}
+		sOpt.ExtraEnvs["GOPROXY"] = gomodProxy
+	}
 
 	return sOpt
 }

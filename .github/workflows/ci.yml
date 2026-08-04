@@ -58,12 +58,6 @@ permissions:
   contents: read
   packages: read
 
-# Buildkit image under test. The CI builders are pinned to this so the
-# integration and e2e suites exercise this buildkitd rather than the engine's
-# embedded buildkit.
-env:
-  BUILDKIT_TEST_IMAGE: moby/buildkit:v0.31.0
-
 jobs:
   lint:
     runs-on: ubuntu-22.04
@@ -74,8 +68,8 @@ jobs:
           egress-policy: audit
 
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.25'
           cache: false
@@ -130,13 +124,13 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.25'
           cache: false
 
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Download Go modules in the background so it overlaps the docker setup
       # chain and builds below instead of adding to it. Nothing docker-related,
@@ -161,7 +155,7 @@ jobs:
           docker version
           docker info
 
-      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+      - uses: docker/login-action@06fb636fac595d6fb4b28a5dfcb21a6f5091859c # v4.5.0
         name: Login to GHCR
         with:
           registry: ghcr.io
@@ -233,6 +227,10 @@ jobs:
         uses: ./.github/actions/dns-spoof-ubuntu-archive
       - name: Setup builder
         run: |
+          buildkit_image_id_file="$(mktemp)"
+          docker buildx build --target=buildkit --iidfile="${buildkit_image_id_file}" .
+          BUILDKIT_TEST_IMAGE="$(<"${buildkit_image_id_file}")"
+
           # Use a buildx container builder pinned to the buildkit version under
           # test so the integration suite runs against it instead of the
           # engine's embedded buildkit. dial-stdio (used by the test harness)
@@ -379,8 +377,8 @@ jobs:
           egress-policy: audit
 
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.25'
           cache: false
@@ -425,7 +423,7 @@ jobs:
           egress-policy: audit
 
       - name: checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # We need to fetch all commits so that we can diff against the base branch
           fetch-depth: 0
@@ -435,7 +433,7 @@ jobs:
       - name: Setup source policy
         if: inputs.source_policy
         uses: ./.github/actions/setup-source-policy
-      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+      - uses: docker/login-action@06fb636fac595d6fb4b28a5dfcb21a6f5091859c # v4.5.0
         name: Login to GHCR
         with:
           registry: ghcr.io
@@ -451,6 +449,10 @@ jobs:
           docker image prune -a -f
 
           docker run -d --net=host ghcr.io/${{ steps.format-repo.outputs.result }}/mirror/dockerhub/library/registry:latest
+
+          buildkit_image_id_file="$(mktemp)"
+          docker buildx build --target=buildkit --iidfile="${buildkit_image_id_file}" .
+          BUILDKIT_TEST_IMAGE="$(<"${buildkit_image_id_file}")"
 
           # Use a buildx container builder pinned to the buildkit version under
           # test so both diff/merge matrix legs exercise the same buildkitd
@@ -508,10 +510,10 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.25"
           cache: false

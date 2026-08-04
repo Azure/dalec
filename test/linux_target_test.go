@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +40,6 @@ import (
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
 	"gotest.tools/v3/skip"
-	"pault.ag/go/debian/deb"
 )
 
 type workerConfig struct {
@@ -684,6 +684,37 @@ index 0000000..5260cb1
 								Command: "/bin/sh -c 'cat /nested/dir/foo'",
 								Stdout:  dalec.CheckOutput{Equals: "hello from nested dir"},
 								Stderr:  dalec.CheckOutput{Empty: true},
+							},
+						},
+					},
+				},
+			})
+
+			testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+				sr := newSolveRequest(
+					withSpec(ctx, t, &spec),
+					withBuildTarget(testConfig.Target.Package),
+				)
+				solveT(ctx, t, gwc, sr)
+			})
+		})
+
+		t.Run("step_env_vars_are_passed_to_the_command", func(t *testing.T) {
+			t.Parallel()
+			ctx := startTestSpan(baseCtx, t)
+
+			spec := testLinuxSpec(t, dalec.Spec{
+				Tests: []*dalec.TestSpec{
+					{
+						Name: "Verify step env vars are passed to the command",
+						Steps: []dalec.TestStep{
+							{
+								Command: `/bin/sh -c 'echo -n "${EMPTY-empty}_${FOO-foo}_${UNDEFINED-undefined}"'`,
+								Env: map[string]string{
+									"FOO":   "bar",
+									"EMPTY": "",
+								},
+								Stdout: dalec.CheckOutput{Equals: "_bar_undefined"},
 							},
 						},
 					},
@@ -3124,6 +3155,12 @@ func Value() string {
 		testNodeNpmGenerator(ctx, t, testConfig.Target)
 	})
 
+	t.Run("node npm generator with registry", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+		testNodeNpmGeneratorRegistry(ctx, t, testConfig.Target)
+	})
+
 	t.Run("test directory creation", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
@@ -3719,6 +3756,18 @@ func Value() string {
 		testBuildNetworkMode(ctx, t, testConfig.Target)
 	})
 
+	t.Run("package manager proxy network", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testPackageManagerProxyNetwork(ctx, t, testConfig.Target)
+	})
+
+	t.Run("sandbox build proxy network", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testSandboxBuildProxyNetwork(ctx, t, testConfig.Target)
+	})
+
 	t.Run("user and group creation", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
@@ -3892,6 +3941,86 @@ func testNodeNpmGenerator(ctx context.Context, t *testing.T, targetCfg targetCon
 				{Command: "[ -f ./src/package.json ]"},
 				{Command: "[ -f ./src/npm.lock ]"},
 				{Command: "[ -f ./src/index.js ]"},
+				{Command: "cd ./src; npm start > result.txt"},
+			},
+		},
+		Artifacts: dalec.Artifacts{
+			Binaries: map[string]dalec.ArtifactConfig{
+				"src/result.txt": {},
+			},
+		},
+		Tests: []*dalec.TestSpec{
+			{
+				Name: "Check npm result",
+				Files: map[string]dalec.FileCheckOutput{
+					"/usr/bin/result.txt": {
+						CheckOutput: dalec.CheckOutput{
+							Contains: []string{"Lodash chunk: [ [ 1, 2 ], [ 3, 4 ] ]"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		reqOpts := append([]srOpt{withBuildTarget(targetCfg.Package), withSpec(ctx, t, spec)}, opts...)
+		req := newSolveRequest(reqOpts...)
+		solveT(ctx, t, client, req)
+	})
+}
+
+// testNodeNpmGeneratorRegistry exercises the nodemod `registry` field end to
+// end: the generate-phase prefetch is pointed at an explicit, non-default npm
+// registry via `--registry`, and the build must still resolve, install, and
+// run the dependency. No package-lock is included so resolution is driven by
+// the configured registry rather than a lockfile's pinned `resolved` URL.
+//
+// registry.yarnpkg.com is a public, no-auth mirror of the npm registry, so it
+// is reachable in CI (GitHub Packages would require credentials) while still
+// being a different endpoint than the default registry.npmjs.org, so the build
+// genuinely connects to the configured registry. That `--registry=<url>` is
+// passed as a single literal, shell-free argument is pinned separately by the
+// TestNodeModRegistry unit test.
+func testNodeNpmGeneratorRegistry(ctx context.Context, t *testing.T, targetCfg targetConfig, opts ...srOpt) {
+	spec := &dalec.Spec{
+		Name:        "test-build-with-nodenpm-generator-registry",
+		Version:     "0.0.1",
+		Revision:    "1",
+		License:     "MIT",
+		Website:     "https://github.com/project-dalec/dalec",
+		Vendor:      "Dalec",
+		Packager:    "Dalec",
+		Description: "Testing container target with node npm generator registry",
+		Sources: map[string]dalec.Source{
+			"src": {
+				Generate: []*dalec.SourceGenerator{
+					{
+						NodeMod: &dalec.GeneratorNodeMod{
+							Registry: "https://registry.yarnpkg.com/",
+						},
+					},
+				},
+				Inline: &dalec.SourceInline{
+					Dir: &dalec.SourceInlineDir{
+						Files: map[string]*dalec.SourceInlineFile{
+							"package.json": {Contents: npmPackageJson},
+							"index.js":     {Contents: IndexJS},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: &dalec.PackageDependencies{
+			Build: map[string]dalec.PackageConstraints{
+				targetCfg.GetPackage("npm"): {},
+			},
+		},
+		Build: dalec.ArtifactBuild{
+			Steps: []dalec.BuildStep{
+				{Command: "[ -f ./src/package.json ]"},
+				{Command: "[ -f ./src/index.js ]"},
+				{Command: "[ -d ./src/node_modules/lodash ]"},
 				{Command: "cd ./src; npm start > result.txt"},
 			},
 		},
@@ -5174,28 +5303,40 @@ func testTargetPlatform(ctx context.Context, t *testing.T, cfg testLinuxConfig) 
 	})
 }
 
-func extractDebControlFile(t *testing.T, f io.ReaderAt) io.ReadCloser {
+// extractDebControlFile reads the control member from a .deb, which is a Unix
+// ar archive: an 8-byte magic followed by entries, each with a 60-byte header
+// and payload padded to a 2-byte boundary.
+func extractDebControlFile(t *testing.T, f io.Reader) io.ReadCloser {
 	t.Helper()
 
-	ar, err := deb.LoadAr(f)
+	const arMagic = "!<arch>\n"
+	magic := make([]byte, len(arMagic))
+	_, err := io.ReadFull(f, magic)
 	assert.NilError(t, err)
+	assert.Equal(t, string(magic), arMagic, "not an ar archive")
 
 	for {
-		entry, err := ar.Next()
-		if err == io.EOF {
+		var hdr [60]byte
+		if _, err := io.ReadFull(f, hdr[:]); err == io.EOF {
 			break
+		} else {
+			assert.NilError(t, err)
 		}
+
+		// Name is bytes 0-16 (GNU ar terminates it with a trailing "/");
+		// size is the decimal byte count at bytes 48-58.
+		name := strings.TrimRight(strings.TrimRight(string(hdr[0:16]), " "), "/")
+		size, err := strconv.ParseInt(strings.TrimSpace(string(hdr[48:58])), 10, 64)
 		assert.NilError(t, err)
 
-		if entry == nil {
-			break
-		}
-
-		if !strings.HasPrefix(entry.Name, "control.") {
+		if !strings.HasPrefix(name, "control.") {
+			// Skip the payload plus its odd-size padding byte.
+			_, err := io.CopyN(io.Discard, f, size+size%2)
+			assert.NilError(t, err)
 			continue
 		}
 
-		rdr, err := compression.DecompressStream(entry.Data)
+		rdr, err := compression.DecompressStream(io.LimitReader(f, size))
 		assert.NilError(t, err)
 		return rdr
 	}
@@ -5300,7 +5441,7 @@ func testPackageProvidesReplaces(ctx context.Context, t *testing.T, cfg testLinu
 			assert.NilError(t, err)
 			defer f.Close()
 
-			cf := extractDebControlFile(t, f.(io.ReaderAt))
+			cf := extractDebControlFile(t, f)
 			assert.Assert(t, cf != nil, "control file not found in deb")
 			defer cf.Close()
 
@@ -5501,7 +5642,7 @@ int main() {
 				}
 				defer f.Close()
 
-				cf := extractDebControlFile(t, f.(io.ReaderAt))
+				cf := extractDebControlFile(t, f)
 				defer cf.Close()
 
 				buf := bytes.NewBuffer(nil)
