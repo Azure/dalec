@@ -10,6 +10,11 @@ const (
 	BuildArgDalecSourceFilterConfigPath  = "DALEC_SOURCE_FILTER_CONFIG_PATH"
 	BuildArgDalecSourceFilterContextName = "DALEC_SOURCE_FILTER_CONFIG_CONTEXT_NAME"
 	DefaultSourceOptionsContextName      = "dalec-source-options"
+
+	// DefaultSourceFilterConfigPath is the path, relative to the source options
+	// build context, that the source filter config is read from when
+	// [BuildArgDalecSourceFilterConfigPath] is not set.
+	DefaultSourceFilterConfigPath = "source-filter.yml"
 )
 
 // SourceFilterConfig configures build-time filtering for source package inputs.
