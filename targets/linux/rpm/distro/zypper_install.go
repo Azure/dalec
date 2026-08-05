@@ -27,6 +27,83 @@ func ZypperInstall(cfg *dnfInstallConfig, releaseVer string, pkgs []string) llb.
 	return zypperCommand(cfg, []string{"install"}, pkgs)
 }
 
+const zypperProxyConfigScript = `
+cleanup_zypper_proxy() {
+	if [ -n "${DALEC_ZYPPER_PROXY_ANCHOR_ACTIVE:-}" ]; then
+		rm -f "${DALEC_ZYPPER_PROXY_ANCHOR_ACTIVE}"
+		"${DALEC_ZYPPER_UPDATE_CA_CERTIFICATES:-update-ca-certificates}"
+		unset DALEC_ZYPPER_PROXY_ANCHOR_ACTIVE
+	fi
+}
+
+install_zypper_proxy_ca() {
+	source_bundle="${1}"
+	if [ ! -f "${source_bundle}" ]; then
+		return 0
+	fi
+	if ! grep -q '# buildkit proxy CA begin' "${source_bundle}" 2>/dev/null; then
+		return 0
+	fi
+
+	proxy_anchor="${DALEC_ZYPPER_PROXY_ANCHOR:-/etc/pki/trust/anchors/dalec-buildkit-proxy-ca.pem}"
+	mkdir -p "$(dirname "${proxy_anchor}")"
+	sed -n '/# buildkit proxy CA begin/,/# buildkit proxy CA end/p' "${source_bundle}" > "${proxy_anchor}"
+	"${DALEC_ZYPPER_UPDATE_CA_CERTIFICATES:-update-ca-certificates}"
+	DALEC_ZYPPER_PROXY_ANCHOR_ACTIVE="${proxy_anchor}"
+}
+
+configure_zypper_proxy() {
+	restore_xtrace=0
+	case "$-" in
+		*x*) set +x; restore_xtrace=1 ;;
+	esac
+
+	if [ "${DALEC_DISABLE_PROXY_CONFIG:-}" = "1" ]; then
+		if [ "${restore_xtrace}" = "1" ]; then
+			set -x
+		fi
+		return 0
+	fi
+
+	http_proxy_value="${HTTP_PROXY:-${http_proxy:-}}"
+	https_proxy_value="${HTTPS_PROXY:-${https_proxy:-}}"
+	if [ -z "${http_proxy_value}" ] && [ -z "${https_proxy_value}" ]; then
+		if [ "${restore_xtrace}" = "1" ]; then
+			set -x
+		fi
+		return 0
+	fi
+
+	zypper_proxy_ca_bundle="${DALEC_RPM_PROXY_CA_BUNDLE:-}"
+	if [ -n "${zypper_proxy_ca_bundle}" ] && [ ! -f "${zypper_proxy_ca_bundle}" ]; then
+		zypper_proxy_ca_bundle=""
+	fi
+	if [ -z "${zypper_proxy_ca_bundle}" ]; then
+		for ca_bundle in \
+			/etc/ssl/certs/ca-certificates.crt \
+			/etc/pki/tls/certs/ca-bundle.crt \
+			/etc/ssl/ca-bundle.pem \
+			/etc/pki/tls/cacert.pem \
+			/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+			/etc/ssl/cert.pem
+		do
+			if [ -f "${ca_bundle}" ]; then
+				zypper_proxy_ca_bundle="${ca_bundle}"
+				break
+			fi
+		done
+	fi
+
+	if [ -n "${zypper_proxy_ca_bundle}" ]; then
+		install_zypper_proxy_ca "${zypper_proxy_ca_bundle}"
+	fi
+
+	if [ "${restore_xtrace}" = "1" ]; then
+		set -x
+	fi
+}
+`
+
 func zypperCommand(cfg *dnfInstallConfig, zypperSubCmd []string, zypperArgs []string) llb.RunOption {
 	const importKeysPath = "/tmp/dalec/internal/zypper/import-keys.sh"
 
@@ -68,6 +145,8 @@ func zypperCommand(cfg *dnfInstallConfig, zypperSubCmd []string, zypperArgs []st
 	}).Parse(`#!/usr/bin/env bash
 set -eux -o pipefail
 
+` + zypperProxyConfigScript + `
+
 import_keys_path={{ shellQuote .ImportKeysPath }}
 global_flags={{ shellQuote .GlobalFlags }}
 zypper_sub_cmd={{ shellQuote .ZypperSubCmd }}
@@ -76,6 +155,9 @@ install_flags={{ shellQuote .InstallFlags }}
 if [ -x "$import_keys_path" ]; then
 	"$import_keys_path"
 fi
+
+configure_zypper_proxy
+trap cleanup_zypper_proxy EXIT
 
 # zypper/libzypp has no command-line flag equivalent to dnf's
 # --setopt=tsflags=nodocs (passing "--rpm-installexcludedocs" is rejected as an
@@ -214,6 +296,9 @@ zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
 
 	runOpts = append(runOpts, llb.Args(cmd))
 	runOpts = append(runOpts, cfg.mounts...)
+	if cfg.disableProxyConfig {
+		runOpts = append(runOpts, llb.AddEnv(dalec.BuildArgDalecDisableProxyConfig, "1"))
+	}
 
 	return dalec.WithRunOptions(runOpts...)
 }
