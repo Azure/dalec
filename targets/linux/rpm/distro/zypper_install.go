@@ -241,7 +241,7 @@ priority=1
 EOF
 
 	global_flags="$global_flags --reposd-dir $repos_dir"
-	zypper $global_flags refresh "$local_repo_alias"
+	zypper $global_flags refresh --force "$local_repo_alias"
 fi
 
 zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
