@@ -11,6 +11,18 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+// TestZypperInstallTemplateRenders ensures the inline install-script template
+// parses and executes across the combinations of includeDocs and the
+// container-assembly root path.
+func TestZypperInstallTemplateRenders(t *testing.T) {
+	for _, includeDocs := range []bool{true, false} {
+		for _, root := range []string{"", "/tmp/rootfs"} {
+			cfg := &dnfInstallConfig{includeDocs: includeDocs, root: root}
+			assert.Assert(t, ZypperInstall(cfg, "", []string{"pkg"}) != nil)
+		}
+	}
+}
+
 func TestConfigureZypperProxyInstallsTemporaryBuildKitCA(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("requires a POSIX shell")
