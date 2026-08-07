@@ -208,7 +208,7 @@ for arg in "${@}"; do
 done
 
 if (( ${#local_rpms[@]} > 0 )); then
-	local_repo_alias="dalec-local"
+	local_repo_alias="dalec-tmp-internal-local"
 	local_repo_dir="/tmp/dalec/internal/zypper/local-repo"
 	repos_dir="/tmp/dalec/internal/zypper/repos.d"
 	mkdir -p "$local_repo_dir" "$repos_dir"

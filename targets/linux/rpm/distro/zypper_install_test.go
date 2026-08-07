@@ -71,18 +71,19 @@ func TestConfigureZypperProxyDoesNotTraceProxyValues(t *testing.T) {
 	err := os.WriteFile(caBundle, []byte("test ca"), 0o600)
 	assert.NilError(t, err)
 
+	const proxyURL = "http://dalec-proxy-value-sentinel@proxy.example:3128"
 	cmd := exec.Command("/bin/bash", "-c", "set -x\n"+zypperProxyConfigScript+`
 configure_zypper_proxy
 `)
 	cmd.Env = []string{
 		"PATH=/bin:/usr/bin",
-		"HTTP_PROXY=******proxy.example:3128",
+		"HTTP_PROXY=" + proxyURL,
 		"DALEC_RPM_PROXY_CA_BUNDLE=" + caBundle,
 	}
 
 	out, err := cmd.CombinedOutput()
 	assert.NilError(t, err, string(out))
-	assert.Assert(t, !strings.Contains(string(out), "secret"), string(out))
+	assert.Assert(t, !strings.Contains(string(out), proxyURL), string(out))
 }
 
 func TestConfigureZypperProxyDisabled(t *testing.T) {

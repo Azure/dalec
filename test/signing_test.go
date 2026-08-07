@@ -716,7 +716,6 @@ func testSignedRPMCustomBaseImage(ctx context.Context, t *testing.T, targetCfg t
 
 			if withCollisionRepo {
 				collisionSpec := newSimpleSpec()
-				collisionSpec.Version = "99.0.0"
 				collisionSpec.Sources["foo"].Inline.File.Contents = "#!/usr/bin/env bash\necho \"collision package\"\n"
 
 				collisionSr := newSolveRequest(
@@ -742,7 +741,7 @@ name=Collision Repository
 baseurl=file://%s
 enabled=1
 gpgcheck=0
-priority=0
+priority=1
 `, repoPath),
 										},
 									},
@@ -779,7 +778,7 @@ priority=0
 	})
 
 	if len(workerCfg) > 0 {
-		t.Run("signed rpm without key selects mounted package over higher repo version", func(t *testing.T) {
+		t.Run("signed rpm without key selects mounted package over same NEVRA", func(t *testing.T) {
 			run(t, false, true)
 		})
 	}
