@@ -32,7 +32,7 @@ For more information, see the [CNCF Code of Conduct FAQ](https://github.com/cncf
 
 ### Badges
 
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10703/badge)](https://www.bestpractices.dev/projects/10703)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/11346/badge)](https://www.bestpractices.dev/projects/11346)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/project-dalec/dalec/badge)](https://scorecard.dev/viewer/?uri=github.com/project-dalec/dalec)
 
 Copyright Contributors to Dalec, established as Dalec a Series of LF Projects, LLC.
