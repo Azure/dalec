@@ -40,6 +40,7 @@ type dnfInstallConfig struct {
 	forceArch string
 
 	disableProxyConfig bool
+	cacheNamespace     string
 }
 
 type DnfInstallOpt func(*dnfInstallConfig)
@@ -87,6 +88,7 @@ func IncludeDocs(v bool) DnfInstallOpt {
 func DnfWithSourceOpts(sOpt dalec.SourceOpts) DnfInstallOpt {
 	return func(cfg *dnfInstallConfig) {
 		cfg.disableProxyConfig = sOpt.DisableProxyConfig()
+		cfg.cacheNamespace = sOpt.CacheNamespace
 	}
 }
 
@@ -349,7 +351,7 @@ func (cfg *Config) InstallIntoRoot(rootfsPath string, pkgs []string, targetArch 
 				llb.AddMount(
 					joinUnderRoot(rootfsPath, d),
 					llb.Scratch(),
-					llb.AsPersistentCacheDir(cfg.packageCacheID(cachePlatform, d), llb.CacheMountLocked),
+					llb.AsPersistentCacheDir(cfg.packageCacheID(sOpt.CacheNamespace, cachePlatform, d), llb.CacheMountLocked),
 				),
 			)
 		}
@@ -400,7 +402,7 @@ func (cfg *Config) WithDeps(sOpt dalec.SourceOpts, targetKey, pkgName string, de
 		rpmSpec := rpm.RPMSpecWithMacros(spec, in, targetKey, "", dalec.SourceFilterConfig{}, cfg.RPMMacros, opts...)
 
 		specPath := filepath.Join("SPECS", spec.Name, spec.Name+".spec")
-		cacheInfo := rpm.CacheInfo{CacheIdentity: cfg.BuildCacheIdentity(), Caches: spec.Build.Caches}
+		cacheInfo := rpm.CacheInfo{CacheIdentity: cfg.BuildCacheIdentity(), CacheNamespace: sOpt.CacheNamespace, Caches: spec.Build.Caches}
 		rpmDir := rpm.Build(rpmSpec, in, specPath, cacheInfo, opts...)
 
 		const rpmMountDir = "/tmp/internal/dalec/deps/install/rpms"
