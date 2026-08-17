@@ -240,11 +240,10 @@ jobs:
           # Disable buildkit GC. It has been evicting persistent caches
           # mid-build and causing flakes; freeing up runner disk earlier in the
           # job makes keeping the cache around for the whole run feasible.
-          printf '[worker.oci]\n  gc = false\n' > /tmp/buildkitd.toml
           docker buildx create --use \
             --driver-opt network=host \
             --driver-opt image=${BUILDKIT_TEST_IMAGE} \
-            --buildkitd-config /tmp/buildkitd.toml
+            --buildkitd-config .github/buildkitd-ci.toml
       - name: Pre-build base images
         run: |
           set -eu
@@ -458,9 +457,13 @@ jobs:
           # Use a buildx container builder pinned to the buildkit version under
           # test so both diff/merge matrix legs exercise the same buildkitd
           # rather than diff/merge=1 falling back to the engine's embedded buildkit.
+          #
+          # Use the same GC-disabled config as the integration tests because
+          # persistent cache mounts are best-effort and can be pruned between solves.
           docker buildx create --use \
             --driver-opt network=host \
-            --driver-opt image=${BUILDKIT_TEST_IMAGE}
+            --driver-opt image=${BUILDKIT_TEST_IMAGE} \
+            --buildkitd-config .github/buildkitd-ci.toml
           echo USE_BUILDX=1 >> $GITHUB_ENV
 
           if [ "${DALEC_DISABLE_DIFF_MERGE}" = "0" ]; then

@@ -1,0 +1,8 @@
+# Persistent cache mounts are best-effort and may be pruned by BuildKit GC
+# between solves. CI cache-contract tests intentionally validate persistence
+# and sharing behavior, so keep cache-mount records for the duration of the job.
+[worker.oci]
+  gc = false
+
+[worker.containerd]
+  gc = false
