@@ -90,7 +90,6 @@ func TestRockylinux8(t *testing.T) {
 			ID:        "rocky",
 			VersionID: "8",
 		},
-		SkipStripTest: true,
 		Platforms: []ocispecs.Platform{
 			{OS: "linux", Architecture: "amd64"},
 			{OS: "linux", Architecture: "arm64"},

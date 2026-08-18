@@ -26,7 +26,6 @@ import (
 	moby_buildkit_v1_frontend "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/go-archive/compression"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
-	pkgerrors "github.com/pkg/errors"
 	"golang.org/x/exp/maps"
 	"gotest.tools/v3/assert"
 	"gotest.tools/v3/assert/cmp"
@@ -94,8 +93,6 @@ type testLinuxConfig struct {
 	Libdir  string
 	Worker  workerConfig
 	Release OSRelease
-
-	SkipStripTest bool
 
 	Platforms         []ocispecs.Platform
 	PackageOutputPath func(spec *dalec.Spec, platform ocispecs.Platform) string
@@ -3205,13 +3202,8 @@ func testMixGlobalTargetDependencies(ctx context.Context, t *testing.T, cfg test
 }
 
 func testDisableStrip(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
-	skip.If(t, cfg.SkipStripTest, "skipping test as it is not supported for this target: "+cfg.Target.Container)
-
 	newSpec := func() *dalec.Spec {
 		spec := newSimpleSpec()
-		spec.Args = map[string]string{
-			"TARGETARCH": "",
-		}
 
 		spec.Sources = map[string]dalec.Source{
 			"src": {
@@ -3236,44 +3228,46 @@ func testDisableStrip(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 			Build: map[string]dalec.PackageConstraints{
 				cfg.GetPackage("golang"): {},
 			},
+			Test: []string{
+				"bash",
+				"coreutils",
+				"binutils",
+			},
 		}
 		spec.Artifacts = dalec.Artifacts{
 			Binaries: map[string]dalec.ArtifactConfig{
-				"bad-executable": {},
+				"the-executable": {},
 			},
-			Libs: map[string]dalec.ArtifactConfig{
-				"bad-executable": {},
-			},
-		}
-
-		spec.Build.Env = map[string]string{
-			"TARGETARCH": "$TARGETARCH",
 		}
 
 		spec.Build.Steps = []dalec.BuildStep{
-			// Build a binary for a different architecture
-			// This should make `strip` fail.
-			//
-			// Note: The test is specifically using ppc64le as GOARCH
-			// because it seems alma/rockylinux do not error ons trip except for ppc64le.
-			// Even this is a stretch as that does not even work as expected at version < v9.
 			{
-				Command: `cd src; if [ "${TARGETARCH}" = "ppc64le" ]; then export GOARCH=amd64; else export GOARCH=ppc64le; fi; go build -o ../bad-executable main.go`,
+				Command: "cd src; go build -o ../the-executable main.go",
 			},
 		}
+
 		return spec
 	}
 
 	t.Run("strip enabled", func(t *testing.T) {
-		// Make sure that we get a build failure when strip is enabled
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
 		testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
 			spec := newSpec()
-			req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
 
-			_, err := client.Solve(ctx, req)
-			assert.ErrorType(t, pkgerrors.Cause(err), &moby_buildkit_v1_frontend.ExitError{})
+			spec.Tests = append(spec.Tests, &dalec.TestSpec{
+				Name: "Check that binary IS stripped",
+				Steps: []dalec.TestStep{
+					{
+						// dalec test assertions can't handle negative checks directly,
+						// so we use exit code 42 to indicate presence of debug info and fail the test
+						Command: `/bin/bash -eo pipefail -c "grep -q '\.debug_info' < <(readelf -S /usr/bin/the-executable) && exit 42 || exit 0"`,
+					},
+				},
+			})
+
+			req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
+			solveT(ctx, t, client, req)
 		})
 	})
 
@@ -3284,7 +3278,16 @@ func testDisableStrip(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
 			spec := newSpec()
 			spec.Artifacts.DisableStrip = true
 
-			req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Container))
+			spec.Tests = append(spec.Tests, &dalec.TestSpec{
+				Name: "Check that binary is NOT stripped",
+				Steps: []dalec.TestStep{
+					{
+						Command: `/bin/bash -eo pipefail -c "grep -q '\.debug_info' < <(readelf -S /usr/bin/the-executable)"`,
+					},
+				},
+			})
+
+			req := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(cfg.Target.Package))
 			solveT(ctx, t, client, req)
 		})
 	})

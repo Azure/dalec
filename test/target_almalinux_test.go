@@ -90,7 +90,6 @@ func TestAlmalinux8(t *testing.T) {
 			ID:        "almalinux",
 			VersionID: "8",
 		},
-		SkipStripTest: true,
 		Platforms: []ocispecs.Platform{
 			{OS: "linux", Architecture: "amd64"},
 			{OS: "linux", Architecture: "arm64"},
