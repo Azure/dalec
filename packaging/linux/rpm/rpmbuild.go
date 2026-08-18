@@ -23,18 +23,39 @@ type CacheInfo struct {
 // `specPath` is the path to the spec file to build relative to `topDir`
 func Build(topDir, workerImg llb.State, specPath string, caches CacheInfo, opts ...llb.ConstraintsOpt) llb.State {
 	opts = append(opts, dalec.ProgressGroup("Build RPM"))
+	// -ba tells rpmbuild to build the source and binary RPMs
+	return rpmbuild(topDir, workerImg, `--define "_rpmdir /build/out/RPMS" --buildroot /build/tmp/work -ba `+specPath, caches, opts...)
+}
+
+// BuildSourceRPM builds only the source RPM (`src.rpm`) from a spec.
+//
+// The arguments are the same as [Build], except no build caches are used since
+// the package's %build/%install sections are never executed, which also makes
+// this significantly cheaper than a full package build.
+//
+// The returned state contains only `SRPMS`; `_rpmdir` is intentionally left at
+// its default (under `_topdir`) so no empty binary RPM directory ends up in the
+// output.
+func BuildSourceRPM(topDir, workerImg llb.State, specPath string, opts ...llb.ConstraintsOpt) llb.State {
+	opts = append(opts, dalec.ProgressGroup("Build source RPM"))
+	// -bs tells rpmbuild to build only the source RPM
+	return rpmbuild(topDir, workerImg, `--buildroot /build/tmp/work -bs `+specPath, CacheInfo{}, opts...)
+}
+
+// rpmbuild runs rpmbuild with the given trailing args and returns the state
+// with rpmbuild's output directories.
+func rpmbuild(topDir, workerImg llb.State, args string, caches CacheInfo, opts ...llb.ConstraintsOpt) llb.State {
 	return workerImg.Run(
 		// some notes on these args:
 		//  - _topdir is the directory where rpmbuild will look for SOURCES and SPECS
 		//  - _srcrpmdir is the directory where rpmbuild will put the source RPM
 		//  - _rpmdir is the directory where rpmbuild will put the RPM
 		//  - --buildroot is the work directory where rpmbuild will build the RPM
-		//  - -ba tells rpmbuild to build the source and binary RPMs
 		//
 		// TODO(cpuguy83): specPath would ideally never change.
 		// We don't want to have to re-run this step just because the path changed, this should be based on inputs only (ie the content of the rpm spec, sources, etc)
 		// The path should not be an input.
-		dalec.ShArgs(`rpmbuild --define "_topdir /build/top" --define "_srcrpmdir /build/out/SRPMS" --define "_rpmdir /build/out/RPMS" --buildroot /build/tmp/work -ba `+specPath),
+		dalec.ShArgs(`rpmbuild --define "_topdir /build/top" --define "_srcrpmdir /build/out/SRPMS" `+args),
 		llb.AddMount("/build/top", topDir),
 		llb.AddMount("/build/tmp", llb.Scratch(), llb.Tmpfs()),
 		llb.Dir("/build/top"),

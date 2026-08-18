@@ -5,10 +5,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/project-dalec/dalec"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 )
 
 // testSourceOutputBuilds is a regression test for a nil image-config panic in
@@ -128,4 +130,84 @@ func testSourceOutputAppliesGomodEdits(ctx context.Context, t *testing.T, target
 		assert.Check(t, strings.Contains(patch, "replace github.com/cpuguy83/tar2go"),
 			"source package patch must contain the gomod replace directive (Preprocess must run for source packages), got:\n%s", patch)
 	})
+}
+
+// testSourceRPMTarget verifies the `<distro>/srpm` target produces the same
+// source rpm a full `<distro>/rpm` build produces, without running the spec's
+// build steps (i.e. rpmbuild's %build/binary rpm stages never run).
+func testSourceRPMTarget(ctx context.Context, t *testing.T, targetCfg targetConfig) {
+	if !strings.HasSuffix(targetCfg.Package, "/rpm") {
+		t.Skipf("srpm target is not available for package target %q", targetCfg.Package)
+	}
+	srpmTarget := strings.TrimSuffix(targetCfg.Package, "/rpm") + "/srpm"
+
+	spec := &dalec.Spec{
+		Name:        "test-dalec-srpm-target",
+		Version:     "0.0.1",
+		Revision:    "1",
+		Description: "Testing the source rpm only target",
+		License:     "MIT",
+		Sources: map[string]dalec.Source{
+			"src": {
+				Inline: &dalec.SourceInline{
+					File: &dalec.SourceInlineFile{Contents: "hello world"},
+				},
+			},
+		},
+		Artifacts: dalec.Artifacts{
+			Binaries: map[string]dalec.ArtifactConfig{
+				"src": {},
+			},
+		},
+		Build: dalec.ArtifactBuild{
+			Steps: []dalec.BuildStep{
+				// The srpm target must not execute build steps. If %build runs
+				// this fails the build and therefore the test.
+				{Command: "exit 42"},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(srpmTarget))
+		res := solveT(ctx, t, gwc, sr)
+
+		ref, err := res.SingleRef()
+		assert.NilError(t, err)
+
+		// The source rpm must land in the same place a full rpm build puts it.
+		srpmPath := expectedSRPMPath(t, targetCfg, spec)
+		_, err = ref.StatFile(ctx, gwclient.StatRequest{Path: srpmPath})
+		assert.NilError(t, err, "expected source rpm at %q", srpmPath)
+
+		// ... and nothing else: with `-bs` rpmbuild never populates the binary
+		// rpm output dir, so `SRPMS` must be the only thing in the output.
+		ents, err := ref.ReadDir(ctx, gwclient.ReadDirRequest{Path: "/"})
+		assert.NilError(t, err)
+
+		names := make([]string, 0, len(ents))
+		for _, e := range ents {
+			names = append(names, e.Path)
+		}
+		assert.Check(t, cmp.DeepEqual(names, []string{"SRPMS"}), "srpm target output should only contain SRPMS, got %v", names)
+	})
+}
+
+// expectedSRPMPath returns the path of the source rpm the distro's rpm target
+// produces for the given spec.
+func expectedSRPMPath(t *testing.T, targetCfg targetConfig, spec *dalec.Spec) string {
+	t.Helper()
+
+	if targetCfg.ListExpectedSignFiles == nil {
+		t.Fatal("target config is missing ListExpectedSignFiles")
+	}
+
+	for _, f := range targetCfg.ListExpectedSignFiles(spec, platforms.DefaultSpec()) {
+		if strings.HasSuffix(f, ".src.rpm") {
+			return f
+		}
+	}
+
+	t.Fatal("no source rpm in the list of expected package files")
+	return ""
 }

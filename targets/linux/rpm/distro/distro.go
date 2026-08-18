@@ -139,6 +139,17 @@ func (cfg *Config) Routes(prefix string, spec *dalec.Spec) ([]frontend.Route, er
 			},
 		},
 		{
+			FullPath: prefix + "/srpm",
+			Handler:  cfg.HandleSourcePkg,
+			Info: frontend.Target{
+				Target: bktargets.Target{
+					Name:        prefix + "/srpm",
+					Description: "Builds only the src.rpm (no binary rpm).",
+				},
+				SpecDefined: specDefined,
+			},
+		},
+		{
 			FullPath: prefix + "/container",
 			Handler:  linux.HandleContainer(cfg),
 			Info: frontend.Target{

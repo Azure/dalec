@@ -5,6 +5,7 @@ almalinux8/rpm                   Builds an rpm and src.rpm.
 almalinux8/rpm/debug/buildroot   Outputs an rpm buildroot suitable for passing to rpmbuild.
 almalinux8/rpm/debug/sources     Outputs all the sources specified in the spec file in the format given to rpmbuild.
 almalinux8/rpm/debug/spec        Outputs the generated RPM spec file
+almalinux8/srpm                  Builds only the src.rpm (no binary rpm).
 almalinux8/worker                Builds the base worker image responsible for building the rpm
 almalinux9/container (default)   Builds a container image for AlmaLinux 9
 almalinux9/container/depsonly    Builds a container image with only the runtime dependencies installed.
@@ -12,6 +13,7 @@ almalinux9/rpm                   Builds an rpm and src.rpm.
 almalinux9/rpm/debug/buildroot   Outputs an rpm buildroot suitable for passing to rpmbuild.
 almalinux9/rpm/debug/sources     Outputs all the sources specified in the spec file in the format given to rpmbuild.
 almalinux9/rpm/debug/spec        Outputs the generated RPM spec file
+almalinux9/srpm                  Builds only the src.rpm (no binary rpm).
 almalinux9/worker                Builds the base worker image responsible for building the rpm
 azlinux3/container (default)     Builds a container image for Azure Linux 3
 azlinux3/container/depsonly      Builds a container image with only the runtime dependencies installed.
@@ -19,6 +21,7 @@ azlinux3/rpm                     Builds an rpm and src.rpm.
 azlinux3/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.
 azlinux3/rpm/debug/sources       Outputs all the sources specified in the spec file in the format given to rpmbuild.
 azlinux3/rpm/debug/spec          Outputs the generated RPM spec file
+azlinux3/srpm                    Builds only the src.rpm (no binary rpm).
 azlinux3/testing/sysext          Builds a systemd system extension image.
 azlinux3/worker                  Builds the base worker image responsible for building the rpm
 azlinux4/container (default)     Builds a container image for Azure Linux 4
@@ -27,6 +30,7 @@ azlinux4/rpm                     Builds an rpm and src.rpm.
 azlinux4/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.
 azlinux4/rpm/debug/sources       Outputs all the sources specified in the spec file in the format given to rpmbuild.
 azlinux4/rpm/debug/spec          Outputs the generated RPM spec file
+azlinux4/srpm                    Builds only the src.rpm (no binary rpm).
 azlinux4/testing/sysext          Builds a systemd system extension image.
 azlinux4/worker                  Builds the base worker image responsible for building the rpm
 bionic/container                 Builds a container image.
@@ -80,6 +84,7 @@ rockylinux8/rpm                  Builds an rpm and src.rpm.
 rockylinux8/rpm/debug/buildroot  Outputs an rpm buildroot suitable for passing to rpmbuild.
 rockylinux8/rpm/debug/sources    Outputs all the sources specified in the spec file in the format given to rpmbuild.
 rockylinux8/rpm/debug/spec       Outputs the generated RPM spec file
+rockylinux8/srpm                 Builds only the src.rpm (no binary rpm).
 rockylinux8/worker               Builds the base worker image responsible for building the rpm
 rockylinux9/container (default)  Builds a container image for RockyLinux 9
 rockylinux9/container/depsonly   Builds a container image with only the runtime dependencies installed.
@@ -87,6 +92,7 @@ rockylinux9/rpm                  Builds an rpm and src.rpm.
 rockylinux9/rpm/debug/buildroot  Outputs an rpm buildroot suitable for passing to rpmbuild.
 rockylinux9/rpm/debug/sources    Outputs all the sources specified in the spec file in the format given to rpmbuild.
 rockylinux9/rpm/debug/spec       Outputs the generated RPM spec file
+rockylinux9/srpm                 Builds only the src.rpm (no binary rpm).
 rockylinux9/worker               Builds the base worker image responsible for building the rpm
 sles15/container (default)       Builds a container image for SUSE Linux Enterprise 15
 sles15/container/depsonly        Builds a container image with only the runtime dependencies installed.
@@ -94,6 +100,7 @@ sles15/rpm                       Builds an rpm and src.rpm.
 sles15/rpm/debug/buildroot       Outputs an rpm buildroot suitable for passing to rpmbuild.
 sles15/rpm/debug/sources         Outputs all the sources specified in the spec file in the format given to rpmbuild.
 sles15/rpm/debug/spec            Outputs the generated RPM spec file
+sles15/srpm                      Builds only the src.rpm (no binary rpm).
 sles15/worker                    Builds the base worker image responsible for building the rpm
 trixie/container                 Builds a container image.
 trixie/deb (default)             Builds a deb package.
