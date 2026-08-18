@@ -1556,6 +1556,11 @@ func TestImage_validate(t *testing.T) {
 			Image: ImageConfig{},
 		},
 		{
+			Name:      "unsupported image minimization profile",
+			Image:     ImageConfig{MinimizationProfile: "v1"},
+			expectErr: "unsupported image minimization profile",
+		},
+		{
 			Name: "image.base set",
 			Image: ImageConfig{
 				Base: "busybox:latest",

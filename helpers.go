@@ -284,6 +284,18 @@ func (s *Spec) GetImagePost(target string) *PostInstall {
 	return nil
 }
 
+func (s *Spec) GetImageMinimizationProfile(target string) string {
+	if img := s.Targets[target].Image; img != nil && img.MinimizationProfile != "" {
+		return img.MinimizationProfile
+	}
+
+	if s.Image != nil {
+		return s.Image.MinimizationProfile
+	}
+
+	return ""
+}
+
 func (s *Spec) GetArtifacts(targetKey string) Artifacts {
 	if t, ok := s.Targets[targetKey]; ok {
 		// If unset then we should use the global artifacts but if set or deliberately empty then we should use that.

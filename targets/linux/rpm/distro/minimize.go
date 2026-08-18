@@ -213,6 +213,9 @@ while IFS= read -r pkg; do
 	fi
 done < <(printf '%s\n' "${!keep[@]}")
 
+# Package-manager cache paths may be BuildKit cache mounts while minimization
+# runs in the install operation. Those mounts are not committed to the image,
+# and their mountpoints cannot be removed until the operation exits.
 rm -rf \
 	"${rootfs}/var/cache/dnf" \
 	"${rootfs}/var/cache/libdnf5" \
@@ -224,36 +227,15 @@ rm -rf \
 	"${rootfs}/var/log/dnf.librepo.log" \
 	"${rootfs}/var/log/hawkey.log" \
 	"${rootfs}/var/log/tdnf.log" \
-	"${rootfs}/var/log/yum.log"
+	"${rootfs}/var/log/yum.log" 2>/dev/null || true
 `
 
-func minimizeContainer(rootfs, worker, rpmDir, basePkgs llb.State, opts ...llb.ConstraintsOpt) llb.State {
+func minimizeInstall(opts ...llb.ConstraintsOpt) DnfInstallOpt {
 	opts = append(opts, dalec.ProgressGroup("Minimize RPM container"))
 
-	const (
-		workPath      = "/tmp/rootfs"
-		scriptPath    = "/tmp/dalec/internal/rpm/minimize.sh"
-		rpmMountDir   = "/tmp/rpms"
-		baseMountPath = "/tmp/rpms-base"
-	)
+	const scriptPath = "/tmp/dalec/internal/rpm/minimize.sh"
 
 	script := llb.Scratch().File(llb.Mkfile("minimize.sh", 0o755, []byte(rpmMinimizeScript)), opts...)
 
-	return worker.Run(
-		dalec.WithConstraints(opts...),
-		llb.AddMount(scriptPath, script, llb.SourcePath("minimize.sh"), llb.Readonly),
-		llb.AddMount(rpmMountDir, rpmDir, llb.SourcePath("/RPMS"), llb.Readonly),
-		llb.AddMount(baseMountPath, basePkgs, llb.SourcePath("/RPMS"), llb.Readonly),
-		llb.Args([]string{scriptPath}),
-	).AddMount(workPath, rootfs)
-}
-
-func squashContainer(rootfs llb.State, opts ...llb.ConstraintsOpt) llb.State {
-	opts = append(opts, dalec.ProgressGroup("Squash RPM container"))
-
-	return llb.Scratch().File(llb.Copy(rootfs, "/", "/", &llb.CopyInfo{
-		CopyDirContentsOnly: true,
-		CreateDestPath:      true,
-		AllowWildcard:       true,
-	}), opts...)
+	return DnfWithPostInstallScript(scriptPath, script)
 }

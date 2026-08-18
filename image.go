@@ -14,9 +14,15 @@ import (
 type DockerImageSpec = dockerspec.DockerOCIImage
 type DockerImageConfig = dockerspec.DockerOCIImageConfig
 
+const ImageMinimizationProfileDefault = "default"
+
 // ImageConfig is the configuration for the output image.
 // When the target output is a container image, this is used to configure the image.
 type ImageConfig struct {
+	// MinimizationProfile selects an optional post-install image minimization
+	// policy. An empty value leaves the image unchanged; "default" enables the
+	// target-specific default policy.
+	MinimizationProfile string `yaml:"minimization_profile,omitempty" json:"minimization_profile,omitempty"`
 	// Entrypoint sets the image's "entrypoint" field.
 	// This is used to control the default command to run when the image is run.
 	Entrypoint string `yaml:"entrypoint,omitempty" json:"entrypoint,omitempty"`
@@ -154,6 +160,10 @@ func (i *ImageConfig) validate() error {
 
 	if i.Base != "" && len(i.Bases) > 0 {
 		errs = append(errs, errors.New("cannot specify both image.base and image.bases"))
+	}
+
+	if i.MinimizationProfile != "" && i.MinimizationProfile != ImageMinimizationProfileDefault {
+		errs = append(errs, errors.Errorf("unsupported image minimization profile %q", i.MinimizationProfile))
 	}
 
 	for i, base := range i.Bases {

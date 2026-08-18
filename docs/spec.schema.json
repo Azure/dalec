@@ -1300,6 +1300,13 @@
 					],
 					"description": "Labels is the list of labels to set in the image metadata."
 				},
+				"minimization_profile": {
+					"type": [
+						"string",
+						"null"
+					],
+					"description": "MinimizationProfile selects an optional post-install image minimization\npolicy. An empty value leaves the image unchanged; \"default\" enables the\ntarget-specific default policy."
+				},
 				"post": {
 					"$ref": "#/$defs/PostInstall",
 					"description": "Post is the post install configuration for the image.\nThis allows making additional modifications to the container rootfs after the package(s) are installed.\n\nUse this to perform actions that would otherwise require additional tooling inside the container that is not relevant to\nthe resulting container and makes a post-install script as part of the package unnecessary."
