@@ -128,6 +128,18 @@ func linuxSigningTests(ctx context.Context, testConfig testLinuxConfig) func(*te
 			assert.Assert(t, found, "Spec signing override warning message not emitted")
 		})
 
+		t.Run("srpm target", func(t *testing.T) {
+			t.Parallel()
+
+			if !strings.HasSuffix(testConfig.Target.Package, "/rpm") {
+				t.Skipf("srpm target is not available for package target %q", testConfig.Target.Package)
+			}
+			srpmTarget := strings.TrimSuffix(testConfig.Target.Package, "/rpm") + "/srpm"
+
+			spec := newSigningSpec()
+			runTest(t, srpmSigningTest(t, spec, srpmTarget, testConfig))
+		})
+
 		t.Run("with args", func(t *testing.T) {
 			t.Parallel()
 
@@ -578,6 +590,38 @@ func distroSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string, tcfg 
 		var files []string
 		assert.NilError(t, json.Unmarshal(mfst, &files))
 		slices.Sort(files)
+
+		assert.Assert(t, cmp.DeepEqual(files, expectedFiles))
+	}
+}
+
+// srpmSigningTest verifies the source-rpm-only target hands the source package
+// to the configured signer. Unlike the full package target, the source rpm is
+// the only artifact the signer should see.
+func srpmSigningTest(t *testing.T, spec *dalec.Spec, buildTarget string, tcfg testLinuxConfig) testenv.TestFunc {
+	return func(ctx context.Context, gwc gwclient.Client) {
+		topTgt, _, _ := strings.Cut(buildTarget, "/")
+
+		res := solveT(ctx, t, gwc, newSolveRequest(withSpec(ctx, t, spec), withBuildTarget(buildTarget)))
+
+		tgt := readFile(ctx, t, "/target", res)
+		assert.Equal(t, string(tgt), topTgt, "package not sent to the signer")
+
+		if tcfg.Target.ListExpectedSignFiles == nil {
+			t.Fatal("missing function to get list of expected files to sign")
+		}
+
+		var expectedFiles []string
+		for _, f := range tcfg.Target.ListExpectedSignFiles(spec, platforms.DefaultSpec()) {
+			if strings.HasSuffix(f, ".src.rpm") {
+				expectedFiles = append(expectedFiles, f)
+			}
+		}
+
+		var files []string
+		assert.NilError(t, json.Unmarshal(readFile(ctx, t, "/manifest.json", res), &files))
+		slices.Sort(files)
+		slices.Sort(expectedFiles)
 
 		assert.Assert(t, cmp.DeepEqual(files, expectedFiles))
 	}
