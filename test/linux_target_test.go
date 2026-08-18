@@ -6141,11 +6141,29 @@ func testRPMMinimalContainer(ctx context.Context, t *testing.T, testConfig testL
 
 	target := testConfig.Target.MinimalContainer
 
+	t.Run("minimization_is_opt_in", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(ctx, t)
+
+		spec := testLinuxSpec(t, dalec.Spec{})
+
+		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(target))
+			res := solveT(ctx, t, gwc, sr)
+
+			for _, op := range test.LLBOpsFromState(ctx, t, resultToState(t, res)) {
+				assert.Assert(t, op.OpMetadata.ProgressGroup.Name != "Minimize RPM container",
+					"RPM minimization must be disabled unless explicitly selected")
+			}
+		})
+	})
+
 	t.Run("rpm_database_remains_queryable", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
 
 		spec := testLinuxSpec(t, dalec.Spec{})
+		spec.Image = &dalec.ImageConfig{MinimizationProfile: dalec.ImageMinimizationProfileDefault}
 		spec.Dependencies.Test = map[string]dalec.PackageConstraints{
 			"rpm": {},
 		}
@@ -6164,24 +6182,29 @@ func testRPMMinimalContainer(ctx context.Context, t *testing.T, testConfig testL
 		})
 	})
 
-	t.Run("squash_produces_single_layer", func(t *testing.T) {
+	t.Run("minimization_runs_when_selected", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(ctx, t)
 
 		spec := testLinuxSpec(t, dalec.Spec{})
+		spec.Image = &dalec.ImageConfig{MinimizationProfile: dalec.ImageMinimizationProfileDefault}
 
 		testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
 			sr := newSolveRequest(withSpec(ctx, t, &spec), withBuildTarget(target))
 			res := solveT(ctx, t, gwc, sr)
 
-			dt, ok := res.Metadata[exptypes.ExporterImageConfigKey]
-			assert.Assert(t, ok, "missing image config in result metadata")
-
-			var img dalec.DockerImageSpec
-			assert.NilError(t, json.Unmarshal(dt, &img))
-
-			assert.Check(t, len(img.RootFS.DiffIDs) <= 1,
-				"expected squashed image to have at most 1 layer, got %d", len(img.RootFS.DiffIDs))
+			found := false
+			squashed := false
+			for _, op := range test.LLBOpsFromState(ctx, t, resultToState(t, res)) {
+				if op.OpMetadata.ProgressGroup.Name == "Squash RPM container" {
+					squashed = true
+				}
+				if op.OpMetadata.ProgressGroup.Name == "Minimize RPM container" {
+					found = true
+				}
+			}
+			assert.Assert(t, found, "expected selected RPM minimization profile to run")
+			assert.Assert(t, !squashed, "RPM minimization must not require a separate squash operation")
 		})
 	})
 }

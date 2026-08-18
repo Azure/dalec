@@ -3,6 +3,7 @@ package distro
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -151,6 +152,7 @@ import_keys_path={{ shellQuote .ImportKeysPath }}
 global_flags={{ shellQuote .GlobalFlags }}
 zypper_sub_cmd={{ shellQuote .ZypperSubCmd }}
 install_flags={{ shellQuote .InstallFlags }}
+post_install_path={{ shellQuote .PostInstallPath }}
 
 if [ -x "$import_keys_path" ]; then
 	"$import_keys_path"
@@ -245,21 +247,27 @@ EOF
 fi
 
 zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
+
+if [ -n "$post_install_path" ]; then
+	"$post_install_path"
+fi
 `))
 
 	var installScriptBuf bytes.Buffer
 	err := zypperInstallScriptTmpl.Execute(&installScriptBuf, struct {
-		ImportKeysPath string
-		GlobalFlags    string
-		ZypperSubCmd   string
-		InstallFlags   string
-		IncludeDocs    bool
+		ImportKeysPath  string
+		GlobalFlags     string
+		ZypperSubCmd    string
+		InstallFlags    string
+		PostInstallPath string
+		IncludeDocs     bool
 	}{
-		ImportKeysPath: importKeysPath,
-		GlobalFlags:    globalFlagsStr,
-		ZypperSubCmd:   zypperSubCmdStr,
-		InstallFlags:   installFlagsStr,
-		IncludeDocs:    cfg.includeDocs,
+		ImportKeysPath:  importKeysPath,
+		GlobalFlags:     globalFlagsStr,
+		ZypperSubCmd:    zypperSubCmdStr,
+		InstallFlags:    installFlagsStr,
+		PostInstallPath: cfg.postInstallPath,
+		IncludeDocs:     cfg.includeDocs,
 	})
 	if err != nil {
 		// The template is a compile-time constant, so Execute realistically only
@@ -276,6 +284,14 @@ zypper $global_flags $zypper_sub_cmd $install_flags "${install_args[@]}"
 
 	runOpts := []llb.RunOption{
 		llb.AddMount(installScriptPath, installScript, llb.SourcePath("install.sh"), llb.Readonly),
+	}
+	if cfg.postInstallPath != "" {
+		runOpts = append(runOpts, llb.AddMount(
+			cfg.postInstallPath,
+			cfg.postInstallScript,
+			llb.SourcePath(filepath.Base(cfg.postInstallPath)),
+			llb.Readonly,
+		))
 	}
 
 	// If we have keys to import in order to access a repo, mount a script that

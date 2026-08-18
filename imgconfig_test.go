@@ -83,22 +83,24 @@ func TestMergeSpecImage(t *testing.T) {
 	t.Run("target overrides all string fields", func(t *testing.T) {
 		spec := &Spec{
 			Image: &ImageConfig{
-				Entrypoint: "/bin/old",
-				Cmd:        "old",
-				WorkingDir: "/old",
-				StopSignal: "SIGINT",
-				Base:       "old:latest",
-				User:       "root",
+				Entrypoint:          "/bin/old",
+				Cmd:                 "old",
+				WorkingDir:          "/old",
+				StopSignal:          "SIGINT",
+				Base:                "old:latest",
+				User:                "root",
+				MinimizationProfile: "default",
 			},
 			Targets: map[string]Target{
 				"t1": {
 					Image: &ImageConfig{
-						Entrypoint: "/bin/new",
-						Cmd:        "new",
-						WorkingDir: "/new",
-						StopSignal: "SIGTERM",
-						Base:       "new:latest",
-						User:       "nobody",
+						Entrypoint:          "/bin/new",
+						Cmd:                 "new",
+						WorkingDir:          "/new",
+						StopSignal:          "SIGTERM",
+						Base:                "new:latest",
+						User:                "nobody",
+						MinimizationProfile: "default",
 					},
 				},
 			},
@@ -110,6 +112,18 @@ func TestMergeSpecImage(t *testing.T) {
 		assert.Check(t, cmp.Equal(cfg.StopSignal, "SIGTERM"))
 		assert.Check(t, cmp.Equal(cfg.Base, "new:latest"))
 		assert.Check(t, cmp.Equal(cfg.User, "nobody"))
+		assert.Check(t, cmp.Equal(cfg.MinimizationProfile, "default"))
+	})
+
+	t.Run("target minimization profile overrides spec profile", func(t *testing.T) {
+		spec := &Spec{
+			Targets: map[string]Target{
+				"t1": {Image: &ImageConfig{MinimizationProfile: "default"}},
+			},
+		}
+
+		assert.Check(t, cmp.Equal(spec.GetImageMinimizationProfile("t1"), "default"))
+		assert.Check(t, cmp.Equal(spec.GetImageMinimizationProfile("other"), ""))
 	})
 
 	t.Run("target env appends to spec env", func(t *testing.T) {

@@ -40,6 +40,9 @@ type dnfInstallConfig struct {
 	forceArch string
 
 	disableProxyConfig bool
+
+	postInstallPath   string
+	postInstallScript llb.State
 }
 
 type DnfInstallOpt func(*dnfInstallConfig)
@@ -93,6 +96,16 @@ func DnfWithSourceOpts(sOpt dalec.SourceOpts) DnfInstallOpt {
 func DnfInstallWithConstraints(opts []llb.ConstraintsOpt) DnfInstallOpt {
 	return func(cfg *dnfInstallConfig) {
 		cfg.constraints = append(cfg.constraints, opts...)
+	}
+}
+
+// DnfWithPostInstallScript runs the mounted script after package installation
+// in the same worker operation. The script can modify the install root before
+// the operation's filesystem layer is committed.
+func DnfWithPostInstallScript(path string, script llb.State) DnfInstallOpt {
+	return func(cfg *dnfInstallConfig) {
+		cfg.postInstallPath = path
+		cfg.postInstallScript = script
 	}
 }
 
@@ -244,6 +257,11 @@ func dnfCommand(cfg *dnfInstallConfig, releaseVer string, exe string, dnfSubCmd 
 	installFlags := dnfInstallFlags(cfg)
 	installFlags += " -y --setopt varsdir=/etc/dnf/vars --releasever=" + releaseVer + " "
 	forceArch := cfg.forceArch
+	postInstallCommand := ""
+	if cfg.postInstallPath != "" {
+		postInstallCommand = fmt.Sprintf("\n%s", cfg.postInstallPath)
+	}
+
 	installScriptDt := `#!/usr/bin/env bash
 set -eux -o pipefail
 
@@ -278,6 +296,7 @@ configure_dnf_proxy
 trap cleanup_dnf_proxy EXIT
 
 $cmd $dnf_sub_cmd $install_flags "${@}"
+` + postInstallCommand + `
 `
 	var runOpts []llb.RunOption
 
@@ -285,6 +304,14 @@ $cmd $dnf_sub_cmd $install_flags "${@}"
 	const installScriptPath = "/tmp/dalec/internal/dnf/install.sh"
 
 	runOpts = append(runOpts, llb.AddMount(installScriptPath, installScript, llb.SourcePath("install.sh"), llb.Readonly))
+	if cfg.postInstallPath != "" {
+		runOpts = append(runOpts, llb.AddMount(
+			cfg.postInstallPath,
+			cfg.postInstallScript,
+			llb.SourcePath(filepath.Base(cfg.postInstallPath)),
+			llb.Readonly,
+		))
+	}
 
 	// TODO(adamperlin): see if this can be removed for dnf
 	// If we have keys to import in order to access a repo, we need to create a script to use `gpg` to import them

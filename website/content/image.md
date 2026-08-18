@@ -10,6 +10,7 @@ of the produced image. The image field is an object with the following propertie
 - `base`: The image ref to use as the base for the output container. [Deprecated: use `bases` instead] [base section](#base)
 - `bases`: The list of base images to use as the base for the output container(s). [bases section](#bases)
 - `post`: The post processing for the image, such as symlinks. [post section](#post)
+- `minimization_profile`: An optional post-install minimization policy. [minimization profile section](#minimization-profile)
 - `labels`: The labels for the image. This is an optional field. [labels section](#labels)
 - `env`: The environment variables for the image. This is an optional field. [env section](#env)
 - `entrypoint`: The entrypoint for the image. This is an optional field. [entrypoint section](#entrypoint)
@@ -35,6 +36,21 @@ are keyed on the image platform metadata.
 
 With the exception of `base`, `bases`, and `post`, these fields are all used to
 merge with the configured (or default) base image(s).
+
+### Minimization profile
+
+Image minimization is opt-in. Set `minimization_profile` to `default` to enable
+the target's default package minimization policy. An empty value leaves the
+container unchanged. The RPM container policy preserves the RPM database while
+removing packages outside the runtime dependency closure during the container
+setup operation. Custom base images are not minimized.
+
+Example:
+
+```yaml
+image:
+  minimization_profile: default
+```
 
 ### Base
 
