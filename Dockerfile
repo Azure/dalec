@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM} golang:1.26.5@sha256:3aff6657219a4d9c14e27fb1d8976c49c29fddb70ba835014f477e1c70636647 AS go
+FROM --platform=${BUILDPLATFORM} golang:1.26.6@sha256:0d1d3a794be25f809dd2cb3160d8c73276c4056a9f8242a138e908ddeee7b6b6 AS go
 
 # Used by CI to run buildkit
 # We manage the verison here so that Dependabot keeps it up to date.
