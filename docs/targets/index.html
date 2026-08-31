@@ -36,7 +36,7 @@ the underlying target implementation.
     article
   "><meta property="og:url" content="https://project-dalec.github.io/dalec/targets/"><meta property="article:section" content><meta itemprop=name content="Targets"><meta itemprop=description content="DALEC is designed to support building artifacts for a number of different systems. DALEC refers to these in the spec as “targets”. When executing a build with Docker these targets can be specified with the --target=<target> flag.
 Available Targets DALEC includes a number of built-in targets that you can either use in your spec.
-azlinux3 - Azure Linux 3 azlinux4 - Azure Linux 4 (beta status) bullseye - Debian 11 (Bullseye) (v0.11) bookworm - Debian 12 (Bookworm) (v0.11) trixie - Debian 13 (Trixie) (v0.next) bionic - Ubuntu 18.04 (Bionic) (v0.11) focal - Ubuntu 20.04 (focal) (v0.11) jammy - Ubuntu 22.04 (jammy) (v0.9) noble - Ubuntu 24.04 (noble) (v0.11) windowscross - Cross compile from Ubuntu Jammy to Windows almalinux9 - AlmaLinux 9 (v0.13) almalinux8 - AlmaLinux 8 (v0.13) rockylinux8 - Rocky Linux 8 (v0.13) rockylinux9 - Rocky Linux 9 (v0.13) sles15 - SUSE Linux Enterprise 15 (native-architecture builds only) When specifying a “target” to docker build --target=<target> DALEC treats <target> as a route (much like an HTTP path) and each of the above mentioned targets have subroutes you can specify as well, e.g. jammy/deb to have DALEC build and output just the deb package. What subroutes are available depend on the underlying target implementation."><meta itemprop=wordCount content="2285"><meta name=twitter:card content="summary"><meta name=twitter:title content="Targets"><meta name=twitter:description content="DALEC is designed to support building artifacts for a number of different systems. DALEC refers to these in the spec as “targets”. When executing a build with Docker these targets can be specified with the --target=<target> flag.
+azlinux3 - Azure Linux 3 azlinux4 - Azure Linux 4 (beta status) bullseye - Debian 11 (Bullseye) (v0.11) bookworm - Debian 12 (Bookworm) (v0.11) trixie - Debian 13 (Trixie) (v0.next) bionic - Ubuntu 18.04 (Bionic) (v0.11) focal - Ubuntu 20.04 (focal) (v0.11) jammy - Ubuntu 22.04 (jammy) (v0.9) noble - Ubuntu 24.04 (noble) (v0.11) windowscross - Cross compile from Ubuntu Jammy to Windows almalinux9 - AlmaLinux 9 (v0.13) almalinux8 - AlmaLinux 8 (v0.13) rockylinux8 - Rocky Linux 8 (v0.13) rockylinux9 - Rocky Linux 9 (v0.13) sles15 - SUSE Linux Enterprise 15 (native-architecture builds only) When specifying a “target” to docker build --target=<target> DALEC treats <target> as a route (much like an HTTP path) and each of the above mentioned targets have subroutes you can specify as well, e.g. jammy/deb to have DALEC build and output just the deb package. What subroutes are available depend on the underlying target implementation."><meta itemprop=wordCount content="2341"><meta name=twitter:card content="summary"><meta name=twitter:title content="Targets"><meta name=twitter:description content="DALEC is designed to support building artifacts for a number of different systems. DALEC refers to these in the spec as “targets”. When executing a build with Docker these targets can be specified with the --target=<target> flag.
 Available Targets DALEC includes a number of built-in targets that you can either use in your spec.
 azlinux3 - Azure Linux 3 azlinux4 - Azure Linux 4 (beta status) bullseye - Debian 11 (Bullseye) (v0.11) bookworm - Debian 12 (Bookworm) (v0.11) trixie - Debian 13 (Trixie) (v0.next) bionic - Ubuntu 18.04 (Bionic) (v0.11) focal - Ubuntu 20.04 (focal) (v0.11) jammy - Ubuntu 22.04 (jammy) (v0.9) noble - Ubuntu 24.04 (noble) (v0.11) windowscross - Cross compile from Ubuntu Jammy to Windows almalinux9 - AlmaLinux 9 (v0.13) almalinux8 - AlmaLinux 8 (v0.13) rockylinux8 - Rocky Linux 8 (v0.13) rockylinux9 - Rocky Linux 9 (v0.13) sles15 - SUSE Linux Enterprise 15 (native-architecture builds only) When specifying a “target” to docker build --target=<target> DALEC treats <target> as a route (much like an HTTP path) and each of the above mentioned targets have subroutes you can specify as well, e.g. jammy/deb to have DALEC build and output just the deb package. What subroutes are available depend on the underlying target implementation."><link rel=preload href=/dalec/css/compiled/main.min.e4024ea689026ed9e098bb4f4746f983cc1ce70c6b07882c91415d0e0da0d70d.css as=style integrity="sha256-5AJOpokCbtngmLtPR0b5g8wc5wxrB4gskUFdDg2g1w0="><link href=/dalec/css/compiled/main.min.e4024ea689026ed9e098bb4f4746f983cc1ce70c6b07882c91415d0e0da0d70d.css rel=stylesheet integrity="sha256-5AJOpokCbtngmLtPR0b5g8wc5wxrB4gskUFdDg2g1w0="><script src=/dalec/js/main-head.min.907a8e1ded21c23715431801eab8ba942f764c759516d844d403128a2ebd7f0c.js integrity="sha256-kHqOHe0hwjcVQxgB6ri6lC92THWVFthE1AMSii69fww="></script></head><body><a href=#content class="hx:sr-only hx:focus-visible:not-sr-only hx:focus-visible:fixed hx:focus-visible:z-50 hx:focus-visible:top-2 hx:focus-visible:left-2 hx:focus-visible:bg-primary-500 hx:focus-visible:text-white hx:focus-visible:px-4 hx:focus-visible:py-2 hx:focus-visible:rounded-md hx:focus-visible:text-sm hx:focus-visible:font-medium">Skip to content</a><div class="hextra-banner hx:max-md:sticky hx:top-0 hx:z-20 hx:px-6 hx:text-center hx:text-slate-50 hx:dark:text-white hx:bg-neutral-900 hx:dark:bg-neutral-800 hx:print:[display:none]"><div class="hx:relative hx:flex hx:items-center hx:justify-center hx:font-medium hx:text-sm hx:py-2.5"><div style=white-space:pre-wrap class=hx:px-8>⭐ If you like Dalec, please give it a star on <a href=https://github.com/project-dalec/dalec target=_blank rel=noopener>GitHub</a>!</div><button class="hextra-banner-close-button hx:cursor-pointer hx:absolute hx:right-0 hx:text-white hx:font-bold hx:leading-none hx:hover:opacity-75 hx:transition hx:w-10 hx:h-10 hx:-mr-2 hx:md:mr-0 hx:flex hx:items-center hx:justify-center" aria-label="Close banner"><svg height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button></div></div><div class="hextra-nav-container hx:sticky hx:top-0 hx:z-20 hx:w-full hx:bg-transparent hx:print:hidden"><div class="hextra-nav-container-blur hx:pointer-events-none hx:absolute hx:z-[-1] hx:h-full hx:w-full hx:bg-white hx:dark:bg-dark hx:shadow-[0_2px_4px_rgba(0,0,0,.02),0_1px_0_rgba(0,0,0,.06)] hx:contrast-more:shadow-[0_0_0_1px_#000] hx:dark:shadow-[0_-1px_0_rgba(255,255,255,.1)_inset] hx:contrast-more:dark:shadow-[0_0_0_1px_#fff]"></div><nav class="hextra-max-navbar-width hx:mx-auto hx:flex hx:items-center hx:justify-end hx:gap-2 hx:h-16 hx:px-6"><a class="hx:flex hx:items-center hx:hover:opacity-75 hx:ltr:mr-auto hx:rtl:ml-auto" href=/dalec/><img class="hx:mr-2 hx:block hx:dark:hidden" src=/dalec/img/logo.svg alt=Logo height=32 width=32>
 <img class="hx:mr-2 hx:hidden hx:dark:block" src=/dalec/img/logo.svg alt="Dark Logo" height=32 width=32>
@@ -72,6 +72,7 @@ almalinux8/rpm                   Builds an rpm and src.rpm.
 almalinux8/rpm/debug/buildroot   Outputs an rpm buildroot suitable for passing to rpmbuild.
 almalinux8/rpm/debug/sources     Outputs all the sources specified in the spec file in the format given to rpmbuild.
 almalinux8/rpm/debug/spec        Outputs the generated RPM spec file
+almalinux8/srpm                  Builds only the src.rpm (no binary rpm).
 almalinux8/worker                Builds the base worker image responsible for building the rpm
 almalinux9/container (default)   Builds a container image for AlmaLinux 9
 almalinux9/container/depsonly    Builds a container image with only the runtime dependencies installed.
@@ -79,6 +80,7 @@ almalinux9/rpm                   Builds an rpm and src.rpm.
 almalinux9/rpm/debug/buildroot   Outputs an rpm buildroot suitable for passing to rpmbuild.
 almalinux9/rpm/debug/sources     Outputs all the sources specified in the spec file in the format given to rpmbuild.
 almalinux9/rpm/debug/spec        Outputs the generated RPM spec file
+almalinux9/srpm                  Builds only the src.rpm (no binary rpm).
 almalinux9/worker                Builds the base worker image responsible for building the rpm
 azlinux3/container (default)     Builds a container image for Azure Linux 3
 azlinux3/container/depsonly      Builds a container image with only the runtime dependencies installed.
@@ -86,6 +88,7 @@ azlinux3/rpm                     Builds an rpm and src.rpm.
 azlinux3/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.
 azlinux3/rpm/debug/sources       Outputs all the sources specified in the spec file in the format given to rpmbuild.
 azlinux3/rpm/debug/spec          Outputs the generated RPM spec file
+azlinux3/srpm                    Builds only the src.rpm (no binary rpm).
 azlinux3/testing/sysext          Builds a systemd system extension image.
 azlinux3/worker                  Builds the base worker image responsible for building the rpm
 azlinux4/container (default)     Builds a container image for Azure Linux 4
@@ -94,6 +97,7 @@ azlinux4/rpm                     Builds an rpm and src.rpm.
 azlinux4/rpm/debug/buildroot     Outputs an rpm buildroot suitable for passing to rpmbuild.
 azlinux4/rpm/debug/sources       Outputs all the sources specified in the spec file in the format given to rpmbuild.
 azlinux4/rpm/debug/spec          Outputs the generated RPM spec file
+azlinux4/srpm                    Builds only the src.rpm (no binary rpm).
 azlinux4/testing/sysext          Builds a systemd system extension image.
 azlinux4/worker                  Builds the base worker image responsible for building the rpm
 bionic/container                 Builds a container image.
@@ -147,6 +151,7 @@ rockylinux8/rpm                  Builds an rpm and src.rpm.
 rockylinux8/rpm/debug/buildroot  Outputs an rpm buildroot suitable for passing to rpmbuild.
 rockylinux8/rpm/debug/sources    Outputs all the sources specified in the spec file in the format given to rpmbuild.
 rockylinux8/rpm/debug/spec       Outputs the generated RPM spec file
+rockylinux8/srpm                 Builds only the src.rpm (no binary rpm).
 rockylinux8/worker               Builds the base worker image responsible for building the rpm
 rockylinux9/container (default)  Builds a container image for RockyLinux 9
 rockylinux9/container/depsonly   Builds a container image with only the runtime dependencies installed.
@@ -154,6 +159,7 @@ rockylinux9/rpm                  Builds an rpm and src.rpm.
 rockylinux9/rpm/debug/buildroot  Outputs an rpm buildroot suitable for passing to rpmbuild.
 rockylinux9/rpm/debug/sources    Outputs all the sources specified in the spec file in the format given to rpmbuild.
 rockylinux9/rpm/debug/spec       Outputs the generated RPM spec file
+rockylinux9/srpm                 Builds only the src.rpm (no binary rpm).
 rockylinux9/worker               Builds the base worker image responsible for building the rpm
 sles15/container (default)       Builds a container image for SUSE Linux Enterprise 15
 sles15/container/depsonly        Builds a container image with only the runtime dependencies installed.
@@ -161,6 +167,7 @@ sles15/rpm                       Builds an rpm and src.rpm.
 sles15/rpm/debug/buildroot       Outputs an rpm buildroot suitable for passing to rpmbuild.
 sles15/rpm/debug/sources         Outputs all the sources specified in the spec file in the format given to rpmbuild.
 sles15/rpm/debug/spec            Outputs the generated RPM spec file
+sles15/srpm                      Builds only the src.rpm (no binary rpm).
 sles15/worker                    Builds the base worker image responsible for building the rpm
 trixie/container                 Builds a container image.
 trixie/deb (default)             Builds a deb package.
