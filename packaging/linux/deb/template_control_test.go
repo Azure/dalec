@@ -29,14 +29,11 @@ func TestControlWrapperMaintainer(t *testing.T) {
 
 func TestWriteControl(t *testing.T) {
 	t.Run("Generated control declares the Debian standards version in the source stanza", func(t *testing.T) {
-		// Given a package specification
 		spec := &dalec.Spec{Name: "test-pkg"}
 		var output strings.Builder
 
-		// When its control file is generated
 		err := WriteControl(spec, "target", &output)
 
-		// Then it declares the expected Debian standards version exactly once in the source stanza
 		const expected = "Standards-Version: 4.7.4\n"
 		control := output.String()
 		standardsVersionIndex := strings.Index(control, expected)
