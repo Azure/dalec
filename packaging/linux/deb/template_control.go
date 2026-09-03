@@ -14,12 +14,17 @@ import (
 )
 
 func WriteControl(spec *dalec.Spec, target string, w io.Writer) error {
-	return controlTmpl.Execute(w, &controlWrapper{spec, target})
+	return controlTmpl.Execute(w, &controlWrapper{
+		Spec:             spec,
+		Target:           target,
+		StandardsVersion: StandardsVersion,
+	})
 }
 
 type controlWrapper struct {
 	*dalec.Spec
-	Target string
+	Target           string
+	StandardsVersion string
 }
 
 func (w *controlWrapper) Architecture() string {
