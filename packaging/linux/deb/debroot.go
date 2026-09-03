@@ -21,7 +21,10 @@ import (
 )
 
 const (
-	DebHelperCompat           = "11"
+	DebHelperCompat = "11"
+	// StandardsVersion is the version of the Debian Policy Manual that
+	// generated packages declare compliance with in debian/control.
+	StandardsVersion          = "4.7.4"
 	customSystemdPostinstFile = "custom_systemd_postinst.sh.partial"
 	BinariesPath              = "/usr/bin"
 	ConfigFilesPath           = "/etc"

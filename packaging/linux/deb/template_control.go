@@ -49,6 +49,12 @@ func (w *controlWrapper) Maintainer() string {
 	return p + " <" + placeholderMaintainerEmail + ">"
 }
 
+// StandardsVersion returns the Debian Policy Manual version declared in the
+// generated debian/control file's Standards-Version field.
+func (w *controlWrapper) StandardsVersion() string {
+	return StandardsVersion
+}
+
 // NOTE: This is very basic and does not handle things like grouped constraints
 // Given this is just trying to shim things to allow either the rpm format or the deb format
 // in its basic form, this is sufficient for now.

@@ -1,6 +1,7 @@
 package deb
 
 import (
+	"bytes"
 	"reflect"
 	"strings"
 	"testing"
@@ -25,6 +26,22 @@ func TestControlWrapperMaintainer(t *testing.T) {
 		w := &controlWrapper{Spec: &dalec.Spec{}}
 		assert.Equal(t, w.Maintainer(), "")
 	})
+}
+
+func TestWriteControlStandardsVersion(t *testing.T) {
+	spec := &dalec.Spec{
+		Name:     "foo",
+		Packager: "Dalec <maint@example.com>",
+	}
+
+	var buf bytes.Buffer
+	err := WriteControl(spec, "any-target", &buf)
+	assert.NilError(t, err)
+
+	out := buf.String()
+	want := "Standards-Version:" + StandardsVersion
+	assert.Equal(t, strings.Count(out, "Standards-Version:"), 1, "expected exactly one Standards-Version field, got:\n%s", out)
+	assert.Assert(t, cmp.Contains(out, want))
 }
 
 func TestAppendConstraints(t *testing.T) {
