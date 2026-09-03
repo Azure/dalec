@@ -16,10 +16,10 @@ func TestWriteControl(t *testing.T) {
 
 		err := WriteControl(spec, "target", &output)
 
-		const expected = "Standards-Version: 4.7.4" + string(byte(10))
+		const expected = "Standards-Version: 4.7.4\n"
 		control := output.String()
 		standardsVersionIndex := strings.Index(control, expected)
-		packageIndex := strings.Index(control, string(byte(10))+"Package:")
+		packageIndex := strings.Index(control, "\nPackage:")
 		require.NoError(t, err)
 		require.Contains(t, control, expected)
 		require.Equal(t, 1, strings.Count(control, "Standards-Version:"))
