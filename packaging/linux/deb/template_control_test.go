@@ -27,6 +27,28 @@ func TestControlWrapperMaintainer(t *testing.T) {
 	})
 }
 
+func TestWriteControl(t *testing.T) {
+	t.Run("Generated control declares the Debian standards version in the source stanza", func(t *testing.T) {
+		// Given a package specification
+		spec := &dalec.Spec{Name: "test-pkg"}
+		var output strings.Builder
+
+		// When its control file is generated
+		err := WriteControl(spec, "target", &output)
+
+		// Then it declares the expected Debian standards version exactly once in the source stanza
+		const expected = "Standards-Version: 4.7.4\n"
+		control := output.String()
+		standardsVersionIndex := strings.Index(control, expected)
+		packageIndex := strings.Index(control, "\nPackage:")
+		assert.NilError(t, err)
+		assert.Assert(t, cmp.Contains(control, expected))
+		assert.Equal(t, strings.Count(control, "Standards-Version:"), 1)
+		assert.Assert(t, packageIndex >= 0)
+		assert.Assert(t, standardsVersionIndex < packageIndex)
+	})
+}
+
 func TestAppendConstraints(t *testing.T) {
 	tests := []struct {
 		name string
@@ -122,7 +144,7 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 		}
 
 		// Test target1
-		wrapper1 := &controlWrapper{spec, "target1"}
+		wrapper1 := &controlWrapper{Spec: spec, Target: "target1"}
 
 		// Test Replaces
 		replaces := wrapper1.Replaces().String()
@@ -137,7 +159,7 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 		assert.Assert(t, cmp.Contains(provides, "Provides: pkg-c"))
 
 		// Test target2
-		wrapper2 := &controlWrapper{spec, "target2"}
+		wrapper2 := &controlWrapper{Spec: spec, Target: "target2"}
 
 		// Test Replaces
 		replaces = wrapper2.Replaces().String()
@@ -168,7 +190,7 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 		}
 
 		// Test with any target name
-		wrapper := &controlWrapper{spec, "any-target"}
+		wrapper := &controlWrapper{Spec: spec, Target: "any-target"}
 
 		// Test Replaces
 		replaces := wrapper.Replaces().String()
@@ -190,7 +212,7 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 			// No Replaces, Conflicts, or Provides defined
 		}
 
-		wrapper := &controlWrapper{spec, "target1"}
+		wrapper := &controlWrapper{Spec: spec, Target: "target1"}
 
 		// Test empty values
 		assert.DeepEqual(t, wrapper.Replaces().String(), "")
@@ -209,7 +231,7 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 			},
 		}
 
-		wrapper := &controlWrapper{spec, "any-target"}
+		wrapper := &controlWrapper{Spec: spec, Target: "any-target"}
 		replaces := wrapper.Replaces().String()
 
 		// Test multiline formatting
@@ -267,7 +289,7 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 		}
 
 		// Test target1 (should see target-specific values taking precedence)
-		wrapper1 := &controlWrapper{spec, "target1"}
+		wrapper1 := &controlWrapper{Spec: spec, Target: "target1"}
 
 		// Test Replaces - should contain target-specific values and not root values for common-pkg
 		replaces := wrapper1.Replaces().String()
@@ -295,7 +317,7 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 
 		// Test with non-existent target to get root values
 		// Current implementation only falls back to root if target doesn't exist
-		wrapperNonExistent := &controlWrapper{spec, "non-existent-target"}
+		wrapperNonExistent := &controlWrapper{Spec: spec, Target: "non-existent-target"}
 
 		// Test Replaces - should contain root values
 		replaces = wrapperNonExistent.Replaces().String()
@@ -313,7 +335,7 @@ func TestControlWrapper_ReplacesConflictsProvides(t *testing.T) {
 		assert.Assert(t, cmp.Contains(provides, "root-pkg-p (= 5.0.0)"))
 
 		// Test target2 - should return empty values because the maps are explicitly empty
-		wrapper2 := &controlWrapper{spec, "target2"}
+		wrapper2 := &controlWrapper{Spec: spec, Target: "target2"}
 		assert.DeepEqual(t, wrapper2.Replaces().String(), "")
 		assert.DeepEqual(t, wrapper2.Conflicts().String(), "")
 		assert.DeepEqual(t, wrapper2.Provides().String(), "")
