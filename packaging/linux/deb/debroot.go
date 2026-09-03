@@ -22,6 +22,7 @@ import (
 
 const (
 	DebHelperCompat           = "11"
+	StandardsVersion          = "4.7.4"
 	customSystemdPostinstFile = "custom_systemd_postinst.sh.partial"
 	BinariesPath              = "/usr/bin"
 	ConfigFilesPath           = "/etc"
