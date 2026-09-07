@@ -132,6 +132,33 @@ func TestHandlerTargetForwarding(t *testing.T) {
 	})
 }
 
+func TestHandlerBuiltinTargets(t *testing.T) {
+	t.Parallel()
+
+	ctx := startTestSpan(baseCtx, t)
+	testEnv.RunTest(ctx, t, func(ctx context.Context, gwc gwclient.Client) {
+		ls := listTargets(ctx, t, gwc, &dalec.Spec{})
+		checkTargetExists(t, ls, "bookworm/deb")
+		checkTargetExists(t, ls, "trixie/deb")
+
+		if slices.ContainsFunc(ls.Targets, func(tgt targets.Target) bool {
+			return strings.HasPrefix(tgt.Name, "bullseye")
+		}) {
+			t.Fatal("found Bullseye target")
+		}
+
+		req := newSolveRequest(
+			withSpec(ctx, t, &dalec.Spec{}),
+			withBuildTarget("bullseye/deb"),
+		)
+		_, err := gwc.Solve(ctx, req)
+		const expect = "no such handler for target"
+		if err == nil || !strings.Contains(err.Error(), expect) {
+			t.Fatalf("expected error %q, got %+v", expect, stack.Formatter(err))
+		}
+	})
+}
+
 func TestHandlerSubrequestResolve(t *testing.T) {
 	t.Parallel()
 	ctx := startTestSpan(baseCtx, t)

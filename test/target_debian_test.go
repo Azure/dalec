@@ -40,22 +40,6 @@ func TestBookworm(t *testing.T) {
 	testDebianBaseDependencies(t, testConf.Target)
 }
 
-func TestBullseye(t *testing.T) {
-	t.Parallel()
-
-	ctx := startTestSpan(baseCtx, t)
-	testConf := debLinuxTestConfigFor(
-		debian.BullseyeDefaultTargetKey,
-		debian.BullseyeConfig,
-		withPackageOverride("golang", "golang-1.19"),
-		withPackageOverride("rust", "cargo-web"),
-		withPackageOverride("bazel", noPackageAvailable),
-	)
-
-	testLinuxDistro(ctx, t, testConf)
-	testDebianBaseDependencies(t, testConf.Target)
-}
-
 func testDebianBaseDependencies(t *testing.T, target targetConfig) {
 	t.Run("base deps", func(t *testing.T) {
 		t.Parallel()
