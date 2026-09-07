@@ -10,9 +10,6 @@
 - source: "registry:latest"
   dest: mirror/dockerhub/library/registry:latest
 
-- source: "debian:bullseye"
-  dest: mirror/dockerhub/library/debian:bullseye
-
 - source: "debian:bookworm"
   dest: mirror/dockerhub/library/debian:bookworm
 
