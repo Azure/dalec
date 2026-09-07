@@ -5982,7 +5982,6 @@ echo "This is a third test binary"
 			"rockylinux8": rpmTarget,
 			"rockylinux9": rpmTarget,
 			"bookworm":    debTarget,
-			"bullseye":    debTarget,
 			"bionic":      debTarget,
 			"focal":       debTarget,
 			"jammy":       debTarget,

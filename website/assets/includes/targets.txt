@@ -43,11 +43,6 @@ bookworm/deb (default)           Builds a deb package.
 bookworm/dsc                     Builds a Debian source package.
 bookworm/testing/container       Builds a container image for testing purposes only.
 bookworm/worker                  Builds the worker image.
-bullseye/container               Builds a container image.
-bullseye/deb (default)           Builds a deb package.
-bullseye/dsc                     Builds a Debian source package.
-bullseye/testing/container       Builds a container image for testing purposes only.
-bullseye/worker                  Builds the worker image.
 debug/cargohome                  Outputs all the Cargo dependencies for the spec
 debug/gomods                     Outputs all the gomodule dependencies for the spec
 debug/patched-sources            Outputs all patched sources from a dalec spec file.
