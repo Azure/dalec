@@ -267,6 +267,14 @@ func (bi *BaseImage) ToState(sOpt SourceOpts, opts ...llb.ConstraintsOpt) llb.St
 	if bi == nil {
 		return llb.Scratch()
 	}
+
+	// The SourceFilter is intended for actual build sources, not base images.
+	// Do not apply source filter to the base image.
+	//
+	// NOTE: Applying a source filter on Windows is catastrophic because windows layers are special
+	// When applying a source filter, data is copied to an llb.Scratch(), which makes buildkit lose track
+	// of the special behavior for the windows layers.
+	sOpt.SourceFilter = nil
 	return bi.Rootfs.ToState("", sOpt, opts...)
 }
 
