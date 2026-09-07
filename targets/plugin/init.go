@@ -24,7 +24,6 @@ type routeFunc func(prefix string, spec *dalec.Spec) ([]frontend.Route, error)
 func init() {
 	registerDebRoutes(debian.TrixieDefaultTargetKey, debian.TrixieConfig)
 	registerDebRoutes(debian.BookwormDefaultTargetKey, debian.BookwormConfig)
-	registerDebRoutes(debian.BullseyeDefaultTargetKey, debian.BullseyeConfig)
 
 	registerDebRoutes(ubuntu.BionicDefaultTargetKey, ubuntu.BionicConfig)
 	registerDebRoutes(ubuntu.FocalDefaultTargetKey, ubuntu.FocalConfig)
