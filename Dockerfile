@@ -2,7 +2,7 @@ FROM --platform=${BUILDPLATFORM} golang:1.27.1@sha256:512690a5660563b57d37ecc311
 
 # Used by CI to run buildkit
 # We manage the verison here so that Dependabot keeps it up to date.
-FROM moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 AS buildkit
+FROM moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c AS buildkit
 
 FROM go  AS frontend-build
 WORKDIR /build
