@@ -14,7 +14,7 @@ When executing a build with Docker these targets can be specified with the
 DALEC includes a number of built-in targets that you can either use in your spec.
 
 - `azlinux3` - Azure Linux 3
-- `azlinux4` - Azure Linux 4 (beta status)
+- `azlinux4` - Azure Linux 4
 - `bookworm` - Debian 12 (Bookworm) (v0.11)
 - `trixie` - Debian 13 (Trixie) (v0.next)
 - `bionic` - Ubuntu 18.04 (Bionic) (v0.11)
@@ -335,10 +335,7 @@ build:
 ### Azure Linux 4
 
 The `azlinux4` target produces packages and containers for [Azure Linux
-4](https://github.com/microsoft/azurelinux). Azure Linux 4 is currently in
-beta, and not yet supported for production use. Its base image and package
-repositories will move to new locations when it reaches general
-availability.
+4](https://github.com/microsoft/azurelinux).
 
 ## Tips
 

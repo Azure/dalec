@@ -64,9 +64,8 @@
 - source: "mcr.microsoft.com/azurelinux/distroless/base:3.0"
   dest: mirror/mcr/azurelinux/distroless/base:3.0
 
-- source: "mcr.microsoft.com/azurelinux-beta/base/core:4.0"
-  dest: mirror/mcr/azurelinux-beta/base/core:4.0
+- source: "mcr.microsoft.com/azurelinux/core:4"
+  dest: mirror/mcr/azurelinux/core:4
 
 - source: "mcr.microsoft.com/azurelinux-beta/distroless/base:4.0"
   dest: mirror/mcr/azurelinux-beta/distroless/base:4.0
-
