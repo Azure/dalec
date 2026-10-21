@@ -3745,6 +3745,18 @@ func Value() string {
 		testPinnedBuildDeps(ctx, t, testConfig)
 	})
 
+	t.Run("the newest version satisfying the build dependency constraints is installed", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testNewestBuildDepWithinBounds(ctx, t, testConfig)
+	})
+
+	t.Run("the newest version satisfying the runtime dependency constraints is installed", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testNewestRuntimeDepWithinBounds(ctx, t, testConfig)
+	})
+
 	t.Run("custom repo", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
@@ -4282,6 +4294,149 @@ func testPinnedBuildDeps(ctx context.Context, t *testing.T, cfg testLinuxConfig)
 			})
 		})
 	}
+}
+
+func testNewestBuildDepWithinBounds(ctx context.Context, t *testing.T, cfg testLinuxConfig) {
+	const pkgName = "dalec-test-package-bounded"
+
+	if strings.HasSuffix(cfg.Target.Package, "/deb") {
+		t.Run("newest compatible version does not uninstall conflicting packages", func(t *testing.T) {
+			testBuildDepPreservesInstalledPackages(ctx, t, cfg)
+		})
+	}
+
+	spec := &dalec.Spec{
+		Name:        "dalec-test-bounded-build-deps",
+		Version:     "0.0.1",
+		Revision:    "1",
+		Description: "Select the newest build dependency within version bounds",
+		License:     "MIT",
+		Dependencies: &dalec.PackageDependencies{
+			Build: map[string]dalec.PackageConstraints{
+				pkgName: {
+					Version: []string{">= 1.1.1", "< 1.2.0"},
+				},
+			},
+		},
+		Build: dalec.ArtifactBuild{
+			Steps: []dalec.BuildStep{
+				{
+					Command: `set -x; [ "$(dalec-test-version)" = "version: 1.1.9" ]`,
+				},
+			},
+		},
+	}
+
+	testEnv.RunTest(ctx, t, func(ctx context.Context, client gwclient.Client) {
+		worker, pkgs, repoPath := versionedDependencyRepo(ctx, t, client, cfg, pkgName)
+		pg := dalec.ProgressGroup("Get worker")
+		debRepo := strings.HasSuffix(cfg.Target.Package, "/deb")
+
+		sr := newSolveRequest(withSpec(ctx, t, spec), withBuildContext(ctx, t, cfg.Worker.ContextName, worker), withBuildTarget(cfg.Target.Container), withPlatformPtr(cfg.Worker.Platform))
+		res := solveT(ctx, t, client, sr)
+		_, err := res.SingleRef()
+		assert.NilError(t, err)
+
+		// The shared newest-within-bounds assertion above applies to every
+		// distro. These additional cases exercise the Debian build resolver.
+		if !debRepo {
+			return
+		}
+
+		const middleName = "dalec-test-bounded-middle"
+		middle := &dalec.Spec{
+			Name:        middleName,
+			Version:     "1",
+			Revision:    "1",
+			Description: "A transitive upper bound on the versioned dependency",
+			License:     "MIT",
+			Dependencies: &dalec.PackageDependencies{
+				Runtime: map[string]dalec.PackageConstraints{
+					pkgName: {Version: []string{"<= " + cfg.Target.FormatDepEqual("1.1.6", "1")}},
+				},
+				// Package targets also validate runtime installation. Make the
+				// fixture repository available in that separate environment.
+				ExtraRepos: []dalec.PackageRepositoryConfig{{
+					Envs: []string{"install"},
+					Config: map[string]dalec.Source{"bounded.list": {
+						Inline: &dalec.SourceInline{File: &dalec.SourceInlineFile{
+							Contents: "deb [trusted=yes] copy:" + repoPath + "/ /\n",
+						}},
+					}},
+					Data: []dalec.SourceMount{{
+						Dest: repoPath,
+						Spec: dalec.Source{Context: &dalec.SourceContext{Name: "bounded-fixture-worker"}, Path: repoPath},
+					}},
+				}},
+			},
+		}
+
+		middlePkg := reqToState(ctx, client, newSolveRequest(withSpec(ctx, t, middle), withBuildTarget(cfg.Target.Package), withBuildContext(ctx, t, "bounded-fixture-worker", worker)), t)
+		worker = worker.With(cfg.Worker.CreateRepo(llb.Merge(append(pkgs, middlePkg), pg), filepath.Join("/opt/repo", createRepoSuffix())))
+
+		for _, tc := range []struct {
+			name       string
+			installed  string
+			want       string
+			upper      string
+			transitive bool
+			unsat      bool
+		}{
+			{name: "transitive upper bound", want: "1.1.6", transitive: true},
+			{name: "apt success retains satisfying installed", installed: "1.1.1", want: "1.1.1"},
+			{name: "downgrade excluded installed", installed: "1.3.0", want: "1.1.9"},
+			{name: "already feasible newest", want: "1.3.0", upper: "< 1.4.0"},
+			{name: "apt success with older installed and wider bounds", installed: "1.1.1", want: "1.1.1", upper: "< 1.4.0"},
+			{name: "unsatisfiable", unsat: true},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				// No parallelism here: this callback owns the gateway client.
+				caseWorker := worker
+				if tc.installed != "" {
+					caseWorker = caseWorker.Run(
+						llb.Args([]string{"sh", "-ec", `apt-get update; apt-get install -y "$1"; test "$(dalec-test-version)" = "version: $2"`, "install-fixture",
+							pkgName + "=" + cfg.Target.FormatDepEqual(tc.installed, "1"), tc.installed}),
+						pg,
+					).Root()
+				}
+
+				upper := tc.upper
+				if upper == "" {
+					upper = "< 1.2.0"
+				}
+
+				caseSpec := *spec
+				caseSpec.Dependencies = &dalec.PackageDependencies{
+					Build: map[string]dalec.PackageConstraints{
+						pkgName: {Version: []string{">= 1.1.1", upper}},
+					},
+				}
+				if tc.transitive || tc.unsat {
+					caseSpec.Dependencies.Build[middleName] = dalec.PackageConstraints{}
+				}
+				if tc.unsat {
+					caseSpec.Dependencies.Build[pkgName] = dalec.PackageConstraints{Version: []string{">= 1.1.9", upper}}
+				}
+
+				caseSpec.Build = dalec.ArtifactBuild{Steps: []dalec.BuildStep{{
+					Command: fmt.Sprintf(`set -x; [ "$(dalec-test-version)" = "version: %s" ]`, tc.want),
+				}}}
+
+				req := newSolveRequest(withSpec(ctx, t, &caseSpec), withBuildContext(ctx, t, cfg.Worker.ContextName, caseWorker), withBuildTarget(cfg.Target.Container), withPlatformPtr(cfg.Worker.Platform))
+				if tc.unsat {
+					req.Evaluate = true
+					_, err := client.Solve(ctx, req)
+					assert.ErrorContains(t, err, "install-with-constraints.sh")
+					assert.ErrorContains(t, err, "exit code: 1")
+					return
+				}
+
+				result := solveT(ctx, t, client, req)
+				_, err := result.SingleRef()
+				assert.NilError(t, err)
+			})
+		}
+	})
 }
 
 func testLinuxLibArtirfacts(ctx context.Context, t *testing.T, cfg testLinuxConfig) {

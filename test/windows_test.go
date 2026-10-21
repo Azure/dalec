@@ -120,6 +120,16 @@ deb [trusted=yes] copy:` + repoPath + `/ /
 		testPinnedBuildDeps(ctx, t, testConfig)
 	})
 
+	t.Run("the newest version satisfying the build dependency constraints is installed", func(t *testing.T) {
+		t.Parallel()
+		ctx := startTestSpan(baseCtx, t)
+		testConfig := testLinuxConfig{
+			Worker: wcfg,
+			Target: tcfg,
+		}
+		testNewestBuildDepWithinBounds(ctx, t, testConfig)
+	})
+
 	t.Run("default platform", func(t *testing.T) {
 		t.Parallel()
 		ctx := startTestSpan(baseCtx, t)
