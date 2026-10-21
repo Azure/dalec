@@ -2,7 +2,7 @@ package distro
 
 import (
 	"context"
-	"path/filepath"
+	_ "embed"
 	"strconv"
 
 	"github.com/moby/buildkit/client/llb"
@@ -10,6 +10,9 @@ import (
 	"github.com/project-dalec/dalec"
 	"github.com/project-dalec/dalec/packaging/linux/deb"
 )
+
+//go:embed install-local.sh
+var installLocalScript string
 
 const aptProxyConfigScript = `
 cleanup_apt_proxy() {
@@ -361,54 +364,8 @@ func InstallLocalPkg(pkg llb.State, upgrade bool, opts ...llb.ConstraintsOpt) ll
 		// that involves uninstalling the package. This forces aptitude to find a
 		// solution that will respect the constraints even if the solution involves
 		// pinning dependency packages to older versions.
-		const installScript = `#!/usr/bin/env sh
-	set -ex
-	` + aptProxyConfigScript + `
-
-	configure_apt_proxy
-	trap cleanup_apt_proxy EXIT
-
-	# Make sure any cached data from local repos is purged since this should not
-	# be shared between builds.
-rm -f /var/lib/apt/lists/_*
-apt autoclean -y
-
-# Remove any previously failed attempts to get repo data
-rm -rf /var/lib/apt/lists/partial/*
-apt update
-
-if [ "${DALEC_UPGRADE}" = "true" ]; then
-	apt dist-upgrade -y
-fi
-
-if apt install -y ${1}; then
-	exit 0
-fi
-
-if ! command -v aptitude > /dev/null; then
-	needs_cleanup=1
-	apt install -y aptitude
-fi
-
-cleanup() {
-	exit_code=$?
-	cleanup_apt_proxy
-	if [ "${needs_cleanup}" = "1" ]; then
-		apt remove -y aptitude
-	fi
-	exit $exit_code
-}
-
-trap cleanup EXIT
-
-dpkg -i --force-depends ${1}
-
-pkg_name="$(dpkg-deb -f ${1} | grep 'Package:' | awk -F': ' '{ print $2 }')"
-aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject ${pkg_name} :UNINST"
-`
-
 		script := llb.Scratch().File(
-			llb.Mkfile("install.sh", 0o755, []byte(installScript)),
+			llb.Mkfile("install.sh", 0o755, []byte("#!/usr/bin/env bash\n"+aptProxyConfigScript+installLocalScript)),
 			dalec.WithConstraint(&ei.Constraints),
 			dalec.WithConstraints(opts...),
 		)
@@ -421,7 +378,7 @@ aptitude install -y -f -o "Aptitude::ProblemResolver::Hints::=reject ${pkg_name}
 		llb.AddEnv("DEBIAN_FRONTEND", "noninteractive").SetRunOption(ei)
 		llb.AddEnv("DALEC_UPGRADE", strconv.FormatBool(upgrade)).SetRunOption(ei)
 
-		args := []string{p, filepath.Join(debPath, "*.deb")}
+		args := []string{p, debPath}
 		llb.Args(args).SetRunOption(ei)
 	})
 }
