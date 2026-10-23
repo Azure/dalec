@@ -10,11 +10,7 @@ const (
 	dnfCacheNameAzlinux4 = "azlinux4-dnf-cache"
 
 	// Azlinux4Ref is the image ref used for the base worker image.
-	//
-	// TODO(azl4): Azure Linux 4 is currently published under the beta
-	// channel. This location will change when it reaches general
-	// availability.
-	Azlinux4Ref      = "mcr.microsoft.com/azurelinux-beta/base/core:4.0"
+	Azlinux4Ref      = "mcr.microsoft.com/azurelinux/core:4"
 	AzLinux4FullName = "Azure Linux 4"
 	// Azlinux4WorkerContextName is the build context name that can be used to
 	// override the base worker image.
